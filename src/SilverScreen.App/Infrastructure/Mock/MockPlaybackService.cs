@@ -5,5 +5,5 @@ namespace SilverScreen.Infrastructure.Mock;
 
 public sealed class MockPlaybackService : IPlaybackService
 {
-    public string Play(PlaybackRequest request) => $"Play stub: {request.Video.Title}";
+    public Task<string> PlayAsync(PlaybackRequest request) => Task.FromResult($"Play stub: {request.Title}");
 }

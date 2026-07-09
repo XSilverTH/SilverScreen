@@ -2,6 +2,7 @@ using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Queue;
+using SilverScreen.Features.Playback;
 using SilverScreen.Infrastructure.Mock;
 using XSTH.Blueprint.Helpers;
 
@@ -16,7 +17,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private readonly IFeedService _feedService = new MockFeedService();
     private readonly IQueueService _queueService = new QueueService();
-    private readonly IPlaybackService _playbackService = new MockPlaybackService();
+    private readonly IPlaybackService _playbackService = new ExternalMpvPlaybackService();
     private readonly ISearchService _searchService = new MockSearchService();
     private readonly ISessionService _sessionService = new MockSessionService();
 
@@ -430,9 +431,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _searchPopover.Popdown();
     }
 
-    private void PlayVideo(VideoSummary video)
+    private async void PlayVideo(VideoSummary video)
     {
-        SetStatus(_playbackService.Play(new PlaybackRequest(video)));
+        SetStatus(await _playbackService.PlayAsync(new PlaybackRequest(video)));
     }
 
     private void AddToQueue(VideoSummary video)

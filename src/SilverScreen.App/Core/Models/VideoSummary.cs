@@ -6,4 +6,5 @@ public sealed record VideoSummary(
     string ChannelName,
     TimeSpan Duration,
     string ThumbnailUrl,
-    bool IsShort);
+    bool IsShort,
+    string? WatchUrl = null);

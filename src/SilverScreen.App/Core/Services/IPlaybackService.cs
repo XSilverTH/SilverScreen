@@ -4,5 +4,5 @@ namespace SilverScreen.Core.Services;
 
 public interface IPlaybackService
 {
-    string Play(PlaybackRequest request);
+    Task<string> PlayAsync(PlaybackRequest request);
 }
