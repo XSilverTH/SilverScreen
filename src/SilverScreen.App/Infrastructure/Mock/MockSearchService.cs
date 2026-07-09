@@ -1,6 +1,6 @@
-using System;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Features.Search;
 
 namespace SilverScreen.Infrastructure.Mock;
 
@@ -13,10 +13,6 @@ public sealed class MockSearchService : ISearchService
 
     public bool IsLikelyYouTubeUrl(string text)
     {
-        return Uri.TryCreate(text, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-            && (uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase));
+        return YouTubeUrlParser.Parse(text).Kind is not YouTubeUrlKind.NotYouTube and not YouTubeUrlKind.Invalid;
     }
 }

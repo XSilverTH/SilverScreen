@@ -3,6 +3,7 @@ using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Queue;
 using SilverScreen.Features.Playback;
+using SilverScreen.Features.Search;
 using SilverScreen.Infrastructure.Mock;
 using XSTH.Blueprint.Helpers;
 
@@ -412,7 +413,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _searchEntry.GrabFocus();
     }
 
-    private void SubmitSearchText()
+    private async void SubmitSearchText()
     {
         var text = _searchEntry.GetText().Trim();
         if (string.IsNullOrWhiteSpace(text))
@@ -421,18 +422,57 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             return;
         }
 
-        if (_searchService.IsLikelyYouTubeUrl(text))
+        var parsedUrl = YouTubeUrlParser.Parse(text);
+        switch (parsedUrl.Kind)
         {
-            SetStatus($"Open URL stub: {text}");
-        }
-        else
-        {
-            _viewStack.VisibleChildName = SearchTabName;
-            _searchSummaryLabel.Label_ = $"Search stub: {text}";
-            SetStatus($"Search stub: {text}");
+            case YouTubeUrlKind.Video:
+                await PlayYouTubeUrl(parsedUrl);
+                break;
+            case YouTubeUrlKind.Shorts:
+                SetStatus("Shorts are not supported in SilverScreen.");
+                break;
+            case YouTubeUrlKind.Channel:
+                SetStatus("Channel pages are not implemented yet.");
+                break;
+            case YouTubeUrlKind.Playlist:
+                SetStatus("Playlists are not implemented yet.");
+                break;
+            case YouTubeUrlKind.UnknownYouTube:
+                SetStatus("Unsupported YouTube URL.");
+                break;
+            case YouTubeUrlKind.Invalid:
+                SetStatus("Invalid YouTube URL.");
+                break;
+            case YouTubeUrlKind.NotYouTube:
+                _viewStack.VisibleChildName = SearchTabName;
+                _searchSummaryLabel.Label_ = $"Search stub: {text}";
+                SetStatus($"Search stub: {text}");
+                break;
+            default:
+                throw new InvalidOperationException($"Unhandled YouTube URL kind: {parsedUrl.Kind}");
         }
 
         _searchPopover.Popdown();
+    }
+
+    private async Task PlayYouTubeUrl(YouTubeUrlParseResult parsedUrl)
+    {
+        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
+        {
+            SetStatus("Invalid YouTube URL.");
+            return;
+        }
+
+        var video = new VideoSummary(
+            parsedUrl.VideoId,
+            $"YouTube video {parsedUrl.VideoId}",
+            "YouTube",
+            TimeSpan.Zero,
+            string.Empty,
+            false,
+            parsedUrl.CanonicalWatchUrl);
+
+        SetStatus(await _playbackService.PlayAsync(new PlaybackRequest(video)));
     }
 
     private async void PlayVideo(VideoSummary video)
