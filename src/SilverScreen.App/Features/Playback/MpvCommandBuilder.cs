@@ -7,7 +7,7 @@ public sealed record MpvPlaybackCommand(string ExecutablePath, IReadOnlyList<str
 
 public sealed class MpvCommandBuilder
 {
-    public MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options)
+    public MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options, string? cookieFilePath = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -34,7 +34,15 @@ public sealed class MpvCommandBuilder
             throw new InvalidOperationException("Playback URL must be an absolute HTTP or HTTPS URL.");
         }
 
-        return new MpvPlaybackCommand(options.MpvExecutablePath, [playbackUrl]);
+        var arguments = new List<string>();
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        {
+            arguments.Add($"--ytdl-raw-options=cookies={cookieFilePath}");
+        }
+
+        arguments.Add(playbackUrl);
+
+        return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
     }
 
     public ProcessStartInfo BuildStartInfo(MpvPlaybackCommand command)

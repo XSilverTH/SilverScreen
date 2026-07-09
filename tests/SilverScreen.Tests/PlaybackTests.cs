@@ -43,6 +43,20 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void MpvCommandBuilderPassesCookiesOptionBeforeUrlWhenSessionExists()
+    {
+        var command = new MpvCommandBuilder().Build(
+            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackOptions(),
+            "/tmp/silverscreen-cookies/cookies.txt");
+
+        Assert.Collection(
+            command.Arguments,
+            argument => Assert.Equal("--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt", argument),
+            argument => Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument));
+    }
+
+    [Fact]
     public void MpvCommandBuilderRejectsMissingPlaybackUrlCleanly()
     {
         var request = new PlaybackRequest(CreateVideo(string.Empty));

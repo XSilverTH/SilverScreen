@@ -1,9 +1,10 @@
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Queue;
 using SilverScreen.Features.Playback;
+using SilverScreen.Features.Queue;
 using SilverScreen.Features.Search;
+using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure.Mock;
 using XSTH.Blueprint.Helpers;
 
@@ -18,9 +19,10 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private readonly IFeedService _feedService = new MockFeedService();
     private readonly IQueueService _queueService = new QueueService();
-    private readonly IPlaybackService _playbackService = new ExternalMpvPlaybackService();
-    private readonly ISearchService _searchService = new YtDlpSearchService();
-    private readonly ISessionService _sessionService = new MockSessionService();
+    private readonly ISessionService _sessionService = new InMemorySessionService();
+    private readonly ICookieFileProvider _cookieFileProvider;
+    private readonly IPlaybackService _playbackService;
+    private readonly ISearchService _searchService;
 
     private readonly Adw.ViewStack _viewStack;
     private readonly Adw.ViewSwitcher _viewSwitcher;
@@ -47,6 +49,11 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _appMenuButton = GetBuilderObject<MenuButton>("app_menu_button");
         _queueButton = GetBuilderObject<MenuButton>("queue_button");
         _statusLabel = GetBuilderObject<Label>("status_label");
+
+        _cookieFileProvider = new TemporaryCookieFileProvider(_sessionService);
+        _playbackService = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), _cookieFileProvider);
+        _searchService = new YtDlpSearchService(new YtDlpOptions(), new YtDlpRunner(_cookieFileProvider));
+        _sessionService.SessionChanged += (_, _) => BuildAccountPopover();
 
         _searchSummaryLabel = CreateDimLabel("Search results will appear here.");
         _searchResultsFlowBox = CreateVideoFlowBox();
@@ -292,6 +299,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private void BuildAccountPopover()
     {
         var session = _sessionService.GetCurrentSession();
+        _accountButton.TooltipText = session.HasManualSession ? "Manual YouTube session active" : "Account";
 
         var popoverBox = Box.New(Orientation.Vertical, 10);
         popoverBox.MarginTop = 12;
@@ -299,21 +307,93 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         popoverBox.MarginStart = 12;
         popoverBox.MarginEnd = 12;
 
-        var headingText = session.IsSignedIn ? (session.DisplayName ?? "Signed in") : "Not signed in";
+        var headingText = session.HasManualSession ? "Manual YouTube session" : "Not signed in";
         var heading = Label.New(headingText);
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         popoverBox.Append(heading);
 
-        popoverBox.Append(CreateDimLabel("Account support will use manual session/cookie entry in a later step."));
-
-        var sessionButton = Button.NewWithLabel("Add manual session/cookie");
-        sessionButton.Sensitive = false;
-        popoverBox.Append(sessionButton);
+        if (session.HasManualSession)
+        {
+            popoverBox.Append(CreateDimLabel("Manual YouTube session active. Cookies are kept in memory only for this process."));
+            popoverBox.Append(CreatePopoverAction("Clear session", () =>
+            {
+                _sessionService.ClearSession();
+                SetStatus("Manual YouTube session cleared.");
+            }));
+        }
+        else
+        {
+            popoverBox.Append(CreateDimLabel("Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
+            popoverBox.Append(CreatePopoverAction("Add manual session", ShowManualSessionEditor));
+        }
 
         var popover = Popover.New();
         popover.Child = popoverBox;
         _accountButton.Popover = popover;
+    }
+
+    private void ShowManualSessionEditor()
+    {
+        var popoverBox = Box.New(Orientation.Vertical, 10);
+        popoverBox.MarginTop = 12;
+        popoverBox.MarginBottom = 12;
+        popoverBox.MarginStart = 12;
+        popoverBox.MarginEnd = 12;
+
+        var heading = Label.New("Add manual session");
+        heading.Xalign = 0;
+        heading.CssClasses = ["heading"];
+        popoverBox.Append(heading);
+        popoverBox.Append(CreateDimLabel("Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
+
+        var cookieTextView = TextView.New();
+        cookieTextView.Monospace = true;
+        cookieTextView.WrapMode = WrapMode.Char;
+        cookieTextView.HeightRequest = 180;
+
+        var scrolledWindow = ScrolledWindow.New();
+        scrolledWindow.Hexpand = true;
+        scrolledWindow.WidthRequest = 440;
+        scrolledWindow.HeightRequest = 180;
+        scrolledWindow.Child = cookieTextView;
+        popoverBox.Append(scrolledWindow);
+
+        var actions = Box.New(Orientation.Horizontal, 6);
+        actions.Halign = Align.End;
+
+        var cancelButton = Button.NewWithLabel("Cancel");
+        cancelButton.OnClicked += (_, _) => BuildAccountPopover();
+        actions.Append(cancelButton);
+
+        var saveButton = Button.NewWithLabel("Save session");
+        saveButton.CssClasses = ["suggested-action"];
+        saveButton.OnClicked += (_, _) =>
+        {
+            var cookieContent = GetTextViewText(cookieTextView).Trim();
+            if (string.IsNullOrWhiteSpace(cookieContent))
+            {
+                SetStatus("Manual YouTube session was not saved because no cookie content was entered.");
+                return;
+            }
+
+            _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
+            SetStatus("Manual YouTube session active.");
+        };
+        actions.Append(saveButton);
+        popoverBox.Append(actions);
+
+        var popover = Popover.New();
+        popover.Child = popoverBox;
+        _accountButton.Popover = popover;
+        popover.Popup();
+    }
+
+    private static string GetTextViewText(TextView textView)
+    {
+        var buffer = textView.Buffer ?? throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
+        buffer.GetBounds(out var start, out var end);
+        return buffer.GetText(start, end, includeHiddenChars: true);
     }
 
     private void BuildAppMenuPopover()

@@ -1,27 +1,26 @@
 using System.Diagnostics;
 using SilverScreen.Core.Models;
+using SilverScreen.Features.Session;
 
 namespace SilverScreen.Features.Search;
 
 public sealed class YtDlpRunner : IYtDlpRunner
 {
+    private readonly ICookieFileProvider? _cookieFileProvider;
+
+    public YtDlpRunner(ICookieFileProvider? cookieFileProvider = null)
+    {
+        _cookieFileProvider = cookieFileProvider;
+    }
+
     public async Task<ProcessResult> RunSearchAsync(
         SearchRequest request,
         YtDlpOptions options,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = options.ExecutablePath,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        using var cookieFile = _cookieFileProvider?.CreateCookieFile();
 
-        startInfo.ArgumentList.Add("--dump-single-json");
-        startInfo.ArgumentList.Add("--flat-playlist");
-        startInfo.ArgumentList.Add("--skip-download");
-        startInfo.ArgumentList.Add($"ytsearch{options.MaxResults}:{request.Query}");
+        var startInfo = BuildSearchStartInfo(request, options, cookieFile?.Path);
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.Timeout);
@@ -46,6 +45,31 @@ public sealed class YtDlpRunner : IYtDlpRunner
             process.ExitCode,
             await outputTask.ConfigureAwait(false),
             await errorTask.ConfigureAwait(false));
+    }
+
+    public static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options, string? cookieFilePath = null)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = options.ExecutablePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        startInfo.ArgumentList.Add("--dump-single-json");
+        startInfo.ArgumentList.Add("--flat-playlist");
+        startInfo.ArgumentList.Add("--skip-download");
+
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        {
+            startInfo.ArgumentList.Add("--cookies");
+            startInfo.ArgumentList.Add(cookieFilePath);
+        }
+
+        startInfo.ArgumentList.Add($"ytsearch{options.MaxResults}:{request.Query}");
+
+        return startInfo;
     }
 
     private static void TryKill(Process process)

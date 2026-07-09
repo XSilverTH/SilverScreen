@@ -166,6 +166,32 @@ public sealed class YtDlpSearchServiceTests
             video => Assert.Equal("dQw4w9WgXcQ", video.Id));
     }
 
+    [Fact]
+    public void BuildSearchStartInfoOmitsCookiesArgumentWithoutSession()
+    {
+        var startInfo = YtDlpRunner.BuildSearchStartInfo(new SearchRequest("linux"), new YtDlpOptions());
+
+        Assert.DoesNotContain("--cookies", startInfo.ArgumentList);
+    }
+
+    [Fact]
+    public void BuildSearchStartInfoAddsCookiesFileArgumentWhenSessionExists()
+    {
+        var startInfo = YtDlpRunner.BuildSearchStartInfo(
+            new SearchRequest("linux"),
+            new YtDlpOptions(),
+            "/tmp/silverscreen-cookies/cookies.txt");
+
+        Assert.Collection(
+            startInfo.ArgumentList,
+            argument => Assert.Equal("--dump-single-json", argument),
+            argument => Assert.Equal("--flat-playlist", argument),
+            argument => Assert.Equal("--skip-download", argument),
+            argument => Assert.Equal("--cookies", argument),
+            argument => Assert.Equal("/tmp/silverscreen-cookies/cookies.txt", argument),
+            argument => Assert.Equal("ytsearch20:linux", argument));
+    }
+
     private static YtDlpSearchService CreateService(string standardOutput, int exitCode = 0, string standardError = "")
     {
         return new YtDlpSearchService(new YtDlpOptions(), new FakeRunner(new ProcessResult(exitCode, standardOutput, standardError)));
