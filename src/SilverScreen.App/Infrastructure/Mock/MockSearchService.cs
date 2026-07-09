@@ -6,9 +6,9 @@ namespace SilverScreen.Infrastructure.Mock;
 
 public sealed class MockSearchService : ISearchService
 {
-    public FeedPage Search(SearchRequest request)
+    public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
     {
-        return FeedPage.Empty;
+        return Task.FromResult(SearchResultPage.Empty);
     }
 
     public bool IsLikelyYouTubeUrl(string text)

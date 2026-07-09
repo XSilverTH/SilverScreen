@@ -4,7 +4,7 @@ namespace SilverScreen.Core.Services;
 
 public interface ISearchService
 {
-    FeedPage Search(SearchRequest request);
+    Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken);
 
     bool IsLikelyYouTubeUrl(string text);
 }

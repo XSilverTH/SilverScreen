@@ -19,7 +19,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly IFeedService _feedService = new MockFeedService();
     private readonly IQueueService _queueService = new QueueService();
     private readonly IPlaybackService _playbackService = new ExternalMpvPlaybackService();
-    private readonly ISearchService _searchService = new MockSearchService();
+    private readonly ISearchService _searchService = new YtDlpSearchService();
     private readonly ISessionService _sessionService = new MockSessionService();
 
     private readonly Adw.ViewStack _viewStack;
@@ -35,6 +35,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly Label _searchSummaryLabel;
     private readonly Label _queueDurationLabel;
     private readonly Box _queueItemsBox;
+    private readonly FlowBox _searchResultsFlowBox;
+    private CancellationTokenSource? _searchCancellation;
 
     public MainWindow()
     {
@@ -46,7 +48,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _queueButton = GetBuilderObject<MenuButton>("queue_button");
         _statusLabel = GetBuilderObject<Label>("status_label");
 
-        _searchSummaryLabel = CreateDimLabel("Search results will appear here when the real backend exists.");
+        _searchSummaryLabel = CreateDimLabel("Search results will appear here.");
+        _searchResultsFlowBox = CreateVideoFlowBox();
         _searchEntry = Entry.New();
         _searchPopover = BuildSearchPopover();
         _queueDurationLabel = Label.New(string.Empty);
@@ -84,7 +87,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _viewStack.AddTitled(CreatePlaceholderPage("History", "Local watch history is intentionally not persisted in this shell step."), HistoryTabName, "History");
     }
 
-    private Widget CreateVideoGridPage(IEnumerable<VideoSummary> videos)
+    private FlowBox CreateVideoFlowBox()
     {
         var flowBox = FlowBox.New();
         flowBox.SelectionMode = SelectionMode.None;
@@ -100,6 +103,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         flowBox.Hexpand = true;
         flowBox.Vexpand = true;
 
+        return flowBox;
+    }
+
+    private Widget CreateVideoGridPage(IEnumerable<VideoSummary> videos)
+    {
+        var flowBox = CreateVideoFlowBox();
         foreach (var video in videos)
         {
             flowBox.Append(CreateVideoCard(video));
@@ -145,7 +154,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         channel.Xalign = 0;
         textColumn.Append(channel);
 
-        var playbackAvailability = CreateDimLabel(HasPlayableUrl(video) ? "Playable demo URL" : "Mock placeholder • no playable URL");
+        var playbackAvailability = CreateDimLabel(HasPlayableUrl(video) ? "Playable YouTube URL" : "Mock placeholder • no playable URL");
         playbackAvailability.Xalign = 0;
         textColumn.Append(playbackAvailability);
 
@@ -243,6 +252,11 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         page.Append(title);
         page.Append(_searchSummaryLabel);
 
+        var scrolledWindow = ScrolledWindow.New();
+        scrolledWindow.Hexpand = true;
+        scrolledWindow.Vexpand = true;
+        scrolledWindow.Child = _searchResultsFlowBox;
+        page.Append(scrolledWindow);
         return page;
     }
 
@@ -267,7 +281,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         popoverBox.MarginStart = 12;
         popoverBox.MarginEnd = 12;
         popoverBox.Append(_searchEntry);
-        popoverBox.Append(CreateDimLabel("Enter opens a stub only; no network calls are made."));
+        popoverBox.Append(CreateDimLabel("Enter searches YouTube with yt-dlp or opens a supported YouTube URL."));
 
         var popover = Popover.New();
         popover.Child = popoverBox;
@@ -389,6 +403,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         }
     }
 
+    private static void ClearFlowBox(FlowBox flowBox)
+    {
+        while (flowBox.GetFirstChild() is { } child)
+        {
+            flowBox.Remove(child);
+        }
+    }
+
     private Button CreatePopoverAction(string label, Action action)
     {
         var button = Button.NewWithLabel(label);
@@ -418,7 +440,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         var text = _searchEntry.GetText().Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
-            SetStatus("Search stub: empty query ignored");
+            SetStatus("Empty search ignored.");
             return;
         }
 
@@ -444,15 +466,53 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
                 SetStatus("Invalid YouTube URL.");
                 break;
             case YouTubeUrlKind.NotYouTube:
-                _viewStack.VisibleChildName = SearchTabName;
-                _searchSummaryLabel.Label_ = $"Search stub: {text}";
-                SetStatus($"Search stub: {text}");
+                await SearchPlainText(text);
                 break;
             default:
                 throw new InvalidOperationException($"Unhandled YouTube URL kind: {parsedUrl.Kind}");
         }
 
         _searchPopover.Popdown();
+    }
+
+    private async Task SearchPlainText(string query)
+    {
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+        _searchCancellation = new CancellationTokenSource();
+        var cancellationToken = _searchCancellation.Token;
+
+        _viewStack.VisibleChildName = SearchTabName;
+        ClearFlowBox(_searchResultsFlowBox);
+        _searchSummaryLabel.Label_ = $"Searching YouTube for “{query}”…";
+        SetStatus($"Searching YouTube for “{query}”…");
+
+        try
+        {
+            var result = await _searchService.SearchAsync(new SearchRequest(query), cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            RenderSearchResults(result);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void RenderSearchResults(SearchResultPage result)
+    {
+        ClearFlowBox(_searchResultsFlowBox);
+        foreach (var video in result.Videos)
+        {
+            _searchResultsFlowBox.Append(CreateVideoCard(video));
+        }
+
+        var message = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
+        _searchSummaryLabel.Label_ = message;
+        SetStatus(message);
     }
 
     private async Task PlayYouTubeUrl(YouTubeUrlParseResult parsedUrl)
