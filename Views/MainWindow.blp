@@ -2,36 +2,70 @@ using Gtk 4.0;
 using Adw 1;
 
 Adw.ApplicationWindow MainWindow {
-  default-width: 800;
-  default-height: 600;
+  default-width: 1180;
+  default-height: 760;
   title: "SilverScreen";
 
   content: Adw.ToolbarView {
     [top]
     Adw.HeaderBar header_bar {
-      title-widget: Adw.WindowTitle {
-        title: "SilverScreen";
-        subtitle: "Template Application";
+      [start]
+      MenuButton account_button {
+        icon-name: "avatar-default-symbolic";
+        tooltip-text: "Account";
+      }
+
+      [start]
+      Button search_button {
+        icon-name: "system-search-symbolic";
+        tooltip-text: "Search";
+        clicked => $OnSearchButton_Clicked();
+      }
+
+      title-widget: Adw.ViewSwitcher view_switcher {
+        policy: wide;
       };
+
+      [end]
+      MenuButton app_menu_button {
+        icon-name: "open-menu-symbolic";
+        tooltip-text: "Main Menu";
+      }
     }
 
-    content: Adw.StatusPage {
-      title: "Welcome";
-      description: "Hello, World!";
-      icon-name: "face-smile-big-symbolic";
-
-      child: Box {
+    content: Overlay content_overlay {
+      child: Box main_box {
         orientation: vertical;
-        spacing: 12;
-        valign: center;
 
-        Button click_me_button {
-          label: "Click Me!";
-          halign: center;
-          clicked => $OnClickMeButton_Clicked();
-          styles ["pill", "suggested-action"]
+        Adw.ViewStack view_stack {
+          hexpand: true;
+          vexpand: true;
+          hhomogeneous: false;
+          vhomogeneous: false;
+        }
+
+        Label status_label {
+          label: "Ready";
+          xalign: 0;
+          margin-start: 18;
+          margin-end: 18;
+          margin-top: 8;
+          margin-bottom: 10;
+          ellipsize: end;
+          styles ["caption", "dim-label"]
         }
       };
+
+      [overlay]
+      MenuButton queue_button {
+        halign: end;
+        valign: end;
+        margin-end: 24;
+        margin-bottom: 24;
+        tooltip-text: "Queued videos";
+        visible: false;
+        styles ["pill", "suggested-action"]
+      }
     };
   };
 }
