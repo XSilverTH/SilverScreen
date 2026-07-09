@@ -1,8 +1,9 @@
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 
-namespace SilverScreen.Services;
+namespace SilverScreen.Features.Queue;
 
-public sealed class QueueService
+public sealed class QueueService : IQueueService
 {
     private readonly List<QueueItem> _items = [];
 
@@ -12,24 +13,30 @@ public sealed class QueueService
 
     public TimeSpan TotalDuration => TimeSpan.FromTicks(_items.Sum(item => item.Video.Duration.Ticks));
 
-    public void Add(VideoSummary video)
+    public QueueItem Add(VideoSummary video)
     {
-        _items.Add(new QueueItem(video, DateTimeOffset.Now));
+        var item = new QueueItem(video, DateTimeOffset.Now, _items.Count);
+        _items.Add(item);
         Changed?.Invoke(this, EventArgs.Empty);
+        return item;
     }
 
-    public void AddNext(VideoSummary video)
+    public QueueItem AddNext(VideoSummary video)
     {
-        _items.Insert(0, new QueueItem(video, DateTimeOffset.Now));
+        var item = new QueueItem(video, DateTimeOffset.Now, 0);
+        _items.Insert(0, item);
         Changed?.Invoke(this, EventArgs.Empty);
+        return item;
     }
 
-    public void Remove(QueueItem item)
+    public bool Remove(QueueItem item)
     {
         if (_items.Remove(item))
         {
             Changed?.Invoke(this, EventArgs.Empty);
+            return true;
         }
+        return false;
     }
 
     public void Clear()

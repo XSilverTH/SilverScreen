@@ -1,8 +1,11 @@
+using System;
+using System.Collections.Generic;
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 
-namespace SilverScreen.Services;
+namespace SilverScreen.Infrastructure.Mock;
 
-public sealed class MockFeedService
+public sealed class MockFeedService : IFeedService
 {
     private static readonly IReadOnlyList<VideoSummary> HomeVideos =
     [
@@ -17,5 +20,5 @@ public sealed class MockFeedService
         new("vid-windowing", "Wayland Windows, Portals, and Sandboxes", "Compositor Club", TimeSpan.FromMinutes(37) + TimeSpan.FromSeconds(40), "placeholder://indigo", false),
     ];
 
-    public IReadOnlyList<VideoSummary> GetHomeFeed() => HomeVideos;
+    public FeedPage GetHomeFeed() => new(HomeVideos);
 }

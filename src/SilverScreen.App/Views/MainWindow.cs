@@ -1,6 +1,8 @@
 using Gtk;
 using SilverScreen.Core.Models;
-using SilverScreen.Services;
+using SilverScreen.Core.Services;
+using SilverScreen.Features.Queue;
+using SilverScreen.Infrastructure.Mock;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views;
@@ -12,9 +14,11 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private const string SubscriptionsTabName = "subscriptions";
     private const string HistoryTabName = "history";
 
-    private readonly MockFeedService _feedService = new();
-    private readonly QueueService _queueService = new();
-    private readonly PlaybackService _playbackService = new();
+    private readonly IFeedService _feedService = new MockFeedService();
+    private readonly IQueueService _queueService = new QueueService();
+    private readonly IPlaybackService _playbackService = new MockPlaybackService();
+    private readonly ISearchService _searchService = new MockSearchService();
+    private readonly ISessionService _sessionService = new MockSessionService();
 
     private readonly Adw.ViewStack _viewStack;
     private readonly Adw.ViewSwitcher _viewSwitcher;
@@ -71,7 +75,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void BuildStaticTabs()
     {
-        var homePage = CreateVideoGridPage(_feedService.GetHomeFeed().Where(video => !video.IsShort));
+        var homePage = CreateVideoGridPage(_feedService.GetHomeFeed().Videos.Where(video => !video.IsShort));
         _viewStack.AddTitled(homePage, HomeTabName, "Home");
         _viewStack.AddTitled(CreateSearchPage(), SearchTabName, "Search");
         _viewStack.AddTitled(CreatePlaceholderPage("Subscriptions", "Subscription feeds will land after account/session support."), SubscriptionsTabName, "Subscriptions");
@@ -267,13 +271,16 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void BuildAccountPopover()
     {
+        var session = _sessionService.GetCurrentSession();
+
         var popoverBox = Box.New(Orientation.Vertical, 10);
         popoverBox.MarginTop = 12;
         popoverBox.MarginBottom = 12;
         popoverBox.MarginStart = 12;
         popoverBox.MarginEnd = 12;
 
-        var heading = Label.New("Not signed in");
+        var headingText = session.IsSignedIn ? (session.DisplayName ?? "Signed in") : "Not signed in";
+        var heading = Label.New(headingText);
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         popoverBox.Append(heading);
@@ -409,7 +416,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             return;
         }
 
-        if (IsLikelyYouTubeUrl(text))
+        if (_searchService.IsLikelyYouTubeUrl(text))
         {
             SetStatus($"Open URL stub: {text}");
         }
@@ -425,7 +432,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void PlayVideo(VideoSummary video)
     {
-        SetStatus(_playbackService.Play(video));
+        SetStatus(_playbackService.Play(new PlaybackRequest(video)));
     }
 
     private void AddToQueue(VideoSummary video)
@@ -446,14 +453,6 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _statusLabel.Label_ = message;
     }
 
-    private static bool IsLikelyYouTubeUrl(string text)
-    {
-        return Uri.TryCreate(text, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-            && (uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase)
-                || uri.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase));
-    }
 
     private static string BuildVideoUrl(VideoSummary video) => $"https://www.youtube.com/watch?v={video.Id}";
 
