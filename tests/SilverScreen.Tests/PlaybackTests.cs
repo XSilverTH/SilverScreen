@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Features.Playback;
 
@@ -52,6 +53,36 @@ public sealed class PlaybackTests
 
         Assert.Collection(
             command.Arguments,
+            argument => Assert.Equal("--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt", argument),
+            argument => Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument));
+    }
+
+    [Fact]
+    public void MpvCommandBuilderOmitsCookiesOptionWhenSessionCookieFileIsMissing()
+    {
+        var command = new MpvCommandBuilder().Build(
+            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackOptions());
+
+        Assert.DoesNotContain(command.Arguments, argument => argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
+        var argument = Assert.Single(command.Arguments);
+        Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument);
+    }
+
+    [Fact]
+    public void MpvCommandBuilderKeepsCookieOptionAndUrlAsSeparateStartInfoArguments()
+    {
+        var builder = new MpvCommandBuilder();
+        var command = builder.Build(
+            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackOptions(),
+            "/tmp/silverscreen-cookies/cookies.txt");
+
+        var startInfo = builder.BuildStartInfo(command);
+
+        Assert.False(startInfo.UseShellExecute);
+        Assert.Collection(
+            startInfo.ArgumentList,
             argument => Assert.Equal("--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt", argument),
             argument => Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument));
     }
@@ -151,6 +182,74 @@ public sealed class PlaybackTests
         var message = await service.PlayAsync(new PlaybackRequest(CreateVideo("abc123_X-yZ")));
 
         Assert.Equal("Could not start MPV. Is it installed?", message);
+    }
+
+    [Fact]
+    public void ExternalMpvPlaybackServiceExitCleanupWithNoCookieLeaseDoesNotThrow()
+    {
+        var exception = Record.Exception(() => ExternalMpvPlaybackService.HandleProcessExited(null, null));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ExternalMpvPlaybackServiceExitCleanupWithDisposedProcessDoesNotThrow()
+    {
+        using var process = new Process();
+        process.Dispose();
+
+        var exception = Record.Exception(() => ExternalMpvPlaybackService.HandleProcessExited(process, null));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ExternalMpvPlaybackServiceExitCleanupDisposesCookieLease()
+    {
+        var lease = new TrackingDisposable();
+
+        ExternalMpvPlaybackService.HandleProcessExited(null, lease);
+
+        Assert.Equal(1, lease.DisposeCount);
+    }
+
+    [Fact]
+    public void ExternalMpvPlaybackServiceCookieLeaseCleanupCanBeCalledTwice()
+    {
+        var lease = new TrackingDisposable();
+
+        ExternalMpvPlaybackService.CleanupCookieLeaseQuietly(lease, "test cleanup");
+        ExternalMpvPlaybackService.CleanupCookieLeaseQuietly(lease, "test cleanup");
+
+        Assert.Equal(2, lease.DisposeCount);
+    }
+
+    [Fact]
+    public void ExternalMpvPlaybackServiceCookieLeaseCleanupSwallowsDisposeFailures()
+    {
+        var lease = new ThrowingDisposable();
+
+        var exception = Record.Exception(() => ExternalMpvPlaybackService.CleanupCookieLeaseQuietly(lease, "test cleanup"));
+
+        Assert.Null(exception);
+    }
+
+    private sealed class TrackingDisposable : IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose()
+        {
+            DisposeCount++;
+        }
+    }
+
+    private sealed class ThrowingDisposable : IDisposable
+    {
+        public void Dispose()
+        {
+            throw new IOException("test cleanup failure");
+        }
     }
 
     private static VideoSummary CreateVideo(string id, string? watchUrl = null)

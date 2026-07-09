@@ -35,33 +35,118 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             cookieFile = _cookieFileProvider?.CreateCookieFile();
             var command = _commandBuilder.Build(request, _options, cookieFile?.Path);
-            var startInfo = _commandBuilder.BuildStartInfo(command);
+            LogDebug($"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
 
+            var startInfo = _commandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
             if (started is null)
             {
-                cookieFile?.Dispose();
+                LogDebug("MPV process start returned no process.");
+                CleanupCookieLeaseQuietly(cookieFile, "MPV start returned no process");
                 return "Could not start MPV. Is it installed?";
             }
 
-            if (cookieFile is not null)
+            LogDebug($"MPV process started. pid={TryGetProcessId(started)}.");
+            var cookieFileForProcess = cookieFile;
+            cookieFile = null;
+
+            try
             {
                 started.EnableRaisingEvents = true;
-                started.Exited += (_, _) => cookieFile.Dispose();
-                cookieFile = null;
+                started.Exited += (_, _) => HandleProcessExited(started, cookieFileForProcess);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+            {
+                LogDebug($"Could not attach MPV exit cleanup handler; cleaning up lease now. error={ex.GetType().Name}: {ex.Message}");
+                HandleProcessExited(started, cookieFileForProcess);
             }
 
             return $"Opening in MPV: {request.Title}";
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            cookieFile?.Dispose();
+            LogDebug($"MPV process start failed. error={ex.GetType().Name}: {ex.Message}");
+            CleanupCookieLeaseQuietly(cookieFile, "MPV executable start failed");
             return "Could not start MPV. Is it installed?";
         }
         catch (InvalidOperationException ex)
         {
-            cookieFile?.Dispose();
+            LogDebug($"MPV playback request rejected. error={ex.GetType().Name}: {ex.Message}");
+            CleanupCookieLeaseQuietly(cookieFile, "MPV playback request rejected");
             return ex.Message;
         }
+    }
+
+    internal static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
+    {
+        try
+        {
+            var exitCode = TryGetExitCode(process);
+            LogDebug(exitCode is null ? "MPV exited; exit code unavailable." : $"MPV exited with code {exitCode}.");
+            CleanupCookieLeaseQuietly(cookieFileLease, "MPV process exited");
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"MPV exit cleanup handler failed safely. error={ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    internal static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
+    {
+        if (cookieFileLease is null)
+        {
+            LogDebug($"No temporary cookie file lease to clean up. reason='{reason}'.");
+            return;
+        }
+
+        try
+        {
+            cookieFileLease.Dispose();
+            LogDebug($"Temporary cookie file lease cleaned up. reason='{reason}'.");
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"Temporary cookie file lease cleanup failed safely. reason='{reason}', error={ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static int? TryGetExitCode(Process? process)
+    {
+        if (process is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return process.ExitCode;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    private static int? TryGetProcessId(Process process)
+    {
+        try
+        {
+            return process.Id;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    private static bool CommandUsesYtdlCookiesOption(MpvPlaybackCommand command)
+    {
+        return command.Arguments.Any(argument => argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
+    }
+
+    private static void LogDebug(string message)
+    {
+        Debug.WriteLine($"[SilverScreen] {message}");
+        Console.Error.WriteLine($"[SilverScreen] {message}");
     }
 }
