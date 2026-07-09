@@ -7,9 +7,11 @@ namespace SilverScreen.Infrastructure.Mock;
 
 public sealed class MockFeedService : IFeedService
 {
+    private const string DemoPlaybackUrl = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4";
+
     private static readonly IReadOnlyList<VideoSummary> HomeVideos =
     [
-        new("SsLinuxD01A", "Designing a Calm Linux Desktop", "Northstar Labs", TimeSpan.FromMinutes(18) + TimeSpan.FromSeconds(32), "placeholder://slate", false),
+        new("SsDemoMp4A", "[Demo Playback] Big Buck Bunny sample MP4", "SilverScreen Test Media", TimeSpan.FromSeconds(10), "placeholder://slate", false, DemoPlaybackUrl),
         new("SsGtkBlp02B", "GTK4 Blueprint Patterns That Scale", "GNOME Craft", TimeSpan.FromMinutes(26) + TimeSpan.FromSeconds(5), "placeholder://blue", false),
         new("SsAudioRt03", "PipeWire Routing Without the Panic", "Tux Audio", TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(48), "placeholder://green", false),
         new("SsShortRc04", "One Minute Rice Showcase", "Tiny Terminals", TimeSpan.FromSeconds(58), "placeholder://short", true),

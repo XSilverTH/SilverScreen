@@ -12,8 +12,15 @@ public sealed record PlaybackRequest(VideoSummary Video)
 
     public static string? BuildWatchUrl(string videoId)
     {
-        return string.IsNullOrWhiteSpace(videoId)
-            ? null
-            : $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}";
+        return LooksLikeYouTubeVideoId(videoId)
+            ? $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}"
+            : null;
+    }
+
+    public static bool LooksLikeYouTubeVideoId(string id)
+    {
+        return id.Length == 11
+            && !id.StartsWith("Ss", StringComparison.Ordinal)
+            && id.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
     }
 }

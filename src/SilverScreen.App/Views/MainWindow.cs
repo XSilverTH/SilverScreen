@@ -144,6 +144,10 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         channel.Xalign = 0;
         textColumn.Append(channel);
 
+        var playbackAvailability = CreateDimLabel(HasPlayableUrl(video) ? "Playable demo URL" : "Mock placeholder • no playable URL");
+        playbackAvailability.Xalign = 0;
+        textColumn.Append(playbackAvailability);
+
         metadataRow.Append(textColumn);
         metadataRow.Append(CreateVideoMenuButton(video));
         card.Append(metadataRow);
@@ -213,7 +217,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         menuBox.Append(CreatePopoverAction("Add to queue", () => AddToQueue(video)));
         menuBox.Append(CreatePopoverAction("Add next", () => AddNext(video)));
         menuBox.Append(CreatePopoverAction("Open channel", () => SetStatus($"Open channel stub: {video.ChannelName}")));
-        menuBox.Append(CreatePopoverAction("Copy link", () => SetStatus($"Copy link stub: {BuildVideoUrl(video)}")));
+        menuBox.Append(CreatePopoverAction("Copy link", () => CopyVideoLink(video)));
 
         var popover = Popover.New();
         popover.Child = menuBox;
@@ -455,7 +459,15 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     }
 
 
-    private static string BuildVideoUrl(VideoSummary video) => $"https://www.youtube.com/watch?v={video.Id}";
+    private void CopyVideoLink(VideoSummary video)
+    {
+        var videoUrl = BuildVideoUrl(video);
+        SetStatus(videoUrl is null ? "No playable URL is available for this mock video yet." : $"Copy link stub: {videoUrl}");
+    }
+
+    private static bool HasPlayableUrl(VideoSummary video) => BuildVideoUrl(video) is not null;
+
+    private static string? BuildVideoUrl(VideoSummary video) => string.IsNullOrWhiteSpace(video.WatchUrl) ? PlaybackRequest.BuildWatchUrl(video.Id) : video.WatchUrl;
 
     private static string FormatDuration(TimeSpan duration)
     {
