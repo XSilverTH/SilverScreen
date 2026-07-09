@@ -1,0 +1,79 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+out/
+publish/
+TestResults/
+coverage/
+coverage-*/
+*.coverage
+*.coveragexml
+*.trx
+
+# .NET / NuGet
+project.assets.json
+project.nuget.cache
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# GIR.Core / GTK / Blueprint generated intermediates
+*.gresource
+*.resources.xml
+*.ui
+*.typelib
+*.gir
+.gtk-builder-tool/
+.blueprint-compiler/
+
+# Local IDE/editor state
+.idea/
+.vscode/
+.vs/
+*.DotSettings.user
+*.swp
+*.swo
+*~
+
+# Logs, dumps, caches, temporaries
+*.log
+*.tmp
+*.temp
+*.pid
+*.seed
+*.pid.lock
+*.cache
+.cache/
+tmp/
+temp/
+core
+core.*
+*.dmp
+
+# Secrets, sessions, cookies, machine-local config
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+secrets.*
+appsettings.Development.json
+appsettings.Local.json
+cookies.txt
+cookies*.txt
+*.cookies
+*.cookie
+session.json
+sessions/
+.local/
+
+# OS files
+.DS_Store
+Thumbs.db
