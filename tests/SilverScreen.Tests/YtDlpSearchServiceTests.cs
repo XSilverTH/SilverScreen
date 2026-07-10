@@ -194,12 +194,14 @@ public sealed class YtDlpSearchServiceTests
 
     private static YtDlpSearchService CreateService(string standardOutput, int exitCode = 0, string standardError = "")
     {
-        return new YtDlpSearchService(new YtDlpOptions(), new FakeRunner(new ProcessResult(exitCode, standardOutput, standardError)));
+        return new YtDlpSearchService(new YtDlpOptions(),
+            new FakeRunner(new ProcessResult(exitCode, standardOutput, standardError)));
     }
 
     private sealed class FakeRunner(ProcessResult result) : IYtDlpRunner
     {
-        public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options, CancellationToken cancellationToken)
+        public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options,
+            CancellationToken cancellationToken)
         {
             return Task.FromResult(result);
         }
@@ -207,7 +209,8 @@ public sealed class YtDlpSearchServiceTests
 
     private sealed class ThrowingRunner(Exception exception) : IYtDlpRunner
     {
-        public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options, CancellationToken cancellationToken)
+        public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options,
+            CancellationToken cancellationToken)
         {
             throw exception;
         }

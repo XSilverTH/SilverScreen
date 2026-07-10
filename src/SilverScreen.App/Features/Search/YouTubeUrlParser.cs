@@ -128,15 +128,15 @@ public static class YouTubeUrlParser
     private static bool IsSupportedScheme(Uri uri)
     {
         return uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-            || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+               || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsYouTubeHost(string host)
     {
         return host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("www.youtube.com", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("m.youtube.com", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
+               || host.Equals("www.youtube.com", StringComparison.OrdinalIgnoreCase)
+               || host.Equals("m.youtube.com", StringComparison.OrdinalIgnoreCase)
+               || host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GetPathSegment(Uri uri, int index)
@@ -184,6 +184,6 @@ public static class YouTubeUrlParser
     private static bool IsValidVideoId(string videoId)
     {
         return videoId.Length == 11
-            && videoId.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+               && videoId.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
     }
 }

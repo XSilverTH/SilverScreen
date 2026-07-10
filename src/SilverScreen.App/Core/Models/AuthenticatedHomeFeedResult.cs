@@ -7,6 +7,7 @@ public sealed record AuthenticatedHomeFeedResult(
 {
     public override string ToString()
     {
-        return $"Status: {Status}, VideoCount: {FeedPage.Videos.Count}, HasContinuation: {!string.IsNullOrEmpty(FeedPage.ContinuationToken)}, StatusMessage: {StatusMessage}";
+        return
+            $"Status: {Status}, VideoCount: {FeedPage.Videos.Count}, HasContinuation: {!string.IsNullOrEmpty(FeedPage.ContinuationToken)}, StatusMessage: {StatusMessage}";
     }
 }

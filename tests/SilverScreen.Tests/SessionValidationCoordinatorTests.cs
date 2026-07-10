@@ -12,7 +12,8 @@ namespace SilverScreen.Tests;
 
 public sealed class SessionValidationCoordinatorTests
 {
-    private const string FakeCookieContent = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
+    private const string FakeCookieContent =
+        "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
 
     private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     {
@@ -26,6 +27,7 @@ public sealed class SessionValidationCoordinatorTests
             {
                 return LoadFirstPageAsyncHandler(cancellationToken);
             }
+
             return Task.FromResult(new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.Success,
                 FeedPage.Empty,
@@ -92,8 +94,10 @@ public sealed class SessionValidationCoordinatorTests
                 AuthenticatedHomeFeedStatus.Success,
                 new FeedPage(new List<VideoSummary>
                 {
-                    new("v1", "Test Title 1", "Channel 1", TimeSpan.FromMinutes(5), "https://example.com/thumb1.jpg", false),
-                    new("v2", "Test Title 2", "Channel 2", TimeSpan.FromMinutes(3), "https://example.com/thumb2.jpg", false)
+                    new("v1", "Test Title 1", "Channel 1", TimeSpan.FromMinutes(5), "https://example.com/thumb1.jpg",
+                        false),
+                    new("v2", "Test Title 2", "Channel 2", TimeSpan.FromMinutes(3), "https://example.com/thumb2.jpg",
+                        false)
                 }, "token-xyz"),
                 "Fake status message"
             ))

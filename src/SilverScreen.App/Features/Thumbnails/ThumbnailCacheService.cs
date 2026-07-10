@@ -44,12 +44,14 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
         if (maxDownloadBytes <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxDownloadBytes), "Maximum thumbnail download size must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(maxDownloadBytes),
+                "Maximum thumbnail download size must be positive.");
         }
 
         if (maxFileCount <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxFileCount), "Maximum thumbnail cache count must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(maxFileCount),
+                "Maximum thumbnail cache count must be positive.");
         }
 
         _httpClient = httpClient;
@@ -61,7 +63,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     public string CacheDirectory => _cacheDirectory;
 
-    public async Task<ThumbnailResult?> GetThumbnailAsync(VideoSummary video, CancellationToken cancellationToken = default)
+    public async Task<ThumbnailResult?> GetThumbnailAsync(VideoSummary video,
+        CancellationToken cancellationToken = default)
     {
         if (video.IsShort)
         {
@@ -71,7 +74,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         return await GetThumbnailAsync(video.ThumbnailUrl, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<ThumbnailResult?> GetThumbnailAsync(string thumbnailUrl, CancellationToken cancellationToken = default)
+    public async Task<ThumbnailResult?> GetThumbnailAsync(string thumbnailUrl,
+        CancellationToken cancellationToken = default)
     {
         if (!TryCreateHttpUri(thumbnailUrl, out var uri))
         {
@@ -101,7 +105,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
             request.Headers.TryAddWithoutValidation("Accept", "image/jpeg,image/png,*/*;q=0.1");
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
                 return null;
@@ -114,7 +119,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
             await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             await using var target = File.Create(temporaryPath);
-            var copied = await CopyWithLimitAsync(source, target, _maxDownloadBytes, cancellationToken).ConfigureAwait(false);
+            var copied = await CopyWithLimitAsync(source, target, _maxDownloadBytes, cancellationToken)
+                .ConfigureAwait(false);
             if (!copied)
             {
                 return null;
@@ -127,7 +133,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
+                                       or InvalidOperationException)
         {
             return null;
         }
@@ -254,10 +261,11 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private static bool IsYouTubeThumbnailHost(string host)
     {
         return host.Equals("i.ytimg.com", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("img.youtube.com", StringComparison.OrdinalIgnoreCase);
+               || host.Equals("img.youtube.com", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task<bool> CopyWithLimitAsync(Stream source, Stream target, long maxBytes, CancellationToken cancellationToken)
+    private static async Task<bool> CopyWithLimitAsync(Stream source, Stream target, long maxBytes,
+        CancellationToken cancellationToken)
     {
         var buffer = new byte[81920];
         long totalBytes = 0;
@@ -313,13 +321,13 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
 
             return header[0] == (byte)'R'
-                && header[1] == (byte)'I'
-                && header[2] == (byte)'F'
-                && header[3] == (byte)'F'
-                && header[8] == (byte)'W'
-                && header[9] == (byte)'E'
-                && header[10] == (byte)'B'
-                && header[11] == (byte)'P';
+                   && header[1] == (byte)'I'
+                   && header[2] == (byte)'F'
+                   && header[3] == (byte)'F'
+                   && header[8] == (byte)'W'
+                   && header[9] == (byte)'E'
+                   && header[10] == (byte)'B'
+                   && header[11] == (byte)'P';
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

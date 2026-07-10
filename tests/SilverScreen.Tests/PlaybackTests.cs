@@ -29,7 +29,8 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderUsesDefaultMpvExecutable()
     {
-        var command = new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+        var command =
+            new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
 
         Assert.Equal("mpv", command.ExecutablePath);
     }
@@ -37,7 +38,8 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderPassesUrlAsSeparateArgument()
     {
-        var command = new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+        var command =
+            new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
 
         var argument = Assert.Single(command.Arguments);
         Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument);
@@ -64,7 +66,8 @@ public sealed class PlaybackTests
             new PlaybackRequest(CreateVideo("abc123_X-yZ")),
             new PlaybackOptions());
 
-        Assert.DoesNotContain(command.Arguments, argument => argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
+        Assert.DoesNotContain(command.Arguments,
+            argument => argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
         var argument = Assert.Single(command.Arguments);
         Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument);
     }
@@ -92,7 +95,9 @@ public sealed class PlaybackTests
     {
         var request = new PlaybackRequest(CreateVideo(string.Empty));
 
-        var exception = Assert.Throws<InvalidOperationException>(() => new MpvCommandBuilder().Build(request, new PlaybackOptions()));
+        var exception =
+            Assert.Throws<InvalidOperationException>(() =>
+                new MpvCommandBuilder().Build(request, new PlaybackOptions()));
         Assert.Equal("No playable URL is available for this mock video yet.", exception.Message);
     }
 
@@ -169,7 +174,9 @@ public sealed class PlaybackTests
     {
         var request = new PlaybackRequest(CreateVideo("abc123_X-yZ", "file:///tmp/video.mp4"));
 
-        var exception = Assert.Throws<InvalidOperationException>(() => new MpvCommandBuilder().Build(request, new PlaybackOptions()));
+        var exception =
+            Assert.Throws<InvalidOperationException>(() =>
+                new MpvCommandBuilder().Build(request, new PlaybackOptions()));
         Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 
@@ -229,7 +236,8 @@ public sealed class PlaybackTests
     {
         var lease = new ThrowingDisposable();
 
-        var exception = Record.Exception(() => ExternalMpvPlaybackService.CleanupCookieLeaseQuietly(lease, "test cleanup"));
+        var exception =
+            Record.Exception(() => ExternalMpvPlaybackService.CleanupCookieLeaseQuietly(lease, "test cleanup"));
 
         Assert.Null(exception);
     }
@@ -254,6 +262,7 @@ public sealed class PlaybackTests
 
     private static VideoSummary CreateVideo(string id, string? watchUrl = null)
     {
-        return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false, watchUrl);
+        return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
+            watchUrl);
     }
 }

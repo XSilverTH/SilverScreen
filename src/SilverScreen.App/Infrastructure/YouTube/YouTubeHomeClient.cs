@@ -21,7 +21,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
 
     public Func<long> TimeSource { get; set; }
 
-    public YouTubeHomeClient(HttpClient httpClient, ISessionService sessionService, YouTubeHomeClientOptions? options = null)
+    public YouTubeHomeClient(HttpClient httpClient, ISessionService sessionService,
+        YouTubeHomeClientOptions? options = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -29,7 +30,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
         TimeSource = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
 
-    public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null, CancellationToken cancellationToken = default)
+    public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
+        CancellationToken cancellationToken = default)
     {
         // 1. Get Session Cookies
         var sessionCookies = _sessionService.GetManualSessionCookies();
@@ -147,7 +149,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
         }
 
         // 5. Send POST request to InnerTube API
-        var requestUrl = $"https://www.youtube.com/youtubei/v1/browse?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
+        var requestUrl =
+            $"https://www.youtube.com/youtubei/v1/browse?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
         using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
 
         request.Headers.UserAgent.ParseAdd(_options.UserAgent);
@@ -164,7 +167,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
 
         if (_options.AuthUser.HasValue)
         {
-            request.Headers.Add("X-Goog-AuthUser", _options.AuthUser.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            request.Headers.Add("X-Goog-AuthUser",
+                _options.AuthUser.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         // Derive SAPISIDHASH
@@ -250,7 +254,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
         }
     }
 
-    private async Task<YouTubeBootstrapConfig?> EnsureBootstrappedAsync(YouTubeCredentials credentials, CancellationToken cancellationToken)
+    private async Task<YouTubeBootstrapConfig?> EnsureBootstrappedAsync(YouTubeCredentials credentials,
+        CancellationToken cancellationToken)
     {
         if (_bootstrapConfig != null)
         {
@@ -280,6 +285,7 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
             {
                 _bootstrapConfig = config;
             }
+
             return _bootstrapConfig;
         }
         finally
@@ -287,6 +293,7 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
             _bootstrapLock.Release();
         }
     }
+
 
     private static void WalkJson(JsonElement element, List<VideoSummary> videos, ref string? continuationToken)
     {
@@ -302,7 +309,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
                     name.Equals("promotedVideoRenderer", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("promotedSparklesTextSearchGridRenderer", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("promotedSparklesWebRenderer", StringComparison.OrdinalIgnoreCase) ||
-                    (name.StartsWith("ad", StringComparison.OrdinalIgnoreCase) && name.EndsWith("Renderer", StringComparison.OrdinalIgnoreCase)))
+                    (name.StartsWith("ad", StringComparison.OrdinalIgnoreCase) &&
+                     name.EndsWith("Renderer", StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
@@ -321,15 +329,18 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
                     {
                         videos.Add(video);
                     }
+
                     continue;
                 }
 
                 if (name.Equals("continuationCommand", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (property.Value.TryGetProperty("token", out var tokenProp) && tokenProp.ValueKind == JsonValueKind.String)
+                    if (property.Value.TryGetProperty("token", out var tokenProp) &&
+                        tokenProp.ValueKind == JsonValueKind.String)
                     {
                         continuationToken = tokenProp.GetString();
                     }
+
                     continue;
                 }
 
@@ -374,10 +385,12 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
         {
             channelName = ExtractText(ownerProp) ?? "";
         }
+
         if (string.IsNullOrEmpty(channelName) && renderer.TryGetProperty("shortBylineText", out var shortProp))
         {
             channelName = ExtractText(shortProp) ?? "";
         }
+
         if (string.IsNullOrEmpty(channelName) && renderer.TryGetProperty("longBylineText", out var longProp))
         {
             channelName = ExtractText(longProp) ?? "";
@@ -432,6 +445,7 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
                 {
                     return true;
                 }
+
                 if (HasReelEndpoint(prop.Value))
                 {
                     return true;
@@ -448,6 +462,7 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
                 }
             }
         }
+
         return false;
     }
 
@@ -460,7 +475,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
 
         if (element.ValueKind == JsonValueKind.Object)
         {
-            if (element.TryGetProperty("simpleText", out var simpleProp) && simpleProp.ValueKind == JsonValueKind.String)
+            if (element.TryGetProperty("simpleText", out var simpleProp) &&
+                simpleProp.ValueKind == JsonValueKind.String)
             {
                 return simpleProp.GetString();
             }
@@ -475,6 +491,7 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
                         sb.Append(textProp.GetString());
                     }
                 }
+
                 return sb.ToString();
             }
         }
@@ -508,7 +525,8 @@ public sealed class YouTubeHomeClient : IYouTubeHomeClient, IDisposable
             }
             else if (parts.Length == 3)
             {
-                if (int.TryParse(parts[0], out var hours) && int.TryParse(parts[1], out var mins) && int.TryParse(parts[2], out var secs))
+                if (int.TryParse(parts[0], out var hours) && int.TryParse(parts[1], out var mins) &&
+                    int.TryParse(parts[2], out var secs))
                 {
                     return new TimeSpan(hours, mins, secs);
                 }

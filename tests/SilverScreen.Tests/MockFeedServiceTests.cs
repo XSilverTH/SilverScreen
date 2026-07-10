@@ -20,6 +20,7 @@ public sealed class MockFeedServiceTests
         var filteredVideos = rawVideos.Where(video => !video.IsShort).ToList();
 
         // Assert: Verify filtered results contain absolutely no Shorts
-        Assert.All(filteredVideos, video => Assert.False(video.IsShort, $"Expected video '{video.Title}' not to be a Short."));
+        Assert.All(filteredVideos,
+            video => Assert.False(video.IsShort, $"Expected video '{video.Title}' not to be a Short."));
     }
 }

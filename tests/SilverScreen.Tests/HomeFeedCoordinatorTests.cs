@@ -23,11 +23,19 @@ public sealed class HomeFeedCoordinatorTests
         public List<CancellationToken> FirstPageTokens { get; } = new List<CancellationToken>();
         public List<CancellationToken> NextPageTokens { get; } = new List<CancellationToken>();
 
-        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)> _firstPageTcsQueue = new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
-        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)> _nextPageTcsQueue = new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
+        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
+            _firstPageTcsQueue =
+                new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
 
-        private TaskCompletionSource _firstPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        private TaskCompletionSource _nextPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
+            _nextPageTcsQueue =
+                new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
+
+        private TaskCompletionSource _firstPageCalledTcs =
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private TaskCompletionSource _nextPageCalledTcs =
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
         public Task NextPageCalledTask => _nextPageCalledTcs.Task;
@@ -40,14 +48,16 @@ public sealed class HomeFeedCoordinatorTests
 
         public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadFirstPage(bool ignoreCancellation = false)
         {
-            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
             _firstPageTcsQueue.Enqueue((tcs, ignoreCancellation));
             return tcs;
         }
 
         public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadNextPage(bool ignoreCancellation = false)
         {
-            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
             _nextPageTcsQueue.Enqueue((tcs, ignoreCancellation));
             return tcs;
         }
@@ -66,6 +76,7 @@ public sealed class HomeFeedCoordinatorTests
                     var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
                     tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
                 }
+
                 return tcs.Task;
             }
 
@@ -90,6 +101,7 @@ public sealed class HomeFeedCoordinatorTests
                     var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
                     tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
                 }
+
                 return tcs.Task;
             }
 
@@ -103,7 +115,8 @@ public sealed class HomeFeedCoordinatorTests
         public FeedPage GetHomeFeed() => FeedPage.Empty;
     }
 
-    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<HomeFeedState, bool> predicate, TimeSpan timeout)
+    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<HomeFeedState, bool> predicate,
+        TimeSpan timeout)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         EventHandler<HomeFeedState> handler = (s, state) =>
@@ -119,6 +132,7 @@ public sealed class HomeFeedCoordinatorTests
             coordinator.StateChanged -= handler;
             return;
         }
+
         try
         {
             using var cts = new CancellationTokenSource(timeout);

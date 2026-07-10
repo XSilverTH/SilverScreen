@@ -4,5 +4,6 @@ namespace SilverScreen.Features.Search;
 
 public interface IYtDlpRunner
 {
-    Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options, CancellationToken cancellationToken);
+    Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options,
+        CancellationToken cancellationToken);
 }

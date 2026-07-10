@@ -10,6 +10,7 @@ public sealed record HomeSessionValidationResult(
 {
     public override string ToString()
     {
-        return $"IsSuccess: {IsSuccess}, VideoCount: {VideoCount}, HasContinuation: {HasContinuation}, RequiresAuthentication: {RequiresAuthentication}, HighLevelStatus: {HighLevelStatus}, StatusMessage: {StatusMessage}";
+        return
+            $"IsSuccess: {IsSuccess}, VideoCount: {VideoCount}, HasContinuation: {HasContinuation}, RequiresAuthentication: {RequiresAuthentication}, HighLevelStatus: {HighLevelStatus}, StatusMessage: {StatusMessage}";
     }
 }

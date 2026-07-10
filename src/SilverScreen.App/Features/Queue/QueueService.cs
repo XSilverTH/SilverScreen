@@ -36,6 +36,7 @@ public sealed class QueueService : IQueueService
             Changed?.Invoke(this, EventArgs.Empty);
             return true;
         }
+
         return false;
     }
 

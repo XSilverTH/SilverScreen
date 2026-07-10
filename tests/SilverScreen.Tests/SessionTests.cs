@@ -5,7 +5,8 @@ namespace SilverScreen.Tests;
 
 public sealed class SessionTests
 {
-    private const string FakeCookieContent = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
+    private const string FakeCookieContent =
+        "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
 
     [Fact]
     public void SessionServiceStartsSignedOut()

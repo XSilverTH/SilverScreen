@@ -111,7 +111,8 @@ public static class SessionValidationFormatter
 
     public static string FormatResult(HomeSessionValidationResult result)
     {
-        return $"Validation {(result.IsSuccess ? "succeeded" : "failed")}. Usable videos: {result.VideoCount}. Continuation available: {(result.HasContinuation ? "yes" : "no")}. Authentication required: {(result.RequiresAuthentication ? "yes" : "no")}. Status: {FormatHighLevelStatus(result.HighLevelStatus)}";
+        return
+            $"Validation {(result.IsSuccess ? "succeeded" : "failed")}. Usable videos: {result.VideoCount}. Continuation available: {(result.HasContinuation ? "yes" : "no")}. Authentication required: {(result.RequiresAuthentication ? "yes" : "no")}. Status: {FormatHighLevelStatus(result.HighLevelStatus)}";
     }
 
     private static string FormatHighLevelStatus(AuthenticatedHomeFeedStatus status)

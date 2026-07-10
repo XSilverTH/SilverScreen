@@ -97,6 +97,7 @@ public sealed class HomeFeedCoordinator : IDisposable
             _state = pendingState;
             version = _stateVersion;
         }
+
         PublishStateWithVersion(pendingState, version);
 
         try
@@ -136,6 +137,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                     return;
                 }
             }
+
             PublishStateWithVersion(errorState, errVersion);
         }
         finally
@@ -200,6 +202,7 @@ public sealed class HomeFeedCoordinator : IDisposable
             _state = pendingState;
             version = _stateVersion;
         }
+
         PublishStateWithVersion(pendingState, version);
 
         try
@@ -239,6 +242,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                     return;
                 }
             }
+
             PublishStateWithVersion(errorState, errVersion);
         }
         finally
@@ -367,7 +371,8 @@ public sealed class HomeFeedCoordinator : IDisposable
     {
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
-        return session.IsSignedIn && session.HasManualSession && cookies != null && !string.IsNullOrWhiteSpace(cookies.Content);
+        return session.IsSignedIn && session.HasManualSession && cookies != null &&
+               !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
@@ -406,6 +411,7 @@ public sealed class HomeFeedCoordinator : IDisposable
             _state = newState;
             version = _stateVersion;
         }
+
         PublishStateWithVersion(newState, version);
     }
 
