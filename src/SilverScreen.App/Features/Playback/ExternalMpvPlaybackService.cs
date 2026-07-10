@@ -35,7 +35,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             cookieFile = _cookieFileProvider?.CreateCookieFile();
             var command = _commandBuilder.Build(request, _options, cookieFile?.Path);
-            LogDebug($"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
+            LogDebug(
+                $"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
 
             var startInfo = _commandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
@@ -50,16 +51,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
 
-            try
-            {
-                started.EnableRaisingEvents = true;
-                started.Exited += (_, _) => HandleProcessExited(started, cookieFileForProcess);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
-            {
-                LogDebug($"Could not attach MPV exit cleanup handler; cleaning up lease now. error={ex.GetType().Name}: {ex.Message}");
-                HandleProcessExited(started, cookieFileForProcess);
-            }
+            _ = ObserveProcessExitAsync(started, cookieFileForProcess);
 
             return "Opening in MPV.";
         }
@@ -89,6 +81,33 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             LogDebug($"MPV exit cleanup handler failed safely. error={ex.GetType().Name}: {ex.Message}");
         }
+        finally
+        {
+            try
+            {
+                process?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"MPV process disposal failed safely. error={ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
+    private static async Task ObserveProcessExitAsync(Process process, IDisposable? cookieFileLease)
+    {
+        try
+        {
+            await process.WaitForExitAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"Could not observe MPV exit. error={ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            HandleProcessExited(process, cookieFileLease);
+        }
     }
 
     internal static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
@@ -106,7 +125,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         catch (Exception ex)
         {
-            LogDebug($"Temporary cookie file lease cleanup failed safely. reason='{reason}', error={ex.GetType().Name}: {ex.Message}");
+            LogDebug(
+                $"Temporary cookie file lease cleanup failed safely. reason='{reason}', error={ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -141,7 +161,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
 
     private static bool CommandUsesYtdlCookiesOption(MpvPlaybackCommand command)
     {
-        return command.Arguments.Any(argument => argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
+        return command.Arguments.Any(argument =>
+            argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
     }
 
     private static void LogDebug(string message)
