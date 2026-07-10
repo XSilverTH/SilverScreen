@@ -17,6 +17,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private const string SearchTabName = "search";
     private const string SubscriptionsTabName = "subscriptions";
     private const string HistoryTabName = "history";
+    private const int ThumbnailAreaHeight = 140;
+    private const int ThumbnailImageWidth = 226;
+    private const int ThumbnailImageHeight = 127;
 
     private readonly IFeedService _feedService = new MockFeedService();
     private readonly IQueueService _queueService = new QueueService();
@@ -193,10 +196,11 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return card;
     }
 
-    private Box CreateThumbnailPlaceholder(VideoSummary video, out Widget placeholder)
+    private Overlay CreateThumbnailPlaceholder(VideoSummary video, out Widget placeholder)
     {
-        var thumbnail = Box.New(Orientation.Vertical, 6);
-        thumbnail.HeightRequest = 140;
+        var thumbnail = Overlay.New();
+        thumbnail.HeightRequest = ThumbnailAreaHeight;
+        thumbnail.WidthRequest = ThumbnailImageWidth;
         thumbnail.MarginStart = 12;
         thumbnail.MarginEnd = 12;
         thumbnail.MarginTop = 12;
@@ -210,24 +214,25 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         icon.Valign = Align.Center;
         icon.Vexpand = true;
         placeholder = icon;
-        thumbnail.Append(icon);
+        thumbnail.Child = icon;
 
         var duration = Label.New(FormatDuration(video.Duration));
         duration.Halign = Align.End;
+        duration.Valign = Align.End;
         duration.MarginEnd = 10;
         duration.MarginBottom = 8;
         duration.CssClasses = ["caption", "dim-label"];
-        thumbnail.Append(duration);
+        thumbnail.AddOverlay(duration);
 
         return thumbnail;
     }
 
-    private void StartThumbnailLoad(VideoSummary video, Box thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    private void StartThumbnailLoad(VideoSummary video, Overlay thumbnail, Widget placeholder, CancellationToken cancellationToken)
     {
         _ = LoadThumbnailAsync(video, thumbnail, placeholder, cancellationToken);
     }
 
-    private async Task LoadThumbnailAsync(VideoSummary video, Box thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    private async Task LoadThumbnailAsync(VideoSummary video, Overlay thumbnail, Widget placeholder, CancellationToken cancellationToken)
     {
         ThumbnailResult? result;
         try
@@ -255,17 +260,19 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
             try
             {
-                var picture = Picture.NewForFilename(result.LocalPath);
+                var pixbuf = GdkPixbuf.Pixbuf.NewFromFileAtScale(
+                    result.LocalPath,
+                    ThumbnailImageWidth,
+                    ThumbnailImageHeight,
+                    preserveAspectRatio: false);
+                var picture = Picture.NewForPixbuf(pixbuf);
                 picture.AlternativeText = $"{video.Title} thumbnail";
-                picture.CanShrink = true;
-                picture.ContentFit = ContentFit.Cover;
-                picture.Hexpand = true;
-                picture.KeepAspectRatio = true;
-                picture.Valign = Align.Fill;
-                picture.Vexpand = true;
+                picture.Halign = Align.Center;
+                picture.HeightRequest = ThumbnailImageHeight;
+                picture.Valign = Align.Center;
+                picture.WidthRequest = ThumbnailImageWidth;
 
-                thumbnail.Remove(placeholder);
-                thumbnail.Prepend(picture);
+                thumbnail.Child = picture;
             }
             catch (Exception)
             {

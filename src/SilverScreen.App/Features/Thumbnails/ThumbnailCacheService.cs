@@ -81,17 +81,26 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         var cachePath = GetCachePath(uri);
         if (File.Exists(cachePath))
         {
-            TouchCacheFile(cachePath);
-            return new ThumbnailResult(cachePath, WasCacheHit: true);
+            if (IsWebPFile(cachePath))
+            {
+                DeleteFileIfExists(cachePath);
+            }
+            else
+            {
+                TouchCacheFile(cachePath);
+                return new ThumbnailResult(cachePath, WasCacheHit: true);
+            }
         }
 
         Directory.CreateDirectory(_cacheDirectory);
         var temporaryPath = Path.Combine(_cacheDirectory, $"{Path.GetFileName(cachePath)}.{Guid.NewGuid():N}.tmp");
+        var downloadUri = GetYouTubeJpegFallbackUri(uri) ?? uri;
 
         var downloadCompleted = false;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
+            request.Headers.TryAddWithoutValidation("Accept", "image/jpeg,image/png,*/*;q=0.1");
             using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
@@ -111,6 +120,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 return null;
             }
 
+
             downloadCompleted = true;
         }
         catch (OperationCanceledException)
@@ -127,6 +137,12 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             {
                 DeleteFileIfExists(temporaryPath);
             }
+        }
+
+        if (IsWebPFile(temporaryPath))
+        {
+            DeleteFileIfExists(temporaryPath);
+            return null;
         }
 
         try
@@ -213,6 +229,34 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         return SafeExtensions.Contains(extension) ? extension.ToLowerInvariant() : ".img";
     }
 
+    private static Uri? GetYouTubeJpegFallbackUri(Uri uri)
+    {
+        if (!IsYouTubeThumbnailHost(uri.Host))
+        {
+            return null;
+        }
+
+        var pathSegments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (pathSegments.Length < 2 || pathSegments[0] is not ("vi" or "vi_webp"))
+        {
+            return null;
+        }
+
+        var videoId = Uri.UnescapeDataString(pathSegments[1]);
+        if (string.IsNullOrWhiteSpace(videoId))
+        {
+            return null;
+        }
+
+        return new Uri($"https://i.ytimg.com/vi/{Uri.EscapeDataString(videoId)}/maxresdefault.jpg");
+    }
+
+    private static bool IsYouTubeThumbnailHost(string host)
+    {
+        return host.Equals("i.ytimg.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("img.youtube.com", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<bool> CopyWithLimitAsync(Stream source, Stream target, long maxBytes, CancellationToken cancellationToken)
     {
         var buffer = new byte[81920];
@@ -254,6 +298,32 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
+        }
+    }
+
+    private static bool IsWebPFile(string path)
+    {
+        try
+        {
+            Span<byte> header = stackalloc byte[12];
+            using var file = File.OpenRead(path);
+            if (file.Length < header.Length || file.Read(header) != header.Length)
+            {
+                return false;
+            }
+
+            return header[0] == (byte)'R'
+                && header[1] == (byte)'I'
+                && header[2] == (byte)'F'
+                && header[3] == (byte)'F'
+                && header[8] == (byte)'W'
+                && header[9] == (byte)'E'
+                && header[10] == (byte)'B'
+                && header[11] == (byte)'P';
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

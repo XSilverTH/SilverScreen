@@ -370,4 +370,145 @@ public sealed class ThumbnailCacheServiceTests
         Assert.True(File.Exists(cachePath));
         Assert.Equal(1, handler.CallCount);
     }
+
+    [Fact]
+    public async Task GetThumbnailAsync_RequestsIncludeAcceptHeaderPreferringJpegAndPng()
+    {
+        // Arrange
+        using var tempDir = new TemporaryDirectory();
+        string? acceptHeader = null;
+        var handler = new FakeHttpMessageHandler((req, ct) =>
+        {
+            if (req.Headers.TryGetValues("Accept", out var values))
+            {
+                acceptHeader = string.Join(", ", values);
+            }
+            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            response.Content = new ByteArrayContent("image"u8.ToArray());
+            return Task.FromResult(response);
+        });
+        using var httpClient = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
+        const string url = "https://example.com/images/accept.jpg";
+
+        // Act
+        var result = await service.GetThumbnailAsync(url);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(1, handler.CallCount);
+        Assert.NotNull(acceptHeader);
+        Assert.Contains("image/jpeg", acceptHeader);
+        Assert.Contains("image/png", acceptHeader);
+        Assert.StartsWith("image/jpeg, image/png", acceptHeader);
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_CachedWebPFileExists_DiscardsAndRedownloads()
+    {
+        // Arrange
+        using var tempDir = new TemporaryDirectory();
+        var webpBytes = new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var validImageBytes = "valid-jpeg-bytes"u8.ToArray();
+
+        var handler = new FakeHttpMessageHandler((req, ct) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            response.Content = new ByteArrayContent(validImageBytes);
+            return Task.FromResult(response);
+        });
+        using var httpClient = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
+        const string url = "https://example.com/images/cached-webp.jpg";
+
+        var cachePath = service.GetCachePathForUrl(url);
+        Directory.CreateDirectory(tempDir.Path);
+        await File.WriteAllBytesAsync(cachePath, webpBytes);
+
+        // Act
+        var result = await service.GetThumbnailAsync(url);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.WasCacheHit);
+        Assert.Equal(1, handler.CallCount);
+
+        Assert.True(File.Exists(cachePath));
+        var savedBytes = await File.ReadAllBytesAsync(cachePath);
+        Assert.Equal(validImageBytes, savedBytes);
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_WebPDownload_ReturnsNullAndDoesNotLeaveCacheFile()
+    {
+        // Arrange
+        using var tempDir = new TemporaryDirectory();
+        var webpBytes = new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+
+        var handler = new FakeHttpMessageHandler((req, ct) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            response.Content = new ByteArrayContent(webpBytes);
+            return Task.FromResult(response);
+        });
+        using var httpClient = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
+        const string url = "https://example.com/images/downloaded-webp.jpg";
+
+        // Act
+        var result = await service.GetThumbnailAsync(url);
+
+        // Assert
+        Assert.Null(result);
+        Assert.Equal(1, handler.CallCount);
+
+        var cachePath = service.GetCachePathForUrl(url);
+        Assert.False(File.Exists(cachePath));
+
+        if (Directory.Exists(tempDir.Path))
+        {
+            Assert.Empty(Directory.GetFiles(tempDir.Path));
+        }
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_YouTubeHq720UrlWithQueryParameters_NormalizesToMaxresDefaultAndCachesOriginalUrl()
+    {
+        // Arrange
+        using var tempDir = new TemporaryDirectory();
+        const string originalUrl = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwj81Y79Bw==&rs=AOn4CLD_U5rS3pL1z9W1kO3-n1u8H5g1uA";
+        const string expectedRequestUrl = "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg";
+        var imageData = "fake-jpeg-bytes"u8.ToArray();
+
+        string? requestedUrl = null;
+        var handler = new FakeHttpMessageHandler((req, ct) =>
+        {
+            requestedUrl = req.RequestUri?.AbsoluteUri;
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(imageData)
+            };
+            return Task.FromResult(response);
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
+
+        // Act
+        var result = await service.GetThumbnailAsync(originalUrl);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.False(result.WasCacheHit);
+        Assert.Equal(1, handler.CallCount);
+        Assert.Equal(expectedRequestUrl, requestedUrl);
+
+        var expectedCachePath = service.GetCachePathForUrl(originalUrl);
+        Assert.Equal(expectedCachePath, result.LocalPath);
+        Assert.True(File.Exists(expectedCachePath));
+
+        var savedBytes = await File.ReadAllBytesAsync(expectedCachePath);
+        Assert.Equal(imageData, savedBytes);
+    }
+
 }
