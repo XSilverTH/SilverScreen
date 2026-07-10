@@ -35,9 +35,15 @@ public sealed class YtDlpRunner : IYtDlpRunner
         {
             await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             TryKill(process);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
             throw new TimeoutException($"yt-dlp search timed out after {options.Timeout.TotalSeconds:0} seconds.");
         }
 
@@ -47,7 +53,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
             await errorTask.ConfigureAwait(false));
     }
 
-    public static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options, string? cookieFilePath = null)
+    public static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options,
+        string? cookieFilePath = null)
     {
         var startInfo = new ProcessStartInfo
         {
