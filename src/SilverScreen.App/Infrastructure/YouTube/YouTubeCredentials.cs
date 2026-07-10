@@ -31,7 +31,9 @@ public sealed class YouTubeCredentials
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#"))
+            if (string.IsNullOrEmpty(trimmed) ||
+                (trimmed.StartsWith("#", StringComparison.Ordinal) &&
+                 !trimmed.StartsWith("#HttpOnly_", StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -42,12 +44,19 @@ public sealed class YouTubeCredentials
                 continue;
             }
 
-            var domain = parts[0].Trim().ToLowerInvariant();
+            var domain = parts[0].Trim();
+            if (domain.StartsWith("#HttpOnly_", StringComparison.OrdinalIgnoreCase))
+            {
+                domain = domain["#HttpOnly_".Length..];
+            }
+
+            domain = domain.ToLowerInvariant();
             var name = parts[5].Trim();
             var value = parts[6].Trim();
 
-            // We only care about youtube.com or its subdomains
-            if (domain == "youtube.com" || domain == ".youtube.com" || domain.EndsWith(".youtube.com"))
+            // Keep only cookies required to authenticate a WEB InnerTube request.
+            if ((domain == "youtube.com" || domain == ".youtube.com" || domain.EndsWith(".youtube.com")) &&
+                IsRequiredRequestCookie(name))
             {
                 cookies.Add((name, value));
 
@@ -77,11 +86,35 @@ public sealed class YouTubeCredentials
             {
                 sb.Append("; ");
             }
+
             sb.Append(cookie.Name).Append('=').Append(cookie.Value);
         }
 
         return new YouTubeCredentials(sb.ToString(), activeSapisid);
     }
+
+    private static bool IsRequiredRequestCookie(string name)
+    {
+        return name is
+            "SID" or
+            "HSID" or
+            "LOGIN_INFO" or
+            "CONSENT" or
+            "SOCS" or
+            "SSID" or
+            "APISID" or
+            "SAPISID" or
+            "__Secure-1PAPISID" or
+            "__Secure-3PAPISID" or
+            "__Secure-1PSID" or
+            "__Secure-3PSID" or
+            "__Secure-1PSIDTS" or
+            "__Secure-3PSIDTS" or
+            "SIDCC" or
+            "__Secure-1PSIDCC" or
+            "__Secure-3PSIDCC";
+    }
+
 
     public string GenerateSapisidHash(long timestamp)
     {

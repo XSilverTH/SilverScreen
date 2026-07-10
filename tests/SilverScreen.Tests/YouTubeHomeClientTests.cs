@@ -17,18 +17,18 @@ namespace SilverScreen.Tests;
 public sealed class YouTubeHomeClientTests
 {
     private const string BootstrapHtml = """
-        <html>
-        <head>
-          <script>
-            var ytcfg = {
-              "INNERTUBE_API_KEY": "fake-api-key-123",
-              "INNERTUBE_CONTEXT_CLIENT_VERSION": "1.20260710.01.00",
-              "VISITOR_DATA": "fake-visitor-data-abc"
-            };
-          </script>
-        </head>
-        </html>
-        """;
+                                         <html>
+                                         <head>
+                                           <script>
+                                             var ytcfg = {
+                                               "INNERTUBE_API_KEY": "fake-api-key-123",
+                                               "INNERTUBE_CONTEXT_CLIENT_VERSION": "1.20260710.01.00",
+                                               "VISITOR_DATA": "fake-visitor-data-abc"
+                                             };
+                                           </script>
+                                         </head>
+                                         </html>
+                                         """;
 
     private static string CreateNetscapeCookieFile(params (string Name, string Value)[] cookies)
     {
@@ -38,6 +38,7 @@ public sealed class YouTubeHomeClientTests
         {
             sb.AppendLine($"youtube.com\tTRUE\t/\tTRUE\t2147483647\t{cookie.Name}\t{cookie.Value}");
         }
+
         return sb.ToString();
     }
 
@@ -55,7 +56,8 @@ public sealed class YouTubeHomeClientTests
             _handler = handler;
         }
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             _requests.Add(request);
             if (request.Content != null)
@@ -72,6 +74,7 @@ public sealed class YouTubeHomeClientTests
             {
                 return _handler(request);
             }
+
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
     }
@@ -106,6 +109,93 @@ public sealed class YouTubeHomeClientTests
         // Assert
         Assert.NotNull(credentials);
         Assert.Equal("secure-sapisid", credentials.Sapisid);
+    }
+
+    [Fact]
+    public void ParseNetscape_HandlesHttpOnlyCookiesAndPrefersSecureSapisid()
+    {
+        // Arrange
+        var content = """
+                      # Netscape HTTP Cookie File
+                      # This is an ordinary comment that must be ignored
+                      #HttpOnly_.youtube.com	TRUE	/	TRUE	2147483647	__Secure-3PAPISID	secure-sapisid-value
+                      .youtube.com	TRUE	/	TRUE	2147483647	SAPISID	regular-sapisid-value
+                      youtube.com	TRUE	/	FALSE	2147483647	SID	normal-youtube-cookie-value
+                      """;
+
+        // Act
+        var credentials = YouTubeCredentials.ParseNetscape(content);
+
+        // Assert
+        Assert.NotNull(credentials);
+        Assert.Equal("secure-sapisid-value", credentials.Sapisid);
+        Assert.Equal(
+            "__Secure-3PAPISID=secure-sapisid-value; SAPISID=regular-sapisid-value; SID=normal-youtube-cookie-value",
+            credentials.CookieHeader);
+    }
+
+    [Fact]
+    public void ParseNetscape_MinimizesCookieHeaderByExcludingUnrelatedCookies()
+    {
+        // Arrange
+        var content = CreateNetscapeCookieFile(
+            ("SID", "fake-sid-value"),
+            ("HSID", "fake-hsid-value"),
+            ("LOGIN_INFO", "fake-login-info-value"),
+            ("CONSENT", "fake-consent-value"),
+            ("SOCS", "fake-socs-value"),
+            ("SSID", "fake-ssid-value"),
+            ("APISID", "fake-apisid-value"),
+            ("SAPISID", "fake-sapisid-value"),
+            ("__Secure-1PAPISID", "fake-1papisid-value"),
+            ("__Secure-3PAPISID", "fake-3papisid-value"),
+            ("__Secure-1PSID", "fake-1psid-value"),
+            ("__Secure-3PSID", "fake-3psid-value"),
+            ("__Secure-1PSIDTS", "fake-1psidts-value"),
+            ("__Secure-3PSIDTS", "fake-3psidts-value"),
+            ("SIDCC", "fake-sidcc-value"),
+            ("__Secure-1PSIDCC", "fake-1psidcc-value"),
+            ("__Secure-3PSIDCC", "fake-3psidcc-value"),
+            ("PREF", "f6=80&tz=America.Chicago&f5=30000"),
+            ("VISITOR_INFO1_LIVE", "fake-visitor-info-value-which-is-large")
+        );
+
+        // Act
+        var credentials = YouTubeCredentials.ParseNetscape(content);
+
+        // Assert
+        Assert.NotNull(credentials);
+
+        // Assert that the unrelated/large cookies are omitted
+        Assert.DoesNotContain("PREF", credentials.CookieHeader);
+        Assert.DoesNotContain("VISITOR_INFO1_LIVE", credentials.CookieHeader);
+
+        // Assert that the required authentication cookies are retained
+        Assert.Contains("SID=fake-sid-value", credentials.CookieHeader);
+        Assert.Contains("HSID=fake-hsid-value", credentials.CookieHeader);
+        Assert.Contains("LOGIN_INFO=fake-login-info-value", credentials.CookieHeader);
+        Assert.Contains("CONSENT=fake-consent-value", credentials.CookieHeader);
+        Assert.Contains("SOCS=fake-socs-value", credentials.CookieHeader);
+        Assert.Contains("SSID=fake-ssid-value", credentials.CookieHeader);
+        Assert.Contains("APISID=fake-apisid-value", credentials.CookieHeader);
+        Assert.Contains("SAPISID=fake-sapisid-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-1PAPISID=fake-1papisid-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-3PAPISID=fake-3papisid-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-1PSID=fake-1psid-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-3PSID=fake-3psid-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-1PSIDTS=fake-1psidts-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-3PSIDTS=fake-3psidts-value", credentials.CookieHeader);
+        Assert.Contains("SIDCC=fake-sidcc-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-1PSIDCC=fake-1psidcc-value", credentials.CookieHeader);
+        Assert.Contains("__Secure-3PSIDCC=fake-3psidcc-value", credentials.CookieHeader);
+
+        // Confirm full CookieHeader does not contain any of the unrelated cookies and contains only the minimized auth cookies
+        var expectedCookieHeader =
+            "SID=fake-sid-value; HSID=fake-hsid-value; LOGIN_INFO=fake-login-info-value; CONSENT=fake-consent-value; SOCS=fake-socs-value; SSID=fake-ssid-value; APISID=fake-apisid-value; SAPISID=fake-sapisid-value; " +
+            "__Secure-1PAPISID=fake-1papisid-value; __Secure-3PAPISID=fake-3papisid-value; __Secure-1PSID=fake-1psid-value; " +
+            "__Secure-3PSID=fake-3psid-value; __Secure-1PSIDTS=fake-1psidts-value; __Secure-3PSIDTS=fake-3psidts-value; " +
+            "SIDCC=fake-sidcc-value; __Secure-1PSIDCC=fake-1psidcc-value; __Secure-3PSIDCC=fake-3psidcc-value";
+        Assert.Equal(expectedCookieHeader, credentials.CookieHeader);
     }
 
     [Fact]
@@ -183,97 +273,98 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         const string responseJson = """
-            {
-              "contents": {
-                "twoColumnBrowseResultsRenderer": {
-                  "tabs": [
-                    {
-                      "tabRenderer": {
-                        "content": {
-                          "richGridRenderer": {
-                            "contents": [
-                              {
-                                "richItemRenderer": {
-                                  "content": {
-                                    "videoRenderer": {
-                                      "videoId": "video1",
-                                      "title": "Title 1",
-                                      "ownerText": {
-                                        "simpleText": "Channel A"
-                                      },
-                                      "lengthText": {
-                                        "runs": [
-                                          { "text": "10" },
-                                          { "text": ":" },
-                                          { "text": "15" }
-                                        ]
-                                      },
-                                      "thumbnail": {
-                                        "thumbnails": [
-                                          { "url": "https://example.com/low.jpg" },
-                                          { "url": "https://example.com/high.jpg" }
-                                        ]
+                                    {
+                                      "contents": {
+                                        "twoColumnBrowseResultsRenderer": {
+                                          "tabs": [
+                                            {
+                                              "tabRenderer": {
+                                                "content": {
+                                                  "richGridRenderer": {
+                                                    "contents": [
+                                                      {
+                                                        "richItemRenderer": {
+                                                          "content": {
+                                                            "videoRenderer": {
+                                                              "videoId": "video1",
+                                                              "title": "Title 1",
+                                                              "ownerText": {
+                                                                "simpleText": "Channel A"
+                                                              },
+                                                              "lengthText": {
+                                                                "runs": [
+                                                                  { "text": "10" },
+                                                                  { "text": ":" },
+                                                                  { "text": "15" }
+                                                                ]
+                                                              },
+                                                              "thumbnail": {
+                                                                "thumbnails": [
+                                                                  { "url": "https://example.com/low.jpg" },
+                                                                  { "url": "https://example.com/high.jpg" }
+                                                                ]
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      {
+                                                        "richItemRenderer": {
+                                                          "content": {
+                                                            "videoRenderer": {
+                                                              "videoId": "video2",
+                                                              "title": {
+                                                                "runs": [
+                                                                  { "text": "Title" },
+                                                                  { "text": " " },
+                                                                  { "text": "2" }
+                                                                ]
+                                                              },
+                                                              "shortBylineText": {
+                                                                "simpleText": "Channel B"
+                                                              },
+                                                              "lengthText": {
+                                                                "simpleText": "1:02:03"
+                                                              },
+                                                              "thumbnail": {
+                                                                "thumbnails": [
+                                                                  { "url": "https://example.com/med.jpg" }
+                                                                ]
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      {
+                                                        "richItemRenderer": {
+                                                          "content": {
+                                                            "videoRenderer": {
+                                                              "videoId": "video3",
+                                                              "title": "Title 3",
+                                                              "longBylineText": {
+                                                                "simpleText": "Channel C"
+                                                              },
+                                                              "lengthText": {
+                                                                "simpleText": "45"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    ]
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
                                       }
                                     }
-                                  }
-                                }
-                              },
-                              {
-                                "richItemRenderer": {
-                                  "content": {
-                                    "videoRenderer": {
-                                      "videoId": "video2",
-                                      "title": {
-                                        "runs": [
-                                          { "text": "Title" },
-                                          { "text": " " },
-                                          { "text": "2" }
-                                        ]
-                                      },
-                                      "shortBylineText": {
-                                        "simpleText": "Channel B"
-                                      },
-                                      "lengthText": {
-                                        "simpleText": "1:02:03"
-                                      },
-                                      "thumbnail": {
-                                        "thumbnails": [
-                                          { "url": "https://example.com/med.jpg" }
-                                        ]
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              {
-                                "richItemRenderer": {
-                                  "content": {
-                                    "videoRenderer": {
-                                      "videoId": "video3",
-                                      "title": "Title 3",
-                                      "longBylineText": {
-                                        "simpleText": "Channel C"
-                                      },
-                                      "lengthText": {
-                                        "simpleText": "45"
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-            """;
+                                    """;
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -284,6 +375,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson)
@@ -332,43 +424,44 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         const string responseJson = """
-            {
-              "contents": {
-                "items": [
-                  {
-                    "shortsLockupViewModel": {
-                      "entityId": "short1"
-                    }
-                  },
-                  {
-                    "videoRenderer": {
-                      "videoId": "short_video_1",
-                      "title": "Short Video",
-                      "reelEndpoint": {
-                        "reelWatchEndpoint": {
-                          "videoId": "short_video_1"
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "reelEndpoint": {
-                      "videoId": "short_video_2"
-                    }
-                  },
-                  {
-                    "videoRenderer": {
-                      "videoId": "normal_video_1",
-                      "title": "Normal Video"
-                    }
-                  }
-                ]
-              }
-            }
-            """;
+                                    {
+                                      "contents": {
+                                        "items": [
+                                          {
+                                            "shortsLockupViewModel": {
+                                              "entityId": "short1"
+                                            }
+                                          },
+                                          {
+                                            "videoRenderer": {
+                                              "videoId": "short_video_1",
+                                              "title": "Short Video",
+                                              "reelEndpoint": {
+                                                "reelWatchEndpoint": {
+                                                  "videoId": "short_video_1"
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "reelEndpoint": {
+                                              "videoId": "short_video_2"
+                                            }
+                                          },
+                                          {
+                                            "videoRenderer": {
+                                              "videoId": "normal_video_1",
+                                              "title": "Normal Video"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                    """;
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -379,6 +472,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson)
@@ -402,52 +496,53 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         const string responseJson = """
-            {
-              "contents": {
-                "items": [
-                  {
-                    "adSlotRenderer": {
-                      "videoRenderer": {
-                        "videoId": "ad_video_1",
-                        "title": "Ad Video 1"
-                      }
-                    }
-                  },
-                  {
-                    "adPlacementRenderer": {
-                      "videoRenderer": {
-                        "videoId": "ad_video_2",
-                        "title": "Ad Video 2"
-                      }
-                    }
-                  },
-                  {
-                    "promotedVideoRenderer": {
-                      "videoId": "promoted_video_1",
-                      "title": "Promoted Video 1"
-                    }
-                  },
-                  {
-                    "advertisementRenderer": {
-                      "videoRenderer": {
-                        "videoId": "ad_video_3",
-                        "title": "Ad Video 3"
-                      }
-                    }
-                  },
-                  {
-                    "videoRenderer": {
-                      "videoId": "normal_video_2",
-                      "title": "Normal Video 2"
-                    }
-                  }
-                ]
-              }
-            }
-            """;
+                                    {
+                                      "contents": {
+                                        "items": [
+                                          {
+                                            "adSlotRenderer": {
+                                              "videoRenderer": {
+                                                "videoId": "ad_video_1",
+                                                "title": "Ad Video 1"
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "adPlacementRenderer": {
+                                              "videoRenderer": {
+                                                "videoId": "ad_video_2",
+                                                "title": "Ad Video 2"
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "promotedVideoRenderer": {
+                                              "videoId": "promoted_video_1",
+                                              "title": "Promoted Video 1"
+                                            }
+                                          },
+                                          {
+                                            "advertisementRenderer": {
+                                              "videoRenderer": {
+                                                "videoId": "ad_video_3",
+                                                "title": "Ad Video 3"
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "videoRenderer": {
+                                              "videoId": "normal_video_2",
+                                              "title": "Normal Video 2"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                    """;
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -458,6 +553,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson)
@@ -481,43 +577,44 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         const string responseJson = """
-            {
-              "contents": {
-                "items": [
-                  {
-                    "videoRenderer": {
-                      "title": "Missing Video ID"
-                    }
-                  },
-                  {
-                    "videoRenderer": {
-                      "videoId": ""
-                    }
-                  },
-                  {
-                    "channelRenderer": {
-                      "channelId": "chan1",
-                      "title": "Some Channel"
-                    }
-                  },
-                  {
-                    "unknownRenderer": {
-                      "someProp": "someVal"
-                    }
-                  },
-                  {
-                    "videoRenderer": {
-                      "videoId": "valid_video_3",
-                      "title": "Valid Video"
-                    }
-                  }
-                ]
-              }
-            }
-            """;
+                                    {
+                                      "contents": {
+                                        "items": [
+                                          {
+                                            "videoRenderer": {
+                                              "title": "Missing Video ID"
+                                            }
+                                          },
+                                          {
+                                            "videoRenderer": {
+                                              "videoId": ""
+                                            }
+                                          },
+                                          {
+                                            "channelRenderer": {
+                                              "channelId": "chan1",
+                                              "title": "Some Channel"
+                                            }
+                                          },
+                                          {
+                                            "unknownRenderer": {
+                                              "someProp": "someVal"
+                                            }
+                                          },
+                                          {
+                                            "videoRenderer": {
+                                              "videoId": "valid_video_3",
+                                              "title": "Valid Video"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                    """;
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -528,6 +625,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson)
@@ -551,17 +649,18 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         const string responseJson = """
-            {
-              "contents": {
-                "continuationCommand": {
-                  "token": "next_continuation_token_value_abc"
-                }
-              }
-            }
-            """;
+                                    {
+                                      "contents": {
+                                        "continuationCommand": {
+                                          "token": "next_continuation_token_value_abc"
+                                        }
+                                      }
+                                    }
+                                    """;
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -572,6 +671,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson)
@@ -594,7 +694,8 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -605,6 +706,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}")
@@ -629,6 +731,7 @@ public sealed class YouTubeHomeClientTests
                 break;
             }
         }
+
         Assert.True(postIndex >= 0);
         var requestBodyJson = handler.RequestBodies[postIndex];
         using var doc = JsonDocument.Parse(requestBodyJson);
@@ -644,7 +747,8 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -655,6 +759,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{ invalid json")
@@ -678,11 +783,13 @@ public sealed class YouTubeHomeClientTests
     [InlineData(HttpStatusCode.Forbidden, true)]
     [InlineData(HttpStatusCode.InternalServerError, false)]
     [InlineData(HttpStatusCode.BadRequest, false)]
-    public async Task GetHomeFeedAsync_HttpErrorResponse_HandlesRequiresAuthenticationCorrectly(HttpStatusCode statusCode, bool expectedRequiresAuth)
+    public async Task GetHomeFeedAsync_HttpErrorResponse_HandlesRequiresAuthenticationCorrectly(
+        HttpStatusCode statusCode, bool expectedRequiresAuth)
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -693,6 +800,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(statusCode);
         });
 
@@ -713,7 +821,8 @@ public sealed class YouTubeHomeClientTests
     {
         // Arrange
         var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")), SessionCookieFormat.NetscapeCookiesText);
+        sessionService.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
+            SessionCookieFormat.NetscapeCookiesText);
 
         var handler = new FakeHttpMessageHandler(req =>
         {
@@ -724,6 +833,7 @@ public sealed class YouTubeHomeClientTests
                     Content = new StringContent(BootstrapHtml)
                 };
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}")
