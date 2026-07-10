@@ -15,7 +15,8 @@ namespace SilverScreen.Tests;
 
 public sealed class AuthenticatedHomeFeedServiceTests
 {
-    private const string SanitizedCookieContent = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsanitized-session-value\n";
+    private const string SanitizedCookieContent =
+        "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsanitized-session-value\n";
 
     private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
     {
@@ -24,7 +25,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
         public CancellationToken LastCancellationToken { get; private set; }
         public Func<string?, CancellationToken, Task<HomeFeedResult>>? ResponseFactory { get; set; }
 
-        public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null, CancellationToken cancellationToken = default)
+        public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
+            CancellationToken cancellationToken = default)
         {
             CallCount++;
             LastContinuationToken = continuationToken;
@@ -108,7 +110,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
             new("v1", "Test Video 1", "Test Channel 1", TimeSpan.FromMinutes(3), "http://thumb1", false),
             new("v2", "Test Video 2", "Test Channel 2", TimeSpan.FromMinutes(4), "http://thumb2", false)
         };
-        client.ResponseFactory = (token, ct) => Task.FromResult(new HomeFeedResult(expectedVideos, "next-token-abc", true, "OK", false));
+        client.ResponseFactory = (token, ct) =>
+            Task.FromResult(new HomeFeedResult(expectedVideos, "next-token-abc", true, "OK", false));
 
         // Act
         var result = await feedService.LoadFirstPageAsync();
@@ -159,6 +162,36 @@ public sealed class AuthenticatedHomeFeedServiceTests
         var cached = feedService.GetHomeFeed();
         Assert.Single(cached.Videos);
         Assert.Equal("v1", cached.Videos[0].Id);
+    }
+
+    [Fact]
+    public async Task LoadFirstPageAsync_PublicRecommendationsMessage_PreservesMessage()
+    {
+        // Arrange
+        var client = new FakeYouTubeHomeClient();
+        var sessionService = new InMemorySessionService();
+        sessionService.SetManualSession(SanitizedCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        var feedService = new AuthenticatedHomeFeedService(client, sessionService);
+
+        var videos = new List<VideoSummary>
+        {
+            new("v1", "Ordinary Video", "Channel", TimeSpan.FromMinutes(5), "http://thumb1", false)
+        };
+        client.ResponseFactory = (token, ct) => Task.FromResult(new HomeFeedResult(
+            videos,
+            null,
+            true,
+            "Public recommendations are displayed.",
+            false));
+
+        // Act
+        var result = await feedService.LoadFirstPageAsync();
+
+        // Assert
+        Assert.Equal(AuthenticatedHomeFeedStatus.Success, result.Status);
+        Assert.Single(result.FeedPage.Videos);
+        Assert.Equal("v1", result.FeedPage.Videos[0].Id);
+        Assert.Equal("Public recommendations are displayed.", result.StatusMessage);
     }
 
     [Fact]
@@ -590,7 +623,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
 
         // Assert
         Assert.DoesNotContain("sanitized-session-value", feedResult.ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("sanitized-session-value", validationResult.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sanitized-session-value", validationResult.ToString(),
+            StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Netscape", feedResult.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Netscape", validationResult.ToString(), StringComparison.OrdinalIgnoreCase);
     }

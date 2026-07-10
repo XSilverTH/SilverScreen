@@ -1,5 +1,4 @@
 using Gtk;
-using System.Net.Http;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Feed;
@@ -30,8 +29,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly ISearchService _searchService;
     private readonly IThumbnailService _thumbnailService = new ThumbnailCacheService();
 
-    private readonly HttpClient _httpClient;
-    private readonly YouTubeHomeClient _ytHomeClient;
+    private readonly IYouTubeHomeClient _ytHomeClient;
     private readonly AuthenticatedHomeFeedService _authHomeFeedService;
     private readonly HomeFeedCoordinator _homeFeedCoordinator;
     private readonly HomeSessionValidator _homeSessionValidator;
@@ -71,12 +69,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _statusLabel = GetBuilderObject<Label>("status_label");
 
         _cookieFileProvider = new TemporaryCookieFileProvider(_sessionService);
-        _playbackService = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), _cookieFileProvider);
+        _playbackService =
+            new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), _cookieFileProvider);
         _searchService = new YtDlpSearchService(new YtDlpOptions(), new YtDlpRunner(_cookieFileProvider));
         _sessionService.SessionChanged += (_, _) => BuildAccountPopover();
 
-        _httpClient = new HttpClient();
-        _ytHomeClient = new YouTubeHomeClient(_httpClient, _sessionService);
+        _ytHomeClient = new YtDlpHomeClient(_sessionService, _cookieFileProvider);
         _authHomeFeedService = new AuthenticatedHomeFeedService(_ytHomeClient, _sessionService);
         _homeFeedCoordinator = new HomeFeedCoordinator(_sessionService, _authHomeFeedService);
         _homeFeedCoordinator.StateChanged += OnHomeFeedStateChanged;
@@ -90,13 +88,21 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         {
             _isClosing = true;
             _validationCoordinator.Cancel();
-            _ytHomeClient.Dispose();
             _homeFeedCoordinator.Dispose();
+            _searchCancellation?.Cancel();
+            _searchCancellation?.Dispose();
+            _searchThumbnailCancellation?.Cancel();
+            _searchThumbnailCancellation?.Dispose();
             _homeThumbnailCancellation?.Cancel();
             _homeThumbnailCancellation?.Dispose();
             _thumbnailCancellation.Cancel();
+            _thumbnailCancellation.Dispose();
             _authHomeFeedService.Dispose();
-            _httpClient.Dispose();
+            if (_thumbnailService is IDisposable thumbnailService)
+            {
+                thumbnailService.Dispose();
+            }
+
             return false;
         };
 
@@ -113,7 +119,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private T GetBuilderObject<T>(string id) where T : class
     {
         return Builder.GetObject(id) as T
-            ?? throw new InvalidOperationException($"Blueprint object '{id}' was not found or was not a {typeof(T).Name}.");
+               ?? throw new InvalidOperationException(
+                   $"Blueprint object '{id}' was not found or was not a {typeof(T).Name}.");
     }
 
     private void BuildShell()
@@ -135,8 +142,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     {
         _viewStack.AddTitled(CreateHomePage(), HomeTabName, "Home");
         _viewStack.AddTitled(CreateSearchPage(), SearchTabName, "Search");
-        _viewStack.AddTitled(CreatePlaceholderPage("Subscriptions", "Subscription feeds will land after account/session support."), SubscriptionsTabName, "Subscriptions");
-        _viewStack.AddTitled(CreatePlaceholderPage("History", "Local watch history is intentionally not persisted in this shell step."), HistoryTabName, "History");
+        _viewStack.AddTitled(
+            CreatePlaceholderPage("Subscriptions", "Subscription feeds will land after account/session support."),
+            SubscriptionsTabName, "Subscriptions");
+        _viewStack.AddTitled(
+            CreatePlaceholderPage("History", "Local watch history is intentionally not persisted in this shell step."),
+            HistoryTabName, "History");
     }
 
     private FlowBox CreateVideoFlowBox()
@@ -193,8 +204,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         ClearBox(_homeContent);
 
         _homeRefreshButton.Sensitive = state.Kind != HomeFeedStateKind.SignedOut
-            && !state.IsLoading
-            && !state.IsLoadingMore;
+                                       && !state.IsLoading
+                                       && !state.IsLoadingMore;
 
         var usableVideos = state.Videos
             .Where(video => !video.IsShort)
@@ -222,6 +233,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             {
                 flowBox.Append(CreateVideoCard(video, _homeThumbnailCancellation.Token));
             }
+
             _homeContent.Append(flowBox);
 
             if (state.HasContinuation)
@@ -350,7 +362,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         channel.Xalign = 0;
         textColumn.Append(channel);
 
-        var playbackAvailability = CreateDimLabel(HasPlayableUrl(video) ? "Playable YouTube URL" : "Mock placeholder • no playable URL");
+        var playbackAvailability =
+            CreateDimLabel(HasPlayableUrl(video) ? "Playable YouTube URL" : "Mock placeholder • no playable URL");
         playbackAvailability.Xalign = 0;
         textColumn.Append(playbackAvailability);
 
@@ -408,12 +421,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return thumbnail;
     }
 
-    private void StartThumbnailLoad(VideoSummary video, Overlay thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    private void StartThumbnailLoad(VideoSummary video, Overlay thumbnail, Widget placeholder,
+        CancellationToken cancellationToken)
     {
         _ = LoadThumbnailAsync(video, thumbnail, placeholder, cancellationToken);
     }
 
-    private async Task LoadThumbnailAsync(VideoSummary video, Overlay thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    private async Task LoadThumbnailAsync(VideoSummary video, Overlay thumbnail, Widget placeholder,
+        CancellationToken cancellationToken)
     {
         ThumbnailResult? result;
         try
@@ -562,12 +577,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
         if (session.HasManualSession)
         {
-            popoverBox.Append(CreateDimLabel("Manual YouTube session active. Cookies are kept in memory only for this process."));
+            popoverBox.Append(
+                CreateDimLabel("Manual YouTube session active. Cookies are kept in memory only for this process."));
             var validateButton = CreatePopoverAction("Validate Home session", () => OnValidateSessionClicked());
             if (_validationCoordinator.IsValidating)
             {
                 validateButton.Sensitive = false;
             }
+
             popoverBox.Append(validateButton);
             popoverBox.Append(CreatePopoverAction("Clear session", () =>
             {
@@ -577,7 +594,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         }
         else
         {
-            popoverBox.Append(CreateDimLabel("Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
+            popoverBox.Append(CreateDimLabel(
+                "Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
             popoverBox.Append(CreatePopoverAction("Add manual session", ShowManualSessionEditor));
         }
 
@@ -627,7 +645,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         popoverBox.Append(heading);
-        popoverBox.Append(CreateDimLabel("Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
+        popoverBox.Append(CreateDimLabel(
+            "Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
 
         var cookieTextView = TextView.New();
         cookieTextView.Monospace = true;
@@ -673,7 +692,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private static string GetTextViewText(TextView textView)
     {
-        var buffer = textView.Buffer ?? throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
+        var buffer = textView.Buffer ??
+                     throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
         buffer.GetBounds(out var start, out var end);
         return buffer.GetText(start, end, includeHiddenChars: true);
     }
@@ -799,42 +819,52 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private async void SubmitSearchText()
     {
-        var text = _searchEntry.GetText().Trim();
-        if (string.IsNullOrWhiteSpace(text))
+        try
         {
-            SetStatus("Empty search ignored.");
-            return;
-        }
+            var text = _searchEntry.GetText().Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                SetStatus("Empty search ignored.");
+                return;
+            }
 
-        var parsedUrl = YouTubeUrlParser.Parse(text);
-        switch (parsedUrl.Kind)
+            var parsedUrl = YouTubeUrlParser.Parse(text);
+            switch (parsedUrl.Kind)
+            {
+                case YouTubeUrlKind.Video:
+                    await PlayYouTubeUrl(parsedUrl);
+                    break;
+                case YouTubeUrlKind.Shorts:
+                    SetStatus("Shorts are not supported in SilverScreen.");
+                    break;
+                case YouTubeUrlKind.Channel:
+                    SetStatus("Channel pages are not implemented yet.");
+                    break;
+                case YouTubeUrlKind.Playlist:
+                    SetStatus("Playlists are not implemented yet.");
+                    break;
+                case YouTubeUrlKind.UnknownYouTube:
+                    SetStatus("Unsupported YouTube URL.");
+                    break;
+                case YouTubeUrlKind.Invalid:
+                    SetStatus("Invalid YouTube URL.");
+                    break;
+                case YouTubeUrlKind.NotYouTube:
+                    await SearchPlainText(text);
+                    break;
+                default:
+                    SetStatus("Unsupported YouTube URL.");
+                    break;
+            }
+        }
+        catch (Exception)
         {
-            case YouTubeUrlKind.Video:
-                await PlayYouTubeUrl(parsedUrl);
-                break;
-            case YouTubeUrlKind.Shorts:
-                SetStatus("Shorts are not supported in SilverScreen.");
-                break;
-            case YouTubeUrlKind.Channel:
-                SetStatus("Channel pages are not implemented yet.");
-                break;
-            case YouTubeUrlKind.Playlist:
-                SetStatus("Playlists are not implemented yet.");
-                break;
-            case YouTubeUrlKind.UnknownYouTube:
-                SetStatus("Unsupported YouTube URL.");
-                break;
-            case YouTubeUrlKind.Invalid:
-                SetStatus("Invalid YouTube URL.");
-                break;
-            case YouTubeUrlKind.NotYouTube:
-                await SearchPlainText(text);
-                break;
-            default:
-                throw new InvalidOperationException($"Unhandled YouTube URL kind: {parsedUrl.Kind}");
+            SetStatus("The requested action could not be completed.");
         }
-
-        _searchPopover.Popdown();
+        finally
+        {
+            _searchPopover.Popdown();
+        }
     }
 
     private async Task SearchPlainText(string query)
@@ -864,6 +894,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception)
+        {
+            const string message = "Search could not be completed.";
+            _searchSummaryLabel.Label_ = message;
+            SetStatus(message);
         }
     }
 
@@ -906,7 +942,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private async void PlayVideo(VideoSummary video)
     {
-        SetStatus(await _playbackService.PlayAsync(new PlaybackRequest(video)));
+        try
+        {
+            SetStatus(await _playbackService.PlayAsync(new PlaybackRequest(video)));
+        }
+        catch (Exception)
+        {
+            SetStatus("Playback could not be started.");
+        }
     }
 
     private void AddToQueue(VideoSummary video)
@@ -931,12 +974,28 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private void CopyVideoLink(VideoSummary video)
     {
         var videoUrl = BuildVideoUrl(video);
-        SetStatus(videoUrl is null ? "No playable video link is available." : "Copy link is not implemented.");
+        if (videoUrl is null)
+        {
+            SetStatus("No playable video link is available.");
+            return;
+        }
+
+        var clipboard = Gdk.Display.GetDefault()?.GetClipboard();
+        if (clipboard is null)
+        {
+            SetStatus("Clipboard is unavailable.");
+            return;
+        }
+
+        clipboard.SetText(videoUrl);
+        SetStatus("Video link copied to the clipboard.");
     }
 
     private static bool HasPlayableUrl(VideoSummary video) => BuildVideoUrl(video) is not null;
 
-    private static string? BuildVideoUrl(VideoSummary video) => string.IsNullOrWhiteSpace(video.WatchUrl) ? PlaybackRequest.BuildWatchUrl(video.Id) : video.WatchUrl;
+    private static string? BuildVideoUrl(VideoSummary video) => string.IsNullOrWhiteSpace(video.WatchUrl)
+        ? PlaybackRequest.BuildWatchUrl(video.Id)
+        : video.WatchUrl;
 
     private static string FormatDuration(TimeSpan duration)
     {
