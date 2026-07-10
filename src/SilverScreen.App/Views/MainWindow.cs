@@ -5,6 +5,7 @@ using SilverScreen.Features.Playback;
 using SilverScreen.Features.Queue;
 using SilverScreen.Features.Search;
 using SilverScreen.Features.Session;
+using SilverScreen.Features.Thumbnails;
 using SilverScreen.Infrastructure.Mock;
 using XSTH.Blueprint.Helpers;
 
@@ -23,6 +24,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly ICookieFileProvider _cookieFileProvider;
     private readonly IPlaybackService _playbackService;
     private readonly ISearchService _searchService;
+    private readonly IThumbnailService _thumbnailService = new ThumbnailCacheService();
 
     private readonly Adw.ViewStack _viewStack;
     private readonly Adw.ViewSwitcher _viewSwitcher;
@@ -39,6 +41,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly Box _queueItemsBox;
     private readonly FlowBox _searchResultsFlowBox;
     private CancellationTokenSource? _searchCancellation;
+    private readonly CancellationTokenSource _thumbnailCancellation = new();
+    private CancellationTokenSource? _searchThumbnailCancellation;
 
     public MainWindow()
     {
@@ -118,7 +122,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         var flowBox = CreateVideoFlowBox();
         foreach (var video in videos)
         {
-            flowBox.Append(CreateVideoCard(video));
+            flowBox.Append(CreateVideoCard(video, _thumbnailCancellation.Token));
         }
 
         var scrolledWindow = ScrolledWindow.New();
@@ -129,7 +133,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return scrolledWindow;
     }
 
-    private Widget CreateVideoCard(VideoSummary video)
+    private Widget CreateVideoCard(VideoSummary video, CancellationToken thumbnailCancellationToken)
     {
         var card = Box.New(Orientation.Vertical, 10);
         card.WidthRequest = 250;
@@ -139,8 +143,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         card.MarginBottom = 2;
         card.CssClasses = ["card"];
 
-        var thumbnail = CreateThumbnailPlaceholder(video);
+        var thumbnail = CreateThumbnailPlaceholder(video, out var thumbnailPlaceholder);
         card.Append(thumbnail);
+        StartThumbnailLoad(video, thumbnail, thumbnailPlaceholder, thumbnailCancellationToken);
 
         var metadataRow = Box.New(Orientation.Horizontal, 8);
         metadataRow.MarginStart = 12;
@@ -188,7 +193,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return card;
     }
 
-    private Widget CreateThumbnailPlaceholder(VideoSummary video)
+    private Box CreateThumbnailPlaceholder(VideoSummary video, out Widget placeholder)
     {
         var thumbnail = Box.New(Orientation.Vertical, 6);
         thumbnail.HeightRequest = 140;
@@ -204,6 +209,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         icon.Halign = Align.Center;
         icon.Valign = Align.Center;
         icon.Vexpand = true;
+        placeholder = icon;
         thumbnail.Append(icon);
 
         var duration = Label.New(FormatDuration(video.Duration));
@@ -214,6 +220,59 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         thumbnail.Append(duration);
 
         return thumbnail;
+    }
+
+    private void StartThumbnailLoad(VideoSummary video, Box thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    {
+        _ = LoadThumbnailAsync(video, thumbnail, placeholder, cancellationToken);
+    }
+
+    private async Task LoadThumbnailAsync(VideoSummary video, Box thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    {
+        ThumbnailResult? result;
+        try
+        {
+            result = await _thumbnailService.GetThumbnailAsync(video, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (result is null)
+        {
+            return;
+        }
+
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (cancellationToken.IsCancellationRequested
+                || thumbnail.GetRoot() is null
+                || placeholder.GetParent() != thumbnail)
+            {
+                return false;
+            }
+
+            try
+            {
+                var picture = Picture.NewForFilename(result.LocalPath);
+                picture.AlternativeText = $"{video.Title} thumbnail";
+                picture.CanShrink = true;
+                picture.ContentFit = ContentFit.Cover;
+                picture.Hexpand = true;
+                picture.KeepAspectRatio = true;
+                picture.Valign = Align.Fill;
+                picture.Vexpand = true;
+
+                thumbnail.Remove(placeholder);
+                thumbnail.Prepend(picture);
+            }
+            catch (Exception)
+            {
+            }
+
+            return false;
+        });
     }
 
     private MenuButton CreateVideoMenuButton(VideoSummary video)
@@ -560,6 +619,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _searchCancellation?.Cancel();
         _searchCancellation?.Dispose();
         _searchCancellation = new CancellationTokenSource();
+        _searchThumbnailCancellation?.Cancel();
+        _searchThumbnailCancellation?.Dispose();
+        _searchThumbnailCancellation = null;
         var cancellationToken = _searchCancellation.Token;
 
         _viewStack.VisibleChildName = SearchTabName;
@@ -584,10 +646,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void RenderSearchResults(SearchResultPage result)
     {
+        _searchThumbnailCancellation?.Cancel();
+        _searchThumbnailCancellation?.Dispose();
+        _searchThumbnailCancellation = CancellationTokenSource.CreateLinkedTokenSource(_thumbnailCancellation.Token);
+
         ClearFlowBox(_searchResultsFlowBox);
         foreach (var video in result.Videos)
         {
-            _searchResultsFlowBox.Append(CreateVideoCard(video));
+            _searchResultsFlowBox.Append(CreateVideoCard(video, _searchThumbnailCancellation.Token));
         }
 
         var message = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
