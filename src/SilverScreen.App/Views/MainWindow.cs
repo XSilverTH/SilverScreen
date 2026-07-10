@@ -1,12 +1,15 @@
 using Gtk;
+using System.Net.Http;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Features.Feed;
 using SilverScreen.Features.Playback;
 using SilverScreen.Features.Queue;
 using SilverScreen.Features.Search;
 using SilverScreen.Features.Session;
 using SilverScreen.Features.Thumbnails;
 using SilverScreen.Infrastructure.Mock;
+using SilverScreen.Infrastructure.YouTube;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views;
@@ -29,6 +32,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly ISearchService _searchService;
     private readonly IThumbnailService _thumbnailService = new ThumbnailCacheService();
 
+    private readonly HttpClient _httpClient;
+    private readonly YouTubeHomeClient _ytHomeClient;
+    private readonly AuthenticatedHomeFeedService _authHomeFeedService;
+    private readonly HomeSessionValidator _homeSessionValidator;
+    private readonly SessionValidationCoordinator _validationCoordinator;
+
     private readonly Adw.ViewStack _viewStack;
     private readonly Adw.ViewSwitcher _viewSwitcher;
     private readonly Button _searchButton;
@@ -46,6 +55,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private CancellationTokenSource? _searchCancellation;
     private readonly CancellationTokenSource _thumbnailCancellation = new();
     private CancellationTokenSource? _searchThumbnailCancellation;
+    private bool _isClosing;
 
     public MainWindow()
     {
@@ -61,6 +71,22 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _playbackService = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), _cookieFileProvider);
         _searchService = new YtDlpSearchService(new YtDlpOptions(), new YtDlpRunner(_cookieFileProvider));
         _sessionService.SessionChanged += (_, _) => BuildAccountPopover();
+
+        _httpClient = new HttpClient();
+        _ytHomeClient = new YouTubeHomeClient(_httpClient, _sessionService);
+        _authHomeFeedService = new AuthenticatedHomeFeedService(_ytHomeClient, _sessionService);
+        _homeSessionValidator = new HomeSessionValidator(_authHomeFeedService);
+        _validationCoordinator = new SessionValidationCoordinator(_homeSessionValidator, _sessionService);
+
+        Widget.OnCloseRequest += (_, _) =>
+        {
+            _isClosing = true;
+            _validationCoordinator.Cancel();
+            _ytHomeClient.Dispose();
+            _authHomeFeedService.Dispose();
+            _httpClient.Dispose();
+            return false;
+        };
 
         _searchSummaryLabel = CreateDimLabel("Search results will appear here.");
         _searchResultsFlowBox = CreateVideoFlowBox();
@@ -396,6 +422,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         if (session.HasManualSession)
         {
             popoverBox.Append(CreateDimLabel("Manual YouTube session active. Cookies are kept in memory only for this process."));
+            var validateButton = CreatePopoverAction("Validate Home session", () => OnValidateSessionClicked());
+            if (_validationCoordinator.IsValidating)
+            {
+                validateButton.Sensitive = false;
+            }
+            popoverBox.Append(validateButton);
             popoverBox.Append(CreatePopoverAction("Clear session", () =>
             {
                 _sessionService.ClearSession();
@@ -411,6 +443,35 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         var popover = Popover.New();
         popover.Child = popoverBox;
         _accountButton.Popover = popover;
+    }
+
+    private async void OnValidateSessionClicked()
+    {
+        if (!_validationCoordinator.IsAvailable)
+        {
+            return;
+        }
+
+        var validationTask = _validationCoordinator.ValidateAsync();
+        BuildAccountPopover();
+        SetStatus(SessionValidationFormatter.ValidatingMessage);
+
+        try
+        {
+            var result = await validationTask;
+            SetStatus(result);
+        }
+        catch (Exception)
+        {
+            SetStatus(SessionValidationFormatter.FormatUnexpectedError());
+        }
+        finally
+        {
+            if (!_isClosing)
+            {
+                BuildAccountPopover();
+            }
+        }
     }
 
     private void ShowManualSessionEditor()
