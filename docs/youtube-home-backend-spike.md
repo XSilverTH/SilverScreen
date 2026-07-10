@@ -61,4 +61,12 @@ Fixture-verified only: credential parsing, SAPISIDHASH construction, authenticat
 
 ## Next implementation step
 
-Add an asynchronous `IFeedService` adapter only after a controlled live validation. It must request `HomeFeedResult`, implement cancellation/continuation state, map authentication failures to the existing manual-session UX, and leave `MockFeedService` in place until the new backend passes that integration test.
+After a controlled live validation succeeds, integrate the already asynchronous adapter into the static Home tab with cancellation, loading/signed-out/error states, first-page refresh, and session-change clearing. Keep `MockFeedService` as the explicit development/test backend until then.
+
+## Step 11 adapter and validation gate
+
+`AuthenticatedHomeFeedService` now adapts `IYouTubeHomeClient` to `IFeedService` without GTK dependencies. It exposes asynchronous first-page and continuation operations, maps results to safe application statuses, preserves the continuation token, filters Shorts again defensively, and never falls back to mock data. `HomeSessionValidator` uses that same adapter and returns only a success flag, video count, continuation presence, authentication requirement, and a fixed high-level status message.
+
+No live authenticated validation was attempted in Step 11. `InMemorySessionService` owns manual cookies only inside a running SilverScreen process; there was no reachable running application instance with an active manual session. Consequently no repository-local cookie file was created or required, no personal feed response was read, and the non-negotiable integration gate remains closed. `MainWindow` still uses `MockFeedService` unchanged.
+
+The adapter clears its in-memory Home cache whenever the manual session changes and also clears it for signed-out, empty, rejected, or failed results. It does not persist recommendations. Thumbnail files may remain in the existing public thumbnail cache after sign-out; that privacy limitation remains until cache lifecycle policy is explicitly designed.

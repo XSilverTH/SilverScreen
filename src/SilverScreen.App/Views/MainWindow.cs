@@ -94,7 +94,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void BuildStaticTabs()
     {
-        var homePage = CreateVideoGridPage(_feedService.GetHomeFeed().Videos.Where(video => !video.IsShort));
+        var homePage = CreateVideoGridPage(
+            _feedService.GetHomeFeed().Videos.Where(video => !video.IsShort),
+            _feedService is MockFeedService ? "Demo recommendations — development data, not personalized." : null);
         _viewStack.AddTitled(homePage, HomeTabName, "Home");
         _viewStack.AddTitled(CreateSearchPage(), SearchTabName, "Search");
         _viewStack.AddTitled(CreatePlaceholderPage("Subscriptions", "Subscription feeds will land after account/session support."), SubscriptionsTabName, "Subscriptions");
@@ -120,7 +122,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return flowBox;
     }
 
-    private Widget CreateVideoGridPage(IEnumerable<VideoSummary> videos)
+    private Widget CreateVideoGridPage(IEnumerable<VideoSummary> videos, string? bannerText = null)
     {
         var flowBox = CreateVideoFlowBox();
         foreach (var video in videos)
@@ -128,10 +130,22 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             flowBox.Append(CreateVideoCard(video, _thumbnailCancellation.Token));
         }
 
+        var content = Box.New(Orientation.Vertical, 0);
+        if (!string.IsNullOrEmpty(bannerText))
+        {
+            var banner = CreateDimLabel(bannerText);
+            banner.MarginStart = 18;
+            banner.MarginEnd = 18;
+            banner.MarginTop = 12;
+            content.Append(banner);
+        }
+
+        content.Append(flowBox);
+
         var scrolledWindow = ScrolledWindow.New();
         scrolledWindow.Hexpand = true;
         scrolledWindow.Vexpand = true;
-        scrolledWindow.Child = flowBox;
+        scrolledWindow.Child = content;
 
         return scrolledWindow;
     }
