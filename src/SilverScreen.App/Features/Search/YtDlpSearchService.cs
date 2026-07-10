@@ -46,7 +46,8 @@ public sealed class YtDlpSearchService : ISearchService
 
             return videos.Count == 0
                 ? new SearchResultPage(videos, "No video results found.")
-                : new SearchResultPage(videos, $"Found {videos.Count} video result{(videos.Count == 1 ? string.Empty : "s")}.");
+                : new SearchResultPage(videos,
+                    $"Found {videos.Count} video result{(videos.Count == 1 ? string.Empty : "s")}.");
         }
         catch (Win32Exception)
         {
@@ -89,7 +90,8 @@ public sealed class YtDlpSearchService : ISearchService
         }
 
         var videos = new List<VideoSummary>();
-        foreach (var line in trimmedOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var line in trimmedOutput.Split('\n',
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             using var document = JsonDocument.Parse(line);
             videos.AddRange(ParseRoot(document.RootElement));
@@ -184,8 +186,11 @@ public sealed class YtDlpSearchService : ISearchService
 
         return duration.ValueKind switch
         {
-            JsonValueKind.Number when duration.TryGetDouble(out var seconds) && seconds >= 0 => TimeSpan.FromSeconds(seconds),
-            JsonValueKind.String when double.TryParse(duration.GetString(), out var seconds) && seconds >= 0 => TimeSpan.FromSeconds(seconds),
+            JsonValueKind.Number when duration.TryGetDouble(out var seconds) && seconds >= 0 =>
+                TimeSpan.FromSeconds(seconds),
+            JsonValueKind.String when double.TryParse(duration.GetString(), System.Globalization.NumberStyles.Float,
+                                          System.Globalization.CultureInfo.InvariantCulture, out var seconds) &&
+                                      seconds >= 0 => TimeSpan.FromSeconds(seconds),
             _ => TimeSpan.Zero,
         };
     }
@@ -214,7 +219,8 @@ public sealed class YtDlpSearchService : ISearchService
 
     private static bool IsShort(JsonElement element, string? rawUrl)
     {
-        if (element.TryGetProperty("is_short", out var isShort) && isShort.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        if (element.TryGetProperty("is_short", out var isShort) &&
+            isShort.ValueKind is JsonValueKind.True or JsonValueKind.False)
         {
             return isShort.GetBoolean();
         }
