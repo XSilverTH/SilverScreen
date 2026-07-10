@@ -56,6 +56,7 @@ temp/
 core
 core.*
 *.dmp
+omp-session-*.html
 
 # Secrets, sessions, cookies, machine-local config
 .env
