@@ -244,7 +244,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
     }
 
     [Fact]
-    public async Task LoadFirstPageAsync_BackendFailure_ClearsCacheAndReturnsTemporaryBackendFailure()
+    public async Task LoadFirstPageAsync_BackendFailure_PreservesCacheAndReturnsTemporaryBackendFailure()
     {
         // Arrange
         var client = new FakeYouTubeHomeClient();
@@ -267,11 +267,11 @@ public sealed class AuthenticatedHomeFeedServiceTests
         // Assert
         Assert.Equal(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, result.Status);
         Assert.Empty(result.FeedPage.Videos);
-        Assert.Empty(feedService.GetHomeFeed().Videos);
+        Assert.NotEmpty(feedService.GetHomeFeed().Videos);
     }
 
     [Fact]
-    public async Task LoadFirstPageAsync_ClientThrowsException_ClearsCacheAndReturnsTemporaryBackendFailure()
+    public async Task LoadFirstPageAsync_ClientThrowsException_PreservesCacheAndReturnsTemporaryBackendFailure()
     {
         // Arrange
         var client = new FakeYouTubeHomeClient();
@@ -293,7 +293,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
         // Assert
         Assert.Equal(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, result.Status);
         Assert.Empty(result.FeedPage.Videos);
-        Assert.Empty(feedService.GetHomeFeed().Videos);
+        Assert.NotEmpty(feedService.GetHomeFeed().Videos);
     }
 
     [Fact]

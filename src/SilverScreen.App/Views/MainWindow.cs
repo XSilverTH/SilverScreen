@@ -8,7 +8,6 @@ using SilverScreen.Features.Queue;
 using SilverScreen.Features.Search;
 using SilverScreen.Features.Session;
 using SilverScreen.Features.Thumbnails;
-using SilverScreen.Infrastructure.Mock;
 using SilverScreen.Infrastructure.YouTube;
 using XSTH.Blueprint.Helpers;
 
@@ -24,7 +23,6 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private const int ThumbnailImageWidth = 226;
     private const int ThumbnailImageHeight = 127;
 
-    private readonly IFeedService _feedService = new MockFeedService();
     private readonly IQueueService _queueService = new QueueService();
     private readonly ISessionService _sessionService = new InMemorySessionService();
     private readonly ICookieFileProvider _cookieFileProvider;
@@ -35,12 +33,14 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly HttpClient _httpClient;
     private readonly YouTubeHomeClient _ytHomeClient;
     private readonly AuthenticatedHomeFeedService _authHomeFeedService;
+    private readonly HomeFeedCoordinator _homeFeedCoordinator;
     private readonly HomeSessionValidator _homeSessionValidator;
     private readonly SessionValidationCoordinator _validationCoordinator;
 
     private readonly Adw.ViewStack _viewStack;
     private readonly Adw.ViewSwitcher _viewSwitcher;
     private readonly Button _searchButton;
+    private readonly Button _homeRefreshButton;
     private readonly MenuButton _accountButton;
     private readonly MenuButton _appMenuButton;
     private readonly MenuButton _queueButton;
@@ -52,9 +52,11 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly Label _queueDurationLabel;
     private readonly Box _queueItemsBox;
     private readonly FlowBox _searchResultsFlowBox;
+    private readonly Box _homeContent;
     private CancellationTokenSource? _searchCancellation;
     private readonly CancellationTokenSource _thumbnailCancellation = new();
     private CancellationTokenSource? _searchThumbnailCancellation;
+    private CancellationTokenSource? _homeThumbnailCancellation;
     private bool _isClosing;
 
     public MainWindow()
@@ -62,6 +64,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _viewStack = GetBuilderObject<Adw.ViewStack>("view_stack");
         _viewSwitcher = GetBuilderObject<Adw.ViewSwitcher>("view_switcher");
         _searchButton = GetBuilderObject<Button>("search_button");
+        _homeRefreshButton = GetBuilderObject<Button>("home_refresh_button");
         _accountButton = GetBuilderObject<MenuButton>("account_button");
         _appMenuButton = GetBuilderObject<MenuButton>("app_menu_button");
         _queueButton = GetBuilderObject<MenuButton>("queue_button");
@@ -75,7 +78,12 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _httpClient = new HttpClient();
         _ytHomeClient = new YouTubeHomeClient(_httpClient, _sessionService);
         _authHomeFeedService = new AuthenticatedHomeFeedService(_ytHomeClient, _sessionService);
+        _homeFeedCoordinator = new HomeFeedCoordinator(_sessionService, _authHomeFeedService);
+        _homeFeedCoordinator.StateChanged += OnHomeFeedStateChanged;
         _homeSessionValidator = new HomeSessionValidator(_authHomeFeedService);
+        _homeContent = Box.New(Orientation.Vertical, 0);
+        _homeContent.Hexpand = true;
+        _homeContent.Vexpand = true;
         _validationCoordinator = new SessionValidationCoordinator(_homeSessionValidator, _sessionService);
 
         Widget.OnCloseRequest += (_, _) =>
@@ -83,6 +91,10 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             _isClosing = true;
             _validationCoordinator.Cancel();
             _ytHomeClient.Dispose();
+            _homeFeedCoordinator.Dispose();
+            _homeThumbnailCancellation?.Cancel();
+            _homeThumbnailCancellation?.Dispose();
+            _thumbnailCancellation.Cancel();
             _authHomeFeedService.Dispose();
             _httpClient.Dispose();
             return false;
@@ -109,6 +121,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _viewSwitcher.Stack = _viewStack;
 
         BuildStaticTabs();
+        RenderHomeFeedState(_homeFeedCoordinator.State);
         BuildAccountPopover();
         BuildAppMenuPopover();
         BuildQueueButton();
@@ -120,10 +133,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void BuildStaticTabs()
     {
-        var homePage = CreateVideoGridPage(
-            _feedService.GetHomeFeed().Videos.Where(video => !video.IsShort),
-            _feedService is MockFeedService ? "Demo recommendations — development data, not personalized." : null);
-        _viewStack.AddTitled(homePage, HomeTabName, "Home");
+        _viewStack.AddTitled(CreateHomePage(), HomeTabName, "Home");
         _viewStack.AddTitled(CreateSearchPage(), SearchTabName, "Search");
         _viewStack.AddTitled(CreatePlaceholderPage("Subscriptions", "Subscription feeds will land after account/session support."), SubscriptionsTabName, "Subscriptions");
         _viewStack.AddTitled(CreatePlaceholderPage("History", "Local watch history is intentionally not persisted in this shell step."), HistoryTabName, "History");
@@ -148,32 +158,163 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return flowBox;
     }
 
-    private Widget CreateVideoGridPage(IEnumerable<VideoSummary> videos, string? bannerText = null)
+    private Widget CreateHomePage()
     {
-        var flowBox = CreateVideoFlowBox();
-        foreach (var video in videos)
-        {
-            flowBox.Append(CreateVideoCard(video, _thumbnailCancellation.Token));
-        }
-
-        var content = Box.New(Orientation.Vertical, 0);
-        if (!string.IsNullOrEmpty(bannerText))
-        {
-            var banner = CreateDimLabel(bannerText);
-            banner.MarginStart = 18;
-            banner.MarginEnd = 18;
-            banner.MarginTop = 12;
-            content.Append(banner);
-        }
-
-        content.Append(flowBox);
-
         var scrolledWindow = ScrolledWindow.New();
         scrolledWindow.Hexpand = true;
         scrolledWindow.Vexpand = true;
-        scrolledWindow.Child = content;
-
+        scrolledWindow.Child = _homeContent;
         return scrolledWindow;
+    }
+
+    private void OnHomeFeedStateChanged(object? sender, HomeFeedState state)
+    {
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (!_isClosing)
+            {
+                RenderHomeFeedState(state);
+            }
+
+            return false;
+        });
+    }
+
+    private async void OnHomeRefreshButton_Clicked(object? sender, EventArgs e)
+    {
+        await _homeFeedCoordinator.RefreshAsync();
+    }
+
+    private void RenderHomeFeedState(HomeFeedState state)
+    {
+        _homeThumbnailCancellation?.Cancel();
+        _homeThumbnailCancellation?.Dispose();
+        _homeThumbnailCancellation = null;
+        ClearBox(_homeContent);
+
+        _homeRefreshButton.Sensitive = state.Kind != HomeFeedStateKind.SignedOut
+            && !state.IsLoading
+            && !state.IsLoadingMore;
+
+        var usableVideos = state.Videos
+            .Where(video => !video.IsShort)
+            .GroupBy(video => video.Id)
+            .Select(group => group.First())
+            .ToArray();
+
+        if (usableVideos.Length > 0)
+        {
+            _homeThumbnailCancellation = CancellationTokenSource.CreateLinkedTokenSource(_thumbnailCancellation.Token);
+
+            if (state.IsLoading || state.IsLoadingMore)
+            {
+                _homeContent.Append(CreateHomeLoadingRow(
+                    state.IsLoadingMore ? "Loading more recommendations…" : "Loading YouTube recommendations…"));
+            }
+
+            if (!string.IsNullOrEmpty(state.Message))
+            {
+                _homeContent.Append(CreateHomeMessage(state.Message));
+            }
+
+            var flowBox = CreateVideoFlowBox();
+            foreach (var video in usableVideos)
+            {
+                flowBox.Append(CreateVideoCard(video, _homeThumbnailCancellation.Token));
+            }
+            _homeContent.Append(flowBox);
+
+            if (state.HasContinuation)
+            {
+                var loadMoreButton = Button.NewWithLabel(state.IsLoadingMore ? "Loading more…" : "Load more");
+                loadMoreButton.Halign = Align.Center;
+                loadMoreButton.MarginBottom = 24;
+                loadMoreButton.Sensitive = !state.IsLoadingMore && !state.IsLoading;
+                loadMoreButton.OnClicked += async (_, _) => await _homeFeedCoordinator.LoadMoreAsync();
+                _homeContent.Append(loadMoreButton);
+            }
+        }
+        else
+        {
+            _homeContent.Append(state.Kind switch
+            {
+                HomeFeedStateKind.SignedOut => CreateHomeStatusPage(
+                    "Home",
+                    "Sign in to see your YouTube recommendations.",
+                    "avatar-default-symbolic"),
+                HomeFeedStateKind.InitialLoading => CreateHomeLoadingPage(),
+                HomeFeedStateKind.Empty => CreateHomeStatusPage(
+                    "Home",
+                    "No recommendations are available right now.",
+                    "applications-internet-symbolic"),
+                HomeFeedStateKind.AuthenticationRequired => CreateHomeStatusPage(
+                    "Home",
+                    "Your YouTube session is no longer valid.",
+                    "dialog-password-symbolic"),
+                _ => CreateHomeStatusPage(
+                    "Home",
+                    "Could not load YouTube recommendations.",
+                    "network-error-symbolic")
+            });
+        }
+
+        if (!string.IsNullOrEmpty(state.Message))
+        {
+            SetStatus(state.Message);
+        }
+    }
+
+    private Widget CreateHomeLoadingPage()
+    {
+        var content = Box.New(Orientation.Vertical, 12);
+        content.Halign = Align.Center;
+        content.Valign = Align.Center;
+        content.Hexpand = true;
+        content.Vexpand = true;
+
+        var spinner = Spinner.New();
+        spinner.Halign = Align.Center;
+        spinner.Spinning = true;
+        content.Append(spinner);
+
+        var message = Label.New("Loading YouTube recommendations…");
+        message.CssClasses = ["dim-label"];
+        content.Append(message);
+        return content;
+    }
+
+    private Widget CreateHomeLoadingRow(string message)
+    {
+        var row = Box.New(Orientation.Horizontal, 8);
+        row.MarginStart = 18;
+        row.MarginEnd = 18;
+        row.MarginTop = 12;
+
+        var spinner = Spinner.New();
+        spinner.Spinning = true;
+        row.Append(spinner);
+        row.Append(CreateDimLabel(message));
+        return row;
+    }
+
+    private Widget CreateHomeMessage(string message)
+    {
+        var label = CreateDimLabel(message);
+        label.MarginStart = 18;
+        label.MarginEnd = 18;
+        label.MarginTop = 12;
+        return label;
+    }
+
+    private static Widget CreateHomeStatusPage(string title, string description, string iconName)
+    {
+        var statusPage = Adw.StatusPage.New();
+        statusPage.Title = title;
+        statusPage.Description = description;
+        statusPage.IconName = iconName;
+        statusPage.Hexpand = true;
+        statusPage.Vexpand = true;
+        return statusPage;
     }
 
     private Widget CreateVideoCard(VideoSummary video, CancellationToken thumbnailCancellationToken)
@@ -339,7 +480,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         menuBox.Append(CreatePopoverAction("Play", () => PlayVideo(video)));
         menuBox.Append(CreatePopoverAction("Add to queue", () => AddToQueue(video)));
         menuBox.Append(CreatePopoverAction("Add next", () => AddNext(video)));
-        menuBox.Append(CreatePopoverAction("Open channel", () => SetStatus($"Open channel stub: {video.ChannelName}")));
+        menuBox.Append(CreatePopoverAction("Open channel", () => SetStatus("Opening channels is not implemented.")));
         menuBox.Append(CreatePopoverAction("Copy link", () => CopyVideoLink(video)));
 
         var popover = Popover.New();
@@ -771,13 +912,13 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private void AddToQueue(VideoSummary video)
     {
         _queueService.Add(video);
-        SetStatus($"Queued: {video.Title}");
+        SetStatus("Video added to queue.");
     }
 
     private void AddNext(VideoSummary video)
     {
         _queueService.AddNext(video);
-        SetStatus($"Added next: {video.Title}");
+        SetStatus("Video added next in queue.");
     }
 
     private void SetStatus(string message)
@@ -790,7 +931,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private void CopyVideoLink(VideoSummary video)
     {
         var videoUrl = BuildVideoUrl(video);
-        SetStatus(videoUrl is null ? "No playable URL is available for this mock video yet." : $"Copy link stub: {videoUrl}");
+        SetStatus(videoUrl is null ? "No playable video link is available." : "Copy link is not implemented.");
     }
 
     private static bool HasPlayableUrl(VideoSummary video) => BuildVideoUrl(video) is not null;

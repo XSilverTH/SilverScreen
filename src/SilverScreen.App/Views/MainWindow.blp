@@ -27,6 +27,13 @@ Adw.ApplicationWindow MainWindow {
       };
 
       [end]
+      Button home_refresh_button {
+        icon-name: "view-refresh-symbolic";
+        tooltip-text: "Refresh Home";
+        clicked => $OnHomeRefreshButton_Clicked();
+      }
+
+      [end]
       MenuButton app_menu_button {
         icon-name: "open-menu-symbolic";
         tooltip-text: "Main Menu";

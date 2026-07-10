@@ -61,7 +61,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
                 HandleProcessExited(started, cookieFileForProcess);
             }
 
-            return $"Opening in MPV: {request.Title}";
+            return "Opening in MPV.";
         }
         catch (Win32Exception ex)
         {

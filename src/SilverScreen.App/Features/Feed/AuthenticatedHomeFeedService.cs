@@ -61,7 +61,6 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         }
         catch (Exception)
         {
-            ClearCachedResults();
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty, BackendFailureMessage);
         }
     }
@@ -96,7 +95,6 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         }
         catch (Exception)
         {
-            ClearCachedResults();
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty, BackendFailureMessage);
         }
     }
@@ -112,17 +110,31 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     {
         if (!clientResult.IsSuccess)
         {
-            ClearCachedResults();
-            return clientResult.RequiresAuthentication
-                ? new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRejected, FeedPage.Empty, AuthenticationRejectedMessage)
-                : new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty, BackendFailureMessage);
+            if (clientResult.RequiresAuthentication)
+            {
+                ClearCachedResults();
+                return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRejected, FeedPage.Empty, AuthenticationRejectedMessage);
+            }
+            return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty, BackendFailureMessage);
         }
 
         var usableVideos = clientResult.Videos.Where(video => !video.IsShort).ToArray();
         if (usableVideos.Length == 0)
         {
-            ClearCachedResults();
-            return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty, EmptyFeedMessage);
+            if (isFirstPage)
+            {
+                ClearCachedResults();
+                return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty, EmptyFeedMessage);
+            }
+            lock (_lock)
+            {
+                _continuationToken = clientResult.ContinuationToken;
+                _cachedFeedPage = new FeedPage(_loadedVideos.ToArray(), _continuationToken);
+            }
+            return new AuthenticatedHomeFeedResult(
+                AuthenticatedHomeFeedStatus.Success,
+                new FeedPage(usableVideos, clientResult.ContinuationToken),
+                SuccessMessage);
         }
 
         lock (_lock)
