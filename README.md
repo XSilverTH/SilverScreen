@@ -19,7 +19,6 @@ The app launches `yt-dlp` and `mpv` by those names. If either command is missing
 From the repository root:
 
 ```sh
-dotnet restore
 dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
 ```
 
