@@ -1,56 +1,89 @@
 # SilverScreen
+HERE BE DRAGONS: this is extremely early in development and is missing most of it's planned features. if you want, you can use this daily as its not critical infrastructure but i wouldn't.
+SilverScreen is a GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV (hopefully an embeded libmpv player in the future).
 
-SilverScreen is a Linux-native YouTube client built with C#, GIR.Core, GTK4, libadwaita, and Blueprint views.
+Search YouTube or paste a video link, then play it with your local MPV install. If you add a temporary YouTube cookie session, SilverScreen can also load your Home recommendations.
 
-## What works
+## What you need
 
-- Search YouTube with `yt-dlp`; paste a supported YouTube video URL to play it directly.
-- Launch playable videos in external `mpv`; a manual Netscape `cookies.txt` session is passed through a user-only temporary file when present.
-- Load recommendations with `yt-dlp`'s `:ytrec` extractor after adding a manual session. The app falls back to public recommendations only when an authenticated request returns no videos.
-- Cache thumbnails under `$XDG_CACHE_HOME/SilverScreen/thumbnails` (or `~/.cache/SilverScreen/thumbnails`) with a bounded on-disk cache.
-- Add, reorder, remove, and clear an in-memory queue. Use a card's overflow menu to copy its playable video link.
+- The .NET 10 SDK.
+- GTK 4 and Libadwaita native libraries compatible with the GirCore bindings used by the app.
+- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) on `PATH` for search and Home recommendations.
+- [`mpv`](https://mpv.io/) on `PATH` for playback.
 
-Sessions and queues are intentionally process-local: cookie content is not persisted and is removed from temporary subprocess files when their process exits.
+The app launches `yt-dlp` and `mpv` by those names. If either command is missing, the related action cannot run.
 
-## Not implemented
+## Run it
 
-Subscriptions, history, playlists, channel browsing, browser-based sign-in, embedded playback, SponsorBlock, and persistent application state.
-
-## Prerequisites
-
-- .NET SDK 10.
-- GTK 4 and libadwaita runtime libraries.
-- `yt-dlp` for search and Home recommendations.
-- `mpv` for playback.
-
-On Arch-based distributions:
+From the repository root:
 
 ```sh
-sudo pacman -S dotnet-sdk gtk4 libadwaita yt-dlp mpv
+dotnet restore
+dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
 ```
 
-## Build
+## Basic usage
+
+1. Select the search button in the header.
+2. Enter a normal YouTube search or paste a supported YouTube video URL.
+3. Select a result to play it in MPV, or open its menu to add it to the queue.
+
+Text searches use `yt-dlp` and show up to 20 non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
+
+The queue is a small in-memory list. **Add next** places a video at the front; you can remove items or clear the list from the floating queue button. It does nothing for now. in the future i hope to turn it into something used in place of opening multiple tabs to watch back to back.
+
+## Home recommendations
+
+Home is opt-in because it needs a YouTube session.
+
+1. Open the account button in the header.
+2. Choose **Add manual session**.
+3. Paste the contents of a browser-exported Netscape-format `cookies.txt` file and save it.
+4. Choose **Validate Home session**, then refresh Home.
+
+SilverScreen keeps this session only in memory for the current process. Cookie values are not shown after saving and are not written to a permanent app config. When `yt-dlp` or MPV needs them, the app creates a temporary cookie file with user-only permissions.
+
+## Important details
+
+- Home requires a manual session. It fetches one recommendation page; loading additional Home pages is not implemented.
+- Search results and Home recommendations exclude YouTube Shorts.
+- Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
+- Subscriptions and History are currently placeholder views. Preferences and About are also placeholders.
+- Search, queue contents, and the manual session are not persisted between app runs.
+
+## Project layout
+
+| Path | What it contains |
+| --- | --- |
+| `src/SilverScreen.App/Views` | The GTK/Libadwaita window and interaction code. |
+| `src/SilverScreen.App/Features` | Search, playback, queue, session, feed, and thumbnail behavior. |
+| `src/SilverScreen.App/Infrastructure/YouTube` | The `yt-dlp`-backed Home feed client. |
+| `tests/SilverScreen.Tests` | Unit tests for the app behavior. |
+
+
+## Feature wishlist
+Things i hope to implement (these are big features im leaving for when the project is in less of an unstable state):
+Viewing video comments
+Embeded player (probably with libmpv)
+Offline playback (downloading)
+Managing offline (or online) playback (organize videos and make playlists and stuff)
+Commenting on videos
+
+i hope to make this a better and complete replacement for the youtube website. not just an alternative
+
+
+## Development
+
+Build the solution:
 
 ```sh
-dotnet restore SilverScreen.sln
-dotnet build SilverScreen.sln --no-restore
+dotnet build SilverScreen.sln
 ```
 
-## Run
+Run the tests:
 
 ```sh
-dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj --no-build
+dotnet test tests/SilverScreen.Tests/SilverScreen.Tests.csproj
 ```
 
-## Use
-
-1. Use the search button to search by text or paste a YouTube video URL. Click a card to play it, middle-click to queue it, or use its overflow menu for more actions.
-2. Open the account menu to paste Netscape `cookies.txt` content. The app stores it only in memory for the current process.
-3. After adding a session, use Home's refresh button to request recommendations. Use **Validate Home session** in the account menu to check the current session.
-4. Install `yt-dlp` and `mpv` before using search/Home and playback respectively; missing executables produce an in-app error rather than a shell invocation.
-
-## Test
-
-```sh
-dotnet test SilverScreen.sln --no-restore
-```
+This README covers the application and its usual local setup. The source is the current reference for implementation details and default timeouts.
