@@ -46,7 +46,7 @@ SilverScreen keeps this session only in memory for the current process. Cookie v
 
 ## Important details
 
-- Home requires a manual session. It fetches one recommendation page; loading additional Home pages is not implemented.
+- Home requires a manual session and supports refresh plus continuation-page loading when YouTube provides one.
 - Search results and Home recommendations exclude YouTube Shorts.
 - Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
 - Subscriptions and History are currently placeholder views. Preferences and About are also placeholders.
@@ -56,10 +56,14 @@ SilverScreen keeps this session only in memory for the current process. Cookie v
 
 | Path | What it contains |
 | --- | --- |
-| `src/SilverScreen.App/Views` | The GTK/Libadwaita window and interaction code. |
+| `src/SilverScreen.App/ApplicationServices.cs` | Explicit application composition and disposal owner for the shared queue, session, playback, search, thumbnail, and Home services. |
+| `src/SilverScreen.App/Views/Shell` | The thin application-window shell: header chrome, navigation stack, status presentation, global menu, and popover placement. |
+| `src/SilverScreen.App/Views/Home`, `Views/Search` | Independently compiled Blueprint page roots and their page-owned rendering/cancellation. |
+| `src/SilverScreen.App/Views/Components`, `Views/Popovers` | Reusable video cards plus independent queue and account popover roots. |
+| `src/SilverScreen.App/ViewModels` | GTK-free shell, Home, search, queue, and account presentation state/adapters. |
 | `src/SilverScreen.App/Features` | Search, playback, queue, session, feed, and thumbnail behavior. |
 | `src/SilverScreen.App/Infrastructure/YouTube` | The `yt-dlp`-backed Home feed client. |
-| `tests/SilverScreen.Tests` | Unit tests for the app behavior. |
+| `tests/SilverScreen.Tests` | Unit tests for feature and presentation-state behavior. |
 
 
 ## Feature wishlist

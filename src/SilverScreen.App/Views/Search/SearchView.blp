@@ -1,0 +1,44 @@
+using Gtk 4.0;
+
+Gtk.Box SearchView {
+  orientation: vertical;
+  spacing: 12;
+  margin-top: 24;
+  margin-bottom: 24;
+  margin-start: 24;
+  margin-end: 24;
+  hexpand: true;
+  vexpand: true;
+
+  Gtk.Label {
+    label: "Search";
+    xalign: 0;
+    styles ["title-2"]
+  }
+
+  Gtk.Label search_summary_label {
+    label: "Search results will appear here.";
+    xalign: 0;
+    wrap: true;
+    styles ["dim-label"]
+  }
+
+  Gtk.ScrolledWindow {
+    hexpand: true;
+    vexpand: true;
+    child: Gtk.FlowBox search_results_flow_box {
+      selection-mode: none;
+      activate-on-single-click: false;
+      column-spacing: 18;
+      row-spacing: 22;
+      min-children-per-line: 1;
+      max-children-per-line: 4;
+      margin-start: 18;
+      margin-end: 18;
+      margin-top: 18;
+      margin-bottom: 96;
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+}

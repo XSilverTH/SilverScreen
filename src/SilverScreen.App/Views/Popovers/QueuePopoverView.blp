@@ -1,0 +1,27 @@
+using Gtk 4.0;
+
+Gtk.Box QueuePopoverView {
+  orientation: vertical;
+  spacing: 8;
+  margin-top: 10;
+  margin-bottom: 10;
+  margin-start: 10;
+  margin-end: 10;
+
+  Gtk.Label queue_duration_label {
+    xalign: 0;
+    styles ["heading"]
+  }
+
+  Gtk.Box queue_items_box {
+    orientation: vertical;
+    spacing: 6;
+  }
+
+  Gtk.Button clear_queue_button {
+    label: "Clear queue";
+    halign: fill;
+    styles ["flat"]
+    clicked => $OnClearQueueButtonClicked();
+  }
+}

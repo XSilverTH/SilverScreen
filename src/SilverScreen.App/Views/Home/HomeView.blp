@@ -1,0 +1,39 @@
+using Gtk 4.0;
+
+Gtk.Box HomeView {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+
+  Gtk.Box home_toolbar {
+    orientation: horizontal;
+    spacing: 12;
+    margin-top: 12;
+    margin-bottom: 6;
+    margin-start: 18;
+    margin-end: 18;
+
+    Gtk.Label {
+      label: "Home";
+      xalign: 0;
+      hexpand: true;
+      styles ["title-2"]
+    }
+
+    Gtk.Button home_refresh_button {
+      icon-name: "view-refresh-symbolic";
+      tooltip-text: "Refresh Home";
+      clicked => $OnHomeRefreshButtonClicked();
+    }
+  }
+
+  Gtk.ScrolledWindow {
+    hexpand: true;
+    vexpand: true;
+    child: Gtk.Box home_content {
+      orientation: vertical;
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+}

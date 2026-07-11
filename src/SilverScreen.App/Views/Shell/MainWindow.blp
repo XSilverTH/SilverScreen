@@ -8,7 +8,7 @@ Adw.ApplicationWindow MainWindow {
 
   content: Adw.ToolbarView {
     [top]
-    Adw.HeaderBar header_bar {
+    Adw.HeaderBar {
       [start]
       MenuButton account_button {
         icon-name: "avatar-default-symbolic";
@@ -19,19 +19,12 @@ Adw.ApplicationWindow MainWindow {
       Button search_button {
         icon-name: "system-search-symbolic";
         tooltip-text: "Search";
-        clicked => $OnSearchButton_Clicked();
+        clicked => $OnSearchButtonClicked();
       }
 
       title-widget: Adw.ViewSwitcher view_switcher {
         policy: wide;
       };
-
-      [end]
-      Button home_refresh_button {
-        icon-name: "view-refresh-symbolic";
-        tooltip-text: "Refresh Home";
-        clicked => $OnHomeRefreshButton_Clicked();
-      }
 
       [end]
       MenuButton app_menu_button {
@@ -40,8 +33,8 @@ Adw.ApplicationWindow MainWindow {
       }
     }
 
-    content: Overlay content_overlay {
-      child: Box main_box {
+    content: Overlay {
+      child: Box {
         orientation: vertical;
 
         Adw.ViewStack view_stack {
