@@ -1,5 +1,5 @@
 # SilverScreen
-HERE BE DRAGONS: this is extremely early in development and is missing most of it's planned features. if you want, you can use this daily as its not critical infrastructure but I wouldn't.
+HERE BE DRAGONS: this is extremely early in development and is missing most of it's planned features. if you want, you can use this daily as its not critical infrastructure, but I wouldn't.
 
 SilverScreen is a GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV (hopefully an embeded libmpv player in the future).
 
@@ -31,7 +31,7 @@ dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
 
 Text searches use `yt-dlp` and show up to 20 non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
 
-The queue is a small in-memory list. **Add next** places a video at the front; you can remove items or clear the list from the floating queue button. It does nothing for now. in the future i hope to turn it into something used in place of opening multiple tabs to watch back to back.
+The queue is a small in-memory list. **Add next** places a video at the front; you can remove items or clear the list from the floating queue button. It does nothing for now. in the future I hope to turn it into something used in place of opening multiple tabs to watch back to back.
 
 ## Home recommendations
 
@@ -63,14 +63,15 @@ SilverScreen keeps this session only in memory for the current process. Cookie v
 
 
 ## Feature wishlist
-Things i hope to implement (these are big features im leaving for when the project is in less of an unstable state):
-Viewing video comments
-Embeded player (probably with libmpv)
-Offline playback (downloading)
-Managing offline (or online) playback (organize videos and make playlists and stuff)
-Commenting on videos
+Things I hope to implement (these are big features I'm leaving for when the project is in less of an unstable state):
 
-i hope to make this a better and complete replacement for the youtube website. not just an alternative
+Viewing video comments  
+Embedded player (probably with libmpv)  
+Offline playback (downloading)  
+Managing offline (or online) playback (organize videos and make playlists and stuff)  
+sCommenting on videos
+
+I hope to make this a better and complete replacement for the YouTube website. not just an alternative
 
 
 ## Development
