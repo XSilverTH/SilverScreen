@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,9 +17,7 @@ public sealed class YouTubeCredentials
     public static YouTubeCredentials? ParseNetscape(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
-        {
             return null;
-        }
 
         var cookies = new List<(string Name, string Value)>();
         string? sapisid = null;
@@ -34,58 +30,47 @@ public sealed class YouTubeCredentials
             if (string.IsNullOrEmpty(trimmed) ||
                 (trimmed.StartsWith("#", StringComparison.Ordinal) &&
                  !trimmed.StartsWith("#HttpOnly_", StringComparison.OrdinalIgnoreCase)))
-            {
                 continue;
-            }
 
             var parts = trimmed.Split('\t');
             if (parts.Length < 7)
-            {
                 continue;
-            }
 
             var domain = parts[0].Trim();
             if (domain.StartsWith("#HttpOnly_", StringComparison.OrdinalIgnoreCase))
-            {
                 domain = domain["#HttpOnly_".Length..];
-            }
 
             domain = domain.ToLowerInvariant();
             var name = parts[5].Trim();
             var value = parts[6].Trim();
 
             // Keep only cookies required to authenticate a WEB InnerTube request.
-            if ((domain == "youtube.com" || domain == ".youtube.com" || domain.EndsWith(".youtube.com")) &&
-                IsRequiredRequestCookie(name))
-            {
-                cookies.Add((name, value));
+            if ((domain != "youtube.com" && domain != ".youtube.com" && !domain.EndsWith(".youtube.com")) ||
+                !IsRequiredRequestCookie(name)) continue;
+            cookies.Add((name, value));
 
-                if (name == "SAPISID")
-                {
+            switch (name)
+            {
+                case "SAPISID":
                     sapisid = value;
-                }
-                else if (name == "__Secure-3PAPISID")
-                {
+                    break;
+                case "__Secure-3PAPISID":
                     secureSapisid = value;
-                }
+                    break;
             }
         }
 
         // Prioritize secure sapisid if available
         var activeSapisid = secureSapisid ?? sapisid;
         if (string.IsNullOrEmpty(activeSapisid))
-        {
             return null; // Missing critical authentication cookie
-        }
 
         // Build Cookie header
         var sb = new StringBuilder();
         foreach (var cookie in cookies)
         {
             if (sb.Length > 0)
-            {
                 sb.Append("; ");
-            }
 
             sb.Append(cookie.Name).Append('=').Append(cookie.Value);
         }
@@ -120,7 +105,7 @@ public sealed class YouTubeCredentials
     {
         // derive SAPISIDHASH using SHA-1 of '{unixTimestamp} {SAPISID} https://www.youtube.com'
         var data = $"{timestamp} {Sapisid} https://www.youtube.com";
-        byte[] hashBytes = SHA1.HashData(Encoding.UTF8.GetBytes(data));
+        var hashBytes = SHA1.HashData(Encoding.UTF8.GetBytes(data));
         return Convert.ToHexStringLower(hashBytes);
     }
 

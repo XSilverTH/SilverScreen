@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Search;
+using SilverScreen.Infrastructure.Features.Search;
 
 namespace SilverScreen.ViewModels;
 
@@ -11,22 +11,16 @@ public sealed record SearchViewState(
     string Summary,
     bool IsLoading);
 
-public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
+public sealed class SearchViewModel(
+    ISearchService searchService,
+    IPlaybackService playbackService,
+    ShellViewModel shell)
+    : INotifyPropertyChanged, IDisposable
 {
-    private readonly ISearchService _searchService;
-    private readonly IPlaybackService _playbackService;
-    private readonly ShellViewModel _shell;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
     private SearchViewState _state = new([], "Search results will appear here.", false);
     private bool _disposed;
-
-    public SearchViewModel(ISearchService searchService, IPlaybackService playbackService, ShellViewModel shell)
-    {
-        _searchService = searchService;
-        _playbackService = playbackService;
-        _shell = shell;
-    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<SearchViewState>? StateChanged;
@@ -52,7 +46,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            _shell.Status = "Empty search ignored.";
+            shell.Status = "Empty search ignored.";
             return;
         }
 
@@ -65,31 +59,31 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
                     await PlayYouTubeUrlAsync(parsedUrl);
                     return;
                 case YouTubeUrlKind.Shorts:
-                    _shell.Status = "Shorts are not supported in SilverScreen.";
+                    shell.Status = "Shorts are not supported in SilverScreen.";
                     return;
                 case YouTubeUrlKind.Channel:
-                    _shell.Status = "Channel pages are not implemented yet.";
+                    shell.Status = "Channel pages are not implemented yet.";
                     return;
                 case YouTubeUrlKind.Playlist:
-                    _shell.Status = "Playlists are not implemented yet.";
+                    shell.Status = "Playlists are not implemented yet.";
                     return;
                 case YouTubeUrlKind.UnknownYouTube:
-                    _shell.Status = "Unsupported YouTube URL.";
+                    shell.Status = "Unsupported YouTube URL.";
                     return;
                 case YouTubeUrlKind.Invalid:
-                    _shell.Status = "Invalid YouTube URL.";
+                    shell.Status = "Invalid YouTube URL.";
                     return;
                 case YouTubeUrlKind.NotYouTube:
                     await SearchPlainTextAsync(query);
                     return;
                 default:
-                    _shell.Status = "Unsupported YouTube URL.";
+                    shell.Status = "Unsupported YouTube URL.";
                     return;
             }
         }
         catch (Exception)
         {
-            _shell.Status = "The requested action could not be completed.";
+            shell.Status = "The requested action could not be completed.";
         }
     }
 
@@ -102,22 +96,20 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
 
-        _shell.SelectedPage = "search";
+        shell.SelectedPage = "search";
         var searching = $"Searching YouTube for “{query}”…";
         State = new SearchViewState([], searching, true);
-        _shell.Status = searching;
+        shell.Status = searching;
 
         try
         {
-            var result = await _searchService.SearchAsync(new SearchRequest(query), token).ConfigureAwait(false);
+            var result = await searchService.SearchAsync(new SearchRequest(query), token).ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-            {
                 return;
-            }
 
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
             State = new SearchViewState(result.Videos, summary, false);
-            _shell.Status = summary;
+            shell.Status = summary;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -125,13 +117,11 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
         catch (Exception)
         {
             if (generation != _requestGeneration || _disposed)
-            {
                 return;
-            }
 
             const string message = "Search could not be completed.";
             State = new SearchViewState([], message, false);
-            _shell.Status = message;
+            shell.Status = message;
         }
     }
 
@@ -139,13 +129,13 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
     {
         if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
         {
-            _shell.Status = "Invalid YouTube URL.";
+            shell.Status = "Invalid YouTube URL.";
             return;
         }
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
-        _shell.Status = await _playbackService.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false);
+        shell.Status = await playbackService.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
@@ -159,9 +149,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         ++_requestGeneration;

@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Thumbnails;
+namespace SilverScreen.Infrastructure.Features.Thumbnails;
 
 public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 {
@@ -23,7 +23,6 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private readonly HttpClient _httpClient;
     private readonly bool _disposeHttpClient;
-    private readonly string _cacheDirectory;
     private readonly long _maxDownloadBytes;
     private readonly int _maxFileCount;
 
@@ -55,21 +54,19 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
 
         _httpClient = httpClient;
-        _cacheDirectory = cacheDirectory;
+        CacheDirectory = cacheDirectory;
         _maxDownloadBytes = maxDownloadBytes;
         _maxFileCount = maxFileCount;
         _disposeHttpClient = disposeHttpClient;
     }
 
-    public string CacheDirectory => _cacheDirectory;
+    public string CacheDirectory { get; }
 
     public async Task<ThumbnailResult?> GetThumbnailAsync(VideoSummary video,
         CancellationToken cancellationToken = default)
     {
         if (video.IsShort)
-        {
             return null;
-        }
 
         return await GetThumbnailAsync(video.ThumbnailUrl, cancellationToken).ConfigureAwait(false);
     }
@@ -78,17 +75,13 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         CancellationToken cancellationToken = default)
     {
         if (!TryCreateHttpUri(thumbnailUrl, out var uri))
-        {
             return null;
-        }
 
         var cachePath = GetCachePath(uri);
         if (File.Exists(cachePath))
         {
             if (IsWebPFile(cachePath))
-            {
                 DeleteFileIfExists(cachePath);
-            }
             else
             {
                 TouchCacheFile(cachePath);
@@ -96,8 +89,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
         }
 
-        Directory.CreateDirectory(_cacheDirectory);
-        var temporaryPath = Path.Combine(_cacheDirectory, $"{Path.GetFileName(cachePath)}.{Guid.NewGuid():N}.tmp");
+        Directory.CreateDirectory(CacheDirectory);
+        var temporaryPath = Path.Combine(CacheDirectory, $"{Path.GetFileName(cachePath)}.{Guid.NewGuid():N}.tmp");
         var downloadUri = GetYouTubeJpegFallbackUri(uri) ?? uri;
 
         var downloadCompleted = false;
@@ -108,23 +101,17 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             using var response = await _httpClient
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
-            {
                 return null;
-            }
 
             if (response.Content.Headers.ContentLength is { } contentLength && contentLength > _maxDownloadBytes)
-            {
                 return null;
-            }
 
             await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             await using var target = File.Create(temporaryPath);
             var copied = await CopyWithLimitAsync(source, target, _maxDownloadBytes, cancellationToken)
                 .ConfigureAwait(false);
             if (!copied)
-            {
                 return null;
-            }
 
 
             downloadCompleted = true;
@@ -141,9 +128,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         finally
         {
             if (!downloadCompleted)
-            {
                 DeleteFileIfExists(temporaryPath);
-            }
         }
 
         if (IsWebPFile(temporaryPath))
@@ -191,16 +176,14 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
     }
 
-    public static string GetDefaultCacheDirectory()
+    private static string GetDefaultCacheDirectory()
     {
         var cacheHome = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
-        if (string.IsNullOrWhiteSpace(cacheHome))
-        {
-            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            cacheHome = string.IsNullOrWhiteSpace(userHome)
-                ? Path.GetTempPath()
-                : Path.Combine(userHome, ".cache");
-        }
+        if (!string.IsNullOrWhiteSpace(cacheHome)) return Path.Combine(cacheHome, "SilverScreen", "thumbnails");
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        cacheHome = string.IsNullOrWhiteSpace(userHome)
+            ? Path.GetTempPath()
+            : Path.Combine(userHome, ".cache");
 
         return Path.Combine(cacheHome, "SilverScreen", "thumbnails");
     }
@@ -215,16 +198,14 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private string GetCachePath(Uri uri)
     {
-        return Path.Combine(_cacheDirectory, $"{CreateCacheKey(uri.AbsoluteUri)}{GetSafeExtension(uri)}");
+        return Path.Combine(CacheDirectory, $"{CreateCacheKey(uri.AbsoluteUri)}{GetSafeExtension(uri)}");
     }
 
     private static bool TryCreateHttpUri(string thumbnailUrl, out Uri uri)
     {
         if (Uri.TryCreate(thumbnailUrl, UriKind.Absolute, out uri!)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-        {
             return true;
-        }
 
         uri = null!;
         return false;
@@ -239,23 +220,16 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private static Uri? GetYouTubeJpegFallbackUri(Uri uri)
     {
         if (!IsYouTubeThumbnailHost(uri.Host))
-        {
             return null;
-        }
 
         var pathSegments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (pathSegments.Length < 2 || pathSegments[0] is not ("vi" or "vi_webp"))
-        {
             return null;
-        }
 
         var videoId = Uri.UnescapeDataString(pathSegments[1]);
-        if (string.IsNullOrWhiteSpace(videoId))
-        {
-            return null;
-        }
-
-        return new Uri($"https://i.ytimg.com/vi/{Uri.EscapeDataString(videoId)}/maxresdefault.jpg");
+        return string.IsNullOrWhiteSpace(videoId)
+            ? null
+            : new Uri($"https://i.ytimg.com/vi/{Uri.EscapeDataString(videoId)}/maxresdefault.jpg");
     }
 
     private static bool IsYouTubeThumbnailHost(string host)
@@ -274,15 +248,11 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         {
             var bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (bytesRead == 0)
-            {
                 return true;
-            }
 
             totalBytes += bytesRead;
             if (totalBytes > maxBytes)
-            {
                 return false;
-            }
 
             await target.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
         }
@@ -292,7 +262,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     {
         try
         {
-            var files = Directory.EnumerateFiles(_cacheDirectory)
+            var files = Directory.EnumerateFiles(CacheDirectory)
                 .Where(file => !file.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
                 .Select(file => new FileInfo(file))
                 .OrderByDescending(file => file.LastWriteTimeUtc)
@@ -300,9 +270,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 .ToList();
 
             foreach (var file in files)
-            {
                 file.Delete();
-            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
@@ -316,9 +284,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             Span<byte> header = stackalloc byte[12];
             using var file = File.OpenRead(path);
             if (file.Length < header.Length || file.Read(header) != header.Length)
-            {
                 return false;
-            }
 
             return header[0] == (byte)'R'
                    && header[1] == (byte)'I'
@@ -351,9 +317,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         try
         {
             if (File.Exists(path))
-            {
                 File.Delete(path);
-            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

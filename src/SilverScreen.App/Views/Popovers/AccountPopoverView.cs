@@ -24,9 +24,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
-            {
                 Render();
-            }
 
             return false;
         });
@@ -56,7 +54,8 @@ public partial class AccountPopoverView : ViewBase<Box>
         }
         else
         {
-            Widget.Append(DimLabel("Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
+            Widget.Append(DimLabel(
+                "Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
             Widget.Append(ActionButton("Add manual session", () =>
             {
                 _editing = true;
@@ -71,7 +70,8 @@ public partial class AccountPopoverView : ViewBase<Box>
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         Widget.Append(heading);
-        Widget.Append(DimLabel("Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
+        Widget.Append(DimLabel(
+            "Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
         var editor = TextView.New();
         editor.Monospace = true;
         editor.WrapMode = WrapMode.Char;
@@ -103,7 +103,8 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private static string GetText(TextView textView)
     {
-        var buffer = textView.Buffer ?? throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
+        var buffer = textView.Buffer ??
+                     throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
         buffer.GetBounds(out var start, out var end);
         return buffer.GetText(start, end, true);
     }
@@ -129,17 +130,13 @@ public partial class AccountPopoverView : ViewBase<Box>
     private static void Clear(Box box)
     {
         while (box.GetFirstChild() is { } child)
-        {
             box.Remove(child);
-        }
     }
 
     public new void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;

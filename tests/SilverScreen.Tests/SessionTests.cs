@@ -1,5 +1,5 @@
 using SilverScreen.Core.Models;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Tests;
 

@@ -22,7 +22,8 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
 
     protected override void BindViewModel(QueueViewModel viewModel, BindingScope<QueueViewModel> bindings)
     {
-        bindings.Bind(nameof(QueueViewModel.State), _duration, static model => FormatDuration(model.State.TotalDuration),
+        bindings.Bind(nameof(QueueViewModel.State), _duration,
+            static model => FormatDuration(model.State.TotalDuration),
             static (label, value) => label.SetText(value));
     }
 
@@ -33,9 +34,7 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
-            {
                 Render(state);
-            }
 
             return false;
         });
@@ -45,12 +44,10 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
     {
         Clear(_items);
         foreach (var item in state.Items)
-        {
             _items.Append(CreateRow(item));
-        }
     }
 
-    private Widget CreateRow(QueueItem item)
+    private Box CreateRow(QueueItem item)
     {
         var row = Box.New(Orientation.Horizontal, 8);
         row.WidthRequest = 320;
@@ -77,17 +74,13 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
     private static void Clear(Box box)
     {
         while (box.GetFirstChild() is { } child)
-        {
             box.Remove(child);
-        }
     }
 
     public new void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         if (ViewModel is { } viewModel)

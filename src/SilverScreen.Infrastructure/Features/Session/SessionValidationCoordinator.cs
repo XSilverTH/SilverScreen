@@ -1,25 +1,20 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Feed;
+using SilverScreen.Infrastructure.Features.Feed;
 
-namespace SilverScreen.Features.Session;
+namespace SilverScreen.Infrastructure.Features.Session;
 
-public sealed class SessionValidationCoordinator : IDisposable
+public sealed class SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
+    : IDisposable
 {
-    private readonly HomeSessionValidator _validator;
-    private readonly ISessionService _sessionService;
-    private readonly object _lock = new();
+    private readonly HomeSessionValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+
+    private readonly ISessionService _sessionService =
+        sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+
+    private readonly Lock _lock = new();
     private CancellationTokenSource? _cts;
     private bool _isValidating;
-
-    public SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
-    {
-        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
-        _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
-    }
 
     public bool IsValidating
     {

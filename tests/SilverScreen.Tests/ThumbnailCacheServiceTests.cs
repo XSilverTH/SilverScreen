@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SilverScreen.Core.Models;
-using SilverScreen.Features.Thumbnails;
+using SilverScreen.Infrastructure.Features.Thumbnails;
 using Xunit;
 
 namespace SilverScreen.Tests;

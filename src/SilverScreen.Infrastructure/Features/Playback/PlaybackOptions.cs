@@ -1,4 +1,4 @@
-namespace SilverScreen.Features.Playback;
+namespace SilverScreen.Infrastructure.Features.Playback;
 
 public sealed class PlaybackOptions
 {

@@ -1,4 +1,4 @@
-using SilverScreen.Features.Search;
+using SilverScreen.Infrastructure.Features.Search;
 
 namespace SilverScreen.Tests;
 

@@ -46,17 +46,13 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     private void OnQueueChanged(object? sender, EventArgs eventArgs)
     {
         if (!_disposed)
-        {
             State = Snapshot();
-        }
     }
 
     public void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _queue.Changed -= OnQueueChanged;

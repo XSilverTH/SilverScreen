@@ -1,6 +1,6 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Search;
+using SilverScreen.Infrastructure.Features.Search;
 
 namespace SilverScreen.Infrastructure.Mock;
 

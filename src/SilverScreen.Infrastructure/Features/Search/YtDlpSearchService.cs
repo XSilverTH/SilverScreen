@@ -3,22 +3,13 @@ using System.Text.Json;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Search;
+namespace SilverScreen.Infrastructure.Features.Search;
 
-public sealed class YtDlpSearchService : ISearchService
+public sealed class YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner) : ISearchService
 {
-    private readonly YtDlpOptions _options;
-    private readonly IYtDlpRunner _runner;
-
     public YtDlpSearchService()
         : this(new YtDlpOptions(), new YtDlpRunner())
     {
-    }
-
-    public YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner)
-    {
-        _options = options;
-        _runner = runner;
     }
 
     public async Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
@@ -30,7 +21,7 @@ public sealed class YtDlpSearchService : ISearchService
 
         try
         {
-            var result = await _runner.RunSearchAsync(request, _options, cancellationToken).ConfigureAwait(false);
+            var result = await runner.RunSearchAsync(request, options, cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
                 var error = string.IsNullOrWhiteSpace(result.StandardError)
@@ -41,7 +32,7 @@ public sealed class YtDlpSearchService : ISearchService
 
             var videos = ParseVideos(result.StandardOutput)
                 .Where(video => !video.IsShort)
-                .Take(_options.MaxResults)
+                .Take(options.MaxResults)
                 .ToList();
 
             return videos.Count == 0

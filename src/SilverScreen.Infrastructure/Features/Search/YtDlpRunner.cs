@@ -1,24 +1,17 @@
 using System.Diagnostics;
 using SilverScreen.Core.Models;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Session;
 
-namespace SilverScreen.Features.Search;
+namespace SilverScreen.Infrastructure.Features.Search;
 
-public sealed class YtDlpRunner : IYtDlpRunner
+public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) : IYtDlpRunner
 {
-    private readonly ICookieFileProvider? _cookieFileProvider;
-
-    public YtDlpRunner(ICookieFileProvider? cookieFileProvider = null)
-    {
-        _cookieFileProvider = cookieFileProvider;
-    }
-
     public async Task<ProcessResult> RunSearchAsync(
         SearchRequest request,
         YtDlpOptions options,
         CancellationToken cancellationToken)
     {
-        using var cookieFile = _cookieFileProvider?.CreateCookieFile();
+        using var cookieFile = cookieFileProvider?.CreateCookieFile();
 
         var startInfo = BuildSearchStartInfo(request, options, cookieFile?.Path);
 

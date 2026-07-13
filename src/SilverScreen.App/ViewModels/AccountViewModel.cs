@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.ViewModels;
 
@@ -15,7 +15,8 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private bool _isValidating;
     private bool _disposed;
 
-    public AccountViewModel(ISessionService sessionService, SessionValidationCoordinator validation, ShellViewModel shell)
+    public AccountViewModel(ISessionService sessionService, SessionValidationCoordinator validation,
+        ShellViewModel shell)
     {
         _sessionService = sessionService;
         _validation = validation;
@@ -40,15 +41,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public bool HasManualSession => Session.HasManualSession;
+
     public bool IsValidating
     {
         get => _isValidating;
         private set
         {
             if (_isValidating == value)
-            {
                 return;
-            }
 
             _isValidating = value;
             OnPropertyChanged();
@@ -77,9 +77,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     public async Task ValidateAsync()
     {
         if (!_validation.IsAvailable || _disposed)
-        {
             return;
-        }
 
         IsValidating = true;
         _shell.Status = SessionValidationFormatter.ValidatingMessage;
@@ -94,18 +92,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         finally
         {
             if (!_disposed)
-            {
                 IsValidating = false;
-            }
         }
     }
 
     private void OnSessionChanged(object? sender, EventArgs eventArgs)
     {
         if (!_disposed)
-        {
             Session = _sessionService.GetCurrentSession();
-        }
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
@@ -114,9 +108,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _validation.Cancel();

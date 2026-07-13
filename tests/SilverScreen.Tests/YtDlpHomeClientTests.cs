@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
 using Xunit;
 

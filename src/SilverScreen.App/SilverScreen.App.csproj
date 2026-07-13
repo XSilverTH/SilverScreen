@@ -25,7 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj" />
-        <ProjectReference Include="..\SilverScreen.Infrastructure\SilverScreen.Infrastructure.csproj" />
+        <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
+        <ProjectReference Include="..\SilverScreen.Infrastructure\SilverScreen.Infrastructure.csproj"/>
     </ItemGroup>
 </Project>

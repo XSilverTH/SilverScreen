@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
@@ -7,6 +8,7 @@ using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
+using Window = Gtk.Window;
 
 namespace SilverScreen.Views.Shell;
 
@@ -21,11 +23,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly AccountPopoverView _accountPopover;
     private readonly QueueViewModel _queueViewModel;
     private readonly Label _statusLabel;
-    private readonly Adw.ViewStack _stack;
-    private readonly Adw.ViewSwitcher _switcher;
+    private readonly ViewStack _stack;
     private readonly Button _searchButton;
     private readonly MenuButton _accountButton;
-    private readonly MenuButton _appMenuButton;
     private readonly MenuButton _queueButton;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
@@ -35,31 +35,36 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     {
         _services = services;
         _disposeApplicationServices = disposeApplicationServices;
-        _stack = GetRequiredObject<Adw.ViewStack>("view_stack");
-        _switcher = GetRequiredObject<Adw.ViewSwitcher>("view_switcher");
+        _stack = GetRequiredObject<ViewStack>("view_stack");
+        var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
         _searchButton = GetRequiredObject<Button>("search_button");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
-        _appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
+        var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<MenuButton>("queue_button");
         _statusLabel = GetRequiredObject<Label>("status_label");
 
         var actions = CreateVideoActions();
         _home = new HomeView(new HomeViewModel(services.HomeFeed), services.Thumbnails, actions);
-        _search = new SearchView(new SearchViewModel(services.Search, services.Playback, _shell), services.Thumbnails, actions);
+        _search = new SearchView(new SearchViewModel(services.Search, services.Playback, _shell), services.Thumbnails,
+            actions);
         _queueViewModel = new QueueViewModel(services.Queue);
         _queuePopover = new QueuePopoverView(_queueViewModel);
-        _accountPopover = new AccountPopoverView(new AccountViewModel(services.Session, services.SessionValidation, _shell),
+        _accountPopover = new AccountPopoverView(
+            new AccountViewModel(services.Session, services.SessionValidation, _shell),
             UpdateAccountAppearance);
 
-        _switcher.Stack = _stack;
+        switcher.Stack = _stack;
         _stack.AddTitled(_home.Widget, "home", "Home");
         _stack.AddTitled(_search.Widget, "search", "Search");
-        _stack.AddTitled(Placeholder("Subscriptions", "Subscription feeds will land after account/session support."), "subscriptions", "Subscriptions");
-        _stack.AddTitled(Placeholder("History", "Local watch history is intentionally not persisted in this shell step."), "history", "History");
+        _stack.AddTitled(Placeholder("Subscriptions", "Subscription feeds will land after account/session support."),
+            "subscriptions", "Subscriptions");
+        _stack.AddTitled(
+            Placeholder("History", "Local watch history is intentionally not persisted in this shell step."), "history",
+            "History");
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _queueButton.Popover = CreateQueuePopover();
-        _appMenuButton.Popover = CreateApplicationMenu();
+        appMenuButton.Popover = CreateApplicationMenu();
         _searchPopover = CreateSearchPopover(out _searchEntry);
         _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
@@ -69,7 +74,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private VideoCardActions CreateVideoActions() => new()
     {
-        PlayAsync = async video => _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false),
+        PlayAsync = async video =>
+            _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false),
         AddToQueue = video =>
         {
             _services.Queue.Add(video);
@@ -144,18 +150,17 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (_closed)
-            {
                 return false;
-            }
 
-            if (args.PropertyName == nameof(ShellViewModel.Status))
+            switch (args.PropertyName)
             {
-                Console.WriteLine(_shell.Status);
-                _statusLabel.SetText(_shell.Status);
-            }
-            else if (args.PropertyName == nameof(ShellViewModel.SelectedPage))
-            {
-                _stack.VisibleChildName = _shell.SelectedPage;
+                case nameof(ShellViewModel.Status):
+                    Console.WriteLine(_shell.Status);
+                    _statusLabel.SetText(_shell.Status);
+                    break;
+                case nameof(ShellViewModel.SelectedPage):
+                    _stack.VisibleChildName = _shell.SelectedPage;
+                    break;
             }
 
             return false;
@@ -167,9 +172,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (!_closed)
-            {
                 UpdateQueueButton(state);
-            }
 
             return false;
         });
@@ -202,9 +205,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return false;
     }
 
-    private static Widget Placeholder(string title, string description)
+    private static StatusPage Placeholder(string title, string description)
     {
-        var page = Adw.StatusPage.New();
+        var page = StatusPage.New();
         page.Title = title;
         page.Description = description;
         page.IconName = "applications-internet-symbolic";

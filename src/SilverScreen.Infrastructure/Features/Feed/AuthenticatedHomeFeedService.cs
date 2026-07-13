@@ -1,22 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.YouTube;
 
-namespace SilverScreen.Features.Feed;
+namespace SilverScreen.Infrastructure.Features.Feed;
 
 public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService, IDisposable
 {
     private readonly IYouTubeHomeClient _homeClient;
     private readonly ISessionService _sessionService;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     // Cumulative cache of loaded videos in the current manual session
-    private readonly List<VideoSummary> _loadedVideos = new();
+    private readonly List<VideoSummary> _loadedVideos = [];
     private string? _continuationToken;
     private FeedPage _cachedFeedPage = FeedPage.Empty;
 
@@ -40,9 +35,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     public FeedPage GetHomeFeed()
     {
         lock (_lock)
-        {
             return _cachedFeedPage;
-        }
     }
 
     public async Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
@@ -81,9 +74,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
         string? currentToken;
         lock (_lock)
-        {
             currentToken = _continuationToken;
-        }
 
         if (string.IsNullOrEmpty(currentToken))
         {
@@ -111,7 +102,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     {
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
-        return session.IsSignedIn && session.HasManualSession && cookies != null &&
+        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
@@ -119,15 +110,13 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     {
         if (!clientResult.IsSuccess)
         {
-            if (clientResult.RequiresAuthentication)
-            {
-                ClearCachedResults();
-                return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRejected,
-                    FeedPage.Empty, AuthenticationRejectedMessage);
-            }
-
-            return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty,
-                BackendFailureMessage);
+            if (!clientResult.RequiresAuthentication)
+                return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
+                    FeedPage.Empty,
+                    BackendFailureMessage);
+            ClearCachedResults();
+            return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRejected,
+                FeedPage.Empty, AuthenticationRejectedMessage);
         }
 
         var usableVideos = clientResult.Videos.Where(video => !video.IsShort).ToArray();
@@ -155,16 +144,12 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         lock (_lock)
         {
             if (isFirstPage)
-            {
                 _loadedVideos.Clear();
-            }
 
             foreach (var video in usableVideos)
             {
                 if (_loadedVideos.All(existingVideo => existingVideo.Id != video.Id))
-                {
                     _loadedVideos.Add(video);
-                }
             }
 
             _continuationToken = clientResult.ContinuationToken;

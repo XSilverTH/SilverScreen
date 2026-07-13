@@ -1,4 +1,4 @@
-namespace SilverScreen.Features.Search;
+namespace SilverScreen.Infrastructure.Features.Search;
 
 public enum YouTubeUrlKind
 {

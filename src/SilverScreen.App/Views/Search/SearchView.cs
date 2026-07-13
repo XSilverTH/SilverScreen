@@ -39,9 +39,7 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
-            {
                 Render(state);
-            }
 
             return false;
         });
@@ -54,31 +52,23 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         _thumbnailGeneration = null;
         Clear(_results);
         if (state.IsLoading || state.Videos.Count == 0)
-        {
             return;
-        }
 
         _thumbnailGeneration = new CancellationTokenSource();
         foreach (var video in state.Videos)
-        {
             _results.Append(new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget);
-        }
     }
 
     private static void Clear(FlowBox flowBox)
     {
         while (flowBox.GetFirstChild() is { } child)
-        {
             flowBox.Remove(child);
-        }
     }
 
     public new void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _thumbnailGeneration?.Cancel();

@@ -1,8 +1,8 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Feed;
-using SilverScreen.Features.Queue;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Infrastructure.Features.Queue;
+using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.ViewModels;
 
 namespace SilverScreen.Tests;
@@ -11,11 +11,15 @@ public sealed class ViewModelTests
 {
     private sealed class ControlledSearchService : ISearchService
     {
-        public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests { get; } = [];
+        public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests
+        {
+            get;
+        } = [];
 
         public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
         {
-            var completion = new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var completion =
+                new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
             Requests.Add((request.Query, cancellationToken, completion));
             return completion.Task;
         }
@@ -31,9 +35,13 @@ public sealed class ViewModelTests
     private sealed class FakeFeedService : IAuthenticatedHomeFeedService
     {
         public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty, "Empty"));
+            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
+                "Empty"));
+
         public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty, "Empty"));
+            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
+                "Empty"));
+
         public FeedPage GetHomeFeed() => FeedPage.Empty;
     }
 
@@ -91,7 +99,8 @@ public sealed class ViewModelTests
         var viewModel = new HomeViewModel(coordinator);
         Assert.Equal(HomeFeedStateKind.SignedOut, viewModel.State.Kind);
 
-        session.SetManualSession("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tvalue", SessionCookieFormat.NetscapeCookiesText);
+        session.SetManualSession("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tvalue",
+            SessionCookieFormat.NetscapeCookiesText);
         Assert.Equal(HomeFeedStateKind.Empty, viewModel.State.Kind);
 
         viewModel.Dispose();

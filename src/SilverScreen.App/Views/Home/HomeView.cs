@@ -35,9 +35,7 @@ public partial class HomeView : ViewBase<Box>
         GLib.Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
-            {
                 Render(state);
-            }
 
             return false;
         });
@@ -49,17 +47,22 @@ public partial class HomeView : ViewBase<Box>
         _thumbnailGeneration?.Dispose();
         _thumbnailGeneration = null;
         Clear(_content);
-        _refreshButton.Sensitive = state.Kind != HomeFeedStateKind.SignedOut && !state.IsLoading && !state.IsLoadingMore;
+        _refreshButton.Sensitive = state.Kind != HomeFeedStateKind.SignedOut &&
+                                   state is { IsLoading: false, IsLoadingMore: false };
 
-        var videos = state.Videos.Where(video => !video.IsShort).GroupBy(video => video.Id).Select(group => group.First()).ToArray();
+        var videos = state.Videos.Where(video => !video.IsShort).GroupBy(video => video.Id)
+            .Select(group => group.First()).ToArray();
         if (videos.Length == 0)
         {
             _content.Append(state.Kind switch
             {
-                HomeFeedStateKind.SignedOut => StatusPage("Home", "Sign in to see your YouTube recommendations.", "avatar-default-symbolic"),
+                HomeFeedStateKind.SignedOut => StatusPage("Home", "Sign in to see your YouTube recommendations.",
+                    "avatar-default-symbolic"),
                 HomeFeedStateKind.InitialLoading => LoadingPage(),
-                HomeFeedStateKind.Empty => StatusPage("Home", "No recommendations are available right now.", "applications-internet-symbolic"),
-                HomeFeedStateKind.AuthenticationRequired => StatusPage("Home", "Your YouTube session is no longer valid.", "dialog-password-symbolic"),
+                HomeFeedStateKind.Empty => StatusPage("Home", "No recommendations are available right now.",
+                    "applications-internet-symbolic"),
+                HomeFeedStateKind.AuthenticationRequired => StatusPage("Home",
+                    "Your YouTube session is no longer valid.", "dialog-password-symbolic"),
                 _ => StatusPage("Home", "Could not load YouTube recommendations.", "network-error-symbolic")
             });
             return;
@@ -67,31 +70,25 @@ public partial class HomeView : ViewBase<Box>
 
         _thumbnailGeneration = new CancellationTokenSource();
         if (state.IsLoading || state.IsLoadingMore)
-        {
-            _content.Append(LoadingRow(state.IsLoadingMore ? "Loading more recommendations…" : "Loading YouTube recommendations…"));
-        }
+            _content.Append(LoadingRow(state.IsLoadingMore
+                ? "Loading more recommendations…"
+                : "Loading YouTube recommendations…"));
 
         if (!string.IsNullOrEmpty(state.Message))
-        {
             _content.Append(DimLabel(state.Message));
-        }
 
         var grid = VideoGrid();
         foreach (var video in videos)
-        {
             grid.Append(new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget);
-        }
 
         _content.Append(grid);
-        if (state.HasContinuation)
-        {
-            var loadMore = Button.NewWithLabel(state.IsLoadingMore ? "Loading more…" : "Load more");
-            loadMore.Halign = Align.Center;
-            loadMore.MarginBottom = 24;
-            loadMore.Sensitive = !state.IsLoading && !state.IsLoadingMore;
-            loadMore.OnClicked += async (_, _) => await _viewModel.LoadMoreAsync();
-            _content.Append(loadMore);
-        }
+        if (!state.HasContinuation) return;
+        var loadMore = Button.NewWithLabel(state.IsLoadingMore ? "Loading more…" : "Load more");
+        loadMore.Halign = Align.Center;
+        loadMore.MarginBottom = 24;
+        loadMore.Sensitive = state is { IsLoading: false, IsLoadingMore: false };
+        loadMore.OnClicked += async (_, _) => await _viewModel.LoadMoreAsync();
+        _content.Append(loadMore);
     }
 
     private static FlowBox VideoGrid()
@@ -112,7 +109,7 @@ public partial class HomeView : ViewBase<Box>
         return grid;
     }
 
-    private static Widget LoadingPage()
+    private static Box LoadingPage()
     {
         var content = Box.New(Orientation.Vertical, 12);
         content.Halign = Align.Center;
@@ -171,9 +168,7 @@ public partial class HomeView : ViewBase<Box>
     public new void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _thumbnailGeneration?.Cancel();

@@ -2,29 +2,19 @@ using System.ComponentModel;
 using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Session;
 
-namespace SilverScreen.Features.Playback;
+namespace SilverScreen.Infrastructure.Features.Playback;
 
-public sealed class ExternalMpvPlaybackService : IPlaybackService
+public sealed class ExternalMpvPlaybackService(
+    PlaybackOptions options,
+    MpvCommandBuilder commandBuilder,
+    ICookieFileProvider? cookieFileProvider = null)
+    : IPlaybackService
 {
-    private readonly PlaybackOptions _options;
-    private readonly MpvCommandBuilder _commandBuilder;
-    private readonly ICookieFileProvider? _cookieFileProvider;
-
     public ExternalMpvPlaybackService()
         : this(new PlaybackOptions(), new MpvCommandBuilder())
     {
-    }
-
-    public ExternalMpvPlaybackService(
-        PlaybackOptions options,
-        MpvCommandBuilder commandBuilder,
-        ICookieFileProvider? cookieFileProvider = null)
-    {
-        _options = options;
-        _commandBuilder = commandBuilder;
-        _cookieFileProvider = cookieFileProvider;
     }
 
     public async Task<string> PlayAsync(PlaybackRequest request)
@@ -33,12 +23,12 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
 
         try
         {
-            cookieFile = _cookieFileProvider?.CreateCookieFile();
-            var command = _commandBuilder.Build(request, _options, cookieFile?.Path);
+            cookieFile = cookieFileProvider?.CreateCookieFile();
+            var command = MpvCommandBuilder.Build(request, options, cookieFile?.Path);
             LogDebug(
                 $"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
 
-            var startInfo = _commandBuilder.BuildStartInfo(command);
+            var startInfo = MpvCommandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
             if (started is null)
             {
@@ -133,9 +123,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     private static int? TryGetExitCode(Process? process)
     {
         if (process is null)
-        {
             return null;
-        }
 
         try
         {

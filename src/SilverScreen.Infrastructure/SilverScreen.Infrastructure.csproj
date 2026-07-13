@@ -7,8 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj" />
-        <InternalsVisibleTo Include="SilverScreen.Tests" />
+        <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
+        <InternalsVisibleTo Include="SilverScreen.Tests"/>
     </ItemGroup>
 
 </Project>

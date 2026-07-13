@@ -1,6 +1,6 @@
 using SilverScreen.Core.Models;
 
-namespace SilverScreen.Features.Search;
+namespace SilverScreen.Infrastructure.Features.Search;
 
 public interface IYtDlpRunner
 {

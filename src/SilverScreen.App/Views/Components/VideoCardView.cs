@@ -72,13 +72,9 @@ public partial class VideoCardView : ViewBase<Box>
         click.OnReleased += (sender, args) =>
         {
             if (sender.GetCurrentButton() == 1)
-            {
                 _ = PlayAsync();
-            }
             else if (sender.GetCurrentButton() == 2)
-            {
                 _actions.AddToQueue(_video);
-            }
         };
         Widget.AddController(click);
     }
@@ -122,20 +118,18 @@ public partial class VideoCardView : ViewBase<Box>
         }
 
         if (result is null)
-        {
             return;
-        }
 
         GLib.Functions.IdleAdd(0, () =>
         {
-            if (cancellationToken.IsCancellationRequested || thumbnail.GetRoot() is null || placeholder.GetParent() != thumbnail)
-            {
+            if (cancellationToken.IsCancellationRequested || thumbnail.GetRoot() is null ||
+                placeholder.GetParent() != thumbnail)
                 return false;
-            }
 
             try
             {
-                var pixbuf = GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, ThumbnailWidth, ThumbnailHeight, false);
+                var pixbuf =
+                    GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, ThumbnailWidth, ThumbnailHeight, false);
                 var picture = Picture.NewForPixbuf(pixbuf);
                 picture.AlternativeText = $"{_video.Title} thumbnail";
                 picture.Halign = Align.Center;
@@ -168,7 +162,8 @@ public partial class VideoCardView : ViewBase<Box>
         content.Append(ActionButton("Play", () => _ = PlayAsync()));
         content.Append(ActionButton("Add to queue", () => _actions.AddToQueue(_video)));
         content.Append(ActionButton("Add next", () => _actions.AddNext(_video)));
-        content.Append(ActionButton("Open channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
+        content.Append(
+            ActionButton("Open channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
         content.Append(ActionButton("Copy link", CopyLink));
         var popover = Popover.New();
         popover.Child = content;

@@ -1,22 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Feed;
+namespace SilverScreen.Infrastructure.Features.Feed;
 
 public sealed class HomeFeedCoordinator : IDisposable
 {
     private readonly ISessionService _sessionService;
     private readonly IAuthenticatedHomeFeedService _feedService;
-    private readonly object _lock = new();
-    private readonly List<VideoSummary> _videos = new();
+    private readonly Lock _lock = new();
+    private readonly List<VideoSummary> _videos = [];
     private string? _continuationToken;
     private CancellationTokenSource? _cts;
-    private HomeFeedState _state = HomeFeedState.SignedOut;
     private bool _isLoading;
 
     private long _currentRequestId;
@@ -34,16 +28,14 @@ public sealed class HomeFeedCoordinator : IDisposable
 
         if (IsSessionActive())
         {
-            _state = new HomeFeedState(HomeFeedStateKind.InitialLoading, [], IsLoading: true);
+            State = new HomeFeedState(HomeFeedStateKind.InitialLoading, [], IsLoading: true);
             _ = RefreshAsync();
         }
         else
-        {
-            _state = HomeFeedState.SignedOut;
-        }
+            State = HomeFeedState.SignedOut;
     }
 
-    public HomeFeedState State => _state;
+    public HomeFeedState State { get; private set; }
 
     public async Task RefreshAsync()
     {
@@ -94,7 +86,7 @@ public sealed class HomeFeedCoordinator : IDisposable
             }
 
             _stateVersion++;
-            _state = pendingState;
+            State = pendingState;
             version = _stateVersion;
         }
 
@@ -129,7 +121,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                         HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
                     _stateVersion++;
-                    _state = errorState;
+                    State = errorState;
                     errVersion = _stateVersion;
                 }
                 else
@@ -143,12 +135,8 @@ public sealed class HomeFeedCoordinator : IDisposable
         finally
         {
             lock (_lock)
-            {
                 if (_currentRequestId == requestId)
-                {
                     _isLoading = false;
-                }
-            }
         }
     }
 
@@ -159,19 +147,13 @@ public sealed class HomeFeedCoordinator : IDisposable
         lock (_lock)
         {
             if (_isLoading)
-            {
                 return;
-            }
 
             if (!IsSessionActive())
-            {
                 return;
-            }
 
             if (string.IsNullOrEmpty(_continuationToken))
-            {
                 return;
-            }
 
             _cts?.Cancel();
             _cts?.Dispose();
@@ -188,9 +170,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         lock (_lock)
         {
             if (_currentRequestId != requestId)
-            {
                 return;
-            }
 
             pendingState = new HomeFeedState(
                 HomeFeedStateKind.Ready,
@@ -199,7 +179,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                 HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
             _stateVersion++;
-            _state = pendingState;
+            State = pendingState;
             version = _stateVersion;
         }
 
@@ -234,13 +214,11 @@ public sealed class HomeFeedCoordinator : IDisposable
                         HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
                     _stateVersion++;
-                    _state = errorState;
+                    State = errorState;
                     errVersion = _stateVersion;
                 }
                 else
-                {
                     return;
-                }
             }
 
             PublishStateWithVersion(errorState, errVersion);
@@ -248,12 +226,8 @@ public sealed class HomeFeedCoordinator : IDisposable
         finally
         {
             lock (_lock)
-            {
                 if (_currentRequestId == requestId)
-                {
                     _isLoading = false;
-                }
-            }
         }
     }
 
@@ -265,102 +239,97 @@ public sealed class HomeFeedCoordinator : IDisposable
         lock (_lock)
         {
             if (_currentRequestId != requestId)
-            {
                 return;
-            }
 
-            if (result.Status == AuthenticatedHomeFeedStatus.AuthenticationRequired ||
-                result.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected)
+            switch (result.Status)
             {
-                _videos.Clear();
-                _continuationToken = null;
-                nextState = new HomeFeedState(
-                    HomeFeedStateKind.AuthenticationRequired,
-                    [],
-                    Message: "Your YouTube session is no longer valid.",
-                    IsLoading: false,
-                    IsLoadingMore: false,
-                    HasContinuation: false);
-            }
-            else if (result.Status == AuthenticatedHomeFeedStatus.TemporaryBackendFailure)
-            {
-                nextState = new HomeFeedState(
-                    HomeFeedStateKind.SafeError,
-                    _videos.ToArray(),
-                    Message: "Could not load YouTube recommendations.",
-                    IsLoading: false,
-                    IsLoadingMore: false,
-                    HasContinuation: !string.IsNullOrEmpty(_continuationToken));
-            }
-            else if (result.Status == AuthenticatedHomeFeedStatus.Empty)
-            {
-                if (isFirstPage)
-                {
+                case AuthenticatedHomeFeedStatus.AuthenticationRequired:
+                case AuthenticatedHomeFeedStatus.AuthenticationRejected:
                     _videos.Clear();
                     _continuationToken = null;
                     nextState = new HomeFeedState(
-                        HomeFeedStateKind.Empty,
+                        HomeFeedStateKind.AuthenticationRequired,
                         [],
-                        Message: "No recommendations are available right now.",
+                        Message: "Your YouTube session is no longer valid.",
                         IsLoading: false,
                         IsLoadingMore: false,
                         HasContinuation: false);
-                }
-                else
-                {
-                    _continuationToken = null;
+                    break;
+                case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
                     nextState = new HomeFeedState(
-                        HomeFeedStateKind.Ready,
+                        HomeFeedStateKind.SafeError,
                         _videos.ToArray(),
-                        IsLoading: false,
-                        IsLoadingMore: false,
-                        HasContinuation: false);
-                }
-            }
-            else // Success
-            {
-                var newVideos = result.FeedPage.Videos
-                    .Where(v => !v.IsShort)
-                    .ToList();
-
-                if (isFirstPage)
-                {
-                    _videos.Clear();
-                }
-
-                foreach (var video in newVideos)
-                {
-                    if (_videos.All(existing => existing.Id != video.Id))
-                    {
-                        _videos.Add(video);
-                    }
-                }
-
-                _continuationToken = result.FeedPage.ContinuationToken;
-
-                if (_videos.Count == 0)
-                {
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.Empty,
-                        [],
-                        Message: "No recommendations are available right now.",
-                        IsLoading: false,
-                        IsLoadingMore: false,
-                        HasContinuation: false);
-                }
-                else
-                {
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.Ready,
-                        _videos.ToArray(),
+                        Message: "Could not load YouTube recommendations.",
                         IsLoading: false,
                         IsLoadingMore: false,
                         HasContinuation: !string.IsNullOrEmpty(_continuationToken));
+                    break;
+                case AuthenticatedHomeFeedStatus.Empty when isFirstPage:
+                    _videos.Clear();
+                    _continuationToken = null;
+                    nextState = new HomeFeedState(
+                        HomeFeedStateKind.Empty,
+                        [],
+                        Message: "No recommendations are available right now.",
+                        IsLoading: false,
+                        IsLoadingMore: false,
+                        HasContinuation: false);
+                    break;
+                case AuthenticatedHomeFeedStatus.Empty:
+                    _continuationToken = null;
+                    nextState = new HomeFeedState(
+                        HomeFeedStateKind.Ready,
+                        _videos.ToArray(),
+                        IsLoading: false,
+                        IsLoadingMore: false,
+                        HasContinuation: false);
+                    break;
+                // Success
+                case AuthenticatedHomeFeedStatus.Success:
+                default:
+                {
+                    var newVideos = result.FeedPage.Videos
+                        .Where(v => !v.IsShort)
+                        .ToList();
+
+                    if (isFirstPage)
+                    {
+                        _videos.Clear();
+                    }
+
+                    foreach (var video in newVideos.Where(video => _videos.All(existing => existing.Id != video.Id)))
+                    {
+                        _videos.Add(video);
+                    }
+
+                    _continuationToken = result.FeedPage.ContinuationToken;
+
+                    if (_videos.Count == 0)
+                    {
+                        nextState = new HomeFeedState(
+                            HomeFeedStateKind.Empty,
+                            [],
+                            Message: "No recommendations are available right now.",
+                            IsLoading: false,
+                            IsLoadingMore: false,
+                            HasContinuation: false);
+                    }
+                    else
+                    {
+                        nextState = new HomeFeedState(
+                            HomeFeedStateKind.Ready,
+                            _videos.ToArray(),
+                            IsLoading: false,
+                            IsLoadingMore: false,
+                            HasContinuation: !string.IsNullOrEmpty(_continuationToken));
+                    }
+
+                    break;
                 }
             }
 
             _stateVersion++;
-            _state = nextState;
+            State = nextState;
             version = _stateVersion;
         }
 
@@ -371,16 +340,14 @@ public sealed class HomeFeedCoordinator : IDisposable
     {
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
-        return session.IsSignedIn && session.HasManualSession && cookies != null &&
+        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         if (IsSessionActive())
-        {
             _ = RefreshAsync();
-        }
         else
         {
             CancelAndClear();
@@ -408,7 +375,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         lock (_lock)
         {
             _stateVersion++;
-            _state = newState;
+            State = newState;
             version = _stateVersion;
         }
 
@@ -417,7 +384,7 @@ public sealed class HomeFeedCoordinator : IDisposable
 
     private void PublishStateWithVersion(HomeFeedState stateToPublish, long version)
     {
-        bool shouldPublish = false;
+        var shouldPublish = false;
         lock (_lock)
         {
             if (version == _stateVersion && version > _publishedStateVersion)
@@ -428,9 +395,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         }
 
         if (shouldPublish)
-        {
             StateChanged?.Invoke(this, stateToPublish);
-        }
     }
 
     public void Dispose()

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.YouTube;

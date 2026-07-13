@@ -19,9 +19,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\SilverScreen.Core\SilverScreen.Core.csproj" />
-        <ProjectReference Include="..\..\src\SilverScreen.Infrastructure\SilverScreen.Infrastructure.csproj" />
-        <ProjectReference Include="..\..\src\SilverScreen.App\SilverScreen.App.csproj" />
+        <ProjectReference Include="..\..\src\SilverScreen.Core\SilverScreen.Core.csproj"/>
+        <ProjectReference Include="..\..\src\SilverScreen.Infrastructure\SilverScreen.Infrastructure.csproj"/>
+        <ProjectReference Include="..\..\src\SilverScreen.App\SilverScreen.App.csproj"/>
     </ItemGroup>
 
 </Project>

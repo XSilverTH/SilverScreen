@@ -1,11 +1,11 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Session;
+namespace SilverScreen.Infrastructure.Features.Session;
 
 public sealed class InMemorySessionService : ISessionService
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private ManualSessionCookies? _manualCookies;
 
     public event EventHandler? SessionChanged;
@@ -49,7 +49,7 @@ public sealed class InMemorySessionService : ISessionService
 
     public void ClearSession()
     {
-        var changed = false;
+        bool changed;
         lock (_gate)
         {
             changed = _manualCookies is not null;
@@ -57,8 +57,6 @@ public sealed class InMemorySessionService : ISessionService
         }
 
         if (changed)
-        {
             SessionChanged?.Invoke(this, EventArgs.Empty);
-        }
     }
 }

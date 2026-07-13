@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using SilverScreen.Core.Models;
-using SilverScreen.Features.Feed;
+using SilverScreen.Infrastructure.Features.Feed;
 
 namespace SilverScreen.ViewModels;
 
@@ -38,17 +38,13 @@ public sealed class HomeViewModel : INotifyPropertyChanged, IDisposable
     private void OnStateChanged(object? sender, HomeFeedState state)
     {
         if (!_disposed)
-        {
             State = state;
-        }
     }
 
     public void Dispose()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         _coordinator.StateChanged -= OnStateChanged;

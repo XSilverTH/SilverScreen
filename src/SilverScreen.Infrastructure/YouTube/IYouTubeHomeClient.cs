@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace SilverScreen.Infrastructure.YouTube;
 
 public interface IYouTubeHomeClient

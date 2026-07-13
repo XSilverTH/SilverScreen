@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using SilverScreen.Core.Models;
-using SilverScreen.Features.Playback;
+using SilverScreen.Infrastructure.Features.Playback;
 
 namespace SilverScreen.Tests;
 
@@ -30,7 +30,7 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderUsesDefaultMpvExecutable()
     {
         var command =
-            new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+            MpvCommandBuilder.Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
 
         Assert.Equal("mpv", command.ExecutablePath);
     }
@@ -39,7 +39,7 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderPassesUrlAsSeparateArgument()
     {
         var command =
-            new MpvCommandBuilder().Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+            MpvCommandBuilder.Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
 
         var argument = Assert.Single(command.Arguments);
         Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument);
@@ -48,7 +48,7 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderPassesCookiesOptionBeforeUrlWhenSessionExists()
     {
-        var command = new MpvCommandBuilder().Build(
+        var command = MpvCommandBuilder.Build(
             new PlaybackRequest(CreateVideo("abc123_X-yZ")),
             new PlaybackOptions(),
             "/tmp/silverscreen-cookies/cookies.txt");
@@ -62,7 +62,7 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderOmitsCookiesOptionWhenSessionCookieFileIsMissing()
     {
-        var command = new MpvCommandBuilder().Build(
+        var command = MpvCommandBuilder.Build(
             new PlaybackRequest(CreateVideo("abc123_X-yZ")),
             new PlaybackOptions());
 
@@ -76,12 +76,12 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderKeepsCookieOptionAndUrlAsSeparateStartInfoArguments()
     {
         var builder = new MpvCommandBuilder();
-        var command = builder.Build(
+        var command = MpvCommandBuilder.Build(
             new PlaybackRequest(CreateVideo("abc123_X-yZ")),
             new PlaybackOptions(),
             "/tmp/silverscreen-cookies/cookies.txt");
 
-        var startInfo = builder.BuildStartInfo(command);
+        var startInfo = MpvCommandBuilder.BuildStartInfo(command);
 
         Assert.False(startInfo.UseShellExecute);
         Assert.Collection(
@@ -97,7 +97,7 @@ public sealed class PlaybackTests
 
         var exception =
             Assert.Throws<InvalidOperationException>(() =>
-                new MpvCommandBuilder().Build(request, new PlaybackOptions()));
+                MpvCommandBuilder.Build(request, new PlaybackOptions()));
         Assert.Equal("No playable URL is available for this mock video yet.", exception.Message);
     }
 
@@ -139,7 +139,7 @@ public sealed class PlaybackTests
     {
         var video = CreateVideo(id, explicitUrl);
         var request = new PlaybackRequest(video);
-        var command = new MpvCommandBuilder().Build(request, new PlaybackOptions());
+        var command = MpvCommandBuilder.Build(request, new PlaybackOptions());
 
         var argument = Assert.Single(command.Arguments);
         Assert.Equal(explicitUrl, argument);
@@ -176,7 +176,7 @@ public sealed class PlaybackTests
 
         var exception =
             Assert.Throws<InvalidOperationException>(() =>
-                new MpvCommandBuilder().Build(request, new PlaybackOptions()));
+                MpvCommandBuilder.Build(request, new PlaybackOptions()));
         Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 

@@ -1,10 +1,10 @@
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Feed;
-using SilverScreen.Features.Playback;
-using SilverScreen.Features.Queue;
-using SilverScreen.Features.Search;
-using SilverScreen.Features.Session;
-using SilverScreen.Features.Thumbnails;
+using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Infrastructure.Features.Playback;
+using SilverScreen.Infrastructure.Features.Queue;
+using SilverScreen.Infrastructure.Features.Search;
+using SilverScreen.Infrastructure.Features.Session;
+using SilverScreen.Infrastructure.Features.Thumbnails;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen;

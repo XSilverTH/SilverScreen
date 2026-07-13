@@ -1,4 +1,4 @@
-namespace SilverScreen.Features.Session;
+namespace SilverScreen.Infrastructure.Features.Session;
 
 public interface ICookieFileProvider
 {

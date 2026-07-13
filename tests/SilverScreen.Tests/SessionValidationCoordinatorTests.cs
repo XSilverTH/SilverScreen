@@ -4,8 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Features.Feed;
-using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Infrastructure.Features.Session;
 using Xunit;
 
 namespace SilverScreen.Tests;

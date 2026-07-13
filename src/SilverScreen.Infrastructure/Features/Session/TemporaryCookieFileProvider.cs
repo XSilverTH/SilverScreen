@@ -1,22 +1,16 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Session;
+namespace SilverScreen.Infrastructure.Features.Session;
 
-public sealed class TemporaryCookieFileProvider : ICookieFileProvider
+public sealed class TemporaryCookieFileProvider(ISessionService sessionService, string? tempRoot = null)
+    : ICookieFileProvider
 {
-    private readonly ISessionService _sessionService;
-    private readonly string _tempRoot;
-
-    public TemporaryCookieFileProvider(ISessionService sessionService, string? tempRoot = null)
-    {
-        _sessionService = sessionService;
-        _tempRoot = tempRoot ?? Path.GetTempPath();
-    }
+    private readonly string _tempRoot = tempRoot ?? Path.GetTempPath();
 
     public CookieFileLease? CreateCookieFile()
     {
-        var cookies = _sessionService.GetManualSessionCookies();
+        var cookies = sessionService.GetManualSessionCookies();
         if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
         {
             return null;

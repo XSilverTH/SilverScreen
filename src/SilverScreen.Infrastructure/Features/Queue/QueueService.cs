@@ -1,7 +1,7 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Features.Queue;
+namespace SilverScreen.Infrastructure.Features.Queue;
 
 public sealed class QueueService : IQueueService
 {
@@ -31,21 +31,15 @@ public sealed class QueueService : IQueueService
 
     public bool Remove(QueueItem item)
     {
-        if (_items.Remove(item))
-        {
-            Changed?.Invoke(this, EventArgs.Empty);
-            return true;
-        }
-
-        return false;
+        if (!_items.Remove(item)) return false;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     public void Clear()
     {
         if (_items.Count == 0)
-        {
             return;
-        }
 
         _items.Clear();
         Changed?.Invoke(this, EventArgs.Empty);
