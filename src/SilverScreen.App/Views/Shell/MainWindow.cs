@@ -63,8 +63,9 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             "History");
         _stack.VisibleChildName = _shell.SelectedPage;
 
+        _accountButton.Popover = CreateAccountPopover();
         _queueButton.Popover = CreateQueuePopover();
-        appMenuButton.Popover = CreateApplicationMenu();
+        appMenuButton.MenuModel = CreateApplicationMenuModel();
         _searchPopover = CreateSearchPopover(out _searchEntry);
         _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
@@ -130,19 +131,32 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return popover;
     }
 
-    private Popover CreateApplicationMenu()
+    private Popover CreateAccountPopover()
     {
-        var content = Box.New(Orientation.Vertical, 4);
-        content.MarginTop = 6;
-        content.MarginBottom = 6;
-        content.MarginStart = 6;
-        content.MarginEnd = 6;
-        content.Append(MenuAction("Preferences", () => _shell.Status = "Preferences stub"));
-        content.Append(MenuAction("About SilverScreen", () => _shell.Status = "About stub: SilverScreen"));
-        content.Append(MenuAction("Quit", () => Widget.Close()));
         var popover = Popover.New();
-        popover.Child = content;
+        popover.Child = _accountPopover.Widget;
         return popover;
+    }
+
+    private Gio.Menu CreateApplicationMenuModel()
+    {
+        var preferencesAction = Gio.SimpleAction.New("preferences", null);
+        preferencesAction.OnActivate += (_, _) => _shell.Status = "Preferences stub";
+        Widget.AddAction(preferencesAction);
+
+        var aboutAction = Gio.SimpleAction.New("about", null);
+        aboutAction.OnActivate += (_, _) => _shell.Status = "About stub: SilverScreen";
+        Widget.AddAction(aboutAction);
+
+        var quitAction = Gio.SimpleAction.New("quit", null);
+        quitAction.OnActivate += (_, _) => Widget.Close();
+        Widget.AddAction(quitAction);
+
+        var menu = Gio.Menu.New();
+        menu.Append("Preferences", "win.preferences");
+        menu.Append("About SilverScreen", "win.about");
+        menu.Append("Quit", "win.quit");
+        return menu;
     }
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -227,16 +241,6 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         content.Append(Label.New(duration));
         return content;
     }
-
-    private static Button MenuAction(string label, Action action)
-    {
-        var button = Button.NewWithLabel(label);
-        button.Halign = Align.Fill;
-        button.CssClasses = ["flat"];
-        button.OnClicked += (_, _) => action();
-        return button;
-    }
-
     private static string FormatQueuedDuration(TimeSpan duration) => duration.TotalHours >= 1
         ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
         : duration.TotalMinutes >= 1
