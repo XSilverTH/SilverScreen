@@ -15,8 +15,8 @@ public sealed class VideoCardActions
 
 public partial class VideoCardView : ViewBase<Box>
 {
-    private const int ThumbnailWidth = 226;
-    private const int ThumbnailHeight = 127;
+    private const int CardWidth = 336;
+    private const int ThumbnailHeight = 189;
 
     private readonly VideoSummary _video;
     private readonly IThumbnailService _thumbnails;
@@ -29,43 +29,56 @@ public partial class VideoCardView : ViewBase<Box>
         _thumbnails = thumbnails;
         _actions = actions;
 
-        Widget.WidthRequest = 250;
-        Widget.MarginStart = 2;
-        Widget.MarginEnd = 2;
-        Widget.MarginTop = 2;
-        Widget.MarginBottom = 2;
-        Widget.CssClasses = ["card"];
+        Widget.WidthRequest = CardWidth;
+        Widget.Halign = Align.Center;
+        Widget.Valign = Align.Start;
+        Widget.Hexpand = false;
+
+        var card = Box.New(Orientation.Vertical, 0);
+        card.WidthRequest = CardWidth;
+        card.Halign = Align.Center;
+        card.Valign = Align.Start;
+        card.CssClasses = ["video-card"];
+        card.Overflow = Overflow.Hidden;
+        Widget.Append(card);
 
         var thumbnail = CreateThumbnail(out var placeholder);
-        Widget.Append(thumbnail);
+        card.Append(thumbnail);
         _ = LoadThumbnailAsync(thumbnail, placeholder, thumbnailCancellation);
 
         var metadata = Box.New(Orientation.Horizontal, 8);
+        metadata.CssClasses = ["video-metadata"];
         metadata.MarginStart = 12;
         metadata.MarginEnd = 8;
-        metadata.MarginBottom = 12;
-        var text = Box.New(Orientation.Vertical, 3);
+        metadata.MarginTop = 9;
+        metadata.MarginBottom = 10;
+
+        var text = Box.New(Orientation.Vertical, 2);
         text.Hexpand = true;
 
         var title = Label.New(video.Title);
         title.Xalign = 0;
         title.Wrap = true;
-        title.MaxWidthChars = 34;
-        title.CssClasses = ["heading"];
+        title.MaxWidthChars = 30;
+        title.HeightRequest = 38;
+        title.CssClasses = ["video-title"];
         text.Append(title);
 
         var channel = DimLabel($"{video.ChannelName} • {FormatDuration(video.Duration)}");
         channel.Xalign = 0;
+        channel.Ellipsize = Pango.EllipsizeMode.End;
         text.Append(channel);
+
         var availability = DimLabel(BuildVideoUrl(video) is null
             ? "Mock placeholder • no playable URL"
             : "Playable YouTube URL");
         availability.Xalign = 0;
+        availability.Ellipsize = Pango.EllipsizeMode.End;
         text.Append(availability);
 
         metadata.Append(text);
         metadata.Append(CreateMenuButton());
-        Widget.Append(metadata);
+        card.Append(metadata);
 
         var click = GestureClick.New();
         click.Button = 0;
@@ -76,20 +89,20 @@ public partial class VideoCardView : ViewBase<Box>
             else if (sender.GetCurrentButton() == 2)
                 _actions.AddToQueue(_video);
         };
-        Widget.AddController(click);
+        card.AddController(click);
     }
 
     private Overlay CreateThumbnail(out Widget placeholder)
     {
         var thumbnail = Overlay.New();
-        thumbnail.HeightRequest = 140;
-        thumbnail.WidthRequest = ThumbnailWidth;
-        thumbnail.MarginStart = 12;
-        thumbnail.MarginEnd = 12;
-        thumbnail.MarginTop = 12;
-        thumbnail.CssClasses = ["view", "card"];
+        thumbnail.HeightRequest = ThumbnailHeight;
+        thumbnail.WidthRequest = CardWidth;
+        thumbnail.Hexpand = true;
+        thumbnail.Overflow = Overflow.Hidden;
+        thumbnail.CssClasses = ["video-thumbnail"];
+
         var icon = Image.NewFromIconName("media-playback-start-symbolic");
-        icon.PixelSize = 48;
+        icon.PixelSize = 44;
         icon.Halign = Align.Center;
         icon.Valign = Align.Center;
         placeholder = icon;
@@ -99,8 +112,8 @@ public partial class VideoCardView : ViewBase<Box>
         duration.Halign = Align.End;
         duration.Valign = Align.End;
         duration.MarginEnd = 10;
-        duration.MarginBottom = 8;
-        duration.CssClasses = ["caption", "dim-label"];
+        duration.MarginBottom = 9;
+        duration.CssClasses = ["caption", "duration-pill"];
         thumbnail.AddOverlay(duration);
         return thumbnail;
     }
@@ -128,14 +141,14 @@ public partial class VideoCardView : ViewBase<Box>
 
             try
             {
-                var pixbuf =
-                    GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, ThumbnailWidth, ThumbnailHeight, false);
+                var pixbuf = GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true);
                 var picture = Picture.NewForPixbuf(pixbuf);
                 picture.AlternativeText = $"{_video.Title} thumbnail";
-                picture.Halign = Align.Center;
-                picture.Valign = Align.Center;
-                picture.WidthRequest = ThumbnailWidth;
+                picture.ContentFit = ContentFit.Cover;
+                picture.WidthRequest = CardWidth;
                 picture.HeightRequest = ThumbnailHeight;
+                picture.Hexpand = true;
+                picture.Vexpand = true;
                 thumbnail.Child = picture;
             }
             catch (Exception)
