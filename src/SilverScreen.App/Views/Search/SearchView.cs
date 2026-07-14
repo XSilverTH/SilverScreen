@@ -56,7 +56,15 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
 
         _thumbnailGeneration = new CancellationTokenSource();
         foreach (var video in state.Videos)
-            _results.Append(new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget);
+        {
+            var cardWidget = new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget;
+            _results.Append(cardWidget);
+            if (cardWidget.GetParent() is FlowBoxChild flowBoxChild)
+            {
+                flowBoxChild.Halign = Align.Center;
+                flowBoxChild.Valign = Align.Start;
+            }
+        }
     }
 
     private static void Clear(FlowBox flowBox)

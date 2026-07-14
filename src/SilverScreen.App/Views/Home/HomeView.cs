@@ -79,7 +79,15 @@ public partial class HomeView : ViewBase<Box>
 
         var grid = VideoGrid();
         foreach (var video in videos)
-            grid.Append(new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget);
+        {
+            var cardWidget = new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget;
+            grid.Append(cardWidget);
+            if (cardWidget.GetParent() is FlowBoxChild flowBoxChild)
+            {
+                flowBoxChild.Halign = Align.Center;
+                flowBoxChild.Valign = Align.Start;
+            }
+        }
 
         _content.Append(grid);
         if (!state.HasContinuation) return;
