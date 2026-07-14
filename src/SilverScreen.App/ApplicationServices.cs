@@ -15,7 +15,7 @@ public sealed class ApplicationServices : IDisposable
     public ApplicationServices()
     {
         Queue = new QueueService();
-        Session = new InMemorySessionService();
+        Session = new SecretServiceSessionService();
         CookieFiles = new TemporaryCookieFileProvider(Session);
         Playback = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), CookieFiles);
         Search = new YtDlpSearchService(new YtDlpOptions(), new YtDlpRunner(CookieFiles));

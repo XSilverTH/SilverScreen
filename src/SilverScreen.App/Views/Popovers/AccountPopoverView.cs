@@ -46,7 +46,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         Widget.Append(heading);
         if (_viewModel.HasManualSession)
         {
-            Widget.Append(DimLabel("Manual YouTube session active. Cookies are kept in memory only for this process."));
+            Widget.Append(DimLabel("Manual YouTube session active. Cookies are stored in your desktop Secret Service keyring."));
             var validate = ActionButton("Validate Home session", () => _ = _viewModel.ValidateAsync());
             validate.Sensitive = !_viewModel.IsValidating;
             Widget.Append(validate);
@@ -55,7 +55,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         else
         {
             Widget.Append(DimLabel(
-                "Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are not persisted."));
+                "Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are stored securely in your desktop keyring."));
             Widget.Append(ActionButton("Add manual session", () =>
             {
                 _editing = true;
@@ -71,7 +71,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         heading.CssClasses = ["heading"];
         Widget.Append(heading);
         Widget.Append(DimLabel(
-            "Paste Netscape cookies.txt content exported from a browser. SilverScreen keeps it in memory, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
+            "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
         var editor = TextView.New();
         editor.Monospace = true;
         editor.WrapMode = WrapMode.Char;
@@ -93,9 +93,11 @@ public partial class AccountPopoverView : ViewBase<Box>
         save.CssClasses = ["suggested-action"];
         save.OnClicked += (_, _) =>
         {
-            _viewModel.SaveManualSession(GetText(editor));
-            _editing = false;
-            Render();
+            if (_viewModel.SaveManualSession(GetText(editor)))
+            {
+                _editing = false;
+                Render();
+            }
         };
         actions.Append(save);
         Widget.Append(actions);

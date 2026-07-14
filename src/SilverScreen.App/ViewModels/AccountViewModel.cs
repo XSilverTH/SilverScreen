@@ -56,21 +56,40 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public void SaveManualSession(string cookieContent)
+    public bool SaveManualSession(string cookieContent)
     {
         if (string.IsNullOrWhiteSpace(cookieContent))
         {
             _shell.Status = "Manual YouTube session was not saved because no cookie content was entered.";
-            return;
+            return false;
         }
 
-        _sessionService.SetManualSession(cookieContent.Trim(), SessionCookieFormat.NetscapeCookiesText);
-        _shell.Status = "Manual YouTube session active.";
+        try
+        {
+            _sessionService.SetManualSession(cookieContent.Trim(), SessionCookieFormat.NetscapeCookiesText);
+        }
+        catch (SessionPersistenceException)
+        {
+            _shell.Status = "Manual YouTube session could not be saved because the system keyring is unavailable.";
+            return false;
+        }
+
+        _shell.Status = "Manual YouTube session saved securely.";
+        return true;
     }
 
     public void ClearSession()
     {
-        _sessionService.ClearSession();
+        try
+        {
+            _sessionService.ClearSession();
+        }
+        catch (SessionPersistenceException)
+        {
+            _shell.Status = "Manual YouTube session could not be cleared because the system keyring is unavailable.";
+            return;
+        }
+
         _shell.Status = "Manual YouTube session cleared.";
     }
 

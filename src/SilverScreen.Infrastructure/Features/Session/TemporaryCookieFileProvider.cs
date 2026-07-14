@@ -1,5 +1,6 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using System.Text;
 
 namespace SilverScreen.Infrastructure.Features.Session;
 
@@ -21,58 +22,43 @@ public sealed class TemporaryCookieFileProvider(ISessionService sessionService, 
             return null;
         }
 
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new PlatformNotSupportedException("Temporary cookie files require Linux.");
+        }
+
         var directoryPath = Path.Combine(_tempRoot, $"silverscreen-cookies-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directoryPath);
-        TrySetDirectoryMode(directoryPath);
-
-        var cookieFilePath = Path.Combine(directoryPath, "cookies.txt");
-        File.WriteAllText(cookieFilePath, cookies.Content);
-        TrySetFileMode(cookieFilePath);
-
-        return new CookieFileLease(cookieFilePath, directoryPath);
-    }
-
-    private static void TrySetDirectoryMode(string path)
-    {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
+        var directoryCreated = false;
         try
         {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-        catch (PlatformNotSupportedException)
-        {
-        }
-    }
+            Directory.CreateDirectory(directoryPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            directoryCreated = true;
 
-    private static void TrySetFileMode(string path)
-    {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            return;
-        }
+            var cookieFilePath = Path.Combine(directoryPath, "cookies.txt");
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            };
+            using (var stream = new FileStream(cookieFilePath, options))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                writer.Write(cookies.Content);
+            }
 
-        try
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            return new CookieFileLease(cookieFilePath, directoryPath);
         }
-        catch (IOException)
+        catch
         {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-        catch (PlatformNotSupportedException)
-        {
+            if (directoryCreated && Directory.Exists(directoryPath))
+            {
+                Directory.Delete(directoryPath, recursive: true);
+            }
+
+            throw;
         }
     }
 }
