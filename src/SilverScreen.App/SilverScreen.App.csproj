@@ -13,6 +13,9 @@
         <Compile Update="**\*.cs">
             <DependentUpon>%(Filename).blp</DependentUpon>
         </Compile>
+        <Compile Update="Views\Preferences\PreferencesWindow.cs">
+          <DependentUpon>PreferencesWindow.blp</DependentUpon>
+        </Compile>
     </ItemGroup>
 
     <ItemGroup>

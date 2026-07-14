@@ -6,15 +6,53 @@ using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
-public sealed class ExternalMpvPlaybackService(
-    PlaybackOptions options,
-    MpvCommandBuilder commandBuilder,
-    ICookieFileProvider? cookieFileProvider = null)
-    : IPlaybackService
+public sealed class ExternalMpvPlaybackService : IPlaybackService
 {
+    private readonly PlaybackOptions _staticOptions;
+    private readonly MpvCommandBuilder _commandBuilder;
+    private readonly ICookieFileProvider? _cookieFileProvider;
+    private readonly IPreferencesService? _preferencesService;
+
     public ExternalMpvPlaybackService()
         : this(new PlaybackOptions(), new MpvCommandBuilder())
     {
+    }
+
+    public ExternalMpvPlaybackService(
+        PlaybackOptions options,
+        MpvCommandBuilder commandBuilder,
+        ICookieFileProvider? cookieFileProvider = null)
+    {
+        _staticOptions = options;
+        _commandBuilder = commandBuilder;
+        _cookieFileProvider = cookieFileProvider;
+        _preferencesService = null;
+    }
+
+    public ExternalMpvPlaybackService(
+        IPreferencesService preferencesService,
+        MpvCommandBuilder commandBuilder,
+        ICookieFileProvider? cookieFileProvider = null)
+    {
+        _staticOptions = new PlaybackOptions();
+        _commandBuilder = commandBuilder;
+        _cookieFileProvider = cookieFileProvider;
+        _preferencesService = preferencesService;
+    }
+
+    private PlaybackOptions GetActiveOptions()
+    {
+        if (_preferencesService is null)
+        {
+            return _staticOptions;
+        }
+        var prefs = _preferencesService.GetPreferences();
+        return new PlaybackOptions
+        {
+            MpvExecutablePath = prefs.MpvExecutablePath,
+            VideoQuality = prefs.VideoQuality,
+            ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
+        };
     }
 
     public async Task<string> PlayAsync(PlaybackRequest request)
@@ -23,8 +61,9 @@ public sealed class ExternalMpvPlaybackService(
 
         try
         {
-            cookieFile = cookieFileProvider?.CreateCookieFile();
-            var command = MpvCommandBuilder.Build(request, options, cookieFile?.Path);
+            cookieFile = _cookieFileProvider?.CreateCookieFile();
+            var activeOptions = GetActiveOptions();
+            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path);
             LogDebug(
                 $"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
 

@@ -1,4 +1,5 @@
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Queue;
@@ -14,11 +15,12 @@ public sealed class ApplicationServices : IDisposable
 {
     public ApplicationServices()
     {
+        Preferences = new FilePreferencesService();
         Queue = new QueueService();
         Session = new SecretServiceSessionService();
         CookieFiles = new TemporaryCookieFileProvider(Session);
-        Playback = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), CookieFiles);
-        Search = new YtDlpSearchService(new YtDlpOptions(), new YtDlpRunner(CookieFiles));
+        Playback = new ExternalMpvPlaybackService(Preferences, new MpvCommandBuilder(), CookieFiles);
+        Search = new YtDlpSearchService(Preferences, new YtDlpRunner(CookieFiles));
         Thumbnails = new ThumbnailCacheService();
         YouTubeHomeClient = new YtDlpHomeClient(Session, CookieFiles);
         AuthenticatedHomeFeed = new AuthenticatedHomeFeedService(YouTubeHomeClient, Session);
@@ -26,6 +28,8 @@ public sealed class ApplicationServices : IDisposable
         HomeSessionValidator = new HomeSessionValidator(AuthenticatedHomeFeed);
         SessionValidation = new SessionValidationCoordinator(HomeSessionValidator, Session);
     }
+
+    public IPreferencesService Preferences { get; }
 
     public IQueueService Queue { get; }
     public ISessionService Session { get; }

@@ -31,6 +31,15 @@ public sealed class MpvCommandBuilder
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
             arguments.Add($"--ytdl-raw-options=cookies={cookieFilePath}");
 
+        if (!string.IsNullOrWhiteSpace(options.VideoQuality) && !options.VideoQuality.Equals("Best", StringComparison.OrdinalIgnoreCase))
+        {
+            var heightStr = options.VideoQuality.Replace("p", "", StringComparison.OrdinalIgnoreCase);
+            if (int.TryParse(heightStr, out var height))
+            {
+                arguments.Add($"--ytdl-format=bestvideo[height<={height}]+bestaudio/best[height<={height}]");
+            }
+        }
+
         arguments.Add(playbackUrl);
 
         return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);

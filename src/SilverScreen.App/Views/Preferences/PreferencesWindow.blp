@@ -1,0 +1,57 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.PreferencesWindow PreferencesWindow {
+  title: "Preferences";
+  default-width: 600;
+  default-height: 500;
+  modal: true;
+
+  Adw.PreferencesPage {
+    title: "General";
+    icon-name: "preferences-system-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "Appearance";
+
+      Adw.ComboRow theme_row {
+        title: "Application Theme";
+        subtitle: "Select your preferred color scheme";
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Search (yt-dlp)";
+
+      Adw.EntryRow ytdlp_path_row {
+        title: "yt-dlp Executable Path";
+      }
+
+      Adw.EntryRow max_results_row {
+        title: "Max Search Results";
+      }
+    }
+  }
+
+  Adw.PreferencesPage {
+    title: "Playback";
+    icon-name: "media-playback-start-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "MPV Configuration";
+
+      Adw.EntryRow mpv_path_row {
+        title: "MPV Executable Path";
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Quality";
+
+      Adw.ComboRow quality_row {
+        title: "Default Quality";
+        subtitle: "Preferred video resolution";
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Search;
+using SilverScreen.Views.Preferences;
 using XSTH.Blueprint.Helpers;
 using Window = Gtk.Window;
 
@@ -141,7 +142,13 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private Gio.Menu CreateApplicationMenuModel()
     {
         var preferencesAction = Gio.SimpleAction.New("preferences", null);
-        preferencesAction.OnActivate += (_, _) => _shell.Status = "Preferences stub";
+        preferencesAction.OnActivate += (_, _) =>
+        {
+            var preferencesWindowWrapper = new SilverScreen.Views.Preferences.PreferencesWindow(_services.Preferences);
+            var preferencesWindow = preferencesWindowWrapper.Widget;
+            preferencesWindow.TransientFor = Widget;
+            preferencesWindow.Present();
+        };
         Widget.AddAction(preferencesAction);
 
         var aboutAction = Gio.SimpleAction.New("about", null);

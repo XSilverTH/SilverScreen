@@ -5,11 +5,43 @@ using SilverScreen.Core.Services;
 
 namespace SilverScreen.Infrastructure.Features.Search;
 
-public sealed class YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner) : ISearchService
+public sealed class YtDlpSearchService : ISearchService
 {
+    private readonly YtDlpOptions _staticOptions;
+    private readonly IYtDlpRunner _runner;
+    private readonly IPreferencesService? _preferencesService;
+
     public YtDlpSearchService()
         : this(new YtDlpOptions(), new YtDlpRunner())
     {
+    }
+
+    public YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner)
+    {
+        _staticOptions = options;
+        _runner = runner;
+        _preferencesService = null;
+    }
+
+    public YtDlpSearchService(IPreferencesService preferencesService, IYtDlpRunner runner)
+    {
+        _staticOptions = new YtDlpOptions();
+        _runner = runner;
+        _preferencesService = preferencesService;
+    }
+
+    private YtDlpOptions GetActiveOptions()
+    {
+        if (_preferencesService is null)
+        {
+            return _staticOptions;
+        }
+        var prefs = _preferencesService.GetPreferences();
+        return _staticOptions with
+        {
+            ExecutablePath = prefs.YtDlpExecutablePath,
+            MaxResults = prefs.MaxResults
+        };
     }
 
     public async Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
@@ -21,7 +53,8 @@ public sealed class YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner
 
         try
         {
-            var result = await runner.RunSearchAsync(request, options, cancellationToken).ConfigureAwait(false);
+            var activeOptions = GetActiveOptions();
+            var result = await _runner.RunSearchAsync(request, activeOptions, cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
                 var error = string.IsNullOrWhiteSpace(result.StandardError)
@@ -32,7 +65,7 @@ public sealed class YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner
 
             var videos = ParseVideos(result.StandardOutput)
                 .Where(video => !video.IsShort)
-                .Take(options.MaxResults)
+                .Take(activeOptions.MaxResults)
                 .ToList();
 
             return videos.Count == 0

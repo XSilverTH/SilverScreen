@@ -19,11 +19,29 @@ public class App : Adw.Application
     private void Activate(Gio.Application sender, EventArgs args)
     {
         InstallStyles();
+        ApplyTheme(_services.Preferences.GetPreferences().Theme);
+        _services.Preferences.PreferencesChanged += (s, prefs) => ApplyTheme(prefs.Theme);
+
         var mainWindowWrapper = new MainWindow(_services, DisposeServices);
         var mainWindow = mainWindowWrapper.Widget;
         mainWindow.Application = this;
         AddWindow(mainWindow);
         mainWindow.Present();
+    }
+
+    private static void ApplyTheme(string theme)
+    {
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            var styleManager = Adw.StyleManager.GetDefault();
+            styleManager.ColorScheme = theme switch
+            {
+                "Light" => Adw.ColorScheme.PreferLight,
+                "Dark" => Adw.ColorScheme.PreferDark,
+                _ => Adw.ColorScheme.Default
+            };
+            return false;
+        });
     }
 
     private static void InstallStyles()
