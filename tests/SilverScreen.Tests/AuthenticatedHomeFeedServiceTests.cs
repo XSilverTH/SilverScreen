@@ -7,7 +7,6 @@ using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Session;
-using SilverScreen.Infrastructure.Mock;
 using SilverScreen.Infrastructure.YouTube;
 using Xunit;
 
@@ -128,8 +127,6 @@ public sealed class AuthenticatedHomeFeedServiceTests
         Assert.Equal(2, cached.Videos.Count);
         Assert.Equal("next-token-abc", cached.ContinuationToken);
 
-        // Assert no silent MockFeedService fallback
-        Assert.IsNotType<MockFeedService>(feedService);
         Assert.Equal("Test Video 1", result.FeedPage.Videos[0].Title);
     }
 

@@ -21,7 +21,7 @@ public sealed class MpvCommandBuilder
 
         var playbackUrl = request.PlaybackUrl;
         if (string.IsNullOrWhiteSpace(playbackUrl))
-            throw new InvalidOperationException("No playable URL is available for this mock video yet.");
+            throw new InvalidOperationException("No playable URL is available.");
 
         if (!Uri.TryCreate(playbackUrl, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))

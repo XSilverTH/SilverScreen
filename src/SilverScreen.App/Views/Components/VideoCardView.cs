@@ -69,13 +69,6 @@ public partial class VideoCardView : ViewBase<Box>
         channel.Ellipsize = Pango.EllipsizeMode.End;
         text.Append(channel);
 
-        var availability = DimLabel(BuildVideoUrl(video) is null
-            ? "Mock placeholder • no playable URL"
-            : "Playable YouTube URL");
-        availability.Xalign = 0;
-        availability.Ellipsize = Pango.EllipsizeMode.End;
-        text.Append(availability);
-
         metadata.Append(text);
         metadata.Append(CreateMenuButton());
         card.Append(metadata);

@@ -98,28 +98,12 @@ public sealed class PlaybackTests
         var exception =
             Assert.Throws<InvalidOperationException>(() =>
                 MpvCommandBuilder.Build(request, new PlaybackOptions()));
-        Assert.Equal("No playable URL is available for this mock video yet.", exception.Message);
-    }
-
-    [Theory]
-    [InlineData("SsLinuxD01A")]
-    [InlineData("SsDemoMp4A")]
-    [InlineData("SsGtkBlp02B")]
-    public void PlaybackRequestDoesNotDeriveWatchUrlForInternalMockIds(string mockId)
-    {
-        var video = CreateVideo(mockId);
-        var request = new PlaybackRequest(video);
-
-        Assert.Equal(mockId, request.VideoId);
-        Assert.Null(request.PlaybackUrl);
+        Assert.Equal("No playable URL is available.", exception.Message);
     }
 
     [Theory]
     [InlineData("dQw4w9WgXcQ", true)]
     [InlineData("abc123_X-yZ", true)]
-    [InlineData("SsLinuxD01A", false)]
-    [InlineData("SsDemoMp4A", false)]
-    [InlineData("SsGtkBlp02B", false)]
     [InlineData("abc", false)]
     [InlineData("abc123456789", false)]
     [InlineData("abc123_X-y!", false)]
@@ -132,9 +116,8 @@ public sealed class PlaybackTests
     }
 
     [Theory]
-    [InlineData("SsDemoMp4A", "https://example.com/demo.mp4")]
-    [InlineData("SsLinuxD01A", "https://test-videos.co.uk/sample.mp4")]
     [InlineData("dQw4w9WgXcQ", "https://custom-url.com/video")]
+    [InlineData("abc", "https://custom-url.com/video2")]
     public void MpvCommandBuilderUsesExplicitWatchUrlWhenPresent(string id, string explicitUrl)
     {
         var video = CreateVideo(id, explicitUrl);
@@ -146,15 +129,15 @@ public sealed class PlaybackTests
     }
 
     [Fact]
-    public async Task ExternalMpvPlaybackServiceReturnsMockFriendlyMessageWhenPlaybackUrlIsMissing()
+    public async Task ExternalMpvPlaybackServiceReturnsFriendlyMessageWhenPlaybackUrlIsMissing()
     {
-        var video = CreateVideo("SsLinuxD01A");
+        var video = CreateVideo("abc");
         var request = new PlaybackRequest(video);
         var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder());
 
         var message = await service.PlayAsync(request);
 
-        Assert.Equal("No playable URL is available for this mock video yet.", message);
+        Assert.Equal("No playable URL is available.", message);
     }
 
     [Fact]
