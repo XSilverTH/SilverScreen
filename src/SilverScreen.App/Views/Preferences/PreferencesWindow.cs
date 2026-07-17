@@ -15,6 +15,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly ComboRow _qualityRow;
+    private readonly SwitchRow _markWatchedRow;
 
     private static readonly string[] Themes = { "System", "Light", "Dark" };
     private static readonly string[] Qualities = { "Best", "1080p", "720p", "480p", "360p" };
@@ -30,6 +31,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _maxResultsRow = GetRequiredObject<EntryRow>("max_results_row");
         _mpvPathRow = GetRequiredObject<EntryRow>("mpv_path_row");
         _qualityRow = GetRequiredObject<ComboRow>("quality_row");
+        _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
 
         InitializeFields();
         SetupEventHandlers();
@@ -56,6 +58,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             ((Gtk.Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
             ((Gtk.Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Gtk.Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
+            _markWatchedRow.Active = prefs.MarkWatchedVideos;
         }
         finally
         {
@@ -68,6 +71,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         // Handle dropdown selection changes
         _themeRow.OnNotify += OnRowNotify;
         _qualityRow.OnNotify += OnRowNotify;
+        _markWatchedRow.OnNotify += OnRowNotify;
 
         // Handle text entry changes
         ((Gtk.Editable)_ytdlpPathRow).OnChanged += OnRowChanged;
@@ -106,7 +110,8 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             VideoQuality = quality,
             YtDlpExecutablePath = ((Gtk.Editable)_ytdlpPathRow).GetText() ?? "yt-dlp",
             MpvExecutablePath = ((Gtk.Editable)_mpvPathRow).GetText() ?? "mpv",
-            MaxResults = maxResults
+            MaxResults = maxResults,
+            MarkWatchedVideos = _markWatchedRow.Active
         };
 
         _preferencesService.SavePreferences(prefs);

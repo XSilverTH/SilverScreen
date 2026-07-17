@@ -39,6 +39,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("yt-dlp", prefs.YtDlpExecutablePath);
         Assert.Equal("Best", prefs.VideoQuality);
         Assert.Equal(20, prefs.MaxResults);
+        Assert.False(prefs.MarkWatchedVideos);
     }
 
     [Fact]
@@ -51,7 +52,8 @@ public sealed class PreferencesTests : IDisposable
             MpvExecutablePath = "/custom/mpv",
             YtDlpExecutablePath = "/custom/yt-dlp",
             VideoQuality = "1080p",
-            MaxResults = 50
+            MaxResults = 50,
+            MarkWatchedVideos = true
         };
 
         service.SavePreferences(newPrefs);
@@ -66,6 +68,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("/custom/yt-dlp", loaded.YtDlpExecutablePath);
         Assert.Equal("1080p", loaded.VideoQuality);
         Assert.Equal(50, loaded.MaxResults);
+        Assert.True(loaded.MarkWatchedVideos);
     }
 
     [Fact]
@@ -78,7 +81,8 @@ public sealed class PreferencesTests : IDisposable
             MpvExecutablePath = "mpv",
             YtDlpExecutablePath = "yt-dlp",
             VideoQuality = "720p",
-            MaxResults = 10
+            MaxResults = 10,
+            MarkWatchedVideos = true
         };
 
         AppPreferences? eventArgs = null;
@@ -93,5 +97,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("Light", eventArgs.Theme);
         Assert.Equal("720p", eventArgs.VideoQuality);
         Assert.Equal(10, eventArgs.MaxResults);
+        Assert.True(eventArgs.MarkWatchedVideos);
     }
 }

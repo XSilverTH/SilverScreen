@@ -51,6 +51,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             MpvExecutablePath = prefs.MpvExecutablePath,
             VideoQuality = prefs.VideoQuality,
+            MarkWatchedVideos = prefs.MarkWatchedVideos,
             ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
         };
     }

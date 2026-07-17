@@ -73,6 +73,18 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void MpvCommandBuilderMarksWatchedVideosWhenEnabledWithSessionCookies()
+    {
+        var command = MpvCommandBuilder.Build(
+            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackOptions { MarkWatchedVideos = true },
+            "/tmp/silverscreen-cookies/cookies.txt");
+
+        Assert.Contains("--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt,mark-watched=",
+            command.Arguments);
+    }
+
+    [Fact]
     public void MpvCommandBuilderKeepsCookieOptionAndUrlAsSeparateStartInfoArguments()
     {
         var builder = new MpvCommandBuilder();

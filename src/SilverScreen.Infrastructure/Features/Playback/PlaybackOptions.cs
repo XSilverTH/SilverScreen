@@ -7,4 +7,6 @@ public sealed class PlaybackOptions
     public bool ExternalMpvEnabled { get; init; } = true;
 
     public string VideoQuality { get; init; } = "Best";
+
+    public bool MarkWatchedVideos { get; init; }
 }

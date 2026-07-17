@@ -91,7 +91,8 @@ public sealed class FilePreferencesService : IPreferencesService
             MpvExecutablePath = source.MpvExecutablePath,
             VideoQuality = source.VideoQuality,
             YtDlpExecutablePath = source.YtDlpExecutablePath,
-            MaxResults = source.MaxResults
+            MaxResults = source.MaxResults,
+            MarkWatchedVideos = source.MarkWatchedVideos
         };
     }
 

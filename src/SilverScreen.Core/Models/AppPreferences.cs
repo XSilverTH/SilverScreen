@@ -7,4 +7,5 @@ public sealed class AppPreferences
     public string VideoQuality { get; set; } = "Best"; // "Best", "1080p", "720p", "480p", "360p"
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public int MaxResults { get; set; } = 20;
+    public bool MarkWatchedVideos { get; set; }
 }

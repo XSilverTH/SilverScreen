@@ -29,7 +29,13 @@ public sealed class MpvCommandBuilder
 
         var arguments = new List<string>();
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
-            arguments.Add($"--ytdl-raw-options=cookies={cookieFilePath}");
+        {
+            var ytdlOptions = $"cookies={cookieFilePath}";
+            if (options.MarkWatchedVideos)
+                ytdlOptions += ",mark-watched=";
+
+            arguments.Add($"--ytdl-raw-options={ytdlOptions}");
+        }
 
         if (!string.IsNullOrWhiteSpace(options.VideoQuality) && !options.VideoQuality.Equals("Best", StringComparison.OrdinalIgnoreCase))
         {
