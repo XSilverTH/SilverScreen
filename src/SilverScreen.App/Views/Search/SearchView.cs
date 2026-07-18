@@ -13,6 +13,7 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
     private readonly Label _summary;
     private readonly FlowBox _results;
     private CancellationTokenSource? _thumbnailGeneration;
+    private readonly List<VideoCardView> _cards = [];
     private bool _disposed;
 
     public SearchView(SearchViewModel viewModel, IThumbnailService thumbnails, VideoCardActions videoActions)
@@ -50,6 +51,7 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         _thumbnailGeneration?.Cancel();
         _thumbnailGeneration?.Dispose();
         _thumbnailGeneration = null;
+        DisposeCards();
         Clear(_results);
         if (state.IsLoading || state.Videos.Count == 0)
             return;
@@ -57,7 +59,10 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         _thumbnailGeneration = new CancellationTokenSource();
         foreach (var video in state.Videos)
         {
-            var cardWidget = new VideoCardView(video, _thumbnails, _videoActions, _thumbnailGeneration.Token).Widget;
+            var card = new VideoCardView(_thumbnails, _videoActions);
+            card.Bind(video, _thumbnailGeneration.Token);
+            _cards.Add(card);
+            var cardWidget = card.Widget;
             _results.Append(cardWidget);
             if (cardWidget.GetParent() is FlowBoxChild flowBoxChild)
             {
@@ -65,6 +70,14 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
                 flowBoxChild.Valign = Align.Start;
             }
         }
+    }
+
+    private void DisposeCards()
+    {
+        foreach (var card in _cards)
+            card.Dispose();
+
+        _cards.Clear();
     }
 
     private static void Clear(FlowBox flowBox)
@@ -82,6 +95,7 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         _thumbnailGeneration?.Cancel();
         _thumbnailGeneration?.Dispose();
         _thumbnailGeneration = null;
+        DisposeCards();
         if (ViewModel is { } viewModel)
         {
             viewModel.StateChanged -= OnStateChanged;

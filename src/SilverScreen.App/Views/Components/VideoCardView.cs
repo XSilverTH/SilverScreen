@@ -18,14 +18,24 @@ public partial class VideoCardView : ViewBase<Box>
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
 
-    private readonly VideoSummary _video;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _actions;
+    private readonly Overlay _thumbnail;
+    private readonly Widget _placeholder;
+    private readonly Label _duration;
+    private readonly Label _title;
+    private readonly Label _channel;
+    private readonly MenuButton _menu;
+    private VideoSummary? _video;
+    private CancellationTokenSource? _thumbnailCancellation;
+    private Gdk.Texture? _boundTexture;
+    private Picture? _boundPicture;
+    private string _thumbnailAlternativeText = string.Empty;
+    private int _bindingGeneration;
+    private bool _disposed;
 
-    public VideoCardView(VideoSummary video, IThumbnailService thumbnails, VideoCardActions actions,
-        CancellationToken thumbnailCancellation)
+    public VideoCardView(IThumbnailService thumbnails, VideoCardActions actions)
     {
-        _video = video;
         _thumbnails = thumbnails;
         _actions = actions;
 
@@ -42,9 +52,28 @@ public partial class VideoCardView : ViewBase<Box>
         card.Overflow = Overflow.Hidden;
         Widget.Append(card);
 
-        var thumbnail = CreateThumbnail(out var placeholder);
-        card.Append(thumbnail);
-        _ = LoadThumbnailAsync(thumbnail, placeholder, thumbnailCancellation);
+        _thumbnail = Overlay.New();
+        _thumbnail.HeightRequest = ThumbnailHeight;
+        _thumbnail.WidthRequest = CardWidth;
+        _thumbnail.Hexpand = true;
+        _thumbnail.Overflow = Overflow.Hidden;
+        _thumbnail.CssClasses = ["video-thumbnail"];
+
+        var icon = Image.NewFromIconName("media-playback-start-symbolic");
+        icon.PixelSize = 44;
+        icon.Halign = Align.Center;
+        icon.Valign = Align.Center;
+        _placeholder = icon;
+        _thumbnail.Child = _placeholder;
+
+        _duration = Label.New(string.Empty);
+        _duration.Halign = Align.End;
+        _duration.Valign = Align.End;
+        _duration.MarginEnd = 10;
+        _duration.MarginBottom = 9;
+        _duration.CssClasses = ["caption", "duration-pill"];
+        _thumbnail.AddOverlay(_duration);
+        card.Append(_thumbnail);
 
         var metadata = Box.New(Orientation.Horizontal, 8);
         metadata.CssClasses = ["video-metadata"];
@@ -56,108 +85,163 @@ public partial class VideoCardView : ViewBase<Box>
         var text = Box.New(Orientation.Vertical, 2);
         text.Hexpand = true;
 
-        var title = Label.New(video.Title);
-        title.Xalign = 0;
-        title.Wrap = true;
-        title.MaxWidthChars = 30;
-        title.HeightRequest = 38;
-        title.CssClasses = ["video-title"];
-        text.Append(title);
+        _title = Label.New(string.Empty);
+        _title.Xalign = 0;
+        _title.Wrap = true;
+        _title.MaxWidthChars = 30;
+        _title.HeightRequest = 38;
+        _title.CssClasses = ["video-title"];
+        text.Append(_title);
 
-        var channel = DimLabel($"{video.ChannelName} • {FormatDuration(video.Duration)}");
-        channel.Xalign = 0;
-        channel.Ellipsize = Pango.EllipsizeMode.End;
-        text.Append(channel);
+        _channel = DimLabel(string.Empty);
+        _channel.Xalign = 0;
+        _channel.Ellipsize = Pango.EllipsizeMode.End;
+        text.Append(_channel);
 
         metadata.Append(text);
-        metadata.Append(CreateMenuButton());
+        _menu = CreateMenuButton();
+        metadata.Append(_menu);
         card.Append(metadata);
 
         var click = GestureClick.New();
         click.Button = 0;
         click.OnReleased += (sender, args) =>
         {
+            if (_video is not { } video)
+                return;
+
             if (sender.GetCurrentButton() == 1)
-                _ = PlayAsync();
+                StartPlay(video);
             else if (sender.GetCurrentButton() == 2)
-                _actions.AddToQueue(_video);
+                _actions.AddToQueue(video);
         };
         card.AddController(click);
     }
 
-    private Overlay CreateThumbnail(out Widget placeholder)
+    public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
     {
-        var thumbnail = Overlay.New();
-        thumbnail.HeightRequest = ThumbnailHeight;
-        thumbnail.WidthRequest = CardWidth;
-        thumbnail.Hexpand = true;
-        thumbnail.Overflow = Overflow.Hidden;
-        thumbnail.CssClasses = ["video-thumbnail"];
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Unbind();
 
-        var icon = Image.NewFromIconName("media-playback-start-symbolic");
-        icon.PixelSize = 44;
-        icon.Halign = Align.Center;
-        icon.Valign = Align.Center;
-        placeholder = icon;
-        thumbnail.Child = icon;
-
-        var duration = Label.New(FormatDuration(_video.Duration));
-        duration.Halign = Align.End;
-        duration.Valign = Align.End;
-        duration.MarginEnd = 10;
-        duration.MarginBottom = 9;
-        duration.CssClasses = ["caption", "duration-pill"];
-        thumbnail.AddOverlay(duration);
-        return thumbnail;
+        _video = video;
+        _title.SetText(video.Title);
+        _channel.SetText($"{video.ChannelName} • {FormatDuration(video.Duration)}");
+        _duration.SetText(FormatDuration(video.Duration));
+        _thumbnailAlternativeText = $"{video.Title} thumbnail";
+        _menu.TooltipText = $"More actions for {video.Title}";
+        var generation = ++_bindingGeneration;
+        _thumbnailCancellation = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : new CancellationTokenSource();
+        _ = LoadThumbnailAsync(video, generation, _thumbnailCancellation.Token);
     }
 
-    private async Task LoadThumbnailAsync(Overlay thumbnail, Widget placeholder, CancellationToken cancellationToken)
+    public void Unbind()
     {
-        ThumbnailResult? result;
+        _video = null;
+        _bindingGeneration++;
+        _title.SetText(string.Empty);
+        _channel.SetText(string.Empty);
+        _duration.SetText(string.Empty);
+        _thumbnailAlternativeText = string.Empty;
+        _menu.TooltipText = string.Empty;
+        _thumbnailCancellation?.Cancel();
+        _thumbnailCancellation?.Dispose();
+        _thumbnailCancellation = null;
+        ClearThumbnail();
+    }
+
+    private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)
+    {
+        GdkPixbuf.Pixbuf? pixbuf = null;
         try
         {
-            result = await _thumbnails.GetThumbnailAsync(_video, cancellationToken).ConfigureAwait(false);
+            var result = await _thumbnails.GetThumbnailAsync(video, cancellationToken).ConfigureAwait(false);
+            if (result is null)
+                return;
+
+            pixbuf = await Task.Run(
+                () => GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true),
+                cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             return;
         }
-
-        if (result is null)
+        catch (Exception)
+        {
+            // A corrupt or unsupported cached image leaves the placeholder intact.
             return;
+        }
+
+        GdkPixbuf.Pixbuf? decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
 
         GLib.Functions.IdleAdd(0, () =>
         {
-            if (cancellationToken.IsCancellationRequested || thumbnail.GetRoot() is null ||
-                placeholder.GetParent() != thumbnail)
-                return false;
-
             try
             {
-                var pixbuf = GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true);
-                var picture = Picture.NewForPixbuf(pixbuf);
-                picture.AlternativeText = $"{_video.Title} thumbnail";
-                picture.ContentFit = ContentFit.Cover;
-                picture.WidthRequest = CardWidth;
-                picture.HeightRequest = ThumbnailHeight;
-                picture.Hexpand = true;
-                picture.Vexpand = true;
-                thumbnail.Child = picture;
+                if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
+                    _thumbnail.GetRoot() is null)
+                {
+                    return false;
+                }
+
+                Gdk.Texture? texture = null;
+                Picture? picture = null;
+                try
+                {
+                    var pixbufForTexture = decodedPixbuf ??
+                        throw new InvalidOperationException("Thumbnail decode was released before texture creation.");
+                    texture = Gdk.Texture.NewForPixbuf(pixbufForTexture);
+                    pixbufForTexture.Dispose();
+                    decodedPixbuf = null;
+                    picture = Picture.NewForPaintable(texture);
+                    picture.AlternativeText = _thumbnailAlternativeText;
+                    picture.ContentFit = ContentFit.Cover;
+                    picture.WidthRequest = CardWidth;
+                    picture.HeightRequest = ThumbnailHeight;
+                    picture.Hexpand = true;
+                    picture.Vexpand = true;
+
+                    ClearThumbnail();
+                    _thumbnail.Child = picture;
+                    _boundTexture = texture;
+                    _boundPicture = picture;
+                    texture = null;
+                    picture = null;
+                }
+                finally
+                {
+                    picture?.Dispose();
+                    texture?.Dispose();
+                }
             }
             catch (Exception)
             {
                 // A corrupt or unsupported cached image leaves the placeholder intact.
+            }
+            finally
+            {
+                decodedPixbuf?.Dispose();
             }
 
             return false;
         });
     }
 
+    private void ClearThumbnail()
+    {
+        _thumbnail.Child = _placeholder;
+        _boundPicture?.Dispose();
+        _boundPicture = null;
+        _boundTexture?.Dispose();
+        _boundTexture = null;
+    }
+
     private MenuButton CreateMenuButton()
     {
         var menu = MenuButton.New();
         menu.IconName = "view-more-symbolic";
-        menu.TooltipText = $"More actions for {_video.Title}";
         menu.Valign = Align.Start;
         menu.CssClasses = ["flat"];
         var content = Box.New(Orientation.Vertical, 4);
@@ -165,9 +249,21 @@ public partial class VideoCardView : ViewBase<Box>
         content.MarginBottom = 6;
         content.MarginStart = 6;
         content.MarginEnd = 6;
-        content.Append(ActionButton("Play", () => _ = PlayAsync()));
-        content.Append(ActionButton("Add to queue", () => _actions.AddToQueue(_video)));
-        content.Append(ActionButton("Add next", () => _actions.AddNext(_video)));
+        content.Append(ActionButton("Play", () =>
+        {
+            if (_video is { } video)
+                StartPlay(video);
+        }));
+        content.Append(ActionButton("Add to queue", () =>
+        {
+            if (_video is { } video)
+                _actions.AddToQueue(video);
+        }));
+        content.Append(ActionButton("Add next", () =>
+        {
+            if (_video is { } video)
+                _actions.AddNext(video);
+        }));
         content.Append(
             ActionButton("Open channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
         content.Append(ActionButton("Copy link", CopyLink));
@@ -177,11 +273,13 @@ public partial class VideoCardView : ViewBase<Box>
         return menu;
     }
 
-    private async Task PlayAsync()
+    private void StartPlay(VideoSummary video) => _ = PlayAsync(video);
+
+    private async Task PlayAsync(VideoSummary video)
     {
         try
         {
-            await _actions.PlayAsync(_video);
+            await _actions.PlayAsync(video);
         }
         catch (Exception)
         {
@@ -191,7 +289,10 @@ public partial class VideoCardView : ViewBase<Box>
 
     private void CopyLink()
     {
-        var link = BuildVideoUrl(_video);
+        if (_video is not { } video)
+            return;
+
+        var link = BuildVideoUrl(video);
         if (link is null)
         {
             _actions.ReportStatus("No playable video link is available.");
@@ -234,4 +335,14 @@ public partial class VideoCardView : ViewBase<Box>
     private static string FormatDuration(TimeSpan duration) => duration.TotalHours >= 1
         ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
         : $"{duration.Minutes}:{duration.Seconds:00}";
+
+    public new void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        Unbind();
+        base.Dispose();
+    }
 }

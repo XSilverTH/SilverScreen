@@ -27,6 +27,13 @@ Adw.ApplicationWindow MainWindow {
       };
 
       [end]
+      Button home_refresh_button {
+        icon-name: "view-refresh-symbolic";
+        tooltip-text: "Refresh Home";
+        clicked => $OnHomeRefreshButtonClicked();
+      }
+
+      [end]
       MenuButton app_menu_button {
         icon-name: "open-menu-symbolic";
         tooltip-text: "Main Menu";
@@ -34,7 +41,12 @@ Adw.ApplicationWindow MainWindow {
     }
 
     content: Overlay {
+      hexpand: true;
+      vexpand: true;
+
       child: Box {
+        hexpand: true;
+        vexpand: true;
         orientation: vertical;
 
         Adw.ViewStack view_stack {
@@ -49,12 +61,14 @@ Adw.ApplicationWindow MainWindow {
           xalign: 0;
           margin-start: 18;
           margin-end: 18;
-          margin-top: 8;
-          margin-bottom: 10;
+          margin-top: 4;
+          margin-bottom: 4;
           ellipsize: end;
           styles ["caption", "dim-label"]
         }
+
       };
+
 
       [overlay]
       MenuButton queue_button {

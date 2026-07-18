@@ -5,35 +5,53 @@ Gtk.Box HomeView {
   hexpand: true;
   vexpand: true;
 
-  Gtk.Box home_toolbar {
+
+  Gtk.Box home_loading_row {
+    visible: false;
     orientation: horizontal;
-    spacing: 12;
+    spacing: 8;
     margin-top: 12;
-    margin-bottom: 6;
     margin-start: 18;
     margin-end: 18;
 
-    Gtk.Label {
-      label: "Home";
-      xalign: 0;
-      hexpand: true;
-      styles ["title-2"]
+    Gtk.Spinner home_loading_spinner {
+      spinning: true;
     }
 
-    Gtk.Button home_refresh_button {
-      icon-name: "view-refresh-symbolic";
-      tooltip-text: "Refresh Home";
-      clicked => $OnHomeRefreshButtonClicked();
+    Gtk.Label home_loading_label {
+      xalign: 0;
+      styles ["dim-label"]
     }
   }
 
-  Gtk.ScrolledWindow {
+  Gtk.Label home_message_label {
+    visible: false;
+    xalign: 0;
+    wrap: true;
+    margin-top: 12;
+    margin-start: 18;
+    margin-end: 18;
+    styles ["dim-label"]
+  }
+
+  Gtk.Box home_status_host {
+    visible: false;
+    orientation: vertical;
     hexpand: true;
     vexpand: true;
-    child: Gtk.Box home_content {
-      orientation: vertical;
-      hexpand: true;
-      vexpand: true;
-    };
+  }
+
+  Gtk.ScrolledWindow home_scrolled_window {
+    visible: false;
+    hexpand: true;
+    vexpand: true;
+  }
+
+  Gtk.Button home_load_more_button {
+    visible: false;
+    label: "Load more";
+    halign: center;
+    margin-bottom: 24;
+    clicked => $OnHomeLoadMoreButtonClicked();
   }
 }

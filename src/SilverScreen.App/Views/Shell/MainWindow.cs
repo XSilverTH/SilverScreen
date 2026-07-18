@@ -96,6 +96,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         ReportStatus = message => _shell.Status = message
     };
 
+    private void OnHomeRefreshButtonClicked(object? sender, EventArgs args) => _ = _home.RefreshAsync();
+
     private void OnSearchButtonClicked(object? sender, EventArgs args)
     {
         _searchPopover.Popup();
