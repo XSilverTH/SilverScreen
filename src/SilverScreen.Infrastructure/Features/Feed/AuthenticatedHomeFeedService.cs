@@ -6,15 +6,6 @@ namespace SilverScreen.Infrastructure.Features.Feed;
 
 public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService, IDisposable
 {
-    private readonly IYouTubeHomeClient _homeClient;
-    private readonly ISessionService _sessionService;
-    private readonly Lock _lock = new();
-
-    // Cumulative cache of loaded videos in the current manual session
-    private readonly List<VideoSummary> _loadedVideos = [];
-    private string? _continuationToken;
-    private FeedPage _cachedFeedPage = FeedPage.Empty;
-
     private const string AuthenticationRequiredMessage =
         "Sign in to YouTube to load recommendations.";
 
@@ -23,6 +14,14 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     private const string EmptyFeedMessage = "No usable recommendations were returned.";
     private const string NoContinuationMessage = "No additional recommendations are available.";
     private const string SuccessMessage = "Recommendations loaded.";
+    private readonly IYouTubeHomeClient _homeClient;
+
+    // Cumulative cache of loaded videos in the current manual session
+    private readonly List<VideoSummary> _loadedVideos = [];
+    private readonly Lock _lock = new();
+    private readonly ISessionService _sessionService;
+    private FeedPage _cachedFeedPage = FeedPage.Empty;
+    private string? _continuationToken;
 
     public AuthenticatedHomeFeedService(IYouTubeHomeClient homeClient, ISessionService sessionService)
     {
@@ -35,7 +34,9 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     public FeedPage GetHomeFeed()
     {
         lock (_lock)
+        {
             return _cachedFeedPage;
+        }
     }
 
     public async Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
@@ -50,7 +51,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         try
         {
             var clientResult = await _homeClient.GetHomeFeedAsync(null, cancellationToken);
-            return ProcessClientResult(clientResult, isFirstPage: true);
+            return ProcessClientResult(clientResult, true);
         }
         catch (OperationCanceledException)
         {
@@ -74,18 +75,18 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
         string? currentToken;
         lock (_lock)
+        {
             currentToken = _continuationToken;
+        }
 
         if (string.IsNullOrEmpty(currentToken))
-        {
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, GetHomeFeed(),
                 NoContinuationMessage);
-        }
 
         try
         {
             var clientResult = await _homeClient.GetHomeFeedAsync(currentToken, cancellationToken);
-            return ProcessClientResult(clientResult, isFirstPage: false);
+            return ProcessClientResult(clientResult, false);
         }
         catch (OperationCanceledException)
         {
@@ -96,6 +97,11 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty,
                 BackendFailureMessage);
         }
+    }
+
+    public void Dispose()
+    {
+        _sessionService.SessionChanged -= OnSessionChanged;
     }
 
     private bool IsSessionActive()
@@ -147,10 +153,8 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
                 _loadedVideos.Clear();
 
             foreach (var video in usableVideos)
-            {
                 if (_loadedVideos.All(existingVideo => existingVideo.Id != video.Id))
                     _loadedVideos.Add(video);
-            }
 
             _continuationToken = clientResult.ContinuationToken;
             _cachedFeedPage = new FeedPage(_loadedVideos.ToArray(), _continuationToken);
@@ -178,10 +182,5 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         ClearCachedResults();
-    }
-
-    public void Dispose()
-    {
-        _sessionService.SessionChanged -= OnSessionChanged;
     }
 }

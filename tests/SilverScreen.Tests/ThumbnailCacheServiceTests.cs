@@ -1,63 +1,11 @@
-using System;
-using System.IO;
 using System.Net;
-using System.Net.Http;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Thumbnails;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
 public sealed class ThumbnailCacheServiceTests
 {
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"silverscreen-tests-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch
-            {
-                // Prevent failures in cleanup from crashing tests
-            }
-        }
-    }
-
-    private sealed class FakeHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
-
-        public int CallCount { get; private set; }
-
-        public FakeHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
-        {
-            _handler = handler;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return await _handler(request, cancellationToken);
-        }
-    }
-
     [Fact]
     public void CreateCacheKey_SameUrl_ReturnsStableKey()
     {
@@ -191,10 +139,7 @@ public sealed class ThumbnailCacheServiceTests
         var cachePath = service.GetCachePathForUrl(url);
         Assert.False(File.Exists(cachePath));
 
-        if (Directory.Exists(tempDir.Path))
-        {
-            Assert.Empty(Directory.GetFiles(tempDir.Path));
-        }
+        if (Directory.Exists(tempDir.Path)) Assert.Empty(Directory.GetFiles(tempDir.Path));
     }
 
     [Fact]
@@ -217,10 +162,7 @@ public sealed class ThumbnailCacheServiceTests
         var cachePath = service.GetCachePathForUrl(url);
         Assert.False(File.Exists(cachePath));
 
-        if (Directory.Exists(tempDir.Path))
-        {
-            Assert.Empty(Directory.GetFiles(tempDir.Path));
-        }
+        if (Directory.Exists(tempDir.Path)) Assert.Empty(Directory.GetFiles(tempDir.Path));
     }
 
     [Fact]
@@ -237,7 +179,7 @@ public sealed class ThumbnailCacheServiceTests
             return Task.FromResult(response);
         });
         using var httpClient = new HttpClient(handler);
-        using var service = new ThumbnailCacheService(httpClient, tempDir.Path, maxDownloadBytes: maxBytes);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path, maxBytes);
         const string url = "https://example.com/images/oversized-header.jpg";
 
         // Act
@@ -250,10 +192,7 @@ public sealed class ThumbnailCacheServiceTests
         var cachePath = service.GetCachePathForUrl(url);
         Assert.False(File.Exists(cachePath));
 
-        if (Directory.Exists(tempDir.Path))
-        {
-            Assert.Empty(Directory.GetFiles(tempDir.Path));
-        }
+        if (Directory.Exists(tempDir.Path)) Assert.Empty(Directory.GetFiles(tempDir.Path));
     }
 
     [Fact]
@@ -272,7 +211,7 @@ public sealed class ThumbnailCacheServiceTests
             return Task.FromResult(response);
         });
         using var httpClient = new HttpClient(handler);
-        using var service = new ThumbnailCacheService(httpClient, tempDir.Path, maxDownloadBytes: maxBytes);
+        using var service = new ThumbnailCacheService(httpClient, tempDir.Path, maxBytes);
         const string url = "https://example.com/images/oversized-stream.jpg";
 
         // Act
@@ -285,10 +224,7 @@ public sealed class ThumbnailCacheServiceTests
         var cachePath = service.GetCachePathForUrl(url);
         Assert.False(File.Exists(cachePath));
 
-        if (Directory.Exists(tempDir.Path))
-        {
-            Assert.Empty(Directory.GetFiles(tempDir.Path));
-        }
+        if (Directory.Exists(tempDir.Path)) Assert.Empty(Directory.GetFiles(tempDir.Path));
     }
 
     [Fact]
@@ -332,7 +268,7 @@ public sealed class ThumbnailCacheServiceTests
         using var httpClient = new HttpClient(handler);
         using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
         var video = new VideoSummary("id", "title", "channel", TimeSpan.FromMinutes(1), "https://example.com/thumb.jpg",
-            IsShort: true);
+            true);
 
         // Act
         var result = await service.GetThumbnailAsync(video);
@@ -357,7 +293,7 @@ public sealed class ThumbnailCacheServiceTests
         using var httpClient = new HttpClient(handler);
         using var service = new ThumbnailCacheService(httpClient, tempDir.Path);
         var video = new VideoSummary("id", "title", "channel", TimeSpan.FromMinutes(1), "https://example.com/thumb.jpg",
-            IsShort: false);
+            false);
 
         // Act
         var result = await service.GetThumbnailAsync(video);
@@ -380,10 +316,7 @@ public sealed class ThumbnailCacheServiceTests
         string? acceptHeader = null;
         var handler = new FakeHttpMessageHandler((req, ct) =>
         {
-            if (req.Headers.TryGetValues("Accept", out var values))
-            {
-                acceptHeader = string.Join(", ", values);
-            }
+            if (req.Headers.TryGetValues("Accept", out var values)) acceptHeader = string.Join(", ", values);
 
             var response = new HttpResponseMessage(HttpStatusCode.OK);
             response.Content = new ByteArrayContent("image"u8.ToArray());
@@ -469,10 +402,7 @@ public sealed class ThumbnailCacheServiceTests
         var cachePath = service.GetCachePathForUrl(url);
         Assert.False(File.Exists(cachePath));
 
-        if (Directory.Exists(tempDir.Path))
-        {
-            Assert.Empty(Directory.GetFiles(tempDir.Path));
-        }
+        if (Directory.Exists(tempDir.Path)) Assert.Empty(Directory.GetFiles(tempDir.Path));
     }
 
     [Fact]
@@ -515,5 +445,47 @@ public sealed class ThumbnailCacheServiceTests
 
         var savedBytes = await File.ReadAllBytesAsync(expectedCachePath);
         Assert.Equal(imageData, savedBytes);
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"silverscreen-tests-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                if (Directory.Exists(Path)) Directory.Delete(Path, true);
+            }
+            catch
+            {
+                // Prevent failures in cleanup from crashing tests
+            }
+        }
+    }
+
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
+        {
+            _handler = handler;
+        }
+
+        public int CallCount { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return await _handler(request, cancellationToken);
+        }
     }
 }

@@ -17,13 +17,10 @@ public sealed class SearchViewModel(
     ShellViewModel shell)
     : INotifyPropertyChanged, IDisposable
 {
+    private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
     private SearchViewState _state = new([], "Search results will appear here.", false);
-    private bool _disposed;
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<SearchViewState>? StateChanged;
 
     public SearchViewState State
     {
@@ -40,6 +37,21 @@ public sealed class SearchViewModel(
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        ++_requestGeneration;
+        _requestCancellation?.Cancel();
+        _requestCancellation?.Dispose();
+        _requestCancellation = null;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<SearchViewState>? StateChanged;
 
     public async Task SubmitAsync(string text)
     {
@@ -90,7 +102,7 @@ public sealed class SearchViewModel(
     private async Task SearchPlainTextAsync(string query)
     {
         ThrowIfDisposed();
-        _requestCancellation?.Cancel();
+        await _requestCancellation?.CancelAsync()!;
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;
@@ -138,23 +150,13 @@ public sealed class SearchViewModel(
         shell.Status = await playbackService.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false);
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
     }
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -18,11 +19,12 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         ".png",
         ".webp",
         ".gif",
-        ".bmp",
+        ".bmp"
     };
 
-    private readonly HttpClient _httpClient;
     private readonly bool _disposeHttpClient;
+
+    private readonly HttpClient _httpClient;
     private readonly long _maxDownloadBytes;
     private readonly int _maxFileCount;
 
@@ -42,16 +44,12 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheDirectory);
 
         if (maxDownloadBytes <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(maxDownloadBytes),
                 "Maximum thumbnail download size must be positive.");
-        }
 
         if (maxFileCount <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(maxFileCount),
                 "Maximum thumbnail cache count must be positive.");
-        }
 
         _httpClient = httpClient;
         CacheDirectory = cacheDirectory;
@@ -61,6 +59,11 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     }
 
     public string CacheDirectory { get; }
+
+    public void Dispose()
+    {
+        if (_disposeHttpClient) _httpClient.Dispose();
+    }
 
     public async Task<ThumbnailResult?> GetThumbnailAsync(VideoSummary video,
         CancellationToken cancellationToken = default)
@@ -81,11 +84,13 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         if (File.Exists(cachePath))
         {
             if (IsWebPFile(cachePath))
+            {
                 DeleteFileIfExists(cachePath);
+            }
             else
             {
                 TouchCacheFile(cachePath);
-                return new ThumbnailResult(cachePath, WasCacheHit: true);
+                return new ThumbnailResult(cachePath, true);
             }
         }
 
@@ -143,12 +148,12 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             {
                 File.Delete(temporaryPath);
                 TouchCacheFile(cachePath);
-                return new ThumbnailResult(cachePath, WasCacheHit: true);
+                return new ThumbnailResult(cachePath, true);
             }
 
             File.Move(temporaryPath, cachePath);
             CleanupOldCacheFiles();
-            return new ThumbnailResult(cachePath, WasCacheHit: false);
+            return new ThumbnailResult(cachePath, false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -164,16 +169,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     public static string CreateCacheKey(string thumbnailUrl)
     {
-        var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(thumbnailUrl));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(thumbnailUrl));
         return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
-
-    public void Dispose()
-    {
-        if (_disposeHttpClient)
-        {
-            _httpClient.Dispose();
-        }
     }
 
     private static string GetDefaultCacheDirectory()
@@ -192,7 +189,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     {
         return new HttpClient
         {
-            Timeout = DefaultTimeout,
+            Timeout = DefaultTimeout
         };
     }
 

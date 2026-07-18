@@ -1,5 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text;
+using Gio.Internal;
+using GLib;
+using GLib.Internal;
+using GObject.Internal;
+using Soup.Internal;
+using WebKit;
+using Cookie = Soup.Cookie;
 
 namespace SilverScreen.Features.Session;
 
@@ -12,6 +20,7 @@ internal sealed record WebCookieSnapshot(
     bool HttpOnly,
     long ExpiresUnix);
 
+[SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 internal static class WebLoginCookieReader
 {
     private const string NetscapeHeader = "# Netscape HTTP Cookie File\n";
@@ -19,13 +28,13 @@ internal static class WebLoginCookieReader
     [DllImport("libglib-2.0.so.0", EntryPoint = "g_list_free")]
     private static extern void FreeList(IntPtr list);
 
-    internal static Task<IReadOnlyList<WebCookieSnapshot>> GetCookiesAsync(WebKit.CookieManager manager, string uri)
+    internal static Task<IReadOnlyList<WebCookieSnapshot>> GetCookiesAsync(CookieManager manager, string uri)
     {
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentException.ThrowIfNullOrWhiteSpace(uri);
 
         var completion = new TaskCompletionSource<IReadOnlyList<WebCookieSnapshot>>();
-        var callbackHandler = new Gio.Internal.AsyncReadyCallbackAsyncHandler((sourceObject, result, _) =>
+        var callbackHandler = new AsyncReadyCallbackAsyncHandler((sourceObject, result, _) =>
         {
             if (sourceObject is null)
             {
@@ -33,8 +42,8 @@ internal static class WebLoginCookieReader
                 return;
             }
 
-            GLib.Internal.ListOwnedHandle? listHandle = null;
-            IntPtr list = IntPtr.Zero;
+            ListOwnedHandle? listHandle = null;
+            var list = IntPtr.Zero;
             try
             {
                 listHandle = WebKit.Internal.CookieManager.GetCookiesFinish(
@@ -44,7 +53,7 @@ internal static class WebLoginCookieReader
 
                 if (!error.IsInvalid)
                 {
-                    completion.SetException(new GLib.GException(error));
+                    completion.SetException(new GException(error));
                     return;
                 }
 
@@ -56,21 +65,19 @@ internal static class WebLoginCookieReader
                 {
                     var cookiePointer = Marshal.ReadIntPtr(node);
                     node = Marshal.ReadIntPtr(node, IntPtr.Size);
-                    Soup.Cookie? cookie = null;
+                    Cookie? cookie = null;
                     var ownershipTransferred = false;
                     try
                     {
-                        cookie = (Soup.Cookie)GObject.Internal.BoxedWrapper.WrapHandle(
+                        cookie = (Cookie)BoxedWrapper.WrapHandle(
                             cookiePointer,
-                            ownsHandle: true,
-                            Soup.Cookie.GetGType());
+                            true,
+                            Cookie.GetGType());
                         ownershipTransferred = true;
 
                         var name = cookie.GetName();
                         var value = cookie.GetValue();
                         var domain = cookie.GetDomain();
-                        if (name is null || value is null || domain is null)
-                            continue;
 
                         var path = cookie.GetPath();
                         using var expires = cookie.GetExpires();
@@ -113,7 +120,7 @@ internal static class WebLoginCookieReader
 
         WebKit.Internal.CookieManager.GetCookies(
             manager.Handle.DangerousGetHandle(),
-            GLib.Internal.NonNullableUtf8StringOwnedHandle.Create(uri),
+            NonNullableUtf8StringOwnedHandle.Create(uri),
             IntPtr.Zero,
             callbackHandler.NativeCallback,
             IntPtr.Zero);
@@ -176,7 +183,8 @@ internal static class WebLoginCookieReader
     private static void ValidateField(string value, string fieldName)
     {
         if (value.IndexOfAny(['\t', '\r', '\n']) >= 0)
-            throw new ArgumentException($"Cookie {fieldName} contains a character that cannot be serialized.", fieldName);
+            throw new ArgumentException($"Cookie {fieldName} contains a character that cannot be serialized.",
+                fieldName);
     }
 
     private static void FreeRemainingCookies(IntPtr node)
@@ -192,7 +200,7 @@ internal static class WebLoginCookieReader
 
     private static void FreeCookie(IntPtr cookiePointer)
     {
-        using var cookieHandle = new Soup.Internal.CookieUnownedHandle(cookiePointer);
+        using var cookieHandle = new CookieUnownedHandle(cookiePointer);
         Soup.Internal.Cookie.Free(cookieHandle);
     }
 }

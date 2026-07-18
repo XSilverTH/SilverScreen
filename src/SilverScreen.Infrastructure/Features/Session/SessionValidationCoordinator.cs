@@ -7,12 +7,12 @@ namespace SilverScreen.Infrastructure.Features.Session;
 public sealed class SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
     : IDisposable
 {
-    private readonly HomeSessionValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+    private readonly Lock _lock = new();
 
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
-    private readonly Lock _lock = new();
+    private readonly HomeSessionValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
     private CancellationTokenSource? _cts;
     private bool _isValidating;
 
@@ -29,20 +29,19 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
 
     public bool IsAvailable => HasManualSession() && !IsValidating;
 
+    public void Dispose()
+    {
+        Cancel();
+    }
+
     public async Task<string> ValidateAsync()
     {
         CancellationToken token;
         lock (_lock)
         {
-            if (!HasManualSession())
-            {
-                return SessionValidationFormatter.NoActiveSessionMessage;
-            }
+            if (!HasManualSession()) return SessionValidationFormatter.NoActiveSessionMessage;
 
-            if (_isValidating)
-            {
-                return SessionValidationFormatter.AlreadyRunningMessage;
-            }
+            if (_isValidating) return SessionValidationFormatter.AlreadyRunningMessage;
 
             _isValidating = true;
             _cts = new CancellationTokenSource();
@@ -77,10 +76,7 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
     {
         lock (_lock)
         {
-            if (_isValidating && _cts != null)
-            {
-                _cts.Cancel();
-            }
+            if (_isValidating && _cts != null) _cts.Cancel();
         }
     }
 
@@ -88,11 +84,6 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
     {
         var session = _sessionService.GetCurrentSession();
         return session.IsSignedIn && session.HasManualSession;
-    }
-
-    public void Dispose()
-    {
-        Cancel();
     }
 }
 

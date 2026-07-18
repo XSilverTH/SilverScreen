@@ -2,13 +2,13 @@ namespace SilverScreen.Features.Session;
 
 internal sealed class WebLoginCaptureCoordinator
 {
-    private readonly Func<Task<string?>> _readReadyCookies;
     private readonly Func<string, bool> _persist;
     private readonly Action _persisted;
-    private readonly Action<Exception> _readFailed;
     private readonly Action _persistenceFailed;
-    private Task _drainTask = Task.CompletedTask;
+    private readonly Action<Exception> _readFailed;
+    private readonly Func<Task<string?>> _readReadyCookies;
     private bool _captureRequested;
+    private Task _drainTask = Task.CompletedTask;
     private bool _stopped;
 
     internal WebLoginCaptureCoordinator(

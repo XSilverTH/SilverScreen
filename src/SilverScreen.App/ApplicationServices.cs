@@ -1,7 +1,7 @@
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Playback;
+using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Queue;
 using SilverScreen.Infrastructure.Features.Search;
 using SilverScreen.Infrastructure.Features.Session;
@@ -33,14 +33,14 @@ public sealed class ApplicationServices : IDisposable
 
     public IQueueService Queue { get; }
     public ISessionService Session { get; }
-    public ICookieFileProvider CookieFiles { get; }
+    private ICookieFileProvider CookieFiles { get; }
     public IPlaybackService Playback { get; }
     public ISearchService Search { get; }
     public IThumbnailService Thumbnails { get; }
-    public IYouTubeHomeClient YouTubeHomeClient { get; }
-    public AuthenticatedHomeFeedService AuthenticatedHomeFeed { get; }
+    private IYouTubeHomeClient YouTubeHomeClient { get; }
+    private AuthenticatedHomeFeedService AuthenticatedHomeFeed { get; }
     public HomeFeedCoordinator HomeFeed { get; }
-    public HomeSessionValidator HomeSessionValidator { get; }
+    private HomeSessionValidator HomeSessionValidator { get; }
     public SessionValidationCoordinator SessionValidation { get; }
 
     public void Dispose()
@@ -48,9 +48,6 @@ public sealed class ApplicationServices : IDisposable
         SessionValidation.Dispose();
         HomeFeed.Dispose();
         AuthenticatedHomeFeed.Dispose();
-        if (Thumbnails is IDisposable disposableThumbnails)
-        {
-            disposableThumbnails.Dispose();
-        }
+        if (Thumbnails is IDisposable disposableThumbnails) disposableThumbnails.Dispose();
     }
 }

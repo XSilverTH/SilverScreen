@@ -2,6 +2,7 @@ using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Popovers;
 
@@ -27,11 +28,14 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
             static (label, value) => label.SetText(value));
     }
 
-    private void OnClearQueueButtonClicked(object? sender, EventArgs args) => ViewModel?.Clear();
+    private void OnClearQueueButtonClicked(object? sender, EventArgs args)
+    {
+        ViewModel?.Clear();
+    }
 
     private void OnStateChanged(object? sender, QueuePresentationState state)
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
                 Render(state);
@@ -65,11 +69,14 @@ public partial class QueuePopoverView : ViewBase<Box, QueueViewModel>
         return row;
     }
 
-    private static string FormatDuration(TimeSpan duration) => duration.TotalHours >= 1
-        ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
-        : duration.TotalMinutes >= 1
-            ? $"{(int)duration.TotalMinutes}m"
-            : $"{duration.Seconds}s";
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
+            : duration.TotalMinutes >= 1
+                ? $"{(int)duration.TotalMinutes}m"
+                : $"{duration.Seconds}s";
+    }
 
     private static void Clear(Box box)
     {

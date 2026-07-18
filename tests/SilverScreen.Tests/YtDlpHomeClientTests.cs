@@ -1,12 +1,6 @@
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
@@ -299,12 +293,6 @@ public sealed class YtDlpHomeClientTests
 
     private sealed class FallbackTempScript : IDisposable
     {
-        public string Path { get; }
-        public string LogPath { get; }
-        public string CookieStdoutPath { get; }
-        public string NoCookieStdoutPath { get; }
-        public string ExitCodePath { get; }
-
         public FallbackTempScript()
         {
             var id = Guid.NewGuid().ToString("N");
@@ -384,6 +372,21 @@ public sealed class YtDlpHomeClientTests
             }
         }
 
+        public string Path { get; }
+        public string LogPath { get; }
+        public string CookieStdoutPath { get; }
+        public string NoCookieStdoutPath { get; }
+        public string ExitCodePath { get; }
+
+        public void Dispose()
+        {
+            TryDelete(Path);
+            TryDelete(LogPath);
+            TryDelete(CookieStdoutPath);
+            TryDelete(NoCookieStdoutPath);
+            TryDelete(ExitCodePath);
+        }
+
         public void SetExitCode(int exitCode)
         {
             File.WriteAllText(ExitCodePath, exitCode.ToString());
@@ -397,31 +400,16 @@ public sealed class YtDlpHomeClientTests
 
         public string[] GetLog()
         {
-            if (File.Exists(LogPath))
-            {
-                return File.ReadAllLines(LogPath);
-            }
+            if (File.Exists(LogPath)) return File.ReadAllLines(LogPath);
 
             return Array.Empty<string>();
-        }
-
-        public void Dispose()
-        {
-            TryDelete(Path);
-            TryDelete(LogPath);
-            TryDelete(CookieStdoutPath);
-            TryDelete(NoCookieStdoutPath);
-            TryDelete(ExitCodePath);
         }
 
         private static void TryDelete(string path)
         {
             try
             {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
+                if (File.Exists(path)) File.Delete(path);
             }
             catch
             {
@@ -432,11 +420,6 @@ public sealed class YtDlpHomeClientTests
 
     private sealed class TempScript : IDisposable
     {
-        public string Path { get; }
-        public string StdoutPath { get; }
-        public string StderrPath { get; }
-        public string ExitCodePath { get; }
-
         public TempScript()
         {
             var id = Guid.NewGuid().ToString("N");
@@ -535,6 +518,19 @@ public sealed class YtDlpHomeClientTests
             }
         }
 
+        public string Path { get; }
+        public string StdoutPath { get; }
+        public string StderrPath { get; }
+        public string ExitCodePath { get; }
+
+        public void Dispose()
+        {
+            TryDelete(Path);
+            TryDelete(StdoutPath);
+            TryDelete(StderrPath);
+            TryDelete(ExitCodePath);
+        }
+
         public void SetOutput(string stdout, string stderr = "")
         {
             File.WriteAllText(StdoutPath, stdout);
@@ -546,22 +542,11 @@ public sealed class YtDlpHomeClientTests
             File.WriteAllText(ExitCodePath, exitCode.ToString());
         }
 
-        public void Dispose()
-        {
-            TryDelete(Path);
-            TryDelete(StdoutPath);
-            TryDelete(StderrPath);
-            TryDelete(ExitCodePath);
-        }
-
         private static void TryDelete(string path)
         {
             try
             {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
+                if (File.Exists(path)) File.Delete(path);
             }
             catch
             {

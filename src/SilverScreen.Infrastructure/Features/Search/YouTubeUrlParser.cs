@@ -8,7 +8,7 @@ public enum YouTubeUrlKind
     Channel,
     Playlist,
     UnknownYouTube,
-    Invalid,
+    Invalid
 }
 
 public sealed record YouTubeUrlParseResult(
@@ -35,25 +35,14 @@ public static class YouTubeUrlParser
     public static YouTubeUrlParseResult Parse(string? input)
     {
         var text = input?.Trim();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return YouTubeUrlParseResult.NotYouTube;
-        }
+        if (string.IsNullOrWhiteSpace(text)) return YouTubeUrlParseResult.NotYouTube;
 
-        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
-        {
-            return YouTubeUrlParseResult.NotYouTube;
-        }
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri)) return YouTubeUrlParseResult.NotYouTube;
 
         if (!IsSupportedScheme(uri))
-        {
             return IsYouTubeHost(uri.Host) ? YouTubeUrlParseResult.Invalid : YouTubeUrlParseResult.NotYouTube;
-        }
 
-        if (!IsYouTubeHost(uri.Host))
-        {
-            return YouTubeUrlParseResult.NotYouTube;
-        }
+        if (!IsYouTubeHost(uri.Host)) return YouTubeUrlParseResult.NotYouTube;
 
         return uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)
             ? ParseShortHost(uri)
@@ -63,47 +52,35 @@ public static class YouTubeUrlParser
     private static YouTubeUrlParseResult ParseShortHost(Uri uri)
     {
         var videoId = GetPathSegment(uri, 0);
-        if (videoId is null)
-        {
-            return YouTubeUrlParseResult.UnknownYouTube;
-        }
+        if (videoId is null) return YouTubeUrlParseResult.UnknownYouTube;
 
         return IsValidVideoId(videoId)
-            ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, VideoId: videoId)
+            ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, videoId)
             : YouTubeUrlParseResult.Invalid;
     }
 
     private static YouTubeUrlParseResult ParseYouTubeHost(Uri uri)
     {
         var firstSegment = GetPathSegment(uri, 0);
-        if (firstSegment is null)
-        {
-            return YouTubeUrlParseResult.UnknownYouTube;
-        }
+        if (firstSegment is null) return YouTubeUrlParseResult.UnknownYouTube;
 
         if (firstSegment.Equals("watch", StringComparison.OrdinalIgnoreCase))
         {
             var videoId = GetQueryValue(uri.Query, "v");
-            if (string.IsNullOrWhiteSpace(videoId))
-            {
-                return YouTubeUrlParseResult.UnknownYouTube;
-            }
+            if (string.IsNullOrWhiteSpace(videoId)) return YouTubeUrlParseResult.UnknownYouTube;
 
             return IsValidVideoId(videoId)
-                ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, VideoId: videoId)
+                ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, videoId)
                 : YouTubeUrlParseResult.Invalid;
         }
 
         if (firstSegment.Equals("shorts", StringComparison.OrdinalIgnoreCase))
         {
             var videoId = GetPathSegment(uri, 1);
-            if (videoId is null)
-            {
-                return YouTubeUrlParseResult.UnknownYouTube;
-            }
+            if (videoId is null) return YouTubeUrlParseResult.UnknownYouTube;
 
             return IsValidVideoId(videoId)
-                ? new YouTubeUrlParseResult(YouTubeUrlKind.Shorts, VideoId: videoId)
+                ? new YouTubeUrlParseResult(YouTubeUrlKind.Shorts, videoId)
                 : YouTubeUrlParseResult.Invalid;
         }
 
@@ -118,9 +95,7 @@ public static class YouTubeUrlParser
         if (firstSegment.Equals("channel", StringComparison.OrdinalIgnoreCase)
             || firstSegment.Equals("c", StringComparison.OrdinalIgnoreCase)
             || firstSegment.StartsWith('@'))
-        {
             return new YouTubeUrlParseResult(YouTubeUrlKind.Channel, ChannelPath: uri.AbsolutePath.Trim('/'));
-        }
 
         return YouTubeUrlParseResult.UnknownYouTube;
     }
@@ -148,19 +123,13 @@ public static class YouTubeUrlParser
     private static string? GetQueryValue(string query, string key)
     {
         var trimmedQuery = query.TrimStart('?');
-        if (trimmedQuery.Length == 0)
-        {
-            return null;
-        }
+        if (trimmedQuery.Length == 0) return null;
 
         foreach (var pair in trimmedQuery.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var separatorIndex = pair.IndexOf('=', StringComparison.Ordinal);
             var rawKey = separatorIndex >= 0 ? pair[..separatorIndex] : pair;
-            if (!SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+            if (!SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
 
             var rawValue = separatorIndex >= 0 ? pair[(separatorIndex + 1)..] : string.Empty;
             return SafeUnescape(rawValue.Replace('+', ' '));

@@ -4,11 +4,10 @@ namespace SilverScreen.Core.Services;
 
 public interface IQueueService
 {
-    event EventHandler? Changed;
-
     IReadOnlyList<QueueItem> Items { get; }
 
     TimeSpan TotalDuration { get; }
+    event EventHandler? Changed;
 
     QueueItem Add(VideoSummary video);
 

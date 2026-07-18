@@ -125,7 +125,7 @@ public sealed class YtDlpSearchServiceTests
     [Fact]
     public async Task SearchAsync_HandlesYtDlpFailureAsCleanFailure()
     {
-        var service = CreateService(string.Empty, exitCode: 1, standardError: "ERROR: network unavailable");
+        var service = CreateService(string.Empty, 1, "ERROR: network unavailable");
 
         var result = await service.SearchAsync(new SearchRequest("linux"), CancellationToken.None);
 

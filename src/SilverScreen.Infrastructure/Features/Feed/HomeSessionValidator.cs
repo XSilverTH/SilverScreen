@@ -19,12 +19,12 @@ public sealed class HomeSessionValidator(IAuthenticatedHomeFeedService feedServi
                            result.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected;
 
         return new HomeSessionValidationResult(
-            IsSuccess: isSuccess,
-            VideoCount: videoCount,
-            HasContinuation: hasContinuation,
-            RequiresAuthentication: requiresAuth,
-            HighLevelStatus: result.Status,
-            StatusMessage: result.StatusMessage
+            isSuccess,
+            videoCount,
+            hasContinuation,
+            requiresAuth,
+            result.Status,
+            result.StatusMessage
         );
     }
 }

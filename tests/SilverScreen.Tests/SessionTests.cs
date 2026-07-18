@@ -1,6 +1,6 @@
+using System.Text;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using System.Text;
 using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Tests;
@@ -199,30 +199,21 @@ public sealed class SessionTests
 
         public byte[]? Load()
         {
-            if (FailLoad)
-            {
-                throw new SessionPersistenceException();
-            }
+            if (FailLoad) throw new SessionPersistenceException();
 
             return _stored?.ToArray();
         }
 
         public void Save(byte[] secret)
         {
-            if (FailSave)
-            {
-                throw new SessionPersistenceException();
-            }
+            if (FailSave) throw new SessionPersistenceException();
 
             _stored = secret.ToArray();
         }
 
         public void Delete()
         {
-            if (FailDelete)
-            {
-                throw new SessionPersistenceException();
-            }
+            if (FailDelete) throw new SessionPersistenceException();
 
             _stored = null;
         }
@@ -240,10 +231,7 @@ public sealed class SessionTests
 
         public void Dispose()
         {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, recursive: true);
-            }
+            if (Directory.Exists(Path)) Directory.Delete(Path, true);
         }
     }
 }

@@ -2,7 +2,7 @@ namespace SilverScreen.Core.Models;
 
 public enum SessionCookieFormat
 {
-    NetscapeCookiesText,
+    NetscapeCookiesText
 }
 
 public sealed record AccountSession(

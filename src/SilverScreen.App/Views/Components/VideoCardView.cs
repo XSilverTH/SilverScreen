@@ -1,7 +1,11 @@
+using Gdk;
+using GdkPixbuf;
 using Gtk;
+using Pango;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Components;
 
@@ -13,26 +17,26 @@ public sealed class VideoCardActions
     public required Action<string> ReportStatus { get; init; }
 }
 
-public partial class VideoCardView : ViewBase<Box>
+public class VideoCardView : ViewBase<Box>
 {
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
+    private readonly VideoCardActions _actions;
+    private readonly Label _channel;
+    private readonly Label _duration;
+    private readonly MenuButton _menu;
+    private readonly Widget _placeholder;
+    private readonly Overlay _thumbnail;
 
     private readonly IThumbnailService _thumbnails;
-    private readonly VideoCardActions _actions;
-    private readonly Overlay _thumbnail;
-    private readonly Widget _placeholder;
-    private readonly Label _duration;
     private readonly Label _title;
-    private readonly Label _channel;
-    private readonly MenuButton _menu;
-    private VideoSummary? _video;
-    private CancellationTokenSource? _thumbnailCancellation;
-    private Gdk.Texture? _boundTexture;
-    private Picture? _boundPicture;
-    private string _thumbnailAlternativeText = string.Empty;
     private int _bindingGeneration;
+    private Picture? _boundPicture;
+    private Texture? _boundTexture;
     private bool _disposed;
+    private string _thumbnailAlternativeText = string.Empty;
+    private CancellationTokenSource? _thumbnailCancellation;
+    private VideoSummary? _video;
 
     public VideoCardView(IThumbnailService thumbnails, VideoCardActions actions)
     {
@@ -95,7 +99,7 @@ public partial class VideoCardView : ViewBase<Box>
 
         _channel = DimLabel(string.Empty);
         _channel.Xalign = 0;
-        _channel.Ellipsize = Pango.EllipsizeMode.End;
+        _channel.Ellipsize = EllipsizeMode.End;
         text.Append(_channel);
 
         metadata.Append(text);
@@ -105,7 +109,7 @@ public partial class VideoCardView : ViewBase<Box>
 
         var click = GestureClick.New();
         click.Button = 0;
-        click.OnReleased += (sender, args) =>
+        click.OnReleased += (sender, _) =>
         {
             if (_video is not { } video)
                 return;
@@ -153,7 +157,7 @@ public partial class VideoCardView : ViewBase<Box>
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)
     {
-        GdkPixbuf.Pixbuf? pixbuf = null;
+        Pixbuf? pixbuf;
         try
         {
             var result = await _thumbnails.GetThumbnailAsync(video, cancellationToken).ConfigureAwait(false);
@@ -161,7 +165,7 @@ public partial class VideoCardView : ViewBase<Box>
                 return;
 
             pixbuf = await Task.Run(
-                () => GdkPixbuf.Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true),
+                () => Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -174,25 +178,24 @@ public partial class VideoCardView : ViewBase<Box>
             return;
         }
 
-        GdkPixbuf.Pixbuf? decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
+        var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
 
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             try
             {
                 if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
                     _thumbnail.GetRoot() is null)
-                {
                     return false;
-                }
 
-                Gdk.Texture? texture = null;
+                Texture? texture = null;
                 Picture? picture = null;
                 try
                 {
                     var pixbufForTexture = decodedPixbuf ??
-                        throw new InvalidOperationException("Thumbnail decode was released before texture creation.");
-                    texture = Gdk.Texture.NewForPixbuf(pixbufForTexture);
+                                           throw new InvalidOperationException(
+                                               "Thumbnail decode was released before texture creation.");
+                    texture = Texture.NewForPixbuf(pixbufForTexture);
                     pixbufForTexture.Dispose();
                     decodedPixbuf = null;
                     picture = Picture.NewForPaintable(texture);
@@ -273,7 +276,10 @@ public partial class VideoCardView : ViewBase<Box>
         return menu;
     }
 
-    private void StartPlay(VideoSummary video) => _ = PlayAsync(video);
+    private void StartPlay(VideoSummary video)
+    {
+        _ = PlayAsync(video);
+    }
 
     private async Task PlayAsync(VideoSummary video)
     {
@@ -299,7 +305,7 @@ public partial class VideoCardView : ViewBase<Box>
             return;
         }
 
-        var clipboard = Gdk.Display.GetDefault()?.GetClipboard();
+        var clipboard = Display.GetDefault()?.GetClipboard();
         if (clipboard is null)
         {
             _actions.ReportStatus("Clipboard is unavailable.");
@@ -328,13 +334,19 @@ public partial class VideoCardView : ViewBase<Box>
         return label;
     }
 
-    private static string? BuildVideoUrl(VideoSummary video) => string.IsNullOrWhiteSpace(video.WatchUrl)
-        ? PlaybackRequest.BuildWatchUrl(video.Id)
-        : video.WatchUrl;
+    private static string? BuildVideoUrl(VideoSummary video)
+    {
+        return string.IsNullOrWhiteSpace(video.WatchUrl)
+            ? PlaybackRequest.BuildWatchUrl(video.Id)
+            : video.WatchUrl;
+    }
 
-    private static string FormatDuration(TimeSpan duration) => duration.TotalHours >= 1
-        ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
-        : $"{duration.Minutes}:{duration.Seconds:00}";
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
+            : $"{duration.Minutes}:{duration.Seconds:00}";
+    }
 
     public new void Dispose()
     {

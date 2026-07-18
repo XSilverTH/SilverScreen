@@ -9,11 +9,10 @@ namespace SilverScreen.ViewModels;
 public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly ISessionService _sessionService;
-    private readonly SessionValidationCoordinator _validation;
     private readonly ShellViewModel _shell;
-    private AccountSession _session;
-    private bool _isValidating;
+    private readonly SessionValidationCoordinator _validation;
     private bool _disposed;
+    private AccountSession _session;
 
     public AccountViewModel(ISessionService sessionService, SessionValidationCoordinator validation,
         ShellViewModel shell)
@@ -25,13 +24,10 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler? StateChanged;
-
-    public AccountSession Session
+    private AccountSession Session
     {
         get => _session;
-        private set
+        set
         {
             _session = value;
             OnPropertyChanged();
@@ -44,17 +40,30 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public bool IsValidating
     {
-        get => _isValidating;
+        get;
         private set
         {
-            if (_isValidating == value)
+            if (field == value)
                 return;
 
-            _isValidating = value;
+            field = value;
             OnPropertyChanged();
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _validation.Cancel();
+        _sessionService.SessionChanged -= OnSessionChanged;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler? StateChanged;
 
     public bool SaveManualSession(string cookieContent)
     {
@@ -143,16 +152,8 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             Session = _sessionService.GetCurrentSession();
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-    public void Dispose()
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        _validation.Cancel();
-        _sessionService.SessionChanged -= OnSessionChanged;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

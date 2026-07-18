@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Session;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
@@ -14,37 +9,6 @@ public sealed class SessionValidationCoordinatorTests
 {
     private const string FakeCookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
-
-    private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
-    {
-        public Func<CancellationToken, Task<AuthenticatedHomeFeedResult>>? LoadFirstPageAsyncHandler { get; set; }
-        public int LoadFirstPageCallCount { get; private set; }
-
-        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
-        {
-            LoadFirstPageCallCount++;
-            if (LoadFirstPageAsyncHandler != null)
-            {
-                return LoadFirstPageAsyncHandler(cancellationToken);
-            }
-
-            return Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                FeedPage.Empty,
-                "Success"
-            ));
-        }
-
-        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public FeedPage GetHomeFeed()
-        {
-            return FeedPage.Empty;
-        }
-    }
 
     [Fact]
     public async Task SignedOut_IsAvailableFalse_NoBackendCall()
@@ -56,8 +20,8 @@ public sealed class SessionValidationCoordinatorTests
         var coordinator = new SessionValidationCoordinator(validator, sessionService);
 
         // Act
-        bool isAvailable = coordinator.IsAvailable;
-        string result = await coordinator.ValidateAsync();
+        var isAvailable = coordinator.IsAvailable;
+        var result = await coordinator.ValidateAsync();
 
         // Assert
         Assert.False(isAvailable);
@@ -76,7 +40,7 @@ public sealed class SessionValidationCoordinatorTests
         var coordinator = new SessionValidationCoordinator(validator, sessionService);
 
         // Act
-        bool isAvailable = coordinator.IsAvailable;
+        var isAvailable = coordinator.IsAvailable;
 
         // Assert
         Assert.True(isAvailable);
@@ -90,7 +54,7 @@ public sealed class SessionValidationCoordinatorTests
         sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
         var fakeFeed = new FakeAuthenticatedHomeFeedService
         {
-            LoadFirstPageAsyncHandler = token => Task.FromResult(new AuthenticatedHomeFeedResult(
+            LoadFirstPageAsyncHandler = _ => Task.FromResult(new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.Success,
                 new FeedPage(new List<VideoSummary>
                 {
@@ -106,7 +70,7 @@ public sealed class SessionValidationCoordinatorTests
         var coordinator = new SessionValidationCoordinator(validator, sessionService);
 
         // Act
-        string formattedResult = await coordinator.ValidateAsync();
+        var formattedResult = await coordinator.ValidateAsync();
 
         // Assert
         Assert.Equal(1, fakeFeed.LoadFirstPageCallCount);
@@ -129,7 +93,7 @@ public sealed class SessionValidationCoordinatorTests
         var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>();
         var fakeFeed = new FakeAuthenticatedHomeFeedService
         {
-            LoadFirstPageAsyncHandler = token => tcs.Task
+            LoadFirstPageAsyncHandler = _ => tcs.Task
         };
         var validator = new HomeSessionValidator(fakeFeed);
         var coordinator = new SessionValidationCoordinator(validator, sessionService);
@@ -143,7 +107,7 @@ public sealed class SessionValidationCoordinatorTests
         Assert.False(coordinator.IsAvailable);
 
         // Start duplicate validation while first is in flight
-        string duplicateResult = await coordinator.ValidateAsync();
+        var duplicateResult = await coordinator.ValidateAsync();
 
         // Complete the first validation
         tcs.SetResult(new AuthenticatedHomeFeedResult(
@@ -155,7 +119,7 @@ public sealed class SessionValidationCoordinatorTests
             "Done"
         ));
 
-        string firstResult = await task1;
+        var firstResult = await task1;
 
         // Assert
         Assert.Equal(SessionValidationFormatter.AlreadyRunningMessage, duplicateResult);
@@ -178,7 +142,7 @@ public sealed class SessionValidationCoordinatorTests
         {
             LoadFirstPageAsyncHandler = async token =>
             {
-                using (token.Register(() => tcs.TrySetCanceled(token)))
+                await using (token.Register(() => tcs.TrySetCanceled(token)))
                 {
                     return await tcs.Task;
                 }
@@ -193,7 +157,7 @@ public sealed class SessionValidationCoordinatorTests
         // Trigger cancellation on the coordinator
         coordinator.Cancel();
 
-        string result = await task;
+        var result = await task;
 
         // Assert
         Assert.Equal(SessionValidationFormatter.CancellationMessage, result);
@@ -207,16 +171,16 @@ public sealed class SessionValidationCoordinatorTests
         // Arrange
         var secretCookieLeak = "COOKIE: SID=fake_secret_cookie_content";
         var resultTemplate = new HomeSessionValidationResult(
-            IsSuccess: true,
-            VideoCount: 5,
-            HasContinuation: true,
-            RequiresAuthentication: false,
-            HighLevelStatus: AuthenticatedHomeFeedStatus.Success,
-            StatusMessage: secretCookieLeak
+            true,
+            5,
+            true,
+            false,
+            AuthenticatedHomeFeedStatus.Success,
+            secretCookieLeak
         );
 
         // Act & Assert for secret containment
-        string formatted = SessionValidationFormatter.FormatResult(resultTemplate);
+        var formatted = SessionValidationFormatter.FormatResult(resultTemplate);
         Assert.DoesNotContain(secretCookieLeak, formatted, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SID", formatted, StringComparison.OrdinalIgnoreCase);
 
@@ -236,6 +200,34 @@ public sealed class SessionValidationCoordinatorTests
             var res = resultTemplate with { HighLevelStatus = status };
             var output = SessionValidationFormatter.FormatResult(res);
             Assert.Contains(expectedText, output);
+        }
+    }
+
+    private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
+    {
+        public Func<CancellationToken, Task<AuthenticatedHomeFeedResult>>? LoadFirstPageAsyncHandler { get; init; }
+        public int LoadFirstPageCallCount { get; private set; }
+
+        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+        {
+            LoadFirstPageCallCount++;
+            if (LoadFirstPageAsyncHandler != null) return LoadFirstPageAsyncHandler(cancellationToken);
+
+            return Task.FromResult(new AuthenticatedHomeFeedResult(
+                AuthenticatedHomeFeedStatus.Success,
+                FeedPage.Empty,
+                "Success"
+            ));
+        }
+
+        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public FeedPage GetHomeFeed()
+        {
+            return FeedPage.Empty;
         }
     }
 }

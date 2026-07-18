@@ -10,8 +10,6 @@ public sealed class FilePreferencesService : IPreferencesService
     private readonly object _lock = new();
     private AppPreferences _current;
 
-    public event EventHandler<AppPreferences>? PreferencesChanged;
-
     public FilePreferencesService() : this(GetDefaultPreferencesFilePath())
     {
     }
@@ -21,6 +19,8 @@ public sealed class FilePreferencesService : IPreferencesService
         _filePath = filePath;
         _current = LoadOrCreate();
     }
+
+    public event EventHandler<AppPreferences>? PreferencesChanged;
 
     public AppPreferences GetPreferences()
     {
@@ -44,10 +44,7 @@ public sealed class FilePreferencesService : IPreferencesService
             try
             {
                 var directory = Path.GetDirectoryName(_filePath);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
                 var json = JsonSerializer.Serialize(cloned, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_filePath, json);
@@ -69,10 +66,7 @@ public sealed class FilePreferencesService : IPreferencesService
             {
                 var json = File.ReadAllText(_filePath);
                 var preferences = JsonSerializer.Deserialize<AppPreferences>(json);
-                if (preferences is not null)
-                {
-                    return preferences;
-                }
+                if (preferences is not null) return preferences;
             }
         }
         catch (Exception ex)
@@ -99,10 +93,7 @@ public sealed class FilePreferencesService : IPreferencesService
     private static string GetDefaultPreferencesFilePath()
     {
         var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-        if (!string.IsNullOrWhiteSpace(configHome))
-        {
-            return Path.Combine(configHome, "SilverScreen", "preferences.json");
-        }
+        if (!string.IsNullOrWhiteSpace(configHome)) return Path.Combine(configHome, "SilverScreen", "preferences.json");
 
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         configHome = string.IsNullOrWhiteSpace(userHome)

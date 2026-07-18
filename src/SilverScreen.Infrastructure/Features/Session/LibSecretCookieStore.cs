@@ -16,10 +16,10 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     private const string ContentType = "application/octet-stream";
 
     private static readonly object GlibFunctionsGate = new();
-    private static IntPtr s_glibLibrary;
-    private static IntPtr s_stringHash;
-    private static IntPtr s_stringEqual;
-    private static IntPtr s_free;
+    private static IntPtr _sGlibLibrary;
+    private static IntPtr _sStringHash;
+    private static IntPtr _sStringEqual;
+    private static IntPtr _sFree;
 
     public byte[]? Load()
     {
@@ -77,69 +77,49 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
 
     private static byte[]? LoadNative()
     {
-        IntPtr attributes = IntPtr.Zero;
-        IntPtr secretValue = IntPtr.Zero;
-        IntPtr error = IntPtr.Zero;
+        var attributes = IntPtr.Zero;
+        var secretValue = IntPtr.Zero;
+        var error = IntPtr.Zero;
         byte[]? secret = null;
         try
         {
             attributes = CreateAttributes();
             secretValue = SecretPasswordLookupvBinarySync(IntPtr.Zero, attributes, IntPtr.Zero, out error);
             ThrowIfError(error);
-            if (secretValue == IntPtr.Zero)
-            {
-                return null;
-            }
+            if (secretValue == IntPtr.Zero) return null;
 
             var valuePointer = SecretValueGet(secretValue, out var length);
             var byteCount = length.ToUInt64();
             if (byteCount > int.MaxValue || (byteCount > 0 && valuePointer == IntPtr.Zero))
-            {
                 throw new InvalidOperationException();
-            }
 
             secret = new byte[(int)byteCount];
-            if (secret.Length > 0)
-            {
-                Marshal.Copy(valuePointer, secret, 0, secret.Length);
-            }
+            if (secret.Length > 0) Marshal.Copy(valuePointer, secret, 0, secret.Length);
 
             return secret;
         }
         catch
         {
-            if (secret is not null)
-            {
-                CryptographicOperations.ZeroMemory(secret);
-            }
+            if (secret is not null) CryptographicOperations.ZeroMemory(secret);
 
             throw;
         }
 
         finally
         {
-            if (secretValue != IntPtr.Zero)
-            {
-                SecretValueUnref(secretValue);
-            }
+            if (secretValue != IntPtr.Zero) SecretValueUnref(secretValue);
 
-            if (attributes != IntPtr.Zero)
-            {
-                GHashTableDestroy(attributes);
-            }
+            if (attributes != IntPtr.Zero) GHashTableDestroy(attributes);
 
-            if (error != IntPtr.Zero)
-            {
-                GErrorFree(error);
-            }
+            if (error != IntPtr.Zero) GErrorFree(error);
         }
     }
 
     private static void SaveNative(byte[] secret)
     {
-        IntPtr attributes = IntPtr.Zero;
-        IntPtr secretValue = IntPtr.Zero;
-        IntPtr error = IntPtr.Zero;
+        var attributes = IntPtr.Zero;
+        var secretValue = IntPtr.Zero;
+        var error = IntPtr.Zero;
         GCHandle secretHandle = default;
         try
         {
@@ -147,75 +127,48 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
             secretHandle = GCHandle.Alloc(secret, GCHandleType.Pinned);
             try
             {
-                secretValue = SecretValueNew(secretHandle.AddrOfPinnedObject(), (IntPtr)secret.Length, ContentType);
+                secretValue = SecretValueNew(secretHandle.AddrOfPinnedObject(), secret.Length, ContentType);
             }
             finally
             {
                 CryptographicOperations.ZeroMemory(secret);
             }
 
-            if (secretValue == IntPtr.Zero)
-            {
-                throw new InvalidOperationException();
-            }
+            if (secretValue == IntPtr.Zero) throw new InvalidOperationException();
 
             var stored = SecretPasswordStorevBinarySync(IntPtr.Zero, attributes, IntPtr.Zero, Label, secretValue,
                 IntPtr.Zero, out error);
             ThrowIfError(error);
-            if (stored == 0)
-            {
-                throw new InvalidOperationException();
-            }
+            if (stored == 0) throw new InvalidOperationException();
         }
         finally
         {
-            if (secretHandle.IsAllocated)
-            {
-                secretHandle.Free();
-            }
+            if (secretHandle.IsAllocated) secretHandle.Free();
 
-            if (secretValue != IntPtr.Zero)
-            {
-                SecretValueUnref(secretValue);
-            }
+            if (secretValue != IntPtr.Zero) SecretValueUnref(secretValue);
 
-            if (attributes != IntPtr.Zero)
-            {
-                GHashTableDestroy(attributes);
-            }
+            if (attributes != IntPtr.Zero) GHashTableDestroy(attributes);
 
-            if (error != IntPtr.Zero)
-            {
-                GErrorFree(error);
-            }
+            if (error != IntPtr.Zero) GErrorFree(error);
         }
     }
 
     private static void DeleteNative()
     {
-        IntPtr attributes = IntPtr.Zero;
-        IntPtr error = IntPtr.Zero;
+        var attributes = IntPtr.Zero;
+        var error = IntPtr.Zero;
         try
         {
             attributes = CreateAttributes();
             var cleared = SecretPasswordClearvSync(IntPtr.Zero, attributes, IntPtr.Zero, out error);
             ThrowIfError(error);
-            if (cleared == 0)
-            {
-                throw new InvalidOperationException();
-            }
+            if (cleared == 0) throw new InvalidOperationException();
         }
         finally
         {
-            if (attributes != IntPtr.Zero)
-            {
-                GHashTableDestroy(attributes);
-            }
+            if (attributes != IntPtr.Zero) GHashTableDestroy(attributes);
 
-            if (error != IntPtr.Zero)
-            {
-                GErrorFree(error);
-            }
+            if (error != IntPtr.Zero) GErrorFree(error);
         }
     }
 
@@ -223,10 +176,7 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     {
         var functions = GetGlibFunctions();
         var attributes = GHashTableNewFull(functions.StringHash, functions.StringEqual, functions.Free, functions.Free);
-        if (attributes == IntPtr.Zero)
-        {
-            throw new InvalidOperationException();
-        }
+        if (attributes == IntPtr.Zero) throw new InvalidOperationException();
 
         try
         {
@@ -244,10 +194,7 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     private static void InsertAttribute(IntPtr attributes, string key, string value)
     {
         var duplicatedKey = GStrdup(key);
-        if (duplicatedKey == IntPtr.Zero)
-        {
-            throw new InvalidOperationException();
-        }
+        if (duplicatedKey == IntPtr.Zero) throw new InvalidOperationException();
 
         var duplicatedValue = GStrdup(value);
         if (duplicatedValue == IntPtr.Zero)
@@ -263,15 +210,15 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     {
         lock (GlibFunctionsGate)
         {
-            if (s_glibLibrary == IntPtr.Zero)
+            if (_sGlibLibrary == IntPtr.Zero)
             {
                 var library = NativeLibrary.Load(LibGlib);
                 try
                 {
-                    s_stringHash = NativeLibrary.GetExport(library, "g_str_hash");
-                    s_stringEqual = NativeLibrary.GetExport(library, "g_str_equal");
-                    s_free = NativeLibrary.GetExport(library, "g_free");
-                    s_glibLibrary = library;
+                    _sStringHash = NativeLibrary.GetExport(library, "g_str_hash");
+                    _sStringEqual = NativeLibrary.GetExport(library, "g_str_equal");
+                    _sFree = NativeLibrary.GetExport(library, "g_free");
+                    _sGlibLibrary = library;
                 }
                 catch
                 {
@@ -280,25 +227,22 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
                 }
             }
 
-            return new GlibFunctions(s_stringHash, s_stringEqual, s_free);
+            return new GlibFunctions(_sStringHash, _sStringEqual, _sFree);
         }
     }
 
     private static void ThrowIfError(IntPtr error)
     {
-        if (error != IntPtr.Zero)
-        {
-            throw new InvalidOperationException();
-        }
+        if (error != IntPtr.Zero) throw new InvalidOperationException();
     }
 
-    private readonly record struct GlibFunctions(IntPtr StringHash, IntPtr StringEqual, IntPtr Free);
-
-    [DllImport(LibSecret, EntryPoint = "secret_password_lookupv_binary_sync", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibSecret, EntryPoint = "secret_password_lookupv_binary_sync",
+        CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr SecretPasswordLookupvBinarySync(IntPtr schema, IntPtr attributes, IntPtr cancellable,
         out IntPtr error);
 
-    [DllImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync",
+        CallingConvention = CallingConvention.Cdecl)]
     private static extern int SecretPasswordStorevBinarySync(IntPtr schema, IntPtr attributes, IntPtr collection,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string label, IntPtr value, IntPtr cancellable, out IntPtr error);
 
@@ -334,4 +278,6 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
 
     [DllImport(LibGlib, EntryPoint = "g_error_free", CallingConvention = CallingConvention.Cdecl)]
     private static extern void GErrorFree(IntPtr error);
+
+    private readonly record struct GlibFunctions(IntPtr StringHash, IntPtr StringEqual, IntPtr Free);
 }

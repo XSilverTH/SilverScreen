@@ -4,8 +4,10 @@ namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed record YouTubeBootstrapConfig(string ApiKey, string ClientVersion, string? VisitorData)
 {
-    public override string ToString() =>
-        $"YouTubeBootstrapConfig {{ ClientVersion = {ClientVersion}, Credentials = [REDACTED] }}";
+    public override string ToString()
+    {
+        return $"YouTubeBootstrapConfig {{ ClientVersion = {ClientVersion}, Credentials = [REDACTED] }}";
+    }
 }
 
 public static class YouTubeConfigBootstrap

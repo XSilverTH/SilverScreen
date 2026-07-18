@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -12,16 +14,22 @@ public sealed class YouTubeHomeClient(
     YouTubeHomeClientOptions? options = null)
     : IYouTubeHomeClient, IDisposable
 {
+    private readonly SemaphoreSlim _bootstrapLock = new(1, 1);
     private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+
+    private readonly YouTubeHomeClientOptions _options = options ?? new YouTubeHomeClientOptions();
 
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
-    private readonly YouTubeHomeClientOptions _options = options ?? new YouTubeHomeClientOptions();
-    private readonly SemaphoreSlim _bootstrapLock = new(1, 1);
     private YouTubeBootstrapConfig? _bootstrapConfig;
 
     public Func<long> TimeSource { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    public void Dispose()
+    {
+        _bootstrapLock.Dispose();
+    }
 
     public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
         CancellationToken cancellationToken = default)
@@ -29,28 +37,24 @@ public sealed class YouTubeHomeClient(
         // 1. Get Session Cookies
         var sessionCookies = _sessionService.GetManualSessionCookies();
         if (sessionCookies == null || string.IsNullOrWhiteSpace(sessionCookies.Content))
-        {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Authentication session not found.",
-                RequiresAuthentication: true
+                [],
+                null,
+                false,
+                "Authentication session not found.",
+                true
             );
-        }
 
         // 2. Parse Cookies
         var credentials = YouTubeCredentials.ParseNetscape(sessionCookies.Content);
         if (credentials == null)
-        {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Incomplete authentication credentials. Missing required session cookies.",
-                RequiresAuthentication: true
+                [],
+                null,
+                false,
+                "Incomplete authentication credentials. Missing required session cookies.",
+                true
             );
-        }
 
         // 3. Ensure bootstrap config
         YouTubeBootstrapConfig? config;
@@ -61,24 +65,22 @@ public sealed class YouTubeHomeClient(
         catch (Exception)
         {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to load YouTube bootstrap configuration due to connection issues.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Failed to load YouTube bootstrap configuration due to connection issues.",
+                false
             );
         }
 
         if (config == null)
-        {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to extract YouTube client configuration from homepage.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Failed to extract YouTube client configuration from homepage.",
+                false
             );
-        }
 
         // 4. Build JSON request payload
         var clientContext = new Dictionary<string, object>
@@ -125,11 +127,11 @@ public sealed class YouTubeHomeClient(
         catch (Exception)
         {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to serialize YouTube request payload.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Failed to serialize YouTube request payload.",
+                false
             );
         }
 
@@ -150,7 +152,7 @@ public sealed class YouTubeHomeClient(
 
         if (_options.AuthUser.HasValue)
             request.Headers.Add("X-Goog-AuthUser",
-                _options.AuthUser.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                _options.AuthUser.Value.ToString(CultureInfo.InvariantCulture));
 
         // Derive SAPISIDHASH
         var timestamp = TimeSource();
@@ -167,11 +169,11 @@ public sealed class YouTubeHomeClient(
         catch (Exception)
         {
             return new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Network error occurred while calling YouTube InnerTube API.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Network error occurred while calling YouTube InnerTube API.",
+                false
             );
         }
 
@@ -179,14 +181,14 @@ public sealed class YouTubeHomeClient(
         {
             if (!response.IsSuccessStatusCode)
             {
-                var isAuthError = response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
-                                  response.StatusCode == System.Net.HttpStatusCode.Forbidden;
+                var isAuthError = response.StatusCode == HttpStatusCode.Unauthorized ||
+                                  response.StatusCode == HttpStatusCode.Forbidden;
                 return new HomeFeedResult(
-                    Videos: [],
-                    ContinuationToken: null,
-                    IsSuccess: false,
-                    StatusMessage: $"YouTube InnerTube API returned HTTP status {(int)response.StatusCode}.",
-                    RequiresAuthentication: isAuthError
+                    [],
+                    null,
+                    false,
+                    $"YouTube InnerTube API returned HTTP status {(int)response.StatusCode}.",
+                    isAuthError
                 );
             }
 
@@ -198,11 +200,11 @@ public sealed class YouTubeHomeClient(
             catch (Exception)
             {
                 return new HomeFeedResult(
-                    Videos: [],
-                    ContinuationToken: null,
-                    IsSuccess: false,
-                    StatusMessage: "Failed to read response content from YouTube API.",
-                    RequiresAuthentication: false
+                    [],
+                    null,
+                    false,
+                    "Failed to read response content from YouTube API.",
+                    false
                 );
             }
 
@@ -215,21 +217,21 @@ public sealed class YouTubeHomeClient(
                 WalkJson(document.RootElement, videos, ref nextContinuationToken);
 
                 return new HomeFeedResult(
-                    Videos: videos,
-                    ContinuationToken: nextContinuationToken,
-                    IsSuccess: true,
-                    StatusMessage: null,
-                    RequiresAuthentication: false
+                    videos,
+                    nextContinuationToken,
+                    true,
+                    null,
+                    false
                 );
             }
             catch (Exception)
             {
                 return new HomeFeedResult(
-                    Videos: [],
-                    ContinuationToken: null,
-                    IsSuccess: false,
-                    StatusMessage: "Failed to parse the YouTube home feed JSON response.",
-                    RequiresAuthentication: false
+                    [],
+                    null,
+                    false,
+                    "Failed to parse the YouTube home feed JSON response.",
+                    false
                 );
             }
         }
@@ -379,13 +381,13 @@ public sealed class YouTubeHomeClient(
         var watchUrl = $"https://www.youtube.com/watch?v={videoId}";
 
         return new VideoSummary(
-            Id: videoId,
-            Title: title,
-            ChannelName: channelName,
-            Duration: duration,
-            ThumbnailUrl: thumbnailUrl,
-            IsShort: false,
-            WatchUrl: watchUrl
+            videoId,
+            title,
+            channelName,
+            duration,
+            thumbnailUrl,
+            false,
+            watchUrl
         );
     }
 
@@ -432,12 +434,8 @@ public sealed class YouTubeHomeClient(
             {
                 var sb = new StringBuilder();
                 foreach (var run in runsProp.EnumerateArray())
-                {
                     if (run.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
-                    {
                         sb.Append(textProp.GetString());
-                    }
-                }
 
                 return sb.ToString();
             }
@@ -477,10 +475,5 @@ public sealed class YouTubeHomeClient(
         }
 
         return TimeSpan.Zero;
-    }
-
-    public void Dispose()
-    {
-        _bootstrapLock.Dispose();
     }
 }

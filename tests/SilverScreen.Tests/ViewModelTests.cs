@@ -9,42 +9,6 @@ namespace SilverScreen.Tests;
 
 public sealed class ViewModelTests
 {
-    private sealed class ControlledSearchService : ISearchService
-    {
-        public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests
-        {
-            get;
-        } = [];
-
-        public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
-        {
-            var completion =
-                new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Requests.Add((request.Query, cancellationToken, completion));
-            return completion.Task;
-        }
-
-        public bool IsLikelyYouTubeUrl(string text) => false;
-    }
-
-    private sealed class FakePlaybackService : IPlaybackService
-    {
-        public Task<string> PlayAsync(PlaybackRequest request) => Task.FromResult("Playback started.");
-    }
-
-    private sealed class FakeFeedService : IAuthenticatedHomeFeedService
-    {
-        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
-                "Empty"));
-
-        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
-                "Empty"));
-
-        public FeedPage GetHomeFeed() => FeedPage.Empty;
-    }
-
     [Fact]
     public async Task SearchSupersedesPriorRequest_AndNavigatesToSearch()
     {
@@ -60,7 +24,7 @@ public sealed class ViewModelTests
         Assert.True(firstRequest.Token.IsCancellationRequested);
 
         var video = new VideoSummary("abc123def45", "Second", "Channel", TimeSpan.FromMinutes(2), "", false);
-        service.Requests[1].Completion.SetResult(new SearchResultPage([video], null, true));
+        service.Requests[1].Completion.SetResult(new SearchResultPage([video]));
         await second;
 
         Assert.Equal("search", shell.SelectedPage);
@@ -160,7 +124,8 @@ public sealed class ViewModelTests
         using var viewModel = new AccountViewModel(session, validation, shell);
 
         Assert.False(viewModel.SaveManualSession("cookie"));
-        Assert.Equal("Manual YouTube session could not be saved because the system keyring is unavailable.", shell.Status);
+        Assert.Equal("Manual YouTube session could not be saved because the system keyring is unavailable.",
+            shell.Status);
         Assert.False(viewModel.HasManualSession);
 
         session.FailSave = false;
@@ -181,6 +146,55 @@ public sealed class ViewModelTests
         Assert.Equal(existingContent, session.GetManualSessionCookies()?.Content);
     }
 
+    private sealed class ControlledSearchService : ISearchService
+    {
+        public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests
+        {
+            get;
+        } = [];
+
+        public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
+        {
+            var completion =
+                new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Requests.Add((request.Query, cancellationToken, completion));
+            return completion.Task;
+        }
+
+        public bool IsLikelyYouTubeUrl(string text)
+        {
+            return false;
+        }
+    }
+
+    private sealed class FakePlaybackService : IPlaybackService
+    {
+        public Task<string> PlayAsync(PlaybackRequest request)
+        {
+            return Task.FromResult("Playback started.");
+        }
+    }
+
+    private sealed class FakeFeedService : IAuthenticatedHomeFeedService
+    {
+        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
+                "Empty"));
+        }
+
+        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, FeedPage.Empty,
+                "Empty"));
+        }
+
+        public FeedPage GetHomeFeed()
+        {
+            return FeedPage.Empty;
+        }
+    }
+
     private sealed class FailingSessionService : ISessionService
     {
         private ManualSessionCookies? _cookies;
@@ -190,18 +204,21 @@ public sealed class ViewModelTests
 
         public event EventHandler? SessionChanged;
 
-        public AccountSession GetCurrentSession() => _cookies is null
-            ? AccountSession.SignedOut
-            : new AccountSession(true, "YouTube session", HasManualSession: true, CookieFormat: _cookies.Format);
+        public AccountSession GetCurrentSession()
+        {
+            return _cookies is null
+                ? AccountSession.SignedOut
+                : new AccountSession(true, "YouTube session", HasManualSession: true, CookieFormat: _cookies.Format);
+        }
 
-        public ManualSessionCookies? GetManualSessionCookies() => _cookies;
+        public ManualSessionCookies? GetManualSessionCookies()
+        {
+            return _cookies;
+        }
 
         public void SetManualSession(string cookieContent, SessionCookieFormat format)
         {
-            if (FailSave)
-            {
-                throw new SessionPersistenceException();
-            }
+            if (FailSave) throw new SessionPersistenceException();
 
             _cookies = new ManualSessionCookies(format, cookieContent);
             SessionChanged?.Invoke(this, EventArgs.Empty);
@@ -209,10 +226,7 @@ public sealed class ViewModelTests
 
         public void ClearSession()
         {
-            if (FailClear)
-            {
-                throw new SessionPersistenceException();
-            }
+            if (FailClear) throw new SessionPersistenceException();
 
             _cookies = null;
             SessionChanged?.Invoke(this, EventArgs.Empty);

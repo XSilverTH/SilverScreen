@@ -1,14 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
@@ -16,29 +9,6 @@ public sealed class AuthenticatedHomeFeedServiceTests
 {
     private const string SanitizedCookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsanitized-session-value\n";
-
-    private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
-    {
-        public int CallCount { get; private set; }
-        public string? LastContinuationToken { get; private set; }
-        public CancellationToken LastCancellationToken { get; private set; }
-        public Func<string?, CancellationToken, Task<HomeFeedResult>>? ResponseFactory { get; set; }
-
-        public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
-            CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            LastContinuationToken = continuationToken;
-            LastCancellationToken = cancellationToken;
-
-            if (ResponseFactory != null)
-            {
-                return ResponseFactory(continuationToken, cancellationToken);
-            }
-
-            return Task.FromResult(new HomeFeedResult(Array.Empty<VideoSummary>(), null, true, "Success", false));
-        }
-    }
 
     [Fact]
     public async Task LoadFirstPageAsync_NoSession_ReturnsAuthenticationRequiredWithoutClientCall()
@@ -624,5 +594,25 @@ public sealed class AuthenticatedHomeFeedServiceTests
             StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Netscape", feedResult.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Netscape", validationResult.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
+    {
+        public int CallCount { get; private set; }
+        public string? LastContinuationToken { get; private set; }
+        public CancellationToken LastCancellationToken { get; private set; }
+        public Func<string?, CancellationToken, Task<HomeFeedResult>>? ResponseFactory { get; set; }
+
+        public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            LastContinuationToken = continuationToken;
+            LastCancellationToken = cancellationToken;
+
+            if (ResponseFactory != null) return ResponseFactory(continuationToken, cancellationToken);
+
+            return Task.FromResult(new HomeFeedResult(Array.Empty<VideoSummary>(), null, true, "Success", false));
+        }
     }
 }

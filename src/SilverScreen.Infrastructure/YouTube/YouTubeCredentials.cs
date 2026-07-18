@@ -5,14 +5,14 @@ namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed class YouTubeCredentials
 {
-    public string CookieHeader { get; }
-    public string Sapisid { get; }
-
     private YouTubeCredentials(string cookieHeader, string sapisid)
     {
         CookieHeader = cookieHeader;
         Sapisid = sapisid;
     }
+
+    public string CookieHeader { get; }
+    public string Sapisid { get; }
 
     public static YouTubeCredentials? ParseNetscape(string content)
     {

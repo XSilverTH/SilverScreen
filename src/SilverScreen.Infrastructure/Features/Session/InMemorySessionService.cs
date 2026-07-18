@@ -35,9 +35,7 @@ public sealed class InMemorySessionService : ISessionService
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {
         if (string.IsNullOrWhiteSpace(cookieContent))
-        {
             throw new ArgumentException("Manual session cookie content cannot be empty.", nameof(cookieContent));
-        }
 
         lock (_gate)
         {

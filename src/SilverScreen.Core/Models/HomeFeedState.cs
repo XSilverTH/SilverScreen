@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace SilverScreen.Core.Models;
 
 public enum HomeFeedStateKind

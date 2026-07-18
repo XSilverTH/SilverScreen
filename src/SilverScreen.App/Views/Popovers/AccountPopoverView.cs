@@ -1,16 +1,17 @@
 using Gtk;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Popovers;
 
-public partial class AccountPopoverView : ViewBase<Box>
+public class AccountPopoverView : ViewBase<Box>
 {
-    private readonly AccountViewModel _viewModel;
     private readonly Action _openWebLogin;
     private readonly Action<bool> _sessionAppearanceChanged;
-    private bool _editing;
+    private readonly AccountViewModel _viewModel;
     private bool _disposed;
+    private bool _editing;
 
     public AccountPopoverView(
         AccountViewModel viewModel,
@@ -26,7 +27,7 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private void OnStateChanged(object? sender, EventArgs args)
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
                 Render();

@@ -23,7 +23,7 @@ public sealed class QueueService : IQueueService
 
     public QueueItem AddNext(VideoSummary video)
     {
-        var item = new QueueItem(video, DateTimeOffset.Now, 0);
+        var item = new QueueItem(video, DateTimeOffset.Now);
         _items.Insert(0, item);
         Changed?.Invoke(this, EventArgs.Empty);
         return item;

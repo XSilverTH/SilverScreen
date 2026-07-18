@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -14,11 +15,11 @@ public sealed class YtDlpHomeClient(
     TimeSpan? timeout = null)
     : IYouTubeHomeClient
 {
-    private readonly ISessionService _sessionService =
-        sessionService ?? throw new ArgumentNullException(nameof(sessionService));
-
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+
+    private readonly ISessionService _sessionService =
+        sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
@@ -26,39 +27,33 @@ public sealed class YtDlpHomeClient(
         CancellationToken cancellationToken = default)
     {
         if (!string.IsNullOrEmpty(continuationToken))
-        {
             return new HomeFeedResult(
-                Videos: Array.Empty<VideoSummary>(),
-                ContinuationToken: null,
-                IsSuccess: true,
-                StatusMessage: "Continuations are not supported.",
-                RequiresAuthentication: false
+                Array.Empty<VideoSummary>(),
+                null,
+                true,
+                "Continuations are not supported.",
+                false
             );
-        }
 
         var cookies = _sessionService.GetManualSessionCookies();
         if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
-        {
             return new HomeFeedResult(
-                Videos: Array.Empty<VideoSummary>(),
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Authentication session not found.",
-                RequiresAuthentication: true
+                Array.Empty<VideoSummary>(),
+                null,
+                false,
+                "Authentication session not found.",
+                true
             );
-        }
 
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         if (cookieFile is null || string.IsNullOrWhiteSpace(cookieFile.Path))
-        {
             return new HomeFeedResult(
-                Videos: Array.Empty<VideoSummary>(),
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to create temporary cookie lease.",
-                RequiresAuthentication: true
+                Array.Empty<VideoSummary>(),
+                null,
+                false,
+                "Failed to create temporary cookie lease.",
+                true
             );
-        }
 
         var (firstResult, firstVideos) =
             await ExecuteYtDlpAsync(cookieFile.Path, cancellationToken).ConfigureAwait(false);
@@ -72,11 +67,11 @@ public sealed class YtDlpHomeClient(
             return retryResult;
 
         return new HomeFeedResult(
-            Videos: retryVideos,
-            ContinuationToken: null,
-            IsSuccess: true,
-            StatusMessage: "Public recommendations are displayed.",
-            RequiresAuthentication: false
+            retryVideos,
+            null,
+            true,
+            "Public recommendations are displayed.",
+            false
         );
     }
 
@@ -90,7 +85,7 @@ public sealed class YtDlpHomeClient(
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true,
+            CreateNoWindow = true
         };
 
         startInfo.ArgumentList.Add("--dump-single-json");
@@ -114,21 +109,21 @@ public sealed class YtDlpHomeClient(
         {
             if (!process.Start())
                 return (new HomeFeedResult(
-                    Videos: Array.Empty<VideoSummary>(),
-                    ContinuationToken: null,
-                    IsSuccess: false,
-                    StatusMessage: "Failed to start yt-dlp process.",
-                    RequiresAuthentication: false
+                    Array.Empty<VideoSummary>(),
+                    null,
+                    false,
+                    "Failed to start yt-dlp process.",
+                    false
                 ), Array.Empty<VideoSummary>());
         }
         catch (Exception)
         {
             return (new HomeFeedResult(
-                Videos: Array.Empty<VideoSummary>(),
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Exception while starting yt-dlp process.",
-                RequiresAuthentication: false
+                Array.Empty<VideoSummary>(),
+                null,
+                false,
+                "Exception while starting yt-dlp process.",
+                false
             ), Array.Empty<VideoSummary>());
         }
 
@@ -151,17 +146,14 @@ public sealed class YtDlpHomeClient(
                 // ignore standard stream read exceptions on cancel/kill
             }
 
-            if (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
+            if (cancellationToken.IsCancellationRequested) throw;
 
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "yt-dlp process execution timed out.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "yt-dlp process execution timed out.",
+                false
             ), []);
         }
         catch (Exception)
@@ -177,11 +169,11 @@ public sealed class YtDlpHomeClient(
             }
 
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Exception while executing yt-dlp process.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Exception while executing yt-dlp process.",
+                false
             ), []);
         }
 
@@ -197,11 +189,11 @@ public sealed class YtDlpHomeClient(
             }
 
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: $"yt-dlp process exited with error code {process.ExitCode}.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                $"yt-dlp process exited with error code {process.ExitCode}.",
+                false
             ), []);
         }
 
@@ -214,44 +206,42 @@ public sealed class YtDlpHomeClient(
         catch (Exception)
         {
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to read output from yt-dlp process.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Failed to read output from yt-dlp process.",
+                false
             ), []);
         }
 
         if (string.IsNullOrWhiteSpace(output))
-        {
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "yt-dlp process returned empty output.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "yt-dlp process returned empty output.",
+                false
             ), []);
-        }
 
         try
         {
             var videos = ParsePlaylistOutput(output);
             return (new HomeFeedResult(
-                Videos: videos,
-                ContinuationToken: null,
-                IsSuccess: true,
-                StatusMessage: "Recommendations loaded successfully.",
-                RequiresAuthentication: false
+                videos,
+                null,
+                true,
+                "Recommendations loaded successfully.",
+                false
             ), videos);
         }
         catch (Exception)
         {
             return (new HomeFeedResult(
-                Videos: [],
-                ContinuationToken: null,
-                IsSuccess: false,
-                StatusMessage: "Failed to parse yt-dlp recommendation output.",
-                RequiresAuthentication: false
+                [],
+                null,
+                false,
+                "Failed to parse yt-dlp recommendation output.",
+                false
             ), []);
         }
     }
@@ -277,20 +267,15 @@ public sealed class YtDlpHomeClient(
         {
             foreach (var line in trimmed.Split('\n',
                          StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
                 try
                 {
                     using var doc = JsonDocument.Parse(line);
                     var video = ParseEntry(doc.RootElement);
-                    if (video is not null)
-                    {
-                        videos.Add(video);
-                    }
+                    if (video is not null) videos.Add(video);
                 }
                 catch (JsonException)
                 {
                 }
-            }
         }
 
         return videos;
@@ -316,20 +301,20 @@ public sealed class YtDlpHomeClient(
         var parsedUrl = YouTubeUrlParser.Parse(rawUrl);
         var canonicalWatchUrl = PlaybackRequest.LooksLikeYouTubeVideoId(id)
             ? PlaybackRequest.BuildWatchUrl(id)
-            : (parsedUrl.CanonicalWatchUrl ?? rawUrl);
+            : parsedUrl.CanonicalWatchUrl ?? rawUrl;
 
         var channel = FirstString(element, "channel", "uploader") ?? "YouTube";
         var duration = GetDuration(element);
         var thumbnailUrl = GetHighestQualityThumbnailUrl(element);
 
         return new VideoSummary(
-            Id: id,
-            Title: title,
-            ChannelName: channel,
-            Duration: duration,
-            ThumbnailUrl: thumbnailUrl,
-            IsShort: false,
-            WatchUrl: canonicalWatchUrl
+            id,
+            title,
+            channel,
+            duration,
+            thumbnailUrl,
+            false,
+            canonicalWatchUrl
         );
     }
 
@@ -373,8 +358,8 @@ public sealed class YtDlpHomeClient(
         var seconds = duration.ValueKind switch
         {
             JsonValueKind.Number when duration.TryGetDouble(out var s) => s,
-            JsonValueKind.String when double.TryParse(duration.GetString(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var s2) => s2,
+            JsonValueKind.String when double.TryParse(duration.GetString(), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var s2) => s2,
             _ => 0
         };
 
@@ -409,7 +394,7 @@ public sealed class YtDlpHomeClient(
             if (thumbnail.TryGetProperty("height", out var hProp) && hProp.ValueKind == JsonValueKind.Number)
                 hProp.TryGetDouble(out height);
 
-            var area = (width > 0 && height > 0) ? (width * height) : -1;
+            var area = width > 0 && height > 0 ? width * height : -1;
 
             if (bestUrl == null)
             {
@@ -445,7 +430,7 @@ public sealed class YtDlpHomeClient(
         try
         {
             if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
         }
         catch (InvalidOperationException)
         {

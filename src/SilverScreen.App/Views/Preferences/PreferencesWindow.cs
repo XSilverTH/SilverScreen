@@ -1,4 +1,3 @@
-using System;
 using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
@@ -7,18 +6,17 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Preferences;
 
-public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
+public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 {
-    private readonly IPreferencesService _preferencesService;
-    private readonly ComboRow _themeRow;
-    private readonly EntryRow _ytdlpPathRow;
+    private static readonly string[] Themes = ["System", "Light", "Dark"];
+    private static readonly string[] Qualities = ["Best", "1080p", "720p", "480p", "360p"];
+    private readonly SwitchRow _markWatchedRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
+    private readonly IPreferencesService _preferencesService;
     private readonly ComboRow _qualityRow;
-    private readonly SwitchRow _markWatchedRow;
-
-    private static readonly string[] Themes = { "System", "Light", "Dark" };
-    private static readonly string[] Qualities = { "Best", "1080p", "720p", "480p", "360p" };
+    private readonly ComboRow _themeRow;
+    private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
 
@@ -45,19 +43,19 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             var prefs = _preferencesService.GetPreferences();
 
             // Populate theme dropdown
-            var themeList = Gtk.StringList.New(Themes);
+            var themeList = StringList.New(Themes);
             _themeRow.Model = themeList;
             _themeRow.Selected = (uint)Array.IndexOf(Themes, prefs.Theme);
 
             // Populate quality dropdown
-            var qualityList = Gtk.StringList.New(Qualities);
+            var qualityList = StringList.New(Qualities);
             _qualityRow.Model = qualityList;
             _qualityRow.Selected = (uint)Array.IndexOf(Qualities, prefs.VideoQuality);
 
             // Set entry values
-            ((Gtk.Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
-            ((Gtk.Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
-            ((Gtk.Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
+            ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
+            ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
+            ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
             _markWatchedRow.Active = prefs.MarkWatchedVideos;
         }
         finally
@@ -74,9 +72,9 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _markWatchedRow.OnNotify += OnRowNotify;
 
         // Handle text entry changes
-        ((Gtk.Editable)_ytdlpPathRow).OnChanged += OnRowChanged;
-        ((Gtk.Editable)_maxResultsRow).OnChanged += OnRowChanged;
-        ((Gtk.Editable)_mpvPathRow).OnChanged += OnRowChanged;
+        ((Editable)_ytdlpPathRow).OnChanged += OnRowChanged;
+        ((Editable)_maxResultsRow).OnChanged += OnRowChanged;
+        ((Editable)_mpvPathRow).OnChanged += OnRowChanged;
     }
 
     private void OnRowNotify(object? sender, EventArgs e)
@@ -90,26 +88,24 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         if (_loading) return;
         Save();
     }
+
     private void Save()
     {
         var themeIndex = (int)_themeRow.Selected;
-        var theme = (themeIndex >= 0 && themeIndex < Themes.Length) ? Themes[themeIndex] : "System";
+        var theme = themeIndex >= 0 && themeIndex < Themes.Length ? Themes[themeIndex] : "System";
 
         var qualityIndex = (int)_qualityRow.Selected;
-        var quality = (qualityIndex >= 0 && qualityIndex < Qualities.Length) ? Qualities[qualityIndex] : "Best";
+        var quality = qualityIndex >= 0 && qualityIndex < Qualities.Length ? Qualities[qualityIndex] : "Best";
 
-        var maxResultsText = ((Gtk.Editable)_maxResultsRow).GetText();
-        if (!int.TryParse(maxResultsText, out var maxResults))
-        {
-            maxResults = 20;
-        }
+        var maxResultsText = ((Editable)_maxResultsRow).GetText();
+        if (!int.TryParse(maxResultsText, out var maxResults)) maxResults = 20;
 
         var prefs = new AppPreferences
         {
             Theme = theme,
             VideoQuality = quality,
-            YtDlpExecutablePath = ((Gtk.Editable)_ytdlpPathRow).GetText() ?? "yt-dlp",
-            MpvExecutablePath = ((Gtk.Editable)_mpvPathRow).GetText() ?? "mpv",
+            YtDlpExecutablePath = ((Editable)_ytdlpPathRow).GetText(),
+            MpvExecutablePath = ((Editable)_mpvPathRow).GetText(),
             MaxResults = maxResults,
             MarkWatchedVideos = _markWatchedRow.Active
         };

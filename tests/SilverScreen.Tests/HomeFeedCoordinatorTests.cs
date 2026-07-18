@@ -1,13 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Session;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
@@ -15,116 +9,13 @@ public sealed class HomeFeedCoordinatorTests
 {
     private const string FakeCookieContent = "test-manual-session";
 
-    private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
-    {
-        public int LoadFirstPageCallCount { get; set; }
-        public int LoadNextPageCallCount { get; set; }
-
-        public List<CancellationToken> FirstPageTokens { get; } = new List<CancellationToken>();
-        public List<CancellationToken> NextPageTokens { get; } = new List<CancellationToken>();
-
-        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
-            _firstPageTcsQueue =
-                new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
-
-        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
-            _nextPageTcsQueue =
-                new Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>();
-
-        private TaskCompletionSource _firstPageCalledTcs =
-            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        private TaskCompletionSource _nextPageCalledTcs =
-            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
-        public Task NextPageCalledTask => _nextPageCalledTcs.Task;
-
-        public void ResetCalledTasks()
-        {
-            _firstPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _nextPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
-
-        public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadFirstPage(bool ignoreCancellation = false)
-        {
-            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
-                .RunContinuationsAsynchronously);
-            _firstPageTcsQueue.Enqueue((tcs, ignoreCancellation));
-            return tcs;
-        }
-
-        public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadNextPage(bool ignoreCancellation = false)
-        {
-            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
-                .RunContinuationsAsynchronously);
-            _nextPageTcsQueue.Enqueue((tcs, ignoreCancellation));
-            return tcs;
-        }
-
-        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
-        {
-            LoadFirstPageCallCount++;
-            FirstPageTokens.Add(cancellationToken);
-            _firstPageCalledTcs.TrySetResult();
-
-            if (_firstPageTcsQueue.Count > 0)
-            {
-                var (tcs, ignoreCancellation) = _firstPageTcsQueue.Dequeue();
-                if (!ignoreCancellation)
-                {
-                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
-                }
-
-                return tcs.Task;
-            }
-
-            return Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                FeedPage.Empty,
-                "Success"
-            ));
-        }
-
-        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
-        {
-            LoadNextPageCallCount++;
-            NextPageTokens.Add(cancellationToken);
-            _nextPageCalledTcs.TrySetResult();
-
-            if (_nextPageTcsQueue.Count > 0)
-            {
-                var (tcs, ignoreCancellation) = _nextPageTcsQueue.Dequeue();
-                if (!ignoreCancellation)
-                {
-                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
-                }
-
-                return tcs.Task;
-            }
-
-            return Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                FeedPage.Empty,
-                "Success"
-            ));
-        }
-
-        public FeedPage GetHomeFeed() => FeedPage.Empty;
-    }
-
     private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<HomeFeedState, bool> predicate,
         TimeSpan timeout)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         EventHandler<HomeFeedState> handler = (s, state) =>
         {
-            if (predicate(state))
-            {
-                tcs.TrySetResult();
-            }
+            if (predicate(state)) tcs.TrySetResult();
         };
         coordinator.StateChanged += handler;
         if (predicate(coordinator.State))
@@ -211,9 +102,9 @@ public sealed class HomeFeedCoordinatorTests
         var fakeFeed = new FakeAuthenticatedHomeFeedService();
 
         var firstPageTcs = fakeFeed.ExpectLoadFirstPage();
-        var v1 = CreateTestVideo("1", isShort: false);
-        var v2 = CreateTestVideo("2", isShort: true); // Should be filtered out
-        var v3 = CreateTestVideo("3", isShort: false);
+        var v1 = CreateTestVideo("1");
+        var v2 = CreateTestVideo("2", true); // Should be filtered out
+        var v3 = CreateTestVideo("3");
 
         firstPageTcs.SetResult(new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.Success,
@@ -296,7 +187,7 @@ public sealed class HomeFeedCoordinatorTests
         var v4 = CreateTestVideo("4");
         nextPageTcs2.SetResult(new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.Success,
-            new FeedPage(new List<VideoSummary> { v4 }, null),
+            new FeedPage(new List<VideoSummary> { v4 }),
             "Success"
         ));
 
@@ -401,7 +292,7 @@ public sealed class HomeFeedCoordinatorTests
 
         // We will trigger two requests.
         // Request 1 is started first and blocked.
-        var request1Tcs = fakeFeed.ExpectLoadFirstPage(ignoreCancellation: true);
+        var request1Tcs = fakeFeed.ExpectLoadFirstPage(true);
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
 
@@ -483,5 +374,104 @@ public sealed class HomeFeedCoordinatorTests
         // Existing video cards must be preserved!
         Assert.Equal(2, coordinator.State.Videos.Count);
         Assert.Equal(new[] { "1", "2" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
+    }
+
+    private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
+    {
+        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
+            _firstPageTcsQueue = new();
+
+        private readonly Queue<(TaskCompletionSource<AuthenticatedHomeFeedResult> Tcs, bool IgnoreCancellation)>
+            _nextPageTcsQueue = new();
+
+        private TaskCompletionSource _firstPageCalledTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private TaskCompletionSource _nextPageCalledTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int LoadFirstPageCallCount { get; set; }
+        public int LoadNextPageCallCount { get; set; }
+
+        public List<CancellationToken> FirstPageTokens { get; } = new();
+        public List<CancellationToken> NextPageTokens { get; } = new();
+
+        public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
+        public Task NextPageCalledTask => _nextPageCalledTcs.Task;
+
+        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+        {
+            LoadFirstPageCallCount++;
+            FirstPageTokens.Add(cancellationToken);
+            _firstPageCalledTcs.TrySetResult();
+
+            if (_firstPageTcsQueue.Count > 0)
+            {
+                var (tcs, ignoreCancellation) = _firstPageTcsQueue.Dequeue();
+                if (!ignoreCancellation)
+                {
+                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+                }
+
+                return tcs.Task;
+            }
+
+            return Task.FromResult(new AuthenticatedHomeFeedResult(
+                AuthenticatedHomeFeedStatus.Success,
+                FeedPage.Empty,
+                "Success"
+            ));
+        }
+
+        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+        {
+            LoadNextPageCallCount++;
+            NextPageTokens.Add(cancellationToken);
+            _nextPageCalledTcs.TrySetResult();
+
+            if (_nextPageTcsQueue.Count > 0)
+            {
+                var (tcs, ignoreCancellation) = _nextPageTcsQueue.Dequeue();
+                if (!ignoreCancellation)
+                {
+                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+                }
+
+                return tcs.Task;
+            }
+
+            return Task.FromResult(new AuthenticatedHomeFeedResult(
+                AuthenticatedHomeFeedStatus.Success,
+                FeedPage.Empty,
+                "Success"
+            ));
+        }
+
+        public FeedPage GetHomeFeed()
+        {
+            return FeedPage.Empty;
+        }
+
+        public void ResetCalledTasks()
+        {
+            _firstPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _nextPageCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadFirstPage(bool ignoreCancellation = false)
+        {
+            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
+            _firstPageTcsQueue.Enqueue((tcs, ignoreCancellation));
+            return tcs;
+        }
+
+        public TaskCompletionSource<AuthenticatedHomeFeedResult> ExpectLoadNextPage(bool ignoreCancellation = false)
+        {
+            var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
+            _nextPageTcsQueue.Enqueue((tcs, ignoreCancellation));
+            return tcs;
+        }
     }
 }

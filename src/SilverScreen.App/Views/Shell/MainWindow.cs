@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Adw;
+using Gio;
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
@@ -8,32 +9,35 @@ using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Search;
-using SilverScreen.Views.Preferences;
 using XSTH.Blueprint.Helpers;
+using Action = System.Action;
+using ApplicationWindow = Adw.ApplicationWindow;
+using Functions = GLib.Functions;
+using PreferencesWindow = SilverScreen.Views.Preferences.PreferencesWindow;
 using Window = Gtk.Window;
 
 namespace SilverScreen.Views.Shell;
 
-public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
+public partial class MainWindow : WindowBase<ApplicationWindow>
 {
-    private readonly ApplicationServices _services;
-    private readonly Action _disposeApplicationServices;
-    private readonly ShellViewModel _shell = new();
-    private readonly HomeView _home;
-    private readonly SearchView _search;
-    private readonly QueuePopoverView _queuePopover;
+    private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
-    private readonly QueueViewModel _queueViewModel;
-    private readonly Label _statusLabel;
-    private readonly ViewStack _stack;
-    private readonly Button _searchButton;
-    private readonly MenuButton _accountButton;
+    private readonly Action _disposeApplicationServices;
+    private readonly HomeView _home;
     private readonly MenuButton _queueButton;
+    private readonly QueuePopoverView _queuePopover;
+    private readonly QueueViewModel _queueViewModel;
+    private readonly SearchView _search;
+    private readonly Button _searchButton;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
-    private WebLoginWindow? _webLogin;
+    private readonly ApplicationServices _services;
+    private readonly ShellViewModel _shell = new();
+    private readonly ViewStack _stack;
+    private readonly Label _statusLabel;
     private bool _closed;
+    private WebLoginWindow? _webLogin;
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
     {
@@ -79,24 +83,30 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         Widget.OnCloseRequest += OnCloseRequest;
     }
 
-    private VideoCardActions CreateVideoActions() => new()
+    private VideoCardActions CreateVideoActions()
     {
-        PlayAsync = async video =>
-            _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false),
-        AddToQueue = video =>
+        return new VideoCardActions
         {
-            _services.Queue.Add(video);
-            _shell.Status = "Video added to queue.";
-        },
-        AddNext = video =>
-        {
-            _services.Queue.AddNext(video);
-            _shell.Status = "Video added next in queue.";
-        },
-        ReportStatus = message => _shell.Status = message
-    };
+            PlayAsync = async video =>
+                _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false),
+            AddToQueue = video =>
+            {
+                _services.Queue.Add(video);
+                _shell.Status = "Video added to queue.";
+            },
+            AddNext = video =>
+            {
+                _services.Queue.AddNext(video);
+                _shell.Status = "Video added next in queue.";
+            },
+            ReportStatus = message => _shell.Status = message
+        };
+    }
 
-    private void OnHomeRefreshButtonClicked(object? sender, EventArgs args) => _ = _home.RefreshAsync();
+    private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
+    {
+        _ = _home.RefreshAsync();
+    }
 
     private void OnSearchButtonClicked(object? sender, EventArgs args)
     {
@@ -146,27 +156,27 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         return popover;
     }
 
-    private Gio.Menu CreateApplicationMenuModel()
+    private Menu CreateApplicationMenuModel()
     {
-        var preferencesAction = Gio.SimpleAction.New("preferences", null);
+        var preferencesAction = SimpleAction.New("preferences", null);
         preferencesAction.OnActivate += (_, _) =>
         {
-            var preferencesWindowWrapper = new SilverScreen.Views.Preferences.PreferencesWindow(_services.Preferences);
+            var preferencesWindowWrapper = new PreferencesWindow(_services.Preferences);
             var preferencesWindow = preferencesWindowWrapper.Widget;
             preferencesWindow.TransientFor = Widget;
             preferencesWindow.Present();
         };
         Widget.AddAction(preferencesAction);
 
-        var aboutAction = Gio.SimpleAction.New("about", null);
+        var aboutAction = SimpleAction.New("about", null);
         aboutAction.OnActivate += (_, _) => _shell.Status = "About stub: SilverScreen";
         Widget.AddAction(aboutAction);
 
-        var quitAction = Gio.SimpleAction.New("quit", null);
+        var quitAction = SimpleAction.New("quit", null);
         quitAction.OnActivate += (_, _) => Widget.Close();
         Widget.AddAction(quitAction);
 
-        var menu = Gio.Menu.New();
+        var menu = Menu.New();
         menu.Append("Preferences", "win.preferences");
         menu.Append("About SilverScreen", "win.about");
         menu.Append("Quit", "win.quit");
@@ -175,7 +185,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (_closed)
                 return false;
@@ -197,7 +207,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
 
     private void OnQueueStateChanged(object? sender, QueuePresentationState state)
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (!_closed)
                 UpdateQueueButton(state);
@@ -270,9 +280,13 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         content.Append(Label.New(duration));
         return content;
     }
-    private static string FormatQueuedDuration(TimeSpan duration) => duration.TotalHours >= 1
-        ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
-        : duration.TotalMinutes >= 1
-            ? $"{(int)duration.TotalMinutes}m"
-            : $"{duration.Seconds}s";
+
+    private static string FormatQueuedDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
+            : duration.TotalMinutes >= 1
+                ? $"{(int)duration.TotalMinutes}m"
+                : $"{duration.Seconds}s";
+    }
 }

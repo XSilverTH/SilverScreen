@@ -8,5 +8,8 @@ public sealed record SearchResultPage(
 {
     public static SearchResultPage Empty { get; } = new([], "No results found.");
 
-    public static SearchResultPage Failed(string message) => new([], message, false);
+    public static SearchResultPage Failed(string message)
+    {
+        return new SearchResultPage([], message, false);
+    }
 }

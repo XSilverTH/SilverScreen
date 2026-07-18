@@ -3,18 +3,19 @@ using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Search;
 
-public partial class SearchView : ViewBase<Box, SearchViewModel>
+public class SearchView : ViewBase<Box, SearchViewModel>
 {
+    private readonly List<VideoCardView> _cards = [];
+    private readonly FlowBox _results;
+    private readonly Label _summary;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _videoActions;
-    private readonly Label _summary;
-    private readonly FlowBox _results;
-    private CancellationTokenSource? _thumbnailGeneration;
-    private readonly List<VideoCardView> _cards = [];
     private bool _disposed;
+    private CancellationTokenSource? _thumbnailGeneration;
 
     public SearchView(SearchViewModel viewModel, IThumbnailService thumbnails, VideoCardActions videoActions)
     {
@@ -27,7 +28,10 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
         Render(viewModel.State);
     }
 
-    public Task SubmitAsync(string text) => ViewModel?.SubmitAsync(text) ?? Task.CompletedTask;
+    public Task SubmitAsync(string text)
+    {
+        return ViewModel?.SubmitAsync(text) ?? Task.CompletedTask;
+    }
 
     protected override void BindViewModel(SearchViewModel viewModel, BindingScope<SearchViewModel> bindings)
     {
@@ -37,7 +41,7 @@ public partial class SearchView : ViewBase<Box, SearchViewModel>
 
     private void OnStateChanged(object? sender, SearchViewState state)
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
                 Render(state);

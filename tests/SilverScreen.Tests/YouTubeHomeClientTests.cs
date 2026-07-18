@@ -1,16 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
-using Xunit;
 
 namespace SilverScreen.Tests;
 
@@ -35,48 +28,9 @@ public sealed class YouTubeHomeClientTests
         var sb = new StringBuilder();
         sb.AppendLine("# Netscape HTTP Cookie File");
         foreach (var cookie in cookies)
-        {
             sb.AppendLine($"youtube.com\tTRUE\t/\tTRUE\t2147483647\t{cookie.Name}\t{cookie.Value}");
-        }
 
         return sb.ToString();
-    }
-
-    private sealed class FakeHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly List<HttpRequestMessage> _requests = new();
-        private readonly List<string> _requestBodies = new();
-        private readonly Func<HttpRequestMessage, HttpResponseMessage>? _handler;
-
-        public IReadOnlyList<HttpRequestMessage> Requests => _requests;
-        public IReadOnlyList<string> RequestBodies => _requestBodies;
-
-        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage>? handler = null)
-        {
-            _handler = handler;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            _requests.Add(request);
-            if (request.Content != null)
-            {
-                var body = await request.Content.ReadAsStringAsync(cancellationToken);
-                _requestBodies.Add(body);
-            }
-            else
-            {
-                _requestBodies.Add(string.Empty);
-            }
-
-            if (_handler != null)
-            {
-                return _handler(request);
-            }
-
-            return new HttpResponseMessage(HttpStatusCode.NotFound);
-        }
     }
 
     [Fact]
@@ -369,12 +323,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -466,12 +418,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -547,12 +497,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -619,12 +567,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -665,12 +611,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -700,12 +644,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -722,15 +664,13 @@ public sealed class YouTubeHomeClientTests
         // Assert
         Assert.True(result.IsSuccess);
 
-        int postIndex = -1;
-        for (int i = 0; i < handler.Requests.Count; i++)
-        {
+        var postIndex = -1;
+        for (var i = 0; i < handler.Requests.Count; i++)
             if (handler.Requests[i].Method == HttpMethod.Post)
             {
                 postIndex = i;
                 break;
             }
-        }
 
         Assert.True(postIndex >= 0);
         var requestBodyJson = handler.RequestBodies[postIndex];
@@ -753,12 +693,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -794,12 +732,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(statusCode);
         });
@@ -827,12 +763,10 @@ public sealed class YouTubeHomeClientTests
         var handler = new FakeHttpMessageHandler(req =>
         {
             if (req.Method == HttpMethod.Get)
-            {
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(BootstrapHtml)
                 };
-            }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -857,5 +791,39 @@ public sealed class YouTubeHomeClientTests
         // Assert header exists without asserting/exposing the value in the test output
         Assert.NotNull(postRequest.Headers.Authorization);
         Assert.Equal("SAPISIDHASH", postRequest.Headers.Authorization.Scheme);
+    }
+
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage>? _handler;
+        private readonly List<string> _requestBodies = new();
+        private readonly List<HttpRequestMessage> _requests = new();
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage>? handler = null)
+        {
+            _handler = handler;
+        }
+
+        public IReadOnlyList<HttpRequestMessage> Requests => _requests;
+        public IReadOnlyList<string> RequestBodies => _requestBodies;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            _requests.Add(request);
+            if (request.Content != null)
+            {
+                var body = await request.Content.ReadAsStringAsync(cancellationToken);
+                _requestBodies.Add(body);
+            }
+            else
+            {
+                _requestBodies.Add(string.Empty);
+            }
+
+            if (_handler != null) return _handler(request);
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
     }
 }

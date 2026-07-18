@@ -20,18 +20,12 @@ public sealed class CookieFileLease : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
+        if (_disposed) return;
 
         _disposed = true;
         TryDeleteFile(Path);
 
-        if (_directoryPath is not null)
-        {
-            TryDeleteDirectory(_directoryPath);
-        }
+        if (_directoryPath is not null) TryDeleteDirectory(_directoryPath);
     }
 
     private static void TryDeleteFile(string path)
@@ -52,7 +46,7 @@ public sealed class CookieFileLease : IDisposable
     {
         try
         {
-            Directory.Delete(path, recursive: false);
+            Directory.Delete(path, false);
         }
         catch (IOException)
         {

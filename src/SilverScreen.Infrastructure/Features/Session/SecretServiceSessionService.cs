@@ -8,9 +8,9 @@ namespace SilverScreen.Infrastructure.Features.Session;
 public sealed class SecretServiceSessionService : ISessionService
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
-    private readonly Lock _gate = new();
     private ManualSessionCookies? _manualCookies;
 
     public SecretServiceSessionService()
@@ -58,9 +58,7 @@ public sealed class SecretServiceSessionService : ISessionService
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {
         if (string.IsNullOrWhiteSpace(cookieContent))
-        {
             throw new ArgumentException("Manual session cookie content cannot be empty.", nameof(cookieContent));
-        }
 
         var encodedCookies = Encode(cookieContent);
         try
@@ -81,7 +79,7 @@ public sealed class SecretServiceSessionService : ISessionService
 
     public void ClearSession()
     {
-        var changed = false;
+        bool changed;
         lock (_gate)
         {
             _store.Delete();
@@ -89,10 +87,7 @@ public sealed class SecretServiceSessionService : ISessionService
             _manualCookies = null;
         }
 
-        if (changed)
-        {
-            SessionChanged?.Invoke(this, EventArgs.Empty);
-        }
+        if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private ManualSessionCookies? LoadStoredCookies()
@@ -101,10 +96,7 @@ public sealed class SecretServiceSessionService : ISessionService
         try
         {
             encodedCookies = _store.Load();
-            if (encodedCookies is null)
-            {
-                return null;
-            }
+            if (encodedCookies is null) return null;
 
             string content;
             try
@@ -122,10 +114,7 @@ public sealed class SecretServiceSessionService : ISessionService
         }
         finally
         {
-            if (encodedCookies is not null)
-            {
-                CryptographicOperations.ZeroMemory(encodedCookies);
-            }
+            if (encodedCookies is not null) CryptographicOperations.ZeroMemory(encodedCookies);
         }
     }
 

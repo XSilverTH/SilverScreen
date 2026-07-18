@@ -237,6 +237,12 @@ public sealed class PlaybackTests
         Assert.Null(exception);
     }
 
+    private static VideoSummary CreateVideo(string id, string? watchUrl = null)
+    {
+        return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
+            watchUrl);
+    }
+
     private sealed class TrackingDisposable : IDisposable
     {
         public int DisposeCount { get; private set; }
@@ -253,11 +259,5 @@ public sealed class PlaybackTests
         {
             throw new IOException("test cleanup failure");
         }
-    }
-
-    private static VideoSummary CreateVideo(string id, string? watchUrl = null)
-    {
-        return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
-            watchUrl);
     }
 }

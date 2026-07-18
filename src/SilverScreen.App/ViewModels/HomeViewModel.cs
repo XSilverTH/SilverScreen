@@ -7,8 +7,8 @@ namespace SilverScreen.ViewModels;
 public sealed class HomeViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly HomeFeedCoordinator _coordinator;
-    private HomeFeedState _state;
     private bool _disposed;
+    private HomeFeedState _state;
 
     public HomeViewModel(HomeFeedCoordinator coordinator)
     {
@@ -16,9 +16,6 @@ public sealed class HomeViewModel : INotifyPropertyChanged, IDisposable
         _state = coordinator.State;
         _coordinator.StateChanged += OnStateChanged;
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<HomeFeedState>? StateChanged;
 
     public HomeFeedState State
     {
@@ -31,16 +28,6 @@ public sealed class HomeViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public Task RefreshAsync() => _coordinator.RefreshAsync();
-
-    public Task LoadMoreAsync() => _coordinator.LoadMoreAsync();
-
-    private void OnStateChanged(object? sender, HomeFeedState state)
-    {
-        if (!_disposed)
-            State = state;
-    }
-
     public void Dispose()
     {
         if (_disposed)
@@ -48,5 +35,24 @@ public sealed class HomeViewModel : INotifyPropertyChanged, IDisposable
 
         _disposed = true;
         _coordinator.StateChanged -= OnStateChanged;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<HomeFeedState>? StateChanged;
+
+    public Task RefreshAsync()
+    {
+        return _coordinator.RefreshAsync();
+    }
+
+    public Task LoadMoreAsync()
+    {
+        return _coordinator.LoadMoreAsync();
+    }
+
+    private void OnStateChanged(object? sender, HomeFeedState state)
+    {
+        if (!_disposed)
+            State = state;
     }
 }

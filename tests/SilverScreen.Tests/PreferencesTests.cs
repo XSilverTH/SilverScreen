@@ -15,7 +15,6 @@ public sealed class PreferencesTests : IDisposable
     public void Dispose()
     {
         if (File.Exists(_tempFilePath))
-        {
             try
             {
                 File.Delete(_tempFilePath);
@@ -24,7 +23,6 @@ public sealed class PreferencesTests : IDisposable
             {
                 // Ignore cleanup errors in tests
             }
-        }
     }
 
     [Fact]
@@ -86,10 +84,7 @@ public sealed class PreferencesTests : IDisposable
         };
 
         AppPreferences? eventArgs = null;
-        service.PreferencesChanged += (sender, args) =>
-        {
-            eventArgs = args;
-        };
+        service.PreferencesChanged += (sender, args) => { eventArgs = args; };
 
         service.SavePreferences(newPrefs);
 

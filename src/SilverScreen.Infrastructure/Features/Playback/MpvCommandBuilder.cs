@@ -37,13 +37,12 @@ public sealed class MpvCommandBuilder
             arguments.Add($"--ytdl-raw-options={ytdlOptions}");
         }
 
-        if (!string.IsNullOrWhiteSpace(options.VideoQuality) && !options.VideoQuality.Equals("Best", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(options.VideoQuality) &&
+            !options.VideoQuality.Equals("Best", StringComparison.OrdinalIgnoreCase))
         {
             var heightStr = options.VideoQuality.Replace("p", "", StringComparison.OrdinalIgnoreCase);
             if (int.TryParse(heightStr, out var height))
-            {
                 arguments.Add($"--ytdl-format=bestvideo[height<={height}]+bestaudio/best[height<={height}]");
-            }
         }
 
         arguments.Add(playbackUrl);
@@ -58,13 +57,10 @@ public sealed class MpvCommandBuilder
         var startInfo = new ProcessStartInfo
         {
             FileName = command.ExecutablePath,
-            UseShellExecute = false,
+            UseShellExecute = false
         };
 
-        foreach (var argument in command.Arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        foreach (var argument in command.Arguments) startInfo.ArgumentList.Add(argument);
 
         return startInfo;
     }

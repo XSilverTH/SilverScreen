@@ -18,7 +18,8 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.Timeout);
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process();
+        process.StartInfo = startInfo;
         process.Start();
 
         var outputTask = process.StandardOutput.ReadToEndAsync(timeoutSource.Token);
@@ -32,10 +33,7 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         {
             TryKill(process);
 
-            if (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
+            if (cancellationToken.IsCancellationRequested) throw;
 
             throw new TimeoutException($"yt-dlp search timed out after {options.Timeout.TotalSeconds:0} seconds.");
         }
@@ -54,7 +52,7 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
             FileName = options.ExecutablePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardError = true
         };
 
         startInfo.ArgumentList.Add("--dump-single-json");
@@ -76,10 +74,7 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
     {
         try
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            if (!process.HasExited) process.Kill(true);
         }
         catch (InvalidOperationException)
         {

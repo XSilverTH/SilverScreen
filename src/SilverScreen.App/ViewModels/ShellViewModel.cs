@@ -5,8 +5,6 @@ namespace SilverScreen.ViewModels;
 
 public sealed class ShellViewModel : INotifyPropertyChanged
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
-
     public string Status
     {
         get;
@@ -18,6 +16,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged
         get;
         set => SetField(ref field, value);
     } = "home";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
