@@ -8,13 +8,14 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen;
 
-public class App : Application
+[GObject.Subclass<Application>]
+public partial class App
 {
     private static CssProvider? _styles;
     private readonly ApplicationServices _services = new();
     private bool _servicesDisposed;
 
-    public App()
+    partial void Initialize()
     {
         ApplicationId = "io.github.silverscreen.SilverScreen";
         Flags = ApplicationFlags.FlagsNone;
