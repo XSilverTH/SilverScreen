@@ -1,10 +1,13 @@
 using Gdk;
 using GdkPixbuf;
+using Gio;
 using Gtk;
 using Pango;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
+using Action = System.Action;
+using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Components;
@@ -247,32 +250,35 @@ public class VideoCardView : ViewBase<Box>
         menu.IconName = "view-more-symbolic";
         menu.Valign = Align.Start;
         menu.CssClasses = ["flat"];
-        var content = Box.New(Orientation.Vertical, 4);
-        content.MarginTop = 6;
-        content.MarginBottom = 6;
-        content.MarginStart = 6;
-        content.MarginEnd = 6;
-        content.Append(ActionButton("Play", () =>
+
+        var actions = SimpleActionGroup.New();
+        actions.AddAction(CreateMenuAction("play", () =>
         {
             if (_video is { } video)
                 StartPlay(video);
         }));
-        content.Append(ActionButton("Add to queue", () =>
+        actions.AddAction(CreateMenuAction("add-to-queue", () =>
         {
             if (_video is { } video)
                 _actions.AddToQueue(video);
         }));
-        content.Append(ActionButton("Add next", () =>
+        actions.AddAction(CreateMenuAction("add-next", () =>
         {
             if (_video is { } video)
                 _actions.AddNext(video);
         }));
-        content.Append(
-            ActionButton("Open channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
-        content.Append(ActionButton("Copy link", CopyLink));
-        var popover = Popover.New();
-        popover.Child = content;
-        menu.Popover = popover;
+        actions.AddAction(CreateMenuAction(
+            "open-channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
+        actions.AddAction(CreateMenuAction("copy-link", CopyLink));
+        menu.InsertActionGroup("video", actions);
+
+        var menuModel = Menu.New();
+        menuModel.Append("Play", "video.play");
+        menuModel.Append("Add to queue", "video.add-to-queue");
+        menuModel.Append("Add next", "video.add-next");
+        menuModel.Append("Open channel", "video.open-channel");
+        menuModel.Append("Copy link", "video.copy-link");
+        menu.MenuModel = menuModel;
         return menu;
     }
 
@@ -316,13 +322,11 @@ public class VideoCardView : ViewBase<Box>
         _actions.ReportStatus("Video link copied to the clipboard.");
     }
 
-    private static Button ActionButton(string label, Action action)
+    private static SimpleAction CreateMenuAction(string name, Action activate)
     {
-        var button = Button.NewWithLabel(label);
-        button.Halign = Align.Fill;
-        button.CssClasses = ["flat"];
-        button.OnClicked += (_, _) => action();
-        return button;
+        var action = SimpleAction.New(name, null);
+        action.OnActivate += (_, _) => activate();
+        return action;
     }
 
     private static Label DimLabel(string text)

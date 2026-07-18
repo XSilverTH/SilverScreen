@@ -64,13 +64,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateAccountAppearance);
 
         switcher.Stack = _stack;
-        _stack.AddTitled(_home.Widget, "home", "Home");
-        _stack.AddTitled(_search.Widget, "search", "Search");
+        _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
+        _stack.AddTitled(_search.Widget, "search", "Search").IconName = "system-search-symbolic";
         _stack.AddTitled(Placeholder("Subscriptions", "Subscription feeds will land after account/session support."),
-            "subscriptions", "Subscriptions");
+            "subscriptions", "Subscriptions").IconName = "emblem-favorite-symbolic";
         _stack.AddTitled(
             Placeholder("History", "Local watch history is intentionally not persisted in this shell step."), "history",
-            "History");
+            "History").IconName = "document-open-recent-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _accountButton.Popover = CreateAccountPopover();
