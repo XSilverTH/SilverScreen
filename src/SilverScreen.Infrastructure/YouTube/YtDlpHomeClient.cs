@@ -91,6 +91,8 @@ public sealed class YtDlpHomeClient(
         startInfo.ArgumentList.Add("--dump-single-json");
         startInfo.ArgumentList.Add("--flat-playlist");
         startInfo.ArgumentList.Add("--skip-download");
+        startInfo.ArgumentList.Add("--extractor-args");
+        startInfo.ArgumentList.Add("youtubetab:approximate_date");
         if (cookieFilePath is not null)
         {
             startInfo.ArgumentList.Add("--cookies");
@@ -314,7 +316,9 @@ public sealed class YtDlpHomeClient(
             duration,
             thumbnailUrl,
             false,
-            canonicalWatchUrl
+            canonicalWatchUrl,
+            GetApproximateUploadDate(element),
+            GetPublishedAt(element)
         );
     }
 
@@ -350,6 +354,48 @@ public sealed class YtDlpHomeClient(
         }
 
         return null;
+    }
+
+    private static DateOnly? GetApproximateUploadDate(JsonElement element)
+    {
+        if (element.TryGetProperty("upload_date", out var uploadDate) &&
+            uploadDate.ValueKind == JsonValueKind.String &&
+            DateOnly.TryParseExact(uploadDate.GetString(), "yyyyMMdd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var parsedUploadDate))
+            return parsedUploadDate;
+
+        if (!element.TryGetProperty("timestamp", out var timestamp) ||
+            timestamp.ValueKind != JsonValueKind.Number ||
+            !timestamp.TryGetInt64(out var unixSeconds) ||
+            unixSeconds < 0)
+            return null;
+
+        try
+        {
+            return DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? GetPublishedAt(JsonElement element)
+    {
+        if (!element.TryGetProperty("timestamp", out var timestamp) ||
+            timestamp.ValueKind != JsonValueKind.Number ||
+            !timestamp.TryGetInt64(out var unixSeconds) ||
+            unixSeconds < 0)
+            return null;
+
+        try
+        {
+            return DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 
     private static TimeSpan GetDuration(JsonElement element)

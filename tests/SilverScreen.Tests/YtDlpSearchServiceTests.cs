@@ -18,6 +18,7 @@ public sealed class YtDlpSearchServiceTests
                   "title": "Never Gonna Give You Up",
                   "uploader": "Rick Astley",
                   "duration": 213,
+                  "upload_date": "20260715",
                   "thumbnail": "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
                   "webpage_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
                 }
@@ -36,6 +37,7 @@ public sealed class YtDlpSearchServiceTests
         Assert.Equal("https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", video.ThumbnailUrl);
         Assert.False(video.IsShort);
         Assert.Equal("https://www.youtube.com/watch?v=dQw4w9WgXcQ", video.WatchUrl);
+        Assert.Equal(new DateOnly(2026, 7, 15), video.ApproximateUploadDate);
     }
 
     [Fact]
@@ -62,6 +64,44 @@ public sealed class YtDlpSearchServiceTests
         Assert.Equal(TimeSpan.Zero, video.Duration);
         Assert.Equal(string.Empty, video.ThumbnailUrl);
         Assert.Equal("https://www.youtube.com/watch?v=abcdefghijk", video.WatchUrl);
+        Assert.Null(video.ApproximateUploadDate);
+    }
+
+    [Fact]
+    public async Task SearchAsync_KeepsMalformedUploadDateNonFatalAndNull()
+    {
+        var service = CreateService(
+            """
+            {
+              "entries": [
+                { "id": "malformed01", "title": "Malformed date", "upload_date": "2026-07-15" }
+              ]
+            }
+            """);
+
+        var result = await service.SearchAsync(new SearchRequest("malformed"), CancellationToken.None);
+
+        var video = Assert.Single(result.Videos);
+        Assert.Null(video.ApproximateUploadDate);
+    }
+
+    [Fact]
+    public async Task SearchAsync_UsesNumericTimestampWhenUploadDateIsUnavailable()
+    {
+        var service = CreateService(
+            """
+            {
+              "entries": [
+                { "id": "timestamp01", "title": "Timestamp date", "timestamp": 1784073600 }
+              ]
+            }
+            """);
+
+        var result = await service.SearchAsync(new SearchRequest("timestamp"), CancellationToken.None);
+
+        var video = Assert.Single(result.Videos);
+        Assert.Equal(new DateOnly(2026, 7, 15), video.ApproximateUploadDate);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1784073600), video.PublishedAt);
     }
 
     [Fact]
@@ -171,7 +211,14 @@ public sealed class YtDlpSearchServiceTests
     {
         var startInfo = YtDlpRunner.BuildSearchStartInfo(new SearchRequest("linux"), new YtDlpOptions());
 
-        Assert.DoesNotContain("--cookies", startInfo.ArgumentList);
+        Assert.Collection(
+            startInfo.ArgumentList,
+            argument => Assert.Equal("--dump-single-json", argument),
+            argument => Assert.Equal("--flat-playlist", argument),
+            argument => Assert.Equal("--skip-download", argument),
+            argument => Assert.Equal("--extractor-args", argument),
+            argument => Assert.Equal("youtubetab:approximate_date", argument),
+            argument => Assert.Equal("ytsearch20:linux", argument));
     }
 
     [Fact]
@@ -187,6 +234,8 @@ public sealed class YtDlpSearchServiceTests
             argument => Assert.Equal("--dump-single-json", argument),
             argument => Assert.Equal("--flat-playlist", argument),
             argument => Assert.Equal("--skip-download", argument),
+            argument => Assert.Equal("--extractor-args", argument),
+            argument => Assert.Equal("youtubetab:approximate_date", argument),
             argument => Assert.Equal("--cookies", argument),
             argument => Assert.Equal("/tmp/silverscreen-cookies/cookies.txt", argument),
             argument => Assert.Equal("ytsearch20:linux", argument));

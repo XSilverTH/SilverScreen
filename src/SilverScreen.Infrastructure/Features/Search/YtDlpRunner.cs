@@ -58,6 +58,8 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         startInfo.ArgumentList.Add("--dump-single-json");
         startInfo.ArgumentList.Add("--flat-playlist");
         startInfo.ArgumentList.Add("--skip-download");
+        startInfo.ArgumentList.Add("--extractor-args");
+        startInfo.ArgumentList.Add("youtubetab:approximate_date");
 
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {

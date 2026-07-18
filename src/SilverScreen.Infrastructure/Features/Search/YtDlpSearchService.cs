@@ -155,7 +155,9 @@ public sealed class YtDlpSearchService : ISearchService
             GetDuration(element),
             GetThumbnailUrl(element),
             IsShort(element, rawUrl),
-            canonicalWatchUrl);
+            canonicalWatchUrl,
+            GetApproximateUploadDate(element),
+            GetPublishedAt(element));
     }
 
     private static string? FirstString(JsonElement element, params string[] propertyNames)
@@ -169,6 +171,48 @@ public sealed class YtDlpSearchService : ISearchService
             }
 
         return null;
+    }
+
+    private static DateOnly? GetApproximateUploadDate(JsonElement element)
+    {
+        if (element.TryGetProperty("upload_date", out var uploadDate) &&
+            uploadDate.ValueKind == JsonValueKind.String &&
+            DateOnly.TryParseExact(uploadDate.GetString(), "yyyyMMdd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var parsedUploadDate))
+            return parsedUploadDate;
+
+        if (!element.TryGetProperty("timestamp", out var timestamp) ||
+            timestamp.ValueKind != JsonValueKind.Number ||
+            !timestamp.TryGetInt64(out var unixSeconds) ||
+            unixSeconds < 0)
+            return null;
+
+        try
+        {
+            return DateOnly.FromDateTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? GetPublishedAt(JsonElement element)
+    {
+        if (!element.TryGetProperty("timestamp", out var timestamp) ||
+            timestamp.ValueKind != JsonValueKind.Number ||
+            !timestamp.TryGetInt64(out var unixSeconds) ||
+            unixSeconds < 0)
+            return null;
+
+        try
+        {
+            return DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 
     private static TimeSpan GetDuration(JsonElement element)

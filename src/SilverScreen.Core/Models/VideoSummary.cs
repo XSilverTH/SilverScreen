@@ -7,4 +7,6 @@ public sealed record VideoSummary(
     TimeSpan Duration,
     string ThumbnailUrl,
     bool IsShort,
-    string? WatchUrl = null);
+    string? WatchUrl = null,
+    DateOnly? ApproximateUploadDate = null,
+    DateTimeOffset? PublishedAt = null);

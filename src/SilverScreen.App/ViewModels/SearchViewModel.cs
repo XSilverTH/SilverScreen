@@ -102,7 +102,9 @@ public sealed class SearchViewModel(
     private async Task SearchPlainTextAsync(string query)
     {
         ThrowIfDisposed();
-        await _requestCancellation?.CancelAsync()!;
+        if (_requestCancellation is not null)
+            await _requestCancellation.CancelAsync();
+
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;

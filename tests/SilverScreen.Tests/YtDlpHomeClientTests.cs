@@ -94,6 +94,8 @@ public sealed class YtDlpHomeClientTests
                                  "title": "Video One",
                                  "uploader": "Uploader One",
                                  "duration": 120,
+                                 "upload_date": "20260715",
+                                "timestamp": 1784073600,
                                  "thumbnails": [
                                    { "url": "https://thumb.url/1_low", "preference": 5, "width": 1280, "height": 720 },
                                    { "url": "https://thumb.url/1_high", "preference": 10, "width": 320, "height": 180 }
@@ -104,6 +106,7 @@ public sealed class YtDlpHomeClientTests
                                  "title": "Video Two",
                                  "uploader": "Uploader Two",
                                  "duration": "180",
+                                 "upload_date": "20260714",
                                  "thumbnails": [
                                    { "url": "https://thumb.url/2_small", "preference": 0, "width": 320, "height": 180 },
                                    { "url": "https://thumb.url/2_large", "preference": 0, "width": 1920, "height": 1080 }
@@ -114,6 +117,7 @@ public sealed class YtDlpHomeClientTests
                                  "title": "Video Three",
                                  "uploader": "Uploader Three",
                                  "duration": 300,
+                                 "upload_date": "20260713",
                                  "thumbnail": "https://thumb.url/3_fallback"
                                }
                              ]
@@ -142,6 +146,8 @@ public sealed class YtDlpHomeClientTests
         Assert.Equal(TimeSpan.FromSeconds(120), v1.Duration);
         Assert.Equal("https://thumb.url/1_high", v1.ThumbnailUrl); // preference 10 beats 5
         Assert.Equal("https://www.youtube.com/watch?v=video111111", v1.WatchUrl);
+        Assert.Equal(new DateOnly(2026, 7, 15), v1.ApproximateUploadDate);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1784073600), v1.PublishedAt);
 
         var v2 = result.Videos[1];
         Assert.Equal("video222222", v2.Id);
@@ -149,6 +155,7 @@ public sealed class YtDlpHomeClientTests
         Assert.Equal("Uploader Two", v2.ChannelName);
         Assert.Equal(TimeSpan.FromSeconds(180), v2.Duration);
         Assert.Equal("https://thumb.url/2_large", v2.ThumbnailUrl); // larger area wins when preferences are equal
+        Assert.Equal(new DateOnly(2026, 7, 14), v2.ApproximateUploadDate);
 
         var v3 = result.Videos[2];
         Assert.Equal("video333333", v3.Id);
@@ -156,6 +163,7 @@ public sealed class YtDlpHomeClientTests
         Assert.Equal("Uploader Three", v3.ChannelName);
         Assert.Equal(TimeSpan.FromSeconds(300), v3.Duration);
         Assert.Equal("https://thumb.url/3_fallback", v3.ThumbnailUrl); // fallback to thumbnail property
+        Assert.Equal(new DateOnly(2026, 7, 13), v3.ApproximateUploadDate);
     }
 
     [Fact]
@@ -171,6 +179,7 @@ public sealed class YtDlpHomeClientTests
                                  "title": "A Normal Video",
                                  "uploader": "Channel Name",
                                  "duration": 600,
+                                 "upload_date": "not-a-date",
                                  "thumbnail": "https://thumb.url/valid"
                                },
                                {
@@ -213,6 +222,7 @@ public sealed class YtDlpHomeClientTests
         var video = Assert.Single(result.Videos);
         Assert.Equal("validVideo", video.Id);
         Assert.Equal("A Normal Video", video.Title);
+        Assert.Null(video.ApproximateUploadDate);
     }
 
     [Fact]
@@ -255,6 +265,7 @@ public sealed class YtDlpHomeClientTests
         Assert.Equal("fallback_video_id", video.Id);
         Assert.Equal("Fallback Recommendation", video.Title);
         Assert.Equal("Fallback Channel", video.ChannelName);
+        Assert.Null(video.ApproximateUploadDate);
 
         // Assert that both invocation modes occurred in order
         var log = tempScript.GetLog();
@@ -320,12 +331,12 @@ public sealed class YtDlpHomeClientTests
                                     for %%x in (%*) do if "%%~x"=="--cookies" set "HAS_COOKIES=1"
 
                                     if "%HAS_COOKIES%"=="1" (
-                                      echo --dump-single-json --flat-playlist --skip-download --cookies [COOKIE_FILE] :ytrec >> "{LogPath}"
+                                      echo --dump-single-json --flat-playlist --skip-download --extractor-args youtubetab:approximate_date --cookies [COOKIE_FILE] :ytrec >> "{LogPath}"
                                       if exist "{CookieStdoutPath}" (
                                         type "{CookieStdoutPath}"
                                       )
                                     ) else (
-                                      echo --dump-single-json --flat-playlist --skip-download :ytrec >> "{LogPath}"
+                                      echo --dump-single-json --flat-playlist --skip-download --extractor-args youtubetab:approximate_date :ytrec >> "{LogPath}"
                                       if exist "{NoCookieStdoutPath}" (
                                         type "{NoCookieStdoutPath}"
                                       )
@@ -354,12 +365,12 @@ public sealed class YtDlpHomeClientTests
                                     done
 
                                     if [ "$has_cookies" -eq 1 ]; then
-                                      echo "--dump-single-json --flat-playlist --skip-download --cookies [COOKIE_FILE] :ytrec" >> "{LogPath}"
+                                      echo "--dump-single-json --flat-playlist --skip-download --extractor-args youtubetab:approximate_date --cookies [COOKIE_FILE] :ytrec" >> "{LogPath}"
                                       if [ -f "{CookieStdoutPath}" ]; then
                                         cat "{CookieStdoutPath}"
                                       fi
                                     else
-                                      echo "--dump-single-json --flat-playlist --skip-download :ytrec" >> "{LogPath}"
+                                      echo "--dump-single-json --flat-playlist --skip-download --extractor-args youtubetab:approximate_date :ytrec" >> "{LogPath}"
                                       if [ -f "{NoCookieStdoutPath}" ]; then
                                         cat "{NoCookieStdoutPath}"
                                       fi
@@ -443,16 +454,18 @@ public sealed class YtDlpHomeClientTests
 
                                     set "ARG_COUNT=0"
                                     for %%x in (%*) do set /a ARG_COUNT+=1
-                                    if not "%ARG_COUNT%"=="6" (
-                                      echo Error: expected 6 arguments, got %ARG_COUNT% >&2
+                                    if not "%ARG_COUNT%"=="8" (
+                                      echo Error: expected 8 arguments, got %ARG_COUNT% >&2
                                       exit /b 2
                                     )
 
                                     if not "%~1"=="--dump-single-json" goto bad_args
                                     if not "%~2"=="--flat-playlist" goto bad_args
                                     if not "%~3"=="--skip-download" goto bad_args
-                                    if not "%~4"=="--cookies" goto bad_args
-                                    if not "%~6"==":ytrec" goto bad_args
+                                    if not "%~4"=="--extractor-args" goto bad_args
+                                    if not "%~5"=="youtubetab:approximate_date" goto bad_args
+                                    if not "%~6"=="--cookies" goto bad_args
+                                    if not "%~8"==":ytrec" goto bad_args
                                     goto check_cookies
 
                                     :bad_args
@@ -460,7 +473,7 @@ public sealed class YtDlpHomeClientTests
                                     exit /b 3
 
                                     :check_cookies
-                                    if not exist "%~5" (
+                                    if not exist "%~7" (
                                       echo Error: cookies file not found >&2
                                       exit /b 4
                                     )
@@ -488,18 +501,18 @@ public sealed class YtDlpHomeClientTests
                                       exit_code=0
                                     fi
 
-                                    if [ "$#" -ne 6 ]; then
-                                      echo "Error: expected 6 arguments, got $#" >&2
+                                    if [ "$#" -ne 8 ]; then
+                                      echo "Error: expected 8 arguments, got $#" >&2
                                       exit 2
                                     fi
 
-                                    if [ "$1" != "--dump-single-json" ] || [ "$2" != "--flat-playlist" ] || [ "$3" != "--skip-download" ] || [ "$4" != "--cookies" ] || [ "$6" != ":ytrec" ]; then
+                                    if [ "$1" != "--dump-single-json" ] || [ "$2" != "--flat-playlist" ] || [ "$3" != "--skip-download" ] || [ "$4" != "--extractor-args" ] || [ "$5" != "youtubetab:approximate_date" ] || [ "$6" != "--cookies" ] || [ "$8" != ":ytrec" ]; then
                                       echo "Error: invalid arguments: $@" >&2
                                       exit 3
                                     fi
 
-                                    if [ ! -f "$5" ]; then
-                                      echo "Error: cookies file not found at $5" >&2
+                                    if [ ! -f "$7" ]; then
+                                      echo "Error: cookies file not found at $7" >&2
                                       exit 4
                                     fi
 

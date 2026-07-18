@@ -26,6 +26,7 @@ public class VideoCardView : ViewBase<Box>
     private const int ThumbnailHeight = 189;
     private readonly VideoCardActions _actions;
     private readonly Label _channel;
+    private readonly Label _uploadDate;
     private readonly Label _duration;
     private readonly MenuButton _menu;
     private readonly Widget _placeholder;
@@ -82,10 +83,10 @@ public class VideoCardView : ViewBase<Box>
         _thumbnail.AddOverlay(_duration);
         card.Append(_thumbnail);
 
-        var metadata = Box.New(Orientation.Horizontal, 8);
+        var metadata = Overlay.New();
         metadata.CssClasses = ["video-metadata"];
         metadata.MarginStart = 12;
-        metadata.MarginEnd = 8;
+        metadata.MarginEnd = 12;
         metadata.MarginTop = 9;
         metadata.MarginBottom = 10;
 
@@ -100,14 +101,29 @@ public class VideoCardView : ViewBase<Box>
         _title.CssClasses = ["video-title"];
         text.Append(_title);
 
+        var footer = Box.New(Orientation.Horizontal, 8);
+        footer.Hexpand = true;
+
         _channel = DimLabel(string.Empty);
         _channel.Xalign = 0;
+        _channel.Hexpand = true;
+        _channel.Wrap = false;
         _channel.Ellipsize = EllipsizeMode.End;
-        text.Append(_channel);
+        footer.Append(_channel);
 
-        metadata.Append(text);
+        _uploadDate = DimLabel(string.Empty);
+        _uploadDate.Xalign = 1;
+        _uploadDate.Halign = Align.End;
+        _uploadDate.Wrap = false;
+        _uploadDate.Visible = false;
+        footer.Append(_uploadDate);
+        text.Append(footer);
+
+        metadata.Child = text;
         _menu = CreateMenuButton();
-        metadata.Append(_menu);
+        _menu.Halign = Align.End;
+        _menu.Valign = Align.Start;
+        metadata.AddOverlay(_menu);
         card.Append(metadata);
 
         var click = GestureClick.New();
@@ -132,7 +148,22 @@ public class VideoCardView : ViewBase<Box>
 
         _video = video;
         _title.SetText(video.Title);
-        _channel.SetText($"{video.ChannelName} • {FormatDuration(video.Duration)}");
+        _channel.SetText(video.ChannelName);
+        if (video.PublishedAt is { } publishedAt)
+        {
+            _uploadDate.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
+            _uploadDate.Visible = true;
+        }
+        else if (video.ApproximateUploadDate is { } uploadDate)
+        {
+            _uploadDate.SetText(FormatUploadAge(uploadDate, DateOnly.FromDateTime(DateTime.Now)));
+            _uploadDate.Visible = true;
+        }
+        else
+        {
+            _uploadDate.SetText(string.Empty);
+            _uploadDate.Visible = false;
+        }
         _duration.SetText(FormatDuration(video.Duration));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         _menu.TooltipText = $"More actions for {video.Title}";
@@ -150,6 +181,8 @@ public class VideoCardView : ViewBase<Box>
         _title.SetText(string.Empty);
         _channel.SetText(string.Empty);
         _duration.SetText(string.Empty);
+        _uploadDate.SetText(string.Empty);
+        _uploadDate.Visible = false;
         _thumbnailAlternativeText = string.Empty;
         _menu.TooltipText = string.Empty;
         _thumbnailCancellation?.Cancel();
@@ -350,6 +383,42 @@ public class VideoCardView : ViewBase<Box>
         return duration.TotalHours >= 1
             ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
             : $"{duration.Minutes}:{duration.Seconds:00}";
+    }
+
+    internal static string FormatUploadAge(DateOnly uploadDate, DateOnly today)
+    {
+        var elapsedDays = Math.Max(0, today.DayNumber - uploadDate.DayNumber);
+        return elapsedDays switch
+        {
+            0 => "Today",
+            1 => "1 day ago",
+            < 7 => $"{elapsedDays} days ago",
+            < 30 => FormatWholeUnits(elapsedDays / 7, "week"),
+            < 365 => FormatWholeUnits(elapsedDays / 30, "month"),
+            _ => FormatWholeUnits(elapsedDays / 365, "year")
+        };
+    }
+
+    internal static string FormatUploadAge(DateTimeOffset publishedAt, DateTimeOffset now)
+    {
+        var elapsed = now - publishedAt;
+        if (elapsed <= TimeSpan.Zero || elapsed < TimeSpan.FromMinutes(1))
+            return "Just now";
+
+        if (elapsed < TimeSpan.FromHours(1))
+            return FormatWholeUnits((int)elapsed.TotalMinutes, "minute");
+
+        if (elapsed < TimeSpan.FromDays(1))
+            return FormatWholeUnits((int)elapsed.TotalHours, "hour");
+
+        return FormatUploadAge(
+            DateOnly.FromDateTime(publishedAt.LocalDateTime),
+            DateOnly.FromDateTime(now.LocalDateTime));
+    }
+
+    private static string FormatWholeUnits(int count, string unit)
+    {
+        return count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
     }
 
     public new void Dispose()
