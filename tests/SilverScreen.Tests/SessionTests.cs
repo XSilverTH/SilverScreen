@@ -32,7 +32,7 @@ public sealed class SessionTests
 
         Assert.True(session.IsSignedIn);
         Assert.True(session.HasManualSession);
-        Assert.Equal("Manual YouTube session", session.DisplayName);
+        Assert.Equal("YouTube session", session.DisplayName);
         Assert.Equal(SessionCookieFormat.NetscapeCookiesText, session.CookieFormat);
         Assert.DoesNotContain("fake-session-value", session.ToString(), StringComparison.Ordinal);
     }

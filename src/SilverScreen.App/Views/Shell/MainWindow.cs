@@ -3,6 +3,7 @@ using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
+using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
@@ -22,6 +23,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly SearchView _search;
     private readonly QueuePopoverView _queuePopover;
     private readonly AccountPopoverView _accountPopover;
+    private readonly AccountViewModel _accountViewModel;
     private readonly QueueViewModel _queueViewModel;
     private readonly Label _statusLabel;
     private readonly ViewStack _stack;
@@ -30,6 +32,7 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
     private readonly MenuButton _queueButton;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
+    private WebLoginWindow? _webLogin;
     private bool _closed;
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
@@ -50,8 +53,10 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
             actions);
         _queueViewModel = new QueueViewModel(services.Queue);
         _queuePopover = new QueuePopoverView(_queueViewModel);
+        _accountViewModel = new AccountViewModel(services.Session, services.SessionValidation, _shell);
         _accountPopover = new AccountPopoverView(
-            new AccountViewModel(services.Session, services.SessionValidation, _shell),
+            _accountViewModel,
+            OpenWebLogin,
             UpdateAccountAppearance);
 
         switcher.Stack = _stack;
@@ -205,9 +210,22 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _queueButton.Child = QueueButtonContent(FormatQueuedDuration(state.TotalDuration));
     }
 
+    private void OpenWebLogin()
+    {
+        _accountButton.Popover?.Popdown();
+        if (_webLogin is not null)
+        {
+            _webLogin.Present();
+            return;
+        }
+
+        _webLogin = new WebLoginWindow(Widget, _accountViewModel, () => _webLogin = null);
+        _webLogin.Present();
+    }
+
     private void UpdateAccountAppearance(bool hasManualSession)
     {
-        _accountButton.TooltipText = hasManualSession ? "Manual YouTube session active" : "Account";
+        _accountButton.TooltipText = hasManualSession ? "YouTube session active" : "Account";
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)
@@ -219,6 +237,8 @@ public partial class MainWindow : WindowBase<Adw.ApplicationWindow>
         _home.Dispose();
         _search.Dispose();
         _queuePopover.Dispose();
+        _webLogin?.Dispose();
+        _webLogin = null;
         _accountPopover.Dispose();
         _disposeApplicationServices();
         Dispose();

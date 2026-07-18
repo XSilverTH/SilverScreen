@@ -64,17 +64,39 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return false;
         }
 
-        try
+        return PersistSession(
+            cookieContent.Trim(),
+            "Manual YouTube session saved securely.",
+            "Manual YouTube session could not be saved because the system keyring is unavailable.");
+    }
+
+    public bool SaveWebSession(string cookieContent)
+    {
+        if (string.IsNullOrWhiteSpace(cookieContent))
         {
-            _sessionService.SetManualSession(cookieContent.Trim(), SessionCookieFormat.NetscapeCookiesText);
-        }
-        catch (SessionPersistenceException)
-        {
-            _shell.Status = "Manual YouTube session could not be saved because the system keyring is unavailable.";
+            _shell.Status = "YouTube web session was not saved because no cookie content was captured.";
             return false;
         }
 
-        _shell.Status = "Manual YouTube session saved securely.";
+        return PersistSession(
+            cookieContent.Trim(),
+            "YouTube web session saved securely.",
+            "YouTube session could not be saved because the system keyring is unavailable.");
+    }
+
+    private bool PersistSession(string cookieContent, string successMessage, string failureMessage)
+    {
+        try
+        {
+            _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
+        }
+        catch (SessionPersistenceException)
+        {
+            _shell.Status = failureMessage;
+            return false;
+        }
+
+        _shell.Status = successMessage;
         return true;
     }
 
@@ -86,11 +108,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (SessionPersistenceException)
         {
-            _shell.Status = "Manual YouTube session could not be cleared because the system keyring is unavailable.";
+            _shell.Status = "YouTube session could not be cleared because the system keyring is unavailable.";
             return;
         }
 
-        _shell.Status = "Manual YouTube session cleared.";
+        _shell.Status = "YouTube session cleared.";
     }
 
     public async Task ValidateAsync()

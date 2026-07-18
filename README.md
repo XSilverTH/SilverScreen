@@ -3,12 +3,12 @@ HERE BE DRAGONS: this is extremely early in development and is missing most of i
 
 SilverScreen is a GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV (hopefully an embeded libmpv player in the future).
 
-Search YouTube or paste a video link, then play it with your local MPV install. If you add a manual YouTube cookie session, SilverScreen can also load your Home recommendations.
+Search YouTube or paste a video link, then play it with your local MPV install. With a YouTube session captured through the isolated in-app Google sign-in or added manually, SilverScreen can also load your Home recommendations.
 
 ## What you need
 
 - The .NET 10 SDK.
-- GTK 4 and Libadwaita native libraries compatible with the GirCore bindings used by the app.
+- GTK 4, Libadwaita, WebKitGTK 6 (`libwebkitgtk-6.0`), and libsoup 3 native libraries compatible with the GirCore bindings used by the app.
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) on `PATH` for search and Home recommendations.
 - The `libsecret` shared library and an unlocked Freedesktop Secret Service provider, such as GNOME Keyring or KWallet configured with Secret Service support. `secret-tool` is optional for manual diagnostics and is not an application dependency.
 - [`mpv`](https://mpv.io/) on `PATH` for playback.
@@ -38,19 +38,19 @@ The queue is a small in-memory list. **Add next** places a video at the front; y
 Home is opt-in because it needs a YouTube session.
 
 1. Open the account button in the header.
-2. Choose **Add manual session**.
-3. Paste the contents of a browser-exported Netscape-format `cookies.txt` file and save it.
-4. Choose **Validate Home session**, then refresh Home.
+2. Choose **Sign in with Google** and complete sign-in in the isolated in-app window.
+3. SilverScreen captures the resulting YouTube cookies, closes the sign-in window, and validates the session automatically.
+4. Refresh Home.
 
-SilverScreen stores this session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes that keyring entry. When `yt-dlp` or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
+If embedded Google sign-in is unavailable, choose **Add manual session** instead and paste a browser-exported Netscape-format `cookies.txt` file. SilverScreen stores either session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. The embedded window uses a fresh ephemeral WebKit session for every attempt; its browser storage is discarded after closing, and refreshing never clears the previous saved session unless a new capture succeeds. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes the keyring entry. When `yt-dlp` or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
 
 ## Important details
 
-- Home requires a manual session and supports refresh plus continuation-page loading when YouTube provides one.
+- Home requires a YouTube session and supports refresh plus continuation-page loading when YouTube provides one.
 - Search results and Home recommendations exclude YouTube Shorts.
 - Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
 - Subscriptions and History are currently placeholder views. Preferences and About are also placeholders.
-- Only search and queue contents are not persisted; the manual session persists in the Secret Service keyring.
+- Only search and queue contents are not persisted; the YouTube session persists in the Secret Service keyring.
 
 ## Project layout
 

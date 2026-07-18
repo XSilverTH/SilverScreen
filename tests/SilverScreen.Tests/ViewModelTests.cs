@@ -127,7 +127,28 @@ public sealed class ViewModelTests
 
         viewModel.ClearSession();
         Assert.False(viewModel.HasManualSession);
-        Assert.Equal("Manual YouTube session cleared.", shell.Status);
+        Assert.Equal("YouTube session cleared.", shell.Status);
+    }
+
+    [Fact]
+    public void AccountViewModelSavesCapturedWebSession()
+    {
+        var session = new InMemorySessionService();
+        var shell = new ShellViewModel();
+        var validation = new SessionValidationCoordinator(new HomeSessionValidator(new FakeFeedService()), session);
+        using var viewModel = new AccountViewModel(session, validation, shell);
+
+        Assert.False(viewModel.SaveWebSession("  "));
+        Assert.Equal("YouTube web session was not saved because no cookie content was captured.", shell.Status);
+        Assert.False(viewModel.HasManualSession);
+
+        Assert.True(viewModel.SaveWebSession(
+            "  # Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\tvalue  "));
+        Assert.True(viewModel.HasManualSession);
+        Assert.Equal("YouTube web session saved securely.", shell.Status);
+        Assert.Equal(
+            "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\tvalue",
+            session.GetManualSessionCookies()?.Content);
     }
 
     [Fact]
@@ -149,8 +170,15 @@ public sealed class ViewModelTests
 
         session.FailClear = true;
         viewModel.ClearSession();
-        Assert.Equal("Manual YouTube session could not be cleared because the system keyring is unavailable.", shell.Status);
+        Assert.Equal("YouTube session could not be cleared because the system keyring is unavailable.", shell.Status);
         Assert.True(viewModel.HasManualSession);
+
+        session.FailClear = false;
+        session.FailSave = true;
+        var existingContent = session.GetManualSessionCookies()?.Content;
+        Assert.False(viewModel.SaveWebSession("replacement"));
+        Assert.Equal("YouTube session could not be saved because the system keyring is unavailable.", shell.Status);
+        Assert.Equal(existingContent, session.GetManualSessionCookies()?.Content);
     }
 
     private sealed class FailingSessionService : ISessionService
@@ -164,7 +192,7 @@ public sealed class ViewModelTests
 
         public AccountSession GetCurrentSession() => _cookies is null
             ? AccountSession.SignedOut
-            : new AccountSession(true, "Manual YouTube session", HasManualSession: true, CookieFormat: _cookies.Format);
+            : new AccountSession(true, "YouTube session", HasManualSession: true, CookieFormat: _cookies.Format);
 
         public ManualSessionCookies? GetManualSessionCookies() => _cookies;
 

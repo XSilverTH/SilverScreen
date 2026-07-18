@@ -2,6 +2,7 @@ using SilverScreen;
 using XSTH.Blueprint.Helpers;
 
 Adw.Module.Initialize();
+WebKit.Module.Initialize();
 GResourceHelper.RegisterAssemblyResources(typeof(Program).Assembly);
 
 var app = new App();

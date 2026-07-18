@@ -101,7 +101,7 @@ public static class SessionValidationFormatter
     public const string ValidatingMessage = "Validating YouTube session…";
     public const string CancellationMessage = "Validation canceled.";
     public const string UnexpectedErrorMessage = "Validation failed: An unexpected error occurred.";
-    public const string NoActiveSessionMessage = "Validation failed: No manual YouTube session is active.";
+    public const string NoActiveSessionMessage = "Validation failed: No YouTube session is active.";
     public const string AlreadyRunningMessage = "Validation is already in progress.";
 
     public static string FormatResult(HomeSessionValidationResult result)
@@ -115,7 +115,7 @@ public static class SessionValidationFormatter
         return status switch
         {
             AuthenticatedHomeFeedStatus.Success => "Recommendations loaded.",
-            AuthenticatedHomeFeedStatus.AuthenticationRequired => "A manual YouTube session is required.",
+            AuthenticatedHomeFeedStatus.AuthenticationRequired => "A YouTube session is required.",
             AuthenticatedHomeFeedStatus.AuthenticationRejected => "The YouTube session was rejected or has expired.",
             AuthenticatedHomeFeedStatus.TemporaryBackendFailure => "Recommendations are temporarily unavailable.",
             AuthenticatedHomeFeedStatus.Empty => "No usable recommendations were returned.",

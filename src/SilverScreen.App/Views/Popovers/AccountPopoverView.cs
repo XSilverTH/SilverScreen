@@ -7,13 +7,18 @@ namespace SilverScreen.Views.Popovers;
 public partial class AccountPopoverView : ViewBase<Box>
 {
     private readonly AccountViewModel _viewModel;
+    private readonly Action _openWebLogin;
     private readonly Action<bool> _sessionAppearanceChanged;
     private bool _editing;
     private bool _disposed;
 
-    public AccountPopoverView(AccountViewModel viewModel, Action<bool> sessionAppearanceChanged)
+    public AccountPopoverView(
+        AccountViewModel viewModel,
+        Action openWebLogin,
+        Action<bool> sessionAppearanceChanged)
     {
         _viewModel = viewModel;
+        _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
         _viewModel.StateChanged += OnStateChanged;
         Render();
@@ -40,33 +45,39 @@ public partial class AccountPopoverView : ViewBase<Box>
             return;
         }
 
-        var heading = Label.New(_viewModel.HasManualSession ? "Manual YouTube session" : "Not signed in");
+        var heading = Label.New(_viewModel.HasManualSession ? "YouTube session" : "Not signed in");
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         Widget.Append(heading);
         if (_viewModel.HasManualSession)
         {
-            Widget.Append(DimLabel("Manual YouTube session active. Cookies are stored in your desktop Secret Service keyring."));
+            Widget.Append(DimLabel(
+                "YouTube session active. Cookies are stored in your desktop Secret Service keyring."));
+            Widget.Append(SuggestedActionButton("Refresh with Google", _openWebLogin));
             var validate = ActionButton("Validate Home session", () => _ = _viewModel.ValidateAsync());
             validate.Sensitive = !_viewModel.IsValidating;
             Widget.Append(validate);
+            Widget.Append(ActionButton("Replace with manual session", OpenManualEditor));
             Widget.Append(ActionButton("Clear session", _viewModel.ClearSession));
         }
         else
         {
             Widget.Append(DimLabel(
-                "Paste Netscape cookies.txt content. Raw Cookie: headers are not supported in this step. Values are not displayed after saving and are stored securely in your desktop keyring."));
-            Widget.Append(ActionButton("Add manual session", () =>
-            {
-                _editing = true;
-                Render();
-            }));
+                "Sign in with Google in an isolated window, or paste Netscape cookies.txt content manually. Values are not displayed after saving and are stored securely in your desktop keyring."));
+            Widget.Append(SuggestedActionButton("Sign in with Google", _openWebLogin));
+            Widget.Append(ActionButton("Add manual session", OpenManualEditor));
         }
+    }
+
+    private void OpenManualEditor()
+    {
+        _editing = true;
+        Render();
     }
 
     private void RenderEditor()
     {
-        var heading = Label.New("Add manual session");
+        var heading = Label.New(_viewModel.HasManualSession ? "Replace with manual session" : "Add manual session");
         heading.Xalign = 0;
         heading.CssClasses = ["heading"];
         Widget.Append(heading);
@@ -117,6 +128,13 @@ public partial class AccountPopoverView : ViewBase<Box>
         button.Halign = Align.Fill;
         button.CssClasses = ["flat"];
         button.OnClicked += (_, _) => action();
+        return button;
+    }
+
+    private static Button SuggestedActionButton(string label, Action action)
+    {
+        var button = ActionButton(label, action);
+        button.CssClasses = ["suggested-action"];
         return button;
     }
 

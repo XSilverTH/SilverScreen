@@ -18,7 +18,7 @@ public sealed class InMemorySessionService : ISessionService
                 ? AccountSession.SignedOut
                 : new AccountSession(
                     true,
-                    "Manual YouTube session",
+                    "YouTube session",
                     HasManualSession: true,
                     CookieFormat: _manualCookies.Format);
         }

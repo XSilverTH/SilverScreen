@@ -41,7 +41,7 @@ public sealed class SecretServiceSessionService : ISessionService
                 ? AccountSession.SignedOut
                 : new AccountSession(
                     true,
-                    "Manual YouTube session",
+                    "YouTube session",
                     HasManualSession: true,
                     CookieFormat: _manualCookies.Format);
         }

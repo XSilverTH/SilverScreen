@@ -55,7 +55,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
         Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRequired, result.Status);
         Assert.Equal(0, client.CallCount);
         Assert.Equal(FeedPage.Empty, result.FeedPage);
-        Assert.Equal("Sign in with a manual YouTube session to load recommendations.", result.StatusMessage);
+        Assert.Equal("Sign in to YouTube to load recommendations.", result.StatusMessage);
 
         // Assert no sensitive value appears in ToString
         Assert.DoesNotContain("sanitized-session-value", result.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -76,7 +76,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
         Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRequired, result.Status);
         Assert.Equal(0, client.CallCount);
         Assert.Equal(FeedPage.Empty, result.FeedPage);
-        Assert.Equal("Sign in with a manual YouTube session to load recommendations.", result.StatusMessage);
+        Assert.Equal("Sign in to YouTube to load recommendations.", result.StatusMessage);
     }
 
     [Fact]
@@ -547,7 +547,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
         Assert.False(valResult.HasContinuation);
         Assert.True(valResult.RequiresAuthentication);
         Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRequired, valResult.HighLevelStatus);
-        Assert.Equal("Sign in with a manual YouTube session to load recommendations.", valResult.StatusMessage);
+        Assert.Equal("Sign in to YouTube to load recommendations.", valResult.StatusMessage);
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     private FeedPage _cachedFeedPage = FeedPage.Empty;
 
     private const string AuthenticationRequiredMessage =
-        "Sign in with a manual YouTube session to load recommendations.";
+        "Sign in to YouTube to load recommendations.";
 
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string BackendFailureMessage = "Recommendations are temporarily unavailable.";

@@ -224,7 +224,7 @@ public sealed class SessionValidationCoordinatorTests
         var statuses = new[]
         {
             (AuthenticatedHomeFeedStatus.Success, "Recommendations loaded."),
-            (AuthenticatedHomeFeedStatus.AuthenticationRequired, "A manual YouTube session is required."),
+            (AuthenticatedHomeFeedStatus.AuthenticationRequired, "A YouTube session is required."),
             (AuthenticatedHomeFeedStatus.AuthenticationRejected, "The YouTube session was rejected or has expired."),
             (AuthenticatedHomeFeedStatus.TemporaryBackendFailure, "Recommendations are temporarily unavailable."),
             (AuthenticatedHomeFeedStatus.Empty, "No usable recommendations were returned."),
