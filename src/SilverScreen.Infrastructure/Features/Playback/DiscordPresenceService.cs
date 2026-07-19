@@ -1,3 +1,4 @@
+using Serilog;
 using DiscordRPC;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -31,6 +32,7 @@ internal sealed class DiscordRpcClientAdapter : IDiscordRpcClient
 
 public sealed class DiscordPresenceService : IPlaybackPresenceService
 {
+    private static readonly ILogger Logger = Log.ForContext<DiscordPresenceService>();
     private readonly string? _applicationId;
     private readonly Func<string, IDiscordRpcClient> _clientFactory;
     private readonly object _lock = new();
@@ -126,7 +128,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
 
         if (!ulong.TryParse(_applicationId, out _))
         {
-            Log("Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid.");
+            Logger.Warning("Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid.");
             return;
         }
 
@@ -137,7 +139,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
         catch (Exception ex)
         {
-            LogException("Could not create RPC client", ex);
+            Logger.Warning(ex, "Could not create RPC client");
             return;
         }
 
@@ -153,7 +155,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
         catch (Exception ex)
         {
-            LogException("Could not initialize RPC client", ex);
+            Logger.Warning(ex, "Could not initialize RPC client");
             DisposeClientQuietly(client);
         }
     }
@@ -168,7 +170,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
         catch (Exception ex)
         {
-            LogException("Could not publish playback activity", ex);
+            Logger.Warning(ex, "Could not publish playback activity");
         }
     }
 
@@ -191,7 +193,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
         catch (Exception ex)
         {
-            LogException("Could not clear playback activity", ex);
+            Logger.Warning(ex, "Could not clear playback activity");
         }
     }
 
@@ -203,19 +205,10 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
         catch (Exception ex)
         {
-            LogException("Could not dispose RPC client", ex);
+            Logger.Warning(ex, "Could not dispose RPC client");
         }
     }
 
-    private static void Log(string message)
-    {
-        Console.Error.WriteLine($"[Discord] {message}");
-    }
-
-    private static void LogException(string operation, Exception exception)
-    {
-        Log($"{operation}. {exception.GetType().Name}: {exception.Message}");
-    }
 
     private sealed record CachedActivity(PlaybackRequest Request, DateTimeOffset StartedAt);
 }

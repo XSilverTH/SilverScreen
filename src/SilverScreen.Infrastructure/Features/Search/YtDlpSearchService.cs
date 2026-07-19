@@ -1,3 +1,4 @@
+using Serilog;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
@@ -8,6 +9,7 @@ namespace SilverScreen.Infrastructure.Features.Search;
 
 public sealed class YtDlpSearchService : ISearchService
 {
+    private static readonly ILogger Logger = Log.ForContext<YtDlpSearchService>();
     private readonly IPreferencesService? _preferencesService;
     private readonly IYtDlpRunner _runner;
     private readonly YtDlpOptions _staticOptions;
@@ -44,6 +46,9 @@ public sealed class YtDlpSearchService : ISearchService
                 var error = string.IsNullOrWhiteSpace(result.StandardError)
                     ? $"yt-dlp exited with code {result.ExitCode}."
                     : result.StandardError.Trim();
+                Logger.Warning(
+                    "yt-dlp search exited with code {ExitCode}",
+                    result.ExitCode);
                 return SearchResultPage.Failed($"Search failed: {error}");
             }
 
@@ -57,17 +62,20 @@ public sealed class YtDlpSearchService : ISearchService
                 : new SearchResultPage(videos,
                     $"Found {videos.Count} video result{(videos.Count == 1 ? string.Empty : "s")}.");
         }
-        catch (Win32Exception)
+        catch (Win32Exception exception)
         {
+            Logger.Warning(exception, "yt-dlp is not installed or could not be started for search");
             return SearchResultPage.Failed("Search failed: yt-dlp is not installed.");
         }
-        catch (JsonException ex)
+        catch (JsonException exception)
         {
-            return SearchResultPage.Failed($"Search failed: yt-dlp returned invalid JSON ({ex.Message}).");
+            Logger.Warning(exception, "yt-dlp returned invalid JSON for search");
+            return SearchResultPage.Failed($"Search failed: yt-dlp returned invalid JSON ({exception.Message}).");
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException exception)
         {
-            return SearchResultPage.Failed($"Search failed: {ex.Message}");
+            Logger.Warning(exception, "yt-dlp search timed out");
+            return SearchResultPage.Failed($"Search failed: {exception.Message}");
         }
     }
 

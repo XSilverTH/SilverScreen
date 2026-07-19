@@ -1,3 +1,4 @@
+using Serilog;
 using System.ComponentModel;
 using Adw;
 using Gio;
@@ -21,6 +22,7 @@ namespace SilverScreen.Views.Shell;
 
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
+    private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
@@ -194,7 +196,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             switch (args.PropertyName)
             {
                 case nameof(ShellViewModel.Status):
-                    Console.WriteLine(_shell.Status);
+                    Logger.Information("Application status changed: {Status}", _shell.Status);
                     _statusLabel.SetText(_shell.Status);
                     break;
                 case nameof(ShellViewModel.SelectedPage):

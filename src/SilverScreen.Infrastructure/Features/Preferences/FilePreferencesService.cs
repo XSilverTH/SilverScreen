@@ -1,3 +1,4 @@
+using Serilog;
 using System.Text.Json;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -6,6 +7,7 @@ namespace SilverScreen.Infrastructure.Features.Preferences;
 
 public sealed class FilePreferencesService : IPreferencesService
 {
+    private static readonly ILogger Logger = Log.ForContext<FilePreferencesService>();
     private readonly string _filePath;
     private readonly object _lock = new();
     private AppPreferences _current;
@@ -51,7 +53,7 @@ public sealed class FilePreferencesService : IPreferencesService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Preferences] Failed to save preferences to {_filePath}: {ex.Message}");
+                Logger.Error(ex, "Failed to save preferences to {PreferencesFilePath}", _filePath);
             }
         }
 
@@ -71,7 +73,7 @@ public sealed class FilePreferencesService : IPreferencesService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Preferences] Failed to load preferences from {_filePath}: {ex.Message}");
+            Logger.Error(ex, "Failed to load preferences from {PreferencesFilePath}", _filePath);
         }
 
         return new AppPreferences();

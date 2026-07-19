@@ -1,3 +1,4 @@
+using Serilog;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -15,6 +16,7 @@ public sealed class YtDlpHomeClient(
     TimeSpan? timeout = null)
     : IYouTubeHomeClient
 {
+    private static readonly ILogger Logger = Log.ForContext<YtDlpHomeClient>();
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
 
@@ -110,6 +112,8 @@ public sealed class YtDlpHomeClient(
         try
         {
             if (!process.Start())
+            {
+                Logger.Warning("yt-dlp returned no process for home recommendations");
                 return (new HomeFeedResult(
                     Array.Empty<VideoSummary>(),
                     null,
@@ -117,9 +121,11 @@ public sealed class YtDlpHomeClient(
                     "Failed to start yt-dlp process.",
                     false
                 ), Array.Empty<VideoSummary>());
+            }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Could not start yt-dlp for home recommendations");
             return (new HomeFeedResult(
                 Array.Empty<VideoSummary>(),
                 null,
@@ -136,7 +142,7 @@ public sealed class YtDlpHomeClient(
         {
             await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
             TryKill(process);
             try
@@ -149,6 +155,7 @@ public sealed class YtDlpHomeClient(
             }
 
             if (cancellationToken.IsCancellationRequested) throw;
+            Logger.Warning(exception, "yt-dlp timed out while loading home recommendations");
 
             return (new HomeFeedResult(
                 [],
@@ -158,8 +165,9 @@ public sealed class YtDlpHomeClient(
                 false
             ), []);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "yt-dlp failed while loading home recommendations");
             TryKill(process);
             try
             {
@@ -181,6 +189,9 @@ public sealed class YtDlpHomeClient(
 
         if (process.ExitCode != 0)
         {
+            Logger.Warning(
+                "yt-dlp exited with code {ExitCode} while loading home recommendations",
+                process.ExitCode);
             try
             {
                 await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
@@ -205,8 +216,9 @@ public sealed class YtDlpHomeClient(
             output = await outputTask.ConfigureAwait(false);
             _ = await errorTask.ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Could not read yt-dlp output for home recommendations");
             return (new HomeFeedResult(
                 [],
                 null,
@@ -217,6 +229,8 @@ public sealed class YtDlpHomeClient(
         }
 
         if (string.IsNullOrWhiteSpace(output))
+        {
+            Logger.Warning("yt-dlp returned empty output for home recommendations");
             return (new HomeFeedResult(
                 [],
                 null,
@@ -224,7 +238,7 @@ public sealed class YtDlpHomeClient(
                 "yt-dlp process returned empty output.",
                 false
             ), []);
-
+        }
         try
         {
             var videos = ParsePlaylistOutput(output);
@@ -236,8 +250,9 @@ public sealed class YtDlpHomeClient(
                 false
             ), videos);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Could not parse yt-dlp output for home recommendations");
             return (new HomeFeedResult(
                 [],
                 null,

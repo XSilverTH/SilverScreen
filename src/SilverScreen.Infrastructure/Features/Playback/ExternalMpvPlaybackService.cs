@@ -1,3 +1,4 @@
+using Serilog;
 using System.ComponentModel;
 using System.Diagnostics;
 using SilverScreen.Core.Models;
@@ -8,6 +9,7 @@ namespace SilverScreen.Infrastructure.Features.Playback;
 
 public sealed class ExternalMpvPlaybackService : IPlaybackService
 {
+    private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
     private readonly MpvCommandBuilder _commandBuilder;
     private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPreferencesService? _preferencesService;
@@ -57,19 +59,23 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             cookieFile = _cookieFileProvider?.CreateCookieFile();
             var activeOptions = GetActiveOptions();
             var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path);
-            LogDebug(
-                $"Launching MPV. executable='{command.ExecutablePath}', manualSessionActive={cookieFile is not null}, tempCookiesProvided={cookieFile is not null}, ytdlCookiesOption={CommandUsesYtdlCookiesOption(command)}.");
+            Logger.Information(
+                "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}",
+                command.ExecutablePath,
+                cookieFile is not null,
+                cookieFile is not null,
+                CommandUsesYtdlCookiesOption(command));
 
             var startInfo = MpvCommandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
             if (started is null)
             {
-                LogDebug("MPV process start returned no process.");
+                Logger.Warning("MPV process start returned no process");
                 CleanupCookieLeaseQuietly(cookieFile, "MPV start returned no process");
                 return "Could not start MPV. Is it installed?";
             }
 
-            LogDebug($"MPV process started. pid={TryGetProcessId(started)}.");
+            Logger.Information("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
             var playbackId = RegisterActivePlayback(request, DateTimeOffset.UtcNow);
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
@@ -80,13 +86,13 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         catch (Win32Exception ex)
         {
-            LogDebug($"MPV process start failed. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "MPV process start failed");
             CleanupCookieLeaseQuietly(cookieFile, "MPV executable start failed");
             return "Could not start MPV. Is it installed?";
         }
         catch (InvalidOperationException ex)
         {
-            LogDebug($"MPV playback request rejected. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "MPV playback request rejected");
             CleanupCookieLeaseQuietly(cookieFile, "MPV playback request rejected");
             return ex.Message;
         }
@@ -142,12 +148,15 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         try
         {
             var exitCode = TryGetExitCode(process);
-            LogDebug(exitCode is null ? "MPV exited; exit code unavailable." : $"MPV exited with code {exitCode}.");
+            if (exitCode is null)
+                Logger.Information("MPV exited; exit code unavailable");
+            else
+                Logger.Information("MPV exited with code {ExitCode}", exitCode);
             CleanupCookieLeaseQuietly(cookieFileLease, "MPV process exited");
         }
         catch (Exception ex)
         {
-            LogDebug($"MPV exit cleanup handler failed safely. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "MPV exit cleanup handler failed safely");
         }
         finally
         {
@@ -157,7 +166,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             }
             catch (Exception ex)
             {
-                LogDebug($"MPV process disposal failed safely. error={ex.GetType().Name}: {ex.Message}");
+                Logger.Warning(ex, "MPV process disposal failed safely");
             }
         }
     }
@@ -170,7 +179,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         catch (Exception ex)
         {
-            LogDebug($"Could not observe MPV exit. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "Could not observe MPV exit");
         }
         finally
         {
@@ -183,19 +192,25 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     {
         if (cookieFileLease is null)
         {
-            LogDebug($"No temporary cookie file lease to clean up. reason='{reason}'.");
+            Logger.Debug(
+                "No temporary cookie file lease to clean up. Reason: {Reason}",
+                reason);
             return;
         }
 
         try
         {
             cookieFileLease.Dispose();
-            LogDebug($"Temporary cookie file lease cleaned up. reason='{reason}'.");
+            Logger.Information(
+                "Temporary cookie file lease cleaned up. Reason: {Reason}",
+                reason);
         }
         catch (Exception ex)
         {
-            LogDebug(
-                $"Temporary cookie file lease cleanup failed safely. reason='{reason}', error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(
+                ex,
+                "Temporary cookie file lease cleanup failed safely. Reason: {Reason}",
+                reason);
         }
     }
 
@@ -242,7 +257,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         catch (Exception ex)
         {
-            LogDebug($"Playback presence update failed safely. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "Playback presence update failed safely");
         }
     }
 
@@ -256,15 +271,10 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         catch (Exception ex)
         {
-            LogDebug($"Playback presence clear failed safely. error={ex.GetType().Name}: {ex.Message}");
+            Logger.Warning(ex, "Playback presence clear failed safely");
         }
     }
 
     private sealed record ActivePlayback(long Id, PlaybackRequest Request, DateTimeOffset StartedAt);
 
-    private static void LogDebug(string message)
-    {
-        Debug.WriteLine($"[SilverScreen] {message}");
-        Console.Error.WriteLine($"[SilverScreen] {message}");
-    }
 }
