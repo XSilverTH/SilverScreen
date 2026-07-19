@@ -55,6 +55,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _moveRequested = moveRequested;
         _dropRequested = dropRequested;
         _removeRequested = removeRequested;
+        Widget.Hexpand = true;
         Widget.CssClasses = ["queue-row"];
         Widget.Spacing = 8;
         Widget.MarginTop = 3;
