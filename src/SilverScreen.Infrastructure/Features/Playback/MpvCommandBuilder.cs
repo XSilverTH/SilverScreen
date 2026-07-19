@@ -19,14 +19,24 @@ public sealed class MpvCommandBuilder
         if (string.IsNullOrWhiteSpace(options.MpvExecutablePath))
             throw new InvalidOperationException("MPV executable path is not configured.");
 
-        var playbackUrl = request.PlaybackUrl;
-        if (string.IsNullOrWhiteSpace(playbackUrl))
-            throw new InvalidOperationException("No playable URL is available.");
+        if (request.Videos.IsDefaultOrEmpty)
+            throw new InvalidOperationException("No videos were provided for playback.");
 
-        if (!Uri.TryCreate(playbackUrl, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-            throw new InvalidOperationException("Playback URL must be an absolute HTTP or HTTPS URL.");
+        var playbackUrls = new List<string>(request.Videos.Length);
+        foreach (var video in request.Videos)
+        {
+            var playbackUrl = string.IsNullOrWhiteSpace(video.WatchUrl)
+                ? PlaybackRequest.BuildWatchUrl(video.Id)
+                : video.WatchUrl;
+            if (string.IsNullOrWhiteSpace(playbackUrl))
+                throw new InvalidOperationException("No playable URL is available.");
 
+            if (!Uri.TryCreate(playbackUrl, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                throw new InvalidOperationException("Playback URL must be an absolute HTTP or HTTPS URL.");
+
+            playbackUrls.Add(playbackUrl);
+        }
         var arguments = new List<string>();
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {
@@ -45,7 +55,7 @@ public sealed class MpvCommandBuilder
                 arguments.Add($"--ytdl-format=bestvideo[height<={height}]+bestaudio/best[height<={height}]");
         }
 
-        arguments.Add(playbackUrl);
+        arguments.AddRange(playbackUrls);
 
         return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
     }

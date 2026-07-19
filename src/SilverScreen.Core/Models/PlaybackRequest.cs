@@ -1,14 +1,9 @@
+using System.Collections.Immutable;
+
 namespace SilverScreen.Core.Models;
 
-public sealed record PlaybackRequest(VideoSummary Video)
+public sealed record PlaybackRequest(ImmutableArray<VideoSummary> Videos)
 {
-    public string VideoId => Video.Id;
-
-    public string Title => Video.Title;
-
-    public string? PlaybackUrl => string.IsNullOrWhiteSpace(Video.WatchUrl)
-        ? BuildWatchUrl(Video.Id)
-        : Video.WatchUrl;
 
     public static string? BuildWatchUrl(string videoId)
     {

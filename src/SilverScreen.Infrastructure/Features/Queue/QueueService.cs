@@ -15,7 +15,7 @@ public sealed class QueueService : IQueueService
 
     public QueueItem Add(VideoSummary video)
     {
-        var item = new QueueItem(video, DateTimeOffset.Now, _items.Count);
+        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
         _items.Add(item);
         Changed?.Invoke(this, EventArgs.Empty);
         return item;
@@ -23,15 +23,35 @@ public sealed class QueueService : IQueueService
 
     public QueueItem AddNext(VideoSummary video)
     {
-        var item = new QueueItem(video, DateTimeOffset.Now);
+        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
         _items.Insert(0, item);
         Changed?.Invoke(this, EventArgs.Empty);
         return item;
     }
 
-    public bool Remove(QueueItem item)
+    public bool Move(Guid itemId, int destinationIndex)
     {
-        if (!_items.Remove(item)) return false;
+        var currentIndex = _items.FindIndex(item => item.Id == itemId);
+        if (currentIndex < 0 ||
+            destinationIndex < 0 ||
+            destinationIndex >= _items.Count ||
+            currentIndex == destinationIndex)
+            return false;
+
+        var item = _items[currentIndex];
+        _items.RemoveAt(currentIndex);
+        _items.Insert(destinationIndex, item);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    public bool Remove(Guid itemId)
+    {
+        var index = _items.FindIndex(item => item.Id == itemId);
+        if (index < 0)
+            return false;
+
+        _items.RemoveAt(index);
         Changed?.Invoke(this, EventArgs.Empty);
         return true;
     }

@@ -7,49 +7,53 @@ namespace SilverScreen.Tests;
 public sealed class PlaybackTests
 {
     [Fact]
-    public void PlaybackRequestDerivesWatchUrlFromVideoId()
+    public void PlaybackRequestPreservesOrderedVideos()
     {
-        var video = CreateVideo("abc123_X-yZ");
-        var request = new PlaybackRequest(video);
+        var first = CreateVideo("abc123_X-yZ");
+        var second = CreateVideo("dQw4w9WgXcQ", "https://youtu.be/dQw4w9WgXcQ");
 
-        Assert.Equal("abc123_X-yZ", request.VideoId);
-        Assert.Equal("Video abc123_X-yZ", request.Title);
-        Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", request.PlaybackUrl);
-    }
+        var request = new PlaybackRequest([first, second]);
 
-    [Fact]
-    public void PlaybackRequestUsesExplicitWatchUrlWhenPresent()
-    {
-        var video = CreateVideo("abc123_X-yZ", "https://youtu.be/abc123_X-yZ");
-        var request = new PlaybackRequest(video);
-
-        Assert.Equal("https://youtu.be/abc123_X-yZ", request.PlaybackUrl);
+        Assert.Equal(new[] { first, second }, request.Videos.ToArray());
     }
 
     [Fact]
     public void MpvCommandBuilderUsesDefaultMpvExecutable()
     {
         var command =
-            MpvCommandBuilder.Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+            MpvCommandBuilder.Build(new PlaybackRequest([CreateVideo("abc123_X-yZ")]), new PlaybackOptions());
 
         Assert.Equal("mpv", command.ExecutablePath);
     }
 
     [Fact]
-    public void MpvCommandBuilderPassesUrlAsSeparateArgument()
+    public void MpvCommandBuilderPassesOrderedPlaylistUrlsAsSeparateArguments()
     {
-        var command =
-            MpvCommandBuilder.Build(new PlaybackRequest(CreateVideo("abc123_X-yZ")), new PlaybackOptions());
+        var command = MpvCommandBuilder.Build(
+            new PlaybackRequest([
+                CreateVideo("abc123_X-yZ"),
+                CreateVideo("dQw4w9WgXcQ", "https://youtu.be/dQw4w9WgXcQ"),
+                CreateVideo("M7lc1UVf-VE")
+            ]),
+            new PlaybackOptions { VideoQuality = "720p" },
+            "/tmp/silverscreen-cookies/cookies.txt");
 
-        var argument = Assert.Single(command.Arguments);
-        Assert.Equal("https://www.youtube.com/watch?v=abc123_X-yZ", argument);
+        Assert.Equal(
+            [
+                "--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt",
+                "--ytdl-format=bestvideo[height<=720]+bestaudio/best[height<=720]",
+                "https://www.youtube.com/watch?v=abc123_X-yZ",
+                "https://youtu.be/dQw4w9WgXcQ",
+                "https://www.youtube.com/watch?v=M7lc1UVf-VE"
+            ],
+            command.Arguments);
     }
 
     [Fact]
     public void MpvCommandBuilderPassesCookiesOptionBeforeUrlWhenSessionExists()
     {
         var command = MpvCommandBuilder.Build(
-            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
             new PlaybackOptions(),
             "/tmp/silverscreen-cookies/cookies.txt");
 
@@ -63,7 +67,7 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderOmitsCookiesOptionWhenSessionCookieFileIsMissing()
     {
         var command = MpvCommandBuilder.Build(
-            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
             new PlaybackOptions());
 
         Assert.DoesNotContain(command.Arguments,
@@ -76,7 +80,7 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderMarksWatchedVideosWhenEnabledWithSessionCookies()
     {
         var command = MpvCommandBuilder.Build(
-            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
             new PlaybackOptions { MarkWatchedVideos = true },
             "/tmp/silverscreen-cookies/cookies.txt");
 
@@ -89,7 +93,7 @@ public sealed class PlaybackTests
     {
         var builder = new MpvCommandBuilder();
         var command = MpvCommandBuilder.Build(
-            new PlaybackRequest(CreateVideo("abc123_X-yZ")),
+            new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
             new PlaybackOptions(),
             "/tmp/silverscreen-cookies/cookies.txt");
 
@@ -105,12 +109,36 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderRejectsMissingPlaybackUrlCleanly()
     {
-        var request = new PlaybackRequest(CreateVideo(string.Empty));
+        var request = new PlaybackRequest([CreateVideo(string.Empty)]);
 
-        var exception =
-            Assert.Throws<InvalidOperationException>(() =>
-                MpvCommandBuilder.Build(request, new PlaybackOptions()));
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            MpvCommandBuilder.Build(request, new PlaybackOptions()));
+
         Assert.Equal("No playable URL is available.", exception.Message);
+    }
+
+    [Fact]
+    public void MpvCommandBuilderRejectsAnEmptyPlaylist()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            MpvCommandBuilder.Build(new PlaybackRequest([]), new PlaybackOptions()));
+
+        Assert.Equal("No videos were provided for playback.", exception.Message);
+    }
+
+    [Fact]
+    public void MpvCommandBuilderRejectsWholePlaylistWhenAnyUrlIsInvalid()
+    {
+        var request = new PlaybackRequest([
+            CreateVideo("abc123_X-yZ"),
+            CreateVideo("dQw4w9WgXcQ", "file:///tmp/video.mp4"),
+            CreateVideo("M7lc1UVf-VE")
+        ]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            MpvCommandBuilder.Build(request, new PlaybackOptions()));
+
+        Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 
     [Theory]
@@ -133,7 +161,7 @@ public sealed class PlaybackTests
     public void MpvCommandBuilderUsesExplicitWatchUrlWhenPresent(string id, string explicitUrl)
     {
         var video = CreateVideo(id, explicitUrl);
-        var request = new PlaybackRequest(video);
+        var request = new PlaybackRequest([video]);
         var command = MpvCommandBuilder.Build(request, new PlaybackOptions());
 
         var argument = Assert.Single(command.Arguments);
@@ -144,7 +172,7 @@ public sealed class PlaybackTests
     public async Task ExternalMpvPlaybackServiceReturnsFriendlyMessageWhenPlaybackUrlIsMissing()
     {
         var video = CreateVideo("abc");
-        var request = new PlaybackRequest(video);
+        var request = new PlaybackRequest([video]);
         var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder());
 
         var message = await service.PlayAsync(request);
@@ -156,7 +184,7 @@ public sealed class PlaybackTests
     public async Task ExternalMpvPlaybackServiceReturnsCleanMessageWhenPlaybackUrlIsInvalid()
     {
         var video = CreateVideo("abc123_X-yZ", "ftp://example.com/video.mp4");
-        var request = new PlaybackRequest(video);
+        var request = new PlaybackRequest([video]);
         var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder());
 
         var message = await service.PlayAsync(request);
@@ -167,7 +195,7 @@ public sealed class PlaybackTests
     [Fact]
     public void MpvCommandBuilderRejectsNonHttpPlaybackUrlCleanly()
     {
-        var request = new PlaybackRequest(CreateVideo("abc123_X-yZ", "file:///tmp/video.mp4"));
+        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ", "file:///tmp/video.mp4")]);
 
         var exception =
             Assert.Throws<InvalidOperationException>(() =>
@@ -181,7 +209,7 @@ public sealed class PlaybackTests
         var options = new PlaybackOptions { MpvExecutablePath = "silverscreen-missing-mpv-for-test" };
         var service = new ExternalMpvPlaybackService(options, new MpvCommandBuilder());
 
-        var message = await service.PlayAsync(new PlaybackRequest(CreateVideo("abc123_X-yZ")));
+        var message = await service.PlayAsync(new PlaybackRequest([CreateVideo("abc123_X-yZ")]));
 
         Assert.Equal("Could not start MPV. Is it installed?", message);
     }

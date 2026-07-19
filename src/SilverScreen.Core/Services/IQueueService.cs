@@ -13,7 +13,9 @@ public interface IQueueService
 
     QueueItem AddNext(VideoSummary video);
 
-    bool Remove(QueueItem item);
+    bool Move(Guid itemId, int destinationIndex);
+
+    bool Remove(Guid itemId);
 
     void Clear();
 }

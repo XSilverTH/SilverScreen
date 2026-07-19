@@ -1,3 +1,3 @@
 namespace SilverScreen.Core.Models;
 
-public sealed record QueueItem(VideoSummary Video, DateTimeOffset AddedAt, int Position = 0);
+public sealed record QueueItem(Guid Id, VideoSummary Video, DateTimeOffset AddedAt);

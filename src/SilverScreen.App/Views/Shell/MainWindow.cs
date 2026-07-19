@@ -8,6 +8,7 @@ using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
+using SilverScreen.Views.Queue;
 using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
@@ -25,9 +26,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly AccountViewModel _accountViewModel;
     private readonly Action _disposeApplicationServices;
     private readonly HomeView _home;
-    private readonly MenuButton _queueButton;
-    private readonly QueuePopoverView _queuePopover;
+    private readonly ToggleButton _queueButton;
+    private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
+    private readonly OverlaySplitView _queueSplitView;
+    private readonly Box _queueSidebarHost;
     private readonly SearchView _search;
     private readonly Button _searchButton;
     private readonly Entry _searchEntry;
@@ -48,15 +51,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchButton = GetRequiredObject<Button>("search_button");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
         var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
-        _queueButton = GetRequiredObject<MenuButton>("queue_button");
+        _queueButton = GetRequiredObject<ToggleButton>("queue_button");
+        _queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
+        _queueSidebarHost = GetRequiredObject<Box>("queue_sidebar_host");
         _statusLabel = GetRequiredObject<Label>("status_label");
 
         var actions = CreateVideoActions();
         _home = new HomeView(new HomeViewModel(services.HomeFeed), services.Thumbnails, actions);
         _search = new SearchView(new SearchViewModel(services.Search, services.Playback, _shell), services.Thumbnails,
             actions);
-        _queueViewModel = new QueueViewModel(services.Queue);
-        _queuePopover = new QueuePopoverView(_queueViewModel);
+        _queueViewModel = new QueueViewModel(services.Queue, services.Playback, _shell);
+        _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
+        _queueSidebarHost.Append(_queueView.Widget);
         _accountViewModel = new AccountViewModel(services.Session, services.SessionValidation, _shell);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
@@ -74,7 +80,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _accountButton.Popover = CreateAccountPopover();
-        _queueButton.Popover = CreateQueuePopover();
+        _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
+            GObject.BindingFlags.Bidirectional | GObject.BindingFlags.SyncCreate);
         appMenuButton.MenuModel = CreateApplicationMenuModel();
         _searchPopover = CreateSearchPopover(out _searchEntry);
         _shell.PropertyChanged += OnShellPropertyChanged;
@@ -88,7 +95,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return new VideoCardActions
         {
             PlayAsync = async video =>
-                _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false),
+                _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
             AddToQueue = video =>
             {
                 _services.Queue.Add(video);
@@ -142,12 +149,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return popover;
     }
 
-    private Popover CreateQueuePopover()
-    {
-        var popover = Popover.New();
-        popover.Child = _queuePopover.Widget;
-        return popover;
-    }
 
     private Popover CreateAccountPopover()
     {
@@ -218,8 +219,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateQueueButton(QueuePresentationState state)
     {
-        _queueButton.Visible = state.IsVisible;
-        _queueButton.Child = QueueButtonContent(FormatQueuedDuration(state.TotalDuration));
+        _queueButton.Child = QueueButtonContent(state.Items.Count);
+    }
+
+    private void CloseQueue()
+    {
+        _queueButton.Active = false;
     }
 
     private void OpenWebLogin()
@@ -248,7 +253,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueViewModel.StateChanged -= OnQueueStateChanged;
         _home.Dispose();
         _search.Dispose();
-        _queuePopover.Dispose();
+        _queueView.Dispose();
         _webLogin?.Dispose();
         _webLogin = null;
         _accountPopover.Dispose();
@@ -267,26 +272,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return page;
     }
 
-    private static Box QueueButtonContent(string duration)
+    private static Box QueueButtonContent(int count)
     {
         var content = Box.New(Orientation.Horizontal, 6);
-        content.MarginStart = 10;
-        content.MarginEnd = 10;
-        content.MarginTop = 6;
-        content.MarginBottom = 6;
+        content.MarginStart = 8;
+        content.MarginEnd = 8;
+        content.MarginTop = 4;
+        content.MarginBottom = 4;
         var icon = Image.NewFromIconName("playlist-symbolic");
         icon.PixelSize = 16;
         content.Append(icon);
-        content.Append(Label.New(duration));
+        var label = Label.New(count.ToString());
+        label.CssClasses = ["queue-count"];
+        content.Append(label);
         return content;
-    }
-
-    private static string FormatQueuedDuration(TimeSpan duration)
-    {
-        return duration.TotalHours >= 1
-            ? $"{(int)duration.TotalHours}h {duration.Minutes:00}m"
-            : duration.TotalMinutes >= 1
-                ? $"{(int)duration.TotalMinutes}m"
-                : $"{duration.Seconds}s";
     }
 }

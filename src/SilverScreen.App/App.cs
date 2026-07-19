@@ -83,6 +83,44 @@ public partial class App
                                  color: #ffffff;
                                  padding: 2px 6px;
                                }
+
+                               .queue-panel {
+                                 background-color: @window_bg_color;
+                                 border-left: 1px solid @borders;
+                               }
+
+                               .queue-row {
+                                 background-color: @card_bg_color;
+                                 border: 1px solid @borders;
+                                 border-radius: 12px;
+                                 margin-top: 3px;
+                                 margin-bottom: 3px;
+                               }
+
+                               .queue-thumbnail {
+                                 background-color: #1b1c20;
+                                 border-radius: 8px;
+                               }
+
+                               .queue-thumbnail image {
+                                 border-radius: 8px;
+                               }
+
+                               .queue-row.queue-drop-before {
+                                 border-top: 2px solid @accent_bg_color;
+                               }
+
+                               .queue-row.queue-drop-after {
+                                 border-bottom: 2px solid @accent_bg_color;
+                               }
+
+                               .queue-count {
+                                 background-color: @accent_bg_color;
+                                 border-radius: 999px;
+                                 color: @accent_fg_color;
+                                 min-width: 1.5em;
+                                 padding: 1px 5px;
+                               }
                                """);
 
         StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);

@@ -6,45 +6,51 @@ Adw.ApplicationWindow MainWindow {
   default-height: 760;
   title: "SilverScreen";
 
-  content: Adw.ToolbarView {
-    [top]
-    Adw.HeaderBar {
-      [start]
-      MenuButton account_button {
-        icon-name: "avatar-default-symbolic";
-        tooltip-text: "Account";
+  content: Adw.OverlaySplitView queue_split_view {
+    sidebar-position: end;
+    collapsed: true;
+
+    content: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        [start]
+        MenuButton account_button {
+          icon-name: "avatar-default-symbolic";
+          tooltip-text: "Account";
+        }
+
+        [start]
+        Button search_button {
+          icon-name: "system-search-symbolic";
+          tooltip-text: "Search";
+          clicked => $OnSearchButtonClicked();
+        }
+
+        title-widget: Adw.ViewSwitcher view_switcher {
+          policy: wide;
+        };
+
+        [end]
+        Button home_refresh_button {
+          icon-name: "view-refresh-symbolic";
+          tooltip-text: "Refresh Home";
+          clicked => $OnHomeRefreshButtonClicked();
+        }
+
+        [end]
+        ToggleButton queue_button {
+          tooltip-text: "Queued videos";
+          styles ["flat"]
+        }
+
+        [end]
+        MenuButton app_menu_button {
+          icon-name: "open-menu-symbolic";
+          tooltip-text: "Main Menu";
+        }
       }
 
-      [start]
-      Button search_button {
-        icon-name: "system-search-symbolic";
-        tooltip-text: "Search";
-        clicked => $OnSearchButtonClicked();
-      }
-
-      title-widget: Adw.ViewSwitcher view_switcher {
-        policy: wide;
-      };
-
-      [end]
-      Button home_refresh_button {
-        icon-name: "view-refresh-symbolic";
-        tooltip-text: "Refresh Home";
-        clicked => $OnHomeRefreshButtonClicked();
-      }
-
-      [end]
-      MenuButton app_menu_button {
-        icon-name: "open-menu-symbolic";
-        tooltip-text: "Main Menu";
-      }
-    }
-
-    content: Overlay {
-      hexpand: true;
-      vexpand: true;
-
-      child: Box {
+      content: Box {
         hexpand: true;
         vexpand: true;
         orientation: vertical;
@@ -66,20 +72,12 @@ Adw.ApplicationWindow MainWindow {
           ellipsize: end;
           styles ["caption", "dim-label"]
         }
-
       };
+    };
 
-
-      [overlay]
-      MenuButton queue_button {
-        halign: end;
-        valign: end;
-        margin-end: 24;
-        margin-bottom: 24;
-        tooltip-text: "Queued videos";
-        visible: false;
-        styles ["pill", "suggested-action"]
-      }
+    sidebar: Gtk.Box queue_sidebar_host {
+      hexpand: false;
+      vexpand: true;
     };
   };
 }

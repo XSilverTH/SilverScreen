@@ -149,7 +149,7 @@ public sealed class SearchViewModel(
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
-        shell.Status = await playbackService.PlayAsync(new PlaybackRequest(video)).ConfigureAwait(false);
+        shell.Status = await playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
