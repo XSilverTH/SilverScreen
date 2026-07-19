@@ -8,4 +8,5 @@ public sealed class AppPreferences
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public int MaxResults { get; set; } = 20;
     public bool MarkWatchedVideos { get; set; }
+    public bool DiscordRichPresenceEnabled { get; set; }
 }

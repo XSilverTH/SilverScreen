@@ -4,6 +4,19 @@ namespace SilverScreen.Core.Models;
 
 public sealed record PlaybackRequest(ImmutableArray<VideoSummary> Videos)
 {
+    public string? PlaybackUrl
+    {
+        get
+        {
+            if (Videos.IsDefaultOrEmpty) return null;
+
+            var video = Videos[0];
+            return string.IsNullOrWhiteSpace(video.WatchUrl)
+                ? BuildWatchUrl(video.Id)
+                : video.WatchUrl;
+        }
+    }
+
 
     public static string? BuildWatchUrl(string videoId)
     {

@@ -12,6 +12,10 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
+    private readonly IPlaybackPresenceService? _playbackPresenceService;
+    private readonly object _activePlaybackLock = new();
+    private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
+    private long _nextPlaybackId;
 
     public ExternalMpvPlaybackService()
         : this(new PlaybackOptions(), new MpvCommandBuilder())
@@ -21,23 +25,27 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     public ExternalMpvPlaybackService(
         PlaybackOptions options,
         MpvCommandBuilder commandBuilder,
-        ICookieFileProvider? cookieFileProvider = null)
+        ICookieFileProvider? cookieFileProvider = null,
+        IPlaybackPresenceService? playbackPresenceService = null)
     {
         _staticOptions = options;
         _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = null;
+        _playbackPresenceService = playbackPresenceService;
     }
 
     public ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
         MpvCommandBuilder commandBuilder,
-        ICookieFileProvider? cookieFileProvider = null)
+        ICookieFileProvider? cookieFileProvider = null,
+        IPlaybackPresenceService? playbackPresenceService = null)
     {
         _staticOptions = new PlaybackOptions();
         _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
+        _playbackPresenceService = playbackPresenceService;
     }
 
     public async Task<string> PlayAsync(PlaybackRequest request)
@@ -62,10 +70,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             }
 
             LogDebug($"MPV process started. pid={TryGetProcessId(started)}.");
+            var playbackId = RegisterActivePlayback(request, DateTimeOffset.UtcNow);
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
 
-            _ = ObserveProcessExitAsync(started, cookieFileForProcess);
+            _ = ObserveProcessExitAsync(started, cookieFileForProcess, playbackId);
 
             return "Opening in MPV.";
         }
@@ -96,6 +105,38 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         };
     }
 
+    internal long RegisterActivePlayback(PlaybackRequest request, DateTimeOffset startedAt)
+    {
+        lock (_activePlaybackLock)
+        {
+            var playback = new ActivePlayback(++_nextPlaybackId, request, startedAt);
+            _activePlaybacks.Add(playback.Id, playback);
+            SetPresenceQuietly(playback.Request, playback.StartedAt);
+            return playback.Id;
+        }
+    }
+
+    internal void CompleteActivePlayback(long playbackId)
+    {
+        lock (_activePlaybackLock)
+        {
+            if (!_activePlaybacks.TryGetValue(playbackId, out var completedPlayback)) return;
+
+            var wasMostRecent = _activePlaybacks.Keys.Max() == completedPlayback.Id;
+            _activePlaybacks.Remove(playbackId);
+            if (!wasMostRecent) return;
+
+            if (_activePlaybacks.Count == 0)
+            {
+                ClearPresenceQuietly();
+                return;
+            }
+
+            var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id)!;
+            SetPresenceQuietly(currentPlayback.Request, currentPlayback.StartedAt);
+        }
+    }
+
     internal static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
     {
         try
@@ -121,7 +162,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
     }
 
-    private static async Task ObserveProcessExitAsync(Process process, IDisposable? cookieFileLease)
+    private async Task ObserveProcessExitAsync(Process process, IDisposable? cookieFileLease, long playbackId)
     {
         try
         {
@@ -133,6 +174,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
         finally
         {
+            CompleteActivePlayback(playbackId);
             HandleProcessExited(process, cookieFileLease);
         }
     }
@@ -189,6 +231,36 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         return command.Arguments.Any(argument =>
             argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
     }
+
+    private void SetPresenceQuietly(PlaybackRequest request, DateTimeOffset startedAt)
+    {
+        if (_playbackPresenceService is null) return;
+
+        try
+        {
+            _playbackPresenceService.SetPlaying(request, startedAt);
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"Playback presence update failed safely. error={ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void ClearPresenceQuietly()
+    {
+        if (_playbackPresenceService is null) return;
+
+        try
+        {
+            _playbackPresenceService.Clear();
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"Playback presence clear failed safely. error={ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private sealed record ActivePlayback(long Id, PlaybackRequest Request, DateTimeOffset StartedAt);
 
     private static void LogDebug(string message)
     {

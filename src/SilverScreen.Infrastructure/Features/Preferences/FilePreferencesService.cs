@@ -86,7 +86,8 @@ public sealed class FilePreferencesService : IPreferencesService
             VideoQuality = source.VideoQuality,
             YtDlpExecutablePath = source.YtDlpExecutablePath,
             MaxResults = source.MaxResults,
-            MarkWatchedVideos = source.MarkWatchedVideos
+            MarkWatchedVideos = source.MarkWatchedVideos,
+            DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled
         };
     }
 

@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="DiscordRichPresence" Version="1.6.1.70"/>
         <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
         <InternalsVisibleTo Include="SilverScreen.Tests"/>
     </ItemGroup>

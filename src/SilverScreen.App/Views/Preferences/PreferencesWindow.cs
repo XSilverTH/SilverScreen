@@ -11,6 +11,7 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private static readonly string[] Themes = ["System", "Light", "Dark"];
     private static readonly string[] Qualities = ["Best", "1080p", "720p", "480p", "360p"];
     private readonly SwitchRow _markWatchedRow;
+    private readonly SwitchRow _discordRichPresenceRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly IPreferencesService _preferencesService;
@@ -30,6 +31,7 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _mpvPathRow = GetRequiredObject<EntryRow>("mpv_path_row");
         _qualityRow = GetRequiredObject<ComboRow>("quality_row");
         _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
+        _discordRichPresenceRow = GetRequiredObject<SwitchRow>("discord_rich_presence_row");
 
         InitializeFields();
         SetupEventHandlers();
@@ -57,6 +59,7 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
             _markWatchedRow.Active = prefs.MarkWatchedVideos;
+            _discordRichPresenceRow.Active = prefs.DiscordRichPresenceEnabled;
         }
         finally
         {
@@ -70,6 +73,7 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _themeRow.OnNotify += OnRowNotify;
         _qualityRow.OnNotify += OnRowNotify;
         _markWatchedRow.OnNotify += OnRowNotify;
+        _discordRichPresenceRow.OnNotify += OnRowNotify;
 
         // Handle text entry changes
         ((Editable)_ytdlpPathRow).OnChanged += OnRowChanged;
@@ -107,7 +111,8 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             YtDlpExecutablePath = ((Editable)_ytdlpPathRow).GetText(),
             MpvExecutablePath = ((Editable)_mpvPathRow).GetText(),
             MaxResults = maxResults,
-            MarkWatchedVideos = _markWatchedRow.Active
+            MarkWatchedVideos = _markWatchedRow.Active,
+            DiscordRichPresenceEnabled = _discordRichPresenceRow.Active
         };
 
         _preferencesService.SavePreferences(prefs);

@@ -38,6 +38,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("Best", prefs.VideoQuality);
         Assert.Equal(20, prefs.MaxResults);
         Assert.False(prefs.MarkWatchedVideos);
+        Assert.False(prefs.DiscordRichPresenceEnabled);
     }
 
     [Fact]
@@ -51,7 +52,8 @@ public sealed class PreferencesTests : IDisposable
             YtDlpExecutablePath = "/custom/yt-dlp",
             VideoQuality = "1080p",
             MaxResults = 50,
-            MarkWatchedVideos = true
+            MarkWatchedVideos = true,
+            DiscordRichPresenceEnabled = true
         };
 
         service.SavePreferences(newPrefs);
@@ -67,6 +69,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("1080p", loaded.VideoQuality);
         Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
+        Assert.True(loaded.DiscordRichPresenceEnabled);
     }
 
     [Fact]
@@ -80,7 +83,8 @@ public sealed class PreferencesTests : IDisposable
             YtDlpExecutablePath = "yt-dlp",
             VideoQuality = "720p",
             MaxResults = 10,
-            MarkWatchedVideos = true
+            MarkWatchedVideos = true,
+            DiscordRichPresenceEnabled = true
         };
 
         AppPreferences? eventArgs = null;
@@ -93,5 +97,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("720p", eventArgs.VideoQuality);
         Assert.Equal(10, eventArgs.MaxResults);
         Assert.True(eventArgs.MarkWatchedVideos);
+        Assert.True(eventArgs.DiscordRichPresenceEnabled);
     }
 }

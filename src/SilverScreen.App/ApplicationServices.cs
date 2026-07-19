@@ -19,7 +19,10 @@ public sealed class ApplicationServices : IDisposable
         Queue = new QueueService();
         Session = new SecretServiceSessionService();
         CookieFiles = new TemporaryCookieFileProvider(Session);
-        Playback = new ExternalMpvPlaybackService(Preferences, new MpvCommandBuilder(), CookieFiles);
+        PlaybackPresence = new DiscordPresenceService(
+            Preferences,
+            "1528325550475579522");
+        Playback = new ExternalMpvPlaybackService(Preferences, new MpvCommandBuilder(), CookieFiles, PlaybackPresence);
         Search = new YtDlpSearchService(Preferences, new YtDlpRunner(CookieFiles));
         Thumbnails = new ThumbnailCacheService();
         YouTubeHomeClient = new YtDlpHomeClient(Session, CookieFiles);
@@ -34,6 +37,7 @@ public sealed class ApplicationServices : IDisposable
     public IQueueService Queue { get; }
     public ISessionService Session { get; }
     private ICookieFileProvider CookieFiles { get; }
+    private DiscordPresenceService PlaybackPresence { get; }
     public IPlaybackService Playback { get; }
     public ISearchService Search { get; }
     public IThumbnailService Thumbnails { get; }
@@ -49,5 +53,6 @@ public sealed class ApplicationServices : IDisposable
         HomeFeed.Dispose();
         AuthenticatedHomeFeed.Dispose();
         if (Thumbnails is IDisposable disposableThumbnails) disposableThumbnails.Dispose();
+        PlaybackPresence.Dispose();
     }
 }

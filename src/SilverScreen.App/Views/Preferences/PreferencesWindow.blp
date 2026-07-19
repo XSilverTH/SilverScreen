@@ -62,5 +62,14 @@ Adw.PreferencesWindow PreferencesWindow {
         subtitle: "Use your signed-in session to add played videos to watch history";
       }
     }
+
+    Adw.PreferencesGroup {
+      title: "Discord";
+
+      Adw.SwitchRow discord_rich_presence_row {
+        title: "Share playback activity on Discord";
+        subtitle: "Show the current video in your Discord profile";
+      }
+    }
   }
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
 
 namespace SilverScreen.Tests;
@@ -15,6 +16,56 @@ public sealed class PlaybackTests
         var request = new PlaybackRequest([first, second]);
 
         Assert.Equal(new[] { first, second }, request.Videos.ToArray());
+    }
+
+    [Fact]
+    public void ActivePlaybackLifecycleRestoresTheMostRecentRemainingSession()
+    {
+        var presence = new TrackingPresence();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, presence);
+        var firstRequest = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+        var secondRequest = new PlaybackRequest([CreateVideo("dQw4w9WgXcQ")]);
+        var thirdRequest = new PlaybackRequest([CreateVideo("M7lc1UVf-VE")]);
+        var firstStartedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var thirdStartedAt = DateTimeOffset.UtcNow;
+
+        var firstId = service.RegisterActivePlayback(firstRequest, firstStartedAt);
+        var secondId = service.RegisterActivePlayback(secondRequest, secondStartedAt);
+        var thirdId = service.RegisterActivePlayback(thirdRequest, thirdStartedAt);
+        service.CompleteActivePlayback(secondId);
+
+        Assert.Equal(3, presence.SetCalls.Count);
+        Assert.Equal(thirdRequest, presence.SetCalls[^1].Request);
+
+        service.CompleteActivePlayback(thirdId);
+
+        Assert.Equal(firstRequest, presence.SetCalls[^1].Request);
+        Assert.Equal(firstStartedAt, presence.SetCalls[^1].StartedAt);
+
+        service.CompleteActivePlayback(firstId);
+        Assert.Equal(1, presence.ClearCount);
+        service.CompleteActivePlayback(999);
+        Assert.Equal(1, presence.ClearCount);
+    }
+
+    [Fact]
+    public async Task ActivePlaybackRegistrationSerializesPresencePublication()
+    {
+        var presence = new BlockingPresence();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, presence);
+        var firstRequest = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+        var secondRequest = new PlaybackRequest([CreateVideo("dQw4w9WgXcQ")]);
+
+        var first = Task.Run(() => service.RegisterActivePlayback(firstRequest, DateTimeOffset.UtcNow));
+        Assert.True(presence.FirstSetStarted.Wait(TimeSpan.FromSeconds(5)));
+        var second = Task.Run(() => service.RegisterActivePlayback(secondRequest, DateTimeOffset.UtcNow));
+        Assert.NotSame(second, await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(100))));
+
+        presence.ReleaseFirstSet.Set();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal([firstRequest, secondRequest], presence.SetCalls.Select(call => call.Request));
     }
 
     [Fact]
@@ -173,11 +224,13 @@ public sealed class PlaybackTests
     {
         var video = CreateVideo("abc");
         var request = new PlaybackRequest([video]);
-        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder());
+        var presence = new TrackingPresence();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, presence);
 
         var message = await service.PlayAsync(request);
 
         Assert.Equal("No playable URL is available.", message);
+        Assert.Empty(presence.SetCalls);
     }
 
     [Fact]
@@ -185,11 +238,13 @@ public sealed class PlaybackTests
     {
         var video = CreateVideo("abc123_X-yZ", "ftp://example.com/video.mp4");
         var request = new PlaybackRequest([video]);
-        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder());
+        var presence = new TrackingPresence();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, presence);
 
         var message = await service.PlayAsync(request);
 
         Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", message);
+        Assert.Empty(presence.SetCalls);
     }
 
     [Fact]
@@ -207,11 +262,13 @@ public sealed class PlaybackTests
     public async Task ExternalMpvPlaybackServiceReportsMissingExecutableCleanly()
     {
         var options = new PlaybackOptions { MpvExecutablePath = "silverscreen-missing-mpv-for-test" };
-        var service = new ExternalMpvPlaybackService(options, new MpvCommandBuilder());
+        var presence = new TrackingPresence();
+        var service = new ExternalMpvPlaybackService(options, new MpvCommandBuilder(), null, presence);
 
         var message = await service.PlayAsync(new PlaybackRequest([CreateVideo("abc123_X-yZ")]));
 
         Assert.Equal("Could not start MPV. Is it installed?", message);
+        Assert.Empty(presence.SetCalls);
     }
 
     [Fact]
@@ -269,6 +326,55 @@ public sealed class PlaybackTests
     {
         return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
             watchUrl);
+    }
+
+    private sealed class TrackingPresence : IPlaybackPresenceService
+    {
+        public int ClearCount { get; private set; }
+        public List<(PlaybackRequest Request, DateTimeOffset StartedAt)> SetCalls { get; } = [];
+
+        public void SetPlaying(PlaybackRequest request, DateTimeOffset startedAt)
+        {
+            SetCalls.Add((request, startedAt));
+        }
+
+        public void Clear()
+        {
+            ClearCount++;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class BlockingPresence : IPlaybackPresenceService
+    {
+        public ManualResetEventSlim FirstSetStarted { get; } = new();
+        public ManualResetEventSlim ReleaseFirstSet { get; } = new();
+        public List<(PlaybackRequest Request, DateTimeOffset StartedAt)> SetCalls { get; } = [];
+
+        public void SetPlaying(PlaybackRequest request, DateTimeOffset startedAt)
+        {
+            lock (SetCalls)
+            {
+                SetCalls.Add((request, startedAt));
+                if (SetCalls.Count > 1) return;
+            }
+
+            FirstSetStarted.Set();
+            ReleaseFirstSet.Wait(TimeSpan.FromSeconds(5));
+        }
+
+        public void Clear()
+        {
+        }
+
+        public void Dispose()
+        {
+            FirstSetStarted.Dispose();
+            ReleaseFirstSet.Dispose();
+        }
     }
 
     private sealed class TrackingDisposable : IDisposable
