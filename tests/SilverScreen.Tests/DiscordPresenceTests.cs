@@ -1,4 +1,5 @@
 using DiscordRPC;
+using DiscordRPC.Entities;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
