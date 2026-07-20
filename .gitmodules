@@ -1,0 +1,3 @@
+[submodule "lib/Hi3Helper.SharpDiscordRPC"]
+	path = lib/Hi3Helper.SharpDiscordRPC
+	url = https://github.com/CollapseLauncher/Hi3Helper.SharpDiscordRPC.git
