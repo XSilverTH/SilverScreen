@@ -48,7 +48,7 @@ public sealed class FilePreferencesService : IPreferencesService
                 var directory = Path.GetDirectoryName(_filePath);
                 if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
-                var json = JsonSerializer.Serialize(cloned, new JsonSerializerOptions { WriteIndented = true });
+                var json = JsonSerializer.Serialize(cloned, PreferencesJsonContext.Default.AppPreferences);
                 File.WriteAllText(_filePath, json);
             }
             catch (Exception ex)
@@ -67,7 +67,7 @@ public sealed class FilePreferencesService : IPreferencesService
             if (File.Exists(_filePath))
             {
                 var json = File.ReadAllText(_filePath);
-                var preferences = JsonSerializer.Deserialize<AppPreferences>(json);
+                var preferences = JsonSerializer.Deserialize(json, PreferencesJsonContext.Default.AppPreferences);
                 if (preferences is not null) return preferences;
             }
         }

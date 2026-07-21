@@ -83,46 +83,33 @@ public sealed class YouTubeHomeClient(
             );
 
         // 4. Build JSON request payload
-        var clientContext = new Dictionary<string, object>
+        var payload = new BrowseRequestPayload
         {
-            ["clientName"] = "WEB",
-            ["clientVersion"] = config.ClientVersion,
-            ["originalUrl"] = "https://www.youtube.com/",
-            ["hl"] = "en",
-            ["gl"] = "US"
+            Context = new BrowseRequestContext
+            {
+                Client = new BrowseRequestClientContext
+                {
+                    ClientName = "WEB",
+                    ClientVersion = config.ClientVersion,
+                    OriginalUrl = "https://www.youtube.com/",
+                    Hl = "en",
+                    Gl = "US",
+                    VisitorData = string.IsNullOrEmpty(config.VisitorData) ? null : config.VisitorData
+                },
+                User = new BrowseRequestUserContext
+                {
+                    LockedSafetyMode = false,
+                    Authuser = _options.AuthUser
+                }
+            },
+            BrowseId = string.IsNullOrEmpty(continuationToken) ? "FEwhat_to_watch" : null,
+            Continuation = continuationToken
         };
-
-        if (!string.IsNullOrEmpty(config.VisitorData))
-            clientContext["visitorData"] = config.VisitorData;
-
-        var userContext = new Dictionary<string, object>
-        {
-            ["lockedSafetyMode"] = false
-        };
-
-        if (_options.AuthUser.HasValue)
-            userContext["authuser"] = _options.AuthUser.Value;
-
-        var context = new Dictionary<string, object>
-        {
-            ["client"] = clientContext,
-            ["user"] = userContext
-        };
-
-        var payload = new Dictionary<string, object>
-        {
-            ["context"] = context
-        };
-
-        if (string.IsNullOrEmpty(continuationToken))
-            payload["browseId"] = "FEwhat_to_watch";
-        else
-            payload["continuation"] = continuationToken;
 
         string jsonPayload;
         try
         {
-            jsonPayload = JsonSerializer.Serialize(payload);
+            jsonPayload = JsonSerializer.Serialize(payload, YouTubeRequestJsonContext.Default.BrowseRequestPayload);
         }
         catch (Exception)
         {
