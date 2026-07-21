@@ -1,3 +1,4 @@
+using Serilog;
 using System.Security.Cryptography;
 using System.Text;
 using SilverScreen.Core.Models;
@@ -5,13 +6,15 @@ using SilverScreen.Core.Services;
 
 namespace SilverScreen.Infrastructure.Features.Session;
 
-public sealed class SecretServiceSessionService : ISessionService
+public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
     private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
     private ManualSessionCookies? _manualCookies;
+    private bool _isAvailable = true;
 
     public SecretServiceSessionService()
         : this(new LibSecretCookieStore())
@@ -25,13 +28,26 @@ public sealed class SecretServiceSessionService : ISessionService
         {
             _manualCookies = LoadStoredCookies();
         }
-        catch (SessionPersistenceException)
+        catch (SessionPersistenceException exception)
         {
+            Logger.Warning(exception, "Secret Service was unavailable while restoring the YouTube session");
+            _isAvailable = false;
             _manualCookies = null;
         }
     }
 
     public event EventHandler? SessionChanged;
+
+    public bool IsAvailable
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isAvailable;
+            }
+        }
+    }
 
     public AccountSession GetCurrentSession()
     {
@@ -66,8 +82,18 @@ public sealed class SecretServiceSessionService : ISessionService
             lock (_gate)
             {
                 _store.Save(encodedCookies);
+                _isAvailable = true;
                 _manualCookies = new ManualSessionCookies(format, cookieContent);
             }
+        }
+        catch (SessionPersistenceException)
+        {
+            lock (_gate)
+            {
+                _isAvailable = false;
+            }
+
+            throw;
         }
         finally
         {
@@ -80,11 +106,24 @@ public sealed class SecretServiceSessionService : ISessionService
     public void ClearSession()
     {
         bool changed;
-        lock (_gate)
+        try
         {
-            _store.Delete();
-            changed = _manualCookies is not null;
-            _manualCookies = null;
+            lock (_gate)
+            {
+                _store.Delete();
+                _isAvailable = true;
+                changed = _manualCookies is not null;
+                _manualCookies = null;
+            }
+        }
+        catch (SessionPersistenceException)
+        {
+            lock (_gate)
+            {
+                _isAvailable = false;
+            }
+
+            throw;
         }
 
         if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);

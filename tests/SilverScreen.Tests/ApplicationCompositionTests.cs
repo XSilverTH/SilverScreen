@@ -17,11 +17,13 @@ public sealed class ApplicationCompositionTests
         var preferences = new InMemoryPreferencesService();
         var session = new InMemorySessionService();
         var playback = new FakePlaybackService();
+        var secretServiceAvailability = new SecretServiceAvailability();
         var collection = new ServiceCollection();
 
         collection.AddSilverScreenServices(configuration);
         collection.AddSingleton<IPreferencesService>(preferences);
         collection.AddSingleton<ISessionService>(session);
+        collection.AddSingleton<ISecretServiceAvailability>(secretServiceAvailability);
         collection.AddSingleton<IPlaybackService>(playback);
 
         using var provider = collection.BuildServiceProvider(new ServiceProviderOptions
@@ -35,6 +37,7 @@ public sealed class ApplicationCompositionTests
         Assert.Same(preferences, services.Preferences);
         Assert.Same(session, services.Session);
         Assert.Same(playback, services.Playback);
+        Assert.NotNull(services.RuntimeDependencyDiagnostics);
     }
 
     private sealed class InMemoryPreferencesService : IPreferencesService
@@ -55,5 +58,10 @@ public sealed class ApplicationCompositionTests
     private sealed class FakePlaybackService : IPlaybackService
     {
         public Task<string> PlayAsync(PlaybackRequest request) => Task.FromResult("Played.");
+    }
+
+    private sealed class SecretServiceAvailability : ISecretServiceAvailability
+    {
+        public bool IsAvailable => true;
     }
 }

@@ -13,7 +13,7 @@ Search YouTube or paste a video link, then play it with your local MPV install. 
 - The `libsecret` shared library and an unlocked Freedesktop Secret Service provider, such as GNOME Keyring or KWallet configured with Secret Service support. `secret-tool` is optional for manual diagnostics and is not an application dependency.
 - [`mpv`](https://mpv.io/) on `PATH` for playback.
 
-The app launches `yt-dlp` and `mpv` by those names. If either command is missing, the related action cannot run.
+The app checks the configured `yt-dlp`, `mpv`, and Secret Service dependencies when its main window opens. If setup is incomplete, the status area explains what is unavailable and how to recover; hover it to read the full guidance. Install the missing executable or keyring provider, unlock the keyring, and use **Preferences** to correct a custom executable path before retrying the related action.
 
 ## Run it
 

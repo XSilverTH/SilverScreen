@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
@@ -17,7 +18,7 @@ public sealed class MpvCommandBuilder
             throw new InvalidOperationException("External MPV playback is disabled.");
 
         if (string.IsNullOrWhiteSpace(options.MpvExecutablePath))
-            throw new InvalidOperationException("MPV executable path is not configured.");
+            throw new InvalidOperationException(RuntimeDependencyGuidance.MpvUnavailable(options.MpvExecutablePath));
 
         if (request.Videos.IsDefaultOrEmpty)
             throw new InvalidOperationException("No videos were provided for playback.");

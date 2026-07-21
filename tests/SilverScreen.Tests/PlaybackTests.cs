@@ -267,7 +267,9 @@ public sealed class PlaybackTests
 
         var message = await service.PlayAsync(new PlaybackRequest([CreateVideo("abc123_X-yZ")]));
 
-        Assert.Equal("Could not start MPV. Is it installed?", message);
+        Assert.Equal(
+            "MPV could not be started from 'silverscreen-missing-mpv-for-test'. Install MPV, then set its executable path in Preferences → MPV Configuration.",
+            message);
         Assert.Empty(presence.SetCalls);
     }
 

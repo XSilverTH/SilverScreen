@@ -75,8 +75,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
         return PersistSession(
             cookieContent.Trim(),
-            "Manual YouTube session saved securely.",
-            "Manual YouTube session could not be saved because the system keyring is unavailable.");
+            "Manual YouTube session saved securely.");
     }
 
     public bool SaveWebSession(string cookieContent)
@@ -89,19 +88,18 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
         return PersistSession(
             cookieContent.Trim(),
-            "YouTube web session saved securely.",
-            "YouTube session could not be saved because the system keyring is unavailable.");
+            "YouTube web session saved securely.");
     }
 
-    private bool PersistSession(string cookieContent, string successMessage, string failureMessage)
+    private bool PersistSession(string cookieContent, string successMessage)
     {
         try
         {
             _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
         }
-        catch (SessionPersistenceException)
+        catch (SessionPersistenceException exception)
         {
-            _shell.Status = failureMessage;
+            _shell.Status = exception.Message;
             return false;
         }
 
@@ -115,9 +113,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         {
             _sessionService.ClearSession();
         }
-        catch (SessionPersistenceException)
+        catch (SessionPersistenceException exception)
         {
-            _shell.Status = "YouTube session could not be cleared because the system keyring is unavailable.";
+            _shell.Status = exception.Message;
             return;
         }
 

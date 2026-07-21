@@ -37,9 +37,10 @@ public sealed class YtDlpSearchService : ISearchService
     {
         if (string.IsNullOrWhiteSpace(request.Query)) return SearchResultPage.Empty;
 
+        var activeOptions = _staticOptions;
         try
         {
-            var activeOptions = GetActiveOptions();
+            activeOptions = GetActiveOptions();
             var result = await _runner.RunSearchAsync(request, activeOptions, cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
@@ -49,7 +50,7 @@ public sealed class YtDlpSearchService : ISearchService
                 Logger.Warning(
                     "yt-dlp search exited with code {ExitCode}",
                     result.ExitCode);
-                return SearchResultPage.Failed($"Search failed: {error}");
+                return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
             }
 
             var videos = ParseVideos(result.StandardOutput)
@@ -65,7 +66,7 @@ public sealed class YtDlpSearchService : ISearchService
         catch (Win32Exception exception)
         {
             Logger.Warning(exception, "yt-dlp is not installed or could not be started for search");
-            return SearchResultPage.Failed("Search failed: yt-dlp is not installed.");
+            return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpUnavailable(activeOptions.ExecutablePath)}");
         }
         catch (JsonException exception)
         {
@@ -75,7 +76,7 @@ public sealed class YtDlpSearchService : ISearchService
         catch (TimeoutException exception)
         {
             Logger.Warning(exception, "yt-dlp search timed out");
-            return SearchResultPage.Failed($"Search failed: {exception.Message}");
+            return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpTimedOut}");
         }
     }
 

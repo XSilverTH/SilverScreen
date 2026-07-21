@@ -50,7 +50,9 @@ public sealed class YtDlpHomeClientTests
         // Assert
         Assert.False(result.IsSuccess);
         Assert.False(result.RequiresAuthentication);
-        Assert.Equal("yt-dlp process exited with error code 5.", result.StatusMessage);
+        Assert.Equal(
+            "yt-dlp failed: the process exited with error code 5. Update yt-dlp, verify your network connection, and retry.",
+            result.StatusMessage);
 
         // Ensure standard error containing potential private info or secret is NOT leaked
         Assert.DoesNotContain("private key", result.StatusMessage, StringComparison.OrdinalIgnoreCase);
@@ -77,7 +79,9 @@ public sealed class YtDlpHomeClientTests
         // Assert
         Assert.False(result.IsSuccess);
         Assert.False(result.RequiresAuthentication);
-        Assert.Equal("Exception while starting yt-dlp process.", result.StatusMessage);
+        Assert.Equal(
+            "yt-dlp could not be started from 'non-existent-executable-file-path'. Install yt-dlp, then set its executable path in Preferences → Search (yt-dlp).",
+            result.StatusMessage);
         Assert.Empty(result.Videos);
     }
 
@@ -303,7 +307,9 @@ public sealed class YtDlpHomeClientTests
 
         // Assert
         Assert.False(result.IsSuccess);
-        Assert.Equal("yt-dlp process exited with error code 3.", result.StatusMessage);
+        Assert.Equal(
+            "yt-dlp failed: the process exited with error code 3. Update yt-dlp, verify your network connection, and retry.",
+            result.StatusMessage);
         Assert.Empty(result.Videos);
 
         // Assert that only the cookie-backed invocation occurred, and no retry

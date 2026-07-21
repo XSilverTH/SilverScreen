@@ -90,6 +90,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueViewModel.StateChanged += OnQueueStateChanged;
         UpdateQueueButton(_queueViewModel.State);
         Widget.OnCloseRequest += OnCloseRequest;
+        ReportStartupDependencyWarnings();
     }
 
     private VideoCardActions CreateVideoActions()
@@ -110,6 +111,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             },
             ReportStatus = message => _shell.Status = message
         };
+    }
+
+    private void ReportStartupDependencyWarnings()
+    {
+        var warnings = _services.RuntimeDependencyDiagnostics.GetStartupWarnings();
+        if (warnings.Count == 0)
+            return;
+
+        _shell.Status = $"Runtime setup needed: {string.Join(" ", warnings)}";
     }
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
@@ -197,8 +207,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             switch (args.PropertyName)
             {
                 case nameof(ShellViewModel.Status):
-                    Logger.Information("Application status changed: {Status}", _shell.Status);
                     _statusLabel.SetText(_shell.Status);
+                    _statusLabel.TooltipText = _shell.Status;
                     break;
                 case nameof(ShellViewModel.SelectedPage):
                     _stack.VisibleChildName = _shell.SelectedPage;

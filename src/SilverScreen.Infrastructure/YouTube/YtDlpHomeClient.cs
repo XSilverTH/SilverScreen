@@ -90,12 +90,12 @@ public sealed class YtDlpHomeClient(
         catch (TimeoutException exception)
         {
             Logger.Warning(exception, "yt-dlp timed out while loading home recommendations");
-            return Failure("yt-dlp process execution timed out.");
+            return Failure(RuntimeDependencyGuidance.YtDlpTimedOut);
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Could not execute yt-dlp for home recommendations");
-            return Failure("Exception while starting yt-dlp process.");
+            return Failure(RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
         }
 
         if (processResult.ExitCode != 0)
@@ -103,13 +103,14 @@ public sealed class YtDlpHomeClient(
             Logger.Warning(
                 "yt-dlp exited with code {ExitCode} while loading home recommendations",
                 processResult.ExitCode);
-            return Failure($"yt-dlp process exited with error code {processResult.ExitCode}.");
+            return Failure(RuntimeDependencyGuidance.YtDlpFailed(
+                $"the process exited with error code {processResult.ExitCode}."));
         }
 
         if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
         {
             Logger.Warning("yt-dlp returned empty output for home recommendations");
-            return Failure("yt-dlp process returned empty output.");
+            return Failure(RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
         }
 
         try
@@ -127,7 +128,7 @@ public sealed class YtDlpHomeClient(
         catch (Exception exception)
         {
             Logger.Warning(exception, "Could not parse yt-dlp output for home recommendations");
-            return Failure("Failed to parse yt-dlp recommendation output.");
+            return Failure(RuntimeDependencyGuidance.YtDlpFailed("the recommendation output could not be read."));
         }
     }
 

@@ -183,7 +183,9 @@ public sealed class YtDlpSearchServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Empty(result.Videos);
-        Assert.Equal("Search failed: yt-dlp is not installed.", result.StatusMessage);
+        Assert.Equal(
+            "Search failed: yt-dlp could not be started from 'yt-dlp'. Install yt-dlp, then set its executable path in Preferences → Search (yt-dlp).",
+            result.StatusMessage);
     }
 
     [Fact]
@@ -195,7 +197,9 @@ public sealed class YtDlpSearchServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Empty(result.Videos);
-        Assert.Equal("Search failed: ERROR: network unavailable", result.StatusMessage);
+        Assert.Equal(
+            "Search failed: yt-dlp failed: ERROR: network unavailable Update yt-dlp, verify your network connection, and retry.",
+            result.StatusMessage);
     }
 
     [Fact]

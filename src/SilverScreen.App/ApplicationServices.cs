@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Infrastructure.Features.Diagnostics;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Queue;
@@ -20,7 +21,8 @@ public sealed class ApplicationServices(
     ISearchService search,
     IThumbnailService thumbnails,
     HomeFeedCoordinator homeFeed,
-    SessionValidationCoordinator sessionValidation)
+    SessionValidationCoordinator sessionValidation,
+    RuntimeDependencyDiagnostics runtimeDependencyDiagnostics)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -29,6 +31,7 @@ public sealed class ApplicationServices(
     public ISearchService Search { get; } = search;
     public IThumbnailService Thumbnails { get; } = thumbnails;
     public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
+    public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
 }
 
@@ -45,7 +48,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton(configuration);
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
-        services.AddSingleton<ISessionService, SecretServiceSessionService>();
+        services.AddSingleton<SecretServiceSessionService>();
+        services.AddSingleton<ISessionService>(static provider => provider.GetRequiredService<SecretServiceSessionService>());
+        services.AddSingleton<ISecretServiceAvailability>(
+            static provider => provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ICookieFileProvider, TemporaryCookieFileProvider>();
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
@@ -58,10 +64,16 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYtDlpProcessRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<ISearchService, YtDlpSearchService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
-        services.AddSingleton<IYouTubeHomeClient, YtDlpHomeClient>();
+        services.AddSingleton<IYouTubeHomeClient>(provider =>
+            new YtDlpHomeClient(
+                provider.GetRequiredService<ISessionService>(),
+                provider.GetRequiredService<ICookieFileProvider>(),
+                provider.GetRequiredService<IPreferencesService>().GetPreferences().YtDlpExecutablePath,
+                processRunner: provider.GetRequiredService<IYtDlpProcessRunner>()));
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<HomeSessionValidator>();
+        services.AddSingleton<RuntimeDependencyDiagnostics>();
         services.AddSingleton<SessionValidationCoordinator>();
         services.AddSingleton<ApplicationServices>();
 

@@ -53,11 +53,12 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     public async Task<string> PlayAsync(PlaybackRequest request)
     {
         CookieFileLease? cookieFile = null;
+        var activeOptions = _staticOptions;
 
         try
         {
             cookieFile = _cookieFileProvider?.CreateCookieFile();
-            var activeOptions = GetActiveOptions();
+            activeOptions = GetActiveOptions();
             var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path);
             Logger.Information(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}",
@@ -72,7 +73,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             {
                 Logger.Warning("MPV process start returned no process");
                 CleanupCookieLeaseQuietly(cookieFile, "MPV start returned no process");
-                return "Could not start MPV. Is it installed?";
+                return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
             }
 
             Logger.Information("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
@@ -88,7 +89,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             Logger.Warning(ex, "MPV process start failed");
             CleanupCookieLeaseQuietly(cookieFile, "MPV executable start failed");
-            return "Could not start MPV. Is it installed?";
+            return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
         }
         catch (InvalidOperationException ex)
         {

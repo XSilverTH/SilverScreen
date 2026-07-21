@@ -56,6 +56,7 @@ public sealed class SessionTests
     {
         var store = new FakeCookieSecretStore();
         var firstService = new SecretServiceSessionService(store);
+        Assert.True(firstService.IsAvailable);
         var setEvents = 0;
         firstService.SessionChanged += (_, _) =>
         {
@@ -98,6 +99,7 @@ public sealed class SessionTests
         store.FailSave = true;
         Assert.Throws<SessionPersistenceException>(() =>
             service.SetManualSession("replacement", SessionCookieFormat.NetscapeCookiesText));
+        Assert.False(service.IsAvailable);
         Assert.Equal(FakeCookieContent, service.GetManualSessionCookies()?.Content);
         Assert.Equal(FakeCookieContent, store.StoredContent);
         Assert.Equal(0, changes);
@@ -105,12 +107,14 @@ public sealed class SessionTests
         store.FailSave = false;
         store.FailDelete = true;
         Assert.Throws<SessionPersistenceException>(service.ClearSession);
+        Assert.False(service.IsAvailable);
         Assert.Equal(FakeCookieContent, service.GetManualSessionCookies()?.Content);
         Assert.Equal(FakeCookieContent, store.StoredContent);
         Assert.Equal(0, changes);
 
         store.FailDelete = false;
         service.ClearSession();
+        Assert.True(service.IsAvailable);
         Assert.False(service.GetCurrentSession().IsSignedIn);
         Assert.Null(store.StoredContent);
         Assert.Equal(1, changes);
@@ -123,9 +127,11 @@ public sealed class SessionTests
         var service = new SecretServiceSessionService(store);
 
         Assert.False(service.GetCurrentSession().IsSignedIn);
+        Assert.False(service.IsAvailable);
 
         store.FailLoad = false;
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        Assert.True(service.IsAvailable);
 
         Assert.True(service.GetCurrentSession().IsSignedIn);
         Assert.Equal(FakeCookieContent, store.StoredContent);

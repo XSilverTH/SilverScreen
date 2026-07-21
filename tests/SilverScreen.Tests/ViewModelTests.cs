@@ -169,8 +169,7 @@ public sealed class ViewModelTests
         using var viewModel = new AccountViewModel(session, validation, shell);
 
         Assert.False(viewModel.SaveManualSession("cookie"));
-        Assert.Equal("Manual YouTube session could not be saved because the system keyring is unavailable.",
-            shell.Status);
+        Assert.Equal(RuntimeDependencyGuidance.SecretServiceUnavailable, shell.Status);
         Assert.False(viewModel.HasManualSession);
 
         session.FailSave = false;
@@ -180,14 +179,14 @@ public sealed class ViewModelTests
 
         session.FailClear = true;
         viewModel.ClearSession();
-        Assert.Equal("YouTube session could not be cleared because the system keyring is unavailable.", shell.Status);
+        Assert.Equal(RuntimeDependencyGuidance.SecretServiceUnavailable, shell.Status);
         Assert.True(viewModel.HasManualSession);
 
         session.FailClear = false;
         session.FailSave = true;
         var existingContent = session.GetManualSessionCookies()?.Content;
         Assert.False(viewModel.SaveWebSession("replacement"));
-        Assert.Equal("YouTube session could not be saved because the system keyring is unavailable.", shell.Status);
+        Assert.Equal(RuntimeDependencyGuidance.SecretServiceUnavailable, shell.Status);
         Assert.Equal(existingContent, session.GetManualSessionCookies()?.Content);
     }
 
