@@ -43,60 +43,27 @@ public static class ApplicationServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddSingleton(configuration);
-        services.AddSingleton<IPreferencesService>(static _ => new FilePreferencesService());
-        services.AddSingleton<IQueueService>(static _ => new QueueService());
-        services.AddSingleton<ISessionService>(static _ => new SecretServiceSessionService());
-        services.AddSingleton<ICookieFileProvider>(static provider =>
-            new TemporaryCookieFileProvider(provider.GetRequiredService<ISessionService>()));
+        services.AddSingleton<IPreferencesService, FilePreferencesService>();
+        services.AddSingleton<IQueueService, QueueService>();
+        services.AddSingleton<ISessionService, SecretServiceSessionService>();
+        services.AddSingleton<ICookieFileProvider, TemporaryCookieFileProvider>();
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
             new DiscordPresenceService(
                 provider.GetRequiredService<IPreferencesService>(),
                 provider.GetRequiredService<ApplicationConfiguration>().DiscordApplicationId));
-        services.AddSingleton<IPlaybackService>(provider =>
-            new ExternalMpvPlaybackService(
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<MpvCommandBuilder>(),
-                provider.GetRequiredService<ICookieFileProvider>(),
-                provider.GetRequiredService<IPlaybackPresenceService>()));
-        services.AddSingleton<YtDlpRunner>(static provider =>
-            new YtDlpRunner(provider.GetRequiredService<ICookieFileProvider>()));
+        services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
+        services.AddSingleton<YtDlpRunner>();
         services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<IYtDlpProcessRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
-        services.AddSingleton<ISearchService>(provider =>
-            new YtDlpSearchService(
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IYtDlpRunner>()));
-        services.AddSingleton<IThumbnailService>(static _ => new ThumbnailCacheService());
-        services.AddSingleton<IYouTubeHomeClient>(provider =>
-            new YtDlpHomeClient(
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<ICookieFileProvider>(),
-                processRunner: provider.GetRequiredService<IYtDlpProcessRunner>()));
-        services.AddSingleton<IAuthenticatedHomeFeedService>(provider =>
-            new AuthenticatedHomeFeedService(
-                provider.GetRequiredService<IYouTubeHomeClient>(),
-                provider.GetRequiredService<ISessionService>()));
-        services.AddSingleton<HomeFeedCoordinator>(provider =>
-            new HomeFeedCoordinator(
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<IAuthenticatedHomeFeedService>()));
-        services.AddSingleton<HomeSessionValidator>(provider =>
-            new HomeSessionValidator(provider.GetRequiredService<IAuthenticatedHomeFeedService>()));
-        services.AddSingleton<SessionValidationCoordinator>(provider =>
-            new SessionValidationCoordinator(
-                provider.GetRequiredService<HomeSessionValidator>(),
-                provider.GetRequiredService<ISessionService>()));
-        services.AddSingleton<ApplicationServices>(provider =>
-            new ApplicationServices(
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IQueueService>(),
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<IPlaybackService>(),
-                provider.GetRequiredService<ISearchService>(),
-                provider.GetRequiredService<IThumbnailService>(),
-                provider.GetRequiredService<HomeFeedCoordinator>(),
-                provider.GetRequiredService<SessionValidationCoordinator>()));
+        services.AddSingleton<ISearchService, YtDlpSearchService>();
+        services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
+        services.AddSingleton<IYouTubeHomeClient, YtDlpHomeClient>();
+        services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
+        services.AddSingleton<HomeFeedCoordinator>();
+        services.AddSingleton<HomeSessionValidator>();
+        services.AddSingleton<SessionValidationCoordinator>();
+        services.AddSingleton<ApplicationServices>();
 
         return services;
     }
