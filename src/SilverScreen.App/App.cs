@@ -2,6 +2,7 @@ using Adw;
 using Gdk;
 using Gio;
 using Gtk;
+using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Views.Shell;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
@@ -12,7 +13,7 @@ namespace SilverScreen;
 public partial class App
 {
     private static CssProvider? _styles;
-    private readonly ApplicationServices _services = new();
+    private IServiceProvider? _serviceProvider;
     private bool _servicesDisposed;
 
     partial void Initialize()
@@ -22,13 +23,24 @@ public partial class App
         OnActivate += Activate;
     }
 
+    public void UseServices(IServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        if (Interlocked.CompareExchange(ref _serviceProvider, serviceProvider, null) is not null)
+            throw new InvalidOperationException("Application services have already been configured.");
+    }
+
     private void Activate(Gio.Application sender, EventArgs args)
     {
-        InstallStyles();
-        ApplyTheme(_services.Preferences.GetPreferences().Theme);
-        _services.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.Theme);
+        var services = _serviceProvider?.GetRequiredService<ApplicationServices>()
+                       ?? throw new InvalidOperationException("Application services have not been configured.");
 
-        var mainWindowWrapper = new MainWindow(_services, DisposeServices);
+        InstallStyles();
+        ApplyTheme(services.Preferences.GetPreferences().Theme);
+        services.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.Theme);
+
+        var mainWindowWrapper = new MainWindow(services, DisposeServices);
         var mainWindow = mainWindowWrapper.Widget;
         mainWindow.Application = this;
         AddWindow(mainWindow);
@@ -131,6 +143,6 @@ public partial class App
         if (_servicesDisposed) return;
 
         _servicesDisposed = true;
-        _services.Dispose();
+        (_serviceProvider as IDisposable)?.Dispose();
     }
 }

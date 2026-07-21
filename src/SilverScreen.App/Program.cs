@@ -20,6 +20,8 @@ Log.Logger = new LoggerConfiguration()
         shared: true)
     .CreateLogger();
 
+using var serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
+
 try
 {
     Log.Information("Starting SilverScreen");
@@ -28,6 +30,7 @@ try
     GResourceHelper.RegisterAssemblyResources(typeof(Program).Assembly);
 
     var app = App.NewWithProperties([]);
+    app.UseServices(serviceProvider);
     return app.RunWithSynchronizationContext(args);
 }
 catch (Exception exception)
