@@ -49,7 +49,7 @@ If embedded Google sign-in is unavailable, choose **Add manual session** instead
 - Home requires a YouTube session and supports refresh plus continuation-page loading when YouTube provides one.
 - Search results and Home recommendations exclude YouTube Shorts.
 - Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
-- Subscriptions and History are currently placeholder views. Preferences and About are also placeholders.
+- Subscriptions and History are currently placeholder views.
 - Only search and queue contents are not persisted; the YouTube session persists in the Secret Service keyring.
 
 ## Project layout

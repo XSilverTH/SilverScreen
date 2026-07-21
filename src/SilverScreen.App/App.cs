@@ -18,7 +18,7 @@ public partial class App
 
     partial void Initialize()
     {
-        ApplicationId = "io.github.silverscreen.SilverScreen";
+        ApplicationId = ApplicationMetadata.ApplicationId;
         Flags = ApplicationFlags.FlagsNone;
         OnActivate += Activate;
     }

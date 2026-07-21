@@ -183,7 +183,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Widget.AddAction(preferencesAction);
 
         var aboutAction = SimpleAction.New("about", null);
-        aboutAction.OnActivate += (_, _) => _shell.Status = "About stub: SilverScreen";
+        aboutAction.OnActivate += (_, _) => PresentAboutDialog();
         Widget.AddAction(aboutAction);
 
         var quitAction = SimpleAction.New("quit", null);
@@ -195,6 +195,22 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         menu.Append("About SilverScreen", "win.about");
         menu.Append("Quit", "win.quit");
         return menu;
+    }
+
+    private void PresentAboutDialog()
+    {
+        var dialog = Adw.AboutDialog.New();
+        dialog.ApplicationName = ApplicationMetadata.ApplicationName;
+        dialog.Version = ApplicationMetadata.Version;
+        dialog.DeveloperName = ApplicationMetadata.DeveloperName;
+        dialog.Developers = [ApplicationMetadata.DeveloperName];
+        dialog.Comments = "A GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV.";
+        dialog.Copyright = ApplicationMetadata.Copyright;
+        dialog.LicenseType = Gtk.License.Gpl30Only;
+        dialog.Website = ApplicationMetadata.SourceUrl;
+        dialog.IssueUrl = ApplicationMetadata.IssueUrl;
+        // dialog.DebugInfo = ApplicationMetadata.DebugInformation;
+        dialog.Present(Widget);
     }
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs args)
