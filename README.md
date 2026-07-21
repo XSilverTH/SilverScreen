@@ -1,6 +1,4 @@
 # SilverScreen
-HERE BE DRAGONS: this is extremely early in development and is missing most of it's planned features. if you want, you can use this daily as its not critical infrastructure, but I wouldn't.
-
 SilverScreen is a GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV (hopefully an embeded libmpv player in the future).
 
 Search YouTube or paste a video link, then play it with your local MPV install. With a YouTube session captured through the isolated in-app Google sign-in or added manually, SilverScreen can also load your Home recommendations.
@@ -46,7 +44,7 @@ If embedded Google sign-in is unavailable, choose **Add manual session** instead
 
 ## Important details
 
-- Home requires a YouTube session and supports refresh plus continuation-page loading when YouTube provides one.
+- Home requires a YouTube session.
 - Search results and Home recommendations exclude YouTube Shorts.
 - Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
 - Subscriptions and History are currently placeholder views. Preferences and About are also placeholders.
