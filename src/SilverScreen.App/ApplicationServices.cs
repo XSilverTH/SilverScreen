@@ -23,9 +23,10 @@ public sealed class ApplicationServices : IDisposable
             Preferences,
             "1528325550475579522");
         Playback = new ExternalMpvPlaybackService(Preferences, new MpvCommandBuilder(), CookieFiles, PlaybackPresence);
-        Search = new YtDlpSearchService(Preferences, new YtDlpRunner(CookieFiles));
+        var ytDlpRunner = new YtDlpRunner(CookieFiles);
+        Search = new YtDlpSearchService(Preferences, ytDlpRunner);
         Thumbnails = new ThumbnailCacheService();
-        YouTubeHomeClient = new YtDlpHomeClient(Session, CookieFiles);
+        YouTubeHomeClient = new YtDlpHomeClient(Session, CookieFiles, processRunner: ytDlpRunner);
         AuthenticatedHomeFeed = new AuthenticatedHomeFeedService(YouTubeHomeClient, Session);
         HomeFeed = new HomeFeedCoordinator(Session, AuthenticatedHomeFeed);
         HomeSessionValidator = new HomeSessionValidator(AuthenticatedHomeFeed);

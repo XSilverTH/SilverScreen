@@ -41,6 +41,30 @@ public sealed class YtDlpSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_SelectsTheHighestQualityThumbnail()
+    {
+        var service = CreateService(
+            """
+            {
+              "entries": [
+                {
+                  "id": "dQw4w9WgXcQ",
+                  "title": "Thumbnail selection",
+                  "thumbnails": [
+                    { "url": "https://thumb.url/low-preference", "preference": 1, "width": 1920, "height": 1080 },
+                    { "url": "https://thumb.url/high-preference", "preference": 2, "width": 320, "height": 180 }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        var result = await service.SearchAsync(new SearchRequest("thumbnails"), CancellationToken.None);
+
+        Assert.Equal("https://thumb.url/high-preference", Assert.Single(result.Videos).ThumbnailUrl);
+    }
+
+    [Fact]
     public async Task SearchAsync_HandlesMissingOptionalFields()
     {
         var service = CreateService(

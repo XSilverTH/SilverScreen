@@ -15,15 +15,17 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly IPreferencesService _preferencesService;
+    private readonly Action<string> _reportStatus;
     private readonly ComboRow _qualityRow;
     private readonly ComboRow _themeRow;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
 
-    public PreferencesWindow(IPreferencesService preferencesService)
+    public PreferencesWindow(IPreferencesService preferencesService, Action<string> reportStatus)
     {
         _preferencesService = preferencesService;
+        _reportStatus = reportStatus;
 
         _themeRow = GetRequiredObject<ComboRow>("theme_row");
         _ytdlpPathRow = GetRequiredObject<EntryRow>("ytdlp_path_row");
@@ -115,6 +117,14 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active
         };
 
-        _preferencesService.SavePreferences(prefs);
+        try
+        {
+            _preferencesService.SavePreferences(prefs);
+        }
+        catch (PreferencesPersistenceException)
+        {
+            InitializeFields();
+            _reportStatus("Unable to save preferences. Your changes were not applied.");
+        }
     }
 }

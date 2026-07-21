@@ -164,7 +164,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var preferencesAction = SimpleAction.New("preferences", null);
         preferencesAction.OnActivate += (_, _) =>
         {
-            var preferencesWindowWrapper = new PreferencesWindow(_services.Preferences);
+            var preferencesWindowWrapper = new PreferencesWindow(_services.Preferences,
+                message => _shell.Status = message);
             var preferencesWindow = preferencesWindowWrapper.Widget;
             preferencesWindow.TransientFor = Widget;
             preferencesWindow.Present();

@@ -167,7 +167,7 @@ public sealed class YtDlpHomeClientTests
     }
 
     [Fact]
-    public async Task GetHomeFeedAsync_FiltersShortsAndMalformedEntries()
+    public async Task GetHomeFeedAsync_FiltersShortsAndUsesSharedTolerantMetadataMapping()
     {
         // Arrange
         using var tempScript = new TempScript();
@@ -219,10 +219,20 @@ public sealed class YtDlpHomeClientTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        var video = Assert.Single(result.Videos);
-        Assert.Equal("validVideo", video.Id);
-        Assert.Equal("A Normal Video", video.Title);
-        Assert.Null(video.ApproximateUploadDate);
+        Assert.Collection(
+            result.Videos,
+            video =>
+            {
+                Assert.Equal("validVideo", video.Id);
+                Assert.Equal("A Normal Video", video.Title);
+                Assert.Null(video.ApproximateUploadDate);
+            },
+            video =>
+            {
+                Assert.Equal("missingTitleVideo", video.Id);
+                Assert.Equal("Untitled YouTube video", video.Title);
+                Assert.Equal("YouTube", video.ChannelName);
+            });
     }
 
     [Fact]

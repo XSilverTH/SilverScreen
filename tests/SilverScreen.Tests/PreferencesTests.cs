@@ -1,4 +1,5 @@
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Preferences;
 
 namespace SilverScreen.Tests;
@@ -14,15 +15,17 @@ public sealed class PreferencesTests : IDisposable
 
     public void Dispose()
     {
-        if (File.Exists(_tempFilePath))
-            try
-            {
+        try
+        {
+            if (File.Exists(_tempFilePath))
                 File.Delete(_tempFilePath);
-            }
-            catch
-            {
-                // Ignore cleanup errors in tests
-            }
+            else if (Directory.Exists(_tempFilePath))
+                Directory.Delete(_tempFilePath);
+        }
+        catch
+        {
+            // Ignore cleanup errors in tests
+        }
     }
 
     [Fact]
@@ -98,5 +101,25 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(10, eventArgs.MaxResults);
         Assert.True(eventArgs.MarkWatchedVideos);
         Assert.True(eventArgs.DiscordRichPresenceEnabled);
+    }
+
+    [Fact]
+    public void SavePreferences_ThrowsAndKeepsCurrentPreferences_WhenAtomicReplacementFails()
+    {
+        Directory.CreateDirectory(_tempFilePath);
+        var service = new FilePreferencesService(_tempFilePath);
+        var original = service.GetPreferences();
+        var eventRaised = false;
+        service.PreferencesChanged += (_, _) => eventRaised = true;
+
+        var exception = Assert.Throws<PreferencesPersistenceException>(() =>
+            service.SavePreferences(new AppPreferences { Theme = "Dark" }));
+
+        Assert.Equal(_tempFilePath, exception.FilePath);
+        Assert.True(Directory.Exists(_tempFilePath));
+        Assert.Equal(original.Theme, service.GetPreferences().Theme);
+        Assert.False(eventRaised);
+        Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(_tempFilePath)!,
+            $".{Path.GetFileName(_tempFilePath)}.*.tmp"));
     }
 }

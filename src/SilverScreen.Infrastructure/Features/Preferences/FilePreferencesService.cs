@@ -37,27 +37,53 @@ public sealed class FilePreferencesService : IPreferencesService
     {
         ArgumentNullException.ThrowIfNull(preferences);
 
-        AppPreferences cloned;
+        var cloned = Clone(preferences);
         lock (_lock)
         {
-            _current = Clone(preferences);
-            cloned = Clone(_current);
-
             try
             {
-                var directory = Path.GetDirectoryName(_filePath);
-                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-
-                var json = JsonSerializer.Serialize(cloned, PreferencesJsonContext.Default.AppPreferences);
-                File.WriteAllText(_filePath, json);
+                WriteAtomically(cloned);
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Failed to save preferences to {PreferencesFilePath}", _filePath);
+                throw new PreferencesPersistenceException(_filePath, ex);
             }
+
+            _current = cloned;
         }
 
-        PreferencesChanged?.Invoke(this, cloned);
+        PreferencesChanged?.Invoke(this, Clone(cloned));
+    }
+    private void WriteAtomically(AppPreferences preferences)
+    {
+        var directory = Path.GetDirectoryName(_filePath);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+        var temporaryPath = Path.Combine(
+            directory ?? Directory.GetCurrentDirectory(),
+            $".{Path.GetFileName(_filePath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            using (var stream = new System.IO.FileStream(
+                       temporaryPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 4096,
+                       options: FileOptions.WriteThrough))
+            {
+                JsonSerializer.Serialize(stream, preferences, PreferencesJsonContext.Default.AppPreferences);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, _filePath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+        }
     }
 
     private AppPreferences LoadOrCreate()
