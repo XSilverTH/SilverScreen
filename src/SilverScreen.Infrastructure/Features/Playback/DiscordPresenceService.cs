@@ -1,6 +1,6 @@
-using Serilog;
 using DiscordRPC;
 using DiscordRPC.Entities;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -13,22 +13,29 @@ internal interface IDiscordRpcClient : IDisposable
     void ClearPresence();
 }
 
-internal sealed class DiscordRpcClientAdapter : IDiscordRpcClient
+internal sealed class DiscordRpcClientAdapter(string applicationId) : IDiscordRpcClient
 {
-    private readonly DiscordRpcClient _client;
+    private readonly DiscordRpcClient _client = new(applicationId);
 
-    public DiscordRpcClientAdapter(string applicationId)
+    public bool Initialize()
     {
-        _client = new DiscordRpcClient(applicationId);
+        return _client.Initialize();
     }
 
-    public bool Initialize() => _client.Initialize();
+    public void SetPresence(RichPresence presence)
+    {
+        _client.SetPresence(presence);
+    }
 
-    public void SetPresence(RichPresence presence) => _client.SetPresence(presence);
+    public void ClearPresence()
+    {
+        _client.ClearPresence();
+    }
 
-    public void ClearPresence() => _client.ClearPresence();
-
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        _client.Dispose();
+    }
 }
 
 public sealed class DiscordPresenceService : IPlaybackPresenceService
@@ -36,11 +43,11 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
     private static readonly ILogger Logger = Log.ForContext<DiscordPresenceService>();
     private readonly string? _applicationId;
     private readonly Func<string, IDiscordRpcClient> _clientFactory;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly IPreferencesService _preferencesService;
+    private CachedActivity? _cachedActivity;
 
     private IDiscordRpcClient? _client;
-    private CachedActivity? _cachedActivity;
     private bool _disposed;
     private bool _enabled;
 
@@ -129,11 +136,12 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
 
         if (!ulong.TryParse(_applicationId, out _))
         {
-            Logger.Warning("Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid.");
+            Logger.Warning(
+                "Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid.");
             return;
         }
 
-        IDiscordRpcClient? client = null;
+        IDiscordRpcClient? client;
         try
         {
             client = _clientFactory(_applicationId!);
@@ -242,22 +250,21 @@ internal static class DiscordPresenceFormatter
         };
 
         if (IsHttpUrlWithinLimit(video.ThumbnailUrl, AssetKeyLimit))
-        {
             presence.Assets = new Assets
             {
                 LargeImageKey = video.ThumbnailUrl,
                 LargeImageText = title
             };
-        }
 
         if (IsHttpUrlWithinLimit(request.PlaybackUrl, ButtonUrlLimit))
-        {
-            presence.Buttons = [new Button
-            {
-                Label = "Watch on YouTube",
-                Url = request.PlaybackUrl!
-            }];
-        }
+            presence.Buttons =
+            [
+                new Button
+                {
+                    Label = "Watch on YouTube",
+                    Url = request.PlaybackUrl!
+                }
+            ];
 
         return presence;
     }
@@ -265,15 +272,14 @@ internal static class DiscordPresenceFormatter
     private static bool IsHttpUrlWithinLimit(string? value, int limit)
     {
         return value is not null
-            && value.Length <= limit
-            && Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+               && value.Length <= limit
+               && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+               && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private static string? TrimOptional(string? value, int limit)
     {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        return TrimToUtf16(value.Trim(), limit);
+        return string.IsNullOrWhiteSpace(value) ? null : TrimToUtf16(value.Trim(), limit);
     }
 
     private static string TrimToUtf16(string value, int limit)

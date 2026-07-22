@@ -1,5 +1,4 @@
 using System.Diagnostics;
-
 using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.Features.Search;

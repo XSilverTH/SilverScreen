@@ -35,9 +35,8 @@ public static class YouTubeUrlParser
     public static YouTubeUrlParseResult Parse(string? input)
     {
         var text = input?.Trim();
-        if (string.IsNullOrWhiteSpace(text)) return YouTubeUrlParseResult.NotYouTube;
-
-        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri)) return YouTubeUrlParseResult.NotYouTube;
+        if (string.IsNullOrWhiteSpace(text) || !Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return YouTubeUrlParseResult.NotYouTube;
 
         if (!IsSupportedScheme(uri))
             return IsYouTubeHost(uri.Host) ? YouTubeUrlParseResult.Invalid : YouTubeUrlParseResult.NotYouTube;
@@ -123,19 +122,15 @@ public static class YouTubeUrlParser
     private static string? GetQueryValue(string query, string key)
     {
         var trimmedQuery = query.TrimStart('?');
-        if (trimmedQuery.Length == 0) return null;
-
-        foreach (var pair in trimmedQuery.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var separatorIndex = pair.IndexOf('=', StringComparison.Ordinal);
-            var rawKey = separatorIndex >= 0 ? pair[..separatorIndex] : pair;
-            if (!SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
-
-            var rawValue = separatorIndex >= 0 ? pair[(separatorIndex + 1)..] : string.Empty;
-            return SafeUnescape(rawValue.Replace('+', ' '));
-        }
-
-        return null;
+        return trimmedQuery.Length == 0
+            ? null
+            : (from pair in trimmedQuery.Split('&', StringSplitOptions.RemoveEmptyEntries)
+                let separatorIndex = pair.IndexOf('=', StringComparison.Ordinal)
+                let rawKey = separatorIndex >= 0 ? pair[..separatorIndex] : pair
+                where SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase)
+                select separatorIndex >= 0 ? pair[(separatorIndex + 1)..] : string.Empty
+                into rawValue
+                select SafeUnescape(rawValue.Replace('+', ' '))).FirstOrDefault();
     }
 
     private static string SafeUnescape(string value)

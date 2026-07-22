@@ -102,8 +102,10 @@ public sealed class AuthenticatedHomeFeedServiceTests
         return new AuthenticatedHomeFeedService(client, session);
     }
 
-    private static VideoSummary CreateVideo(string id) =>
-        new(id, $"Video {id}", "Channel", TimeSpan.FromMinutes(3), "thumbnail", false);
+    private static VideoSummary CreateVideo(string id)
+    {
+        return new VideoSummary(id, $"Video {id}", "Channel", TimeSpan.FromMinutes(3), "thumbnail", false);
+    }
 
     private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
     {

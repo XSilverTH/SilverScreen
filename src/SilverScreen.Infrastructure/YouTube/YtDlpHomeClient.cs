@@ -15,12 +15,16 @@ public sealed class YtDlpHomeClient(
     : IYouTubeHomeClient
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpHomeClient>();
+
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+
     private readonly IYtDlpProcessRunner _processRunner =
         processRunner ?? new YtDlpRunner();
+
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
     public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
@@ -28,7 +32,7 @@ public sealed class YtDlpHomeClient(
     {
         if (!string.IsNullOrEmpty(continuationToken))
             return new HomeFeedResult(
-                Array.Empty<VideoSummary>(),
+                [],
                 null,
                 true,
                 "Continuations are not supported.",
@@ -37,7 +41,7 @@ public sealed class YtDlpHomeClient(
         var cookies = _sessionService.GetManualSessionCookies();
         if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
             return new HomeFeedResult(
-                Array.Empty<VideoSummary>(),
+                [],
                 null,
                 false,
                 "Authentication session not found.",
@@ -46,7 +50,7 @@ public sealed class YtDlpHomeClient(
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         if (cookieFile is null || string.IsNullOrWhiteSpace(cookieFile.Path))
             return new HomeFeedResult(
-                Array.Empty<VideoSummary>(),
+                [],
                 null,
                 false,
                 "Failed to create temporary cookie lease.",

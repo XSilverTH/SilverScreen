@@ -1,6 +1,7 @@
 using Adw;
 using Gdk;
 using Gio;
+using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Views.Shell;
@@ -9,7 +10,7 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen;
 
-[GObject.Subclass<Application>]
+[Subclass<Application>]
 public partial class App
 {
     private static CssProvider? _styles;

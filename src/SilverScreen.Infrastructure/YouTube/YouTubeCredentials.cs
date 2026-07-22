@@ -23,12 +23,12 @@ public sealed class YouTubeCredentials
         string? sapisid = null;
         string? secureSapisid = null;
 
-        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lines = content.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
             if (string.IsNullOrEmpty(trimmed) ||
-                (trimmed.StartsWith("#", StringComparison.Ordinal) &&
+                (trimmed.StartsWith('#') &&
                  !trimmed.StartsWith("#HttpOnly_", StringComparison.OrdinalIgnoreCase)))
                 continue;
 

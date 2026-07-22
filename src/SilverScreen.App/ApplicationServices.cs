@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Diagnostics;
+using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Queue;
@@ -49,9 +49,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
         services.AddSingleton<SecretServiceSessionService>();
-        services.AddSingleton<ISessionService>(static provider => provider.GetRequiredService<SecretServiceSessionService>());
-        services.AddSingleton<ISecretServiceAvailability>(
-            static provider => provider.GetRequiredService<SecretServiceSessionService>());
+        services.AddSingleton<ISessionService>(static provider =>
+            provider.GetRequiredService<SecretServiceSessionService>());
+        services.AddSingleton<ISecretServiceAvailability>(static provider =>
+            provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ICookieFileProvider, TemporaryCookieFileProvider>();
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>

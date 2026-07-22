@@ -118,12 +118,14 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         {
             if (!clientResult.RequiresAuthentication)
             {
-                var message = clientResult.StatusMessage?.StartsWith("yt-dlp ", StringComparison.OrdinalIgnoreCase) == true
+                var message = clientResult.StatusMessage?.StartsWith("yt-dlp ", StringComparison.OrdinalIgnoreCase) ==
+                              true
                     ? clientResult.StatusMessage
                     : BackendFailureMessage;
                 return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
                     FeedPage.Empty, message);
             }
+
             ClearCachedResults();
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRejected,
                 FeedPage.Empty, AuthenticationRejectedMessage);

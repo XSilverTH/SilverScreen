@@ -1,14 +1,16 @@
 using Gdk;
 using GdkPixbuf;
 using Gio;
+using GObject;
 using Gtk;
-using Pango;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
+using Type = GObject.Type;
 
 namespace SilverScreen.Views.Queue;
 
@@ -16,33 +18,31 @@ public partial class QueueItemRowView : ViewBase<Box>
 {
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
+    private readonly SimpleActionGroup _actions;
+    private readonly Label _channel;
+    private readonly WidgetPaintable _dragPaintable;
+    private readonly DragSource _dragSource;
+    private readonly Action<Guid, int> _dropRequested;
+    private readonly DropTarget _dropTarget;
+    private readonly Label _duration;
+    private readonly Image _grip;
     private readonly SimpleAction _moveDownAction;
     private readonly Action<Guid, int> _moveRequested;
     private readonly SimpleAction _moveUpAction;
-    private readonly Action<Guid, int> _dropRequested;
-    private readonly Action<Guid> _removeRequested;
-    private readonly SimpleAction _removeAction;
-    private readonly IThumbnailService _thumbnails;
-    private readonly Label _channel;
-    private readonly Label _duration;
-    private readonly Image _grip;
-    private readonly Label _position;
-    private readonly Label _title;
-    private readonly Overlay _thumbnail;
     private readonly Widget _placeholder;
-    private readonly MenuButton _menu;
-    private readonly SimpleActionGroup _actions;
-    private readonly DragSource _dragSource;
-    private readonly DropTarget _dropTarget;
-    private readonly WidgetPaintable _dragPaintable;
-    private CancellationTokenSource? _thumbnailCancellation;
-    private Texture? _boundTexture;
-    private Picture? _boundPicture;
-    private QueueItem? _item;
-    private int _index;
-    private int _itemCount;
+    private readonly Label _position;
+    private readonly SimpleAction _removeAction;
+    private readonly Action<Guid> _removeRequested;
+    private readonly Overlay _thumbnail;
+    private readonly IThumbnailService _thumbnails;
+    private readonly Label _title;
     private int _bindingGeneration;
+    private Picture? _boundPicture;
+    private Texture? _boundTexture;
     private bool _disposed;
+    private int _index;
+    private QueueItem? _item;
+    private CancellationTokenSource? _thumbnailCancellation;
 
     public QueueItemRowView(
         IThumbnailService thumbnails,
@@ -62,7 +62,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _title = GetRequiredObject<Label>("title");
         _channel = GetRequiredObject<Label>("channel");
         _duration = GetRequiredObject<Label>("duration");
-        _menu = GetRequiredObject<MenuButton>("menu");
+        var menu = GetRequiredObject<MenuButton>("menu");
 
         _actions = SimpleActionGroup.New();
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
@@ -75,7 +75,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
         _actions.AddAction(_removeAction);
-        _menu.InsertActionGroup("queue", _actions);
+        menu.InsertActionGroup("queue", _actions);
 
         _dragSource = DragSource.New();
         _dragSource.Actions = DragAction.Move;
@@ -84,14 +84,14 @@ public partial class QueueItemRowView : ViewBase<Box>
             if (_item is not { } item)
                 return null;
 
-            using var value = new GObject.Value(item.Id.ToString());
+            using var value = new Value(item.Id.ToString());
             return ContentProvider.NewForValue(value);
         };
         _grip.AddController(_dragSource);
         _dragPaintable = WidgetPaintable.New(Widget);
         _dragSource.SetIcon(_dragPaintable, 0, 0);
 
-        _dropTarget = DropTarget.New(GObject.Type.String, DragAction.Move);
+        _dropTarget = DropTarget.New(Type.String, DragAction.Move);
         _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
         Widget.AddController(_dropTarget);
     }
@@ -108,7 +108,6 @@ public partial class QueueItemRowView : ViewBase<Box>
         Unbind();
         _item = item;
         _index = index;
-        _itemCount = itemCount;
         _position.SetText((index + 1).ToString());
         _title.SetText(item.Video.Title);
         _channel.SetText(item.Video.ChannelName);
@@ -125,7 +124,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     {
         _item = null;
         _index = 0;
-        _itemCount = 0;
         _bindingGeneration++;
         _position.SetText(string.Empty);
         _title.SetText(string.Empty);
@@ -167,7 +165,8 @@ public partial class QueueItemRowView : ViewBase<Box>
                 return;
 
             pixbuf = await Task.Run(
-                () => Pixbuf.NewFromFileAtScale(result.LocalPath, ThumbnailWidth, ThumbnailHeight, true), cancellationToken)
+                    () => Pixbuf.NewFromFileAtScale(result.LocalPath, ThumbnailWidth, ThumbnailHeight, true),
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -215,8 +214,10 @@ public partial class QueueItemRowView : ViewBase<Box>
                     texture?.Dispose();
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                Log.Error("Failed to load thumbnail: {Message}", e.Message);
+                // ignored
             }
             finally
             {

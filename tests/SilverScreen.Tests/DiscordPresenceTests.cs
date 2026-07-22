@@ -1,4 +1,3 @@
-using DiscordRPC;
 using DiscordRPC.Entities;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -8,8 +7,6 @@ namespace SilverScreen.Tests;
 
 public sealed class DiscordPresenceTests
 {
-
-
     [Fact]
     public void FailedInitializationDisposesAndRetriesWithCachedActivity()
     {
@@ -42,7 +39,7 @@ public sealed class DiscordPresenceTests
     [Fact]
     public void DisablingDisposesAndReenablingRestoresCachedActivity()
     {
-        var preferences = new MutablePreferencesService(enabled: true);
+        var preferences = new MutablePreferencesService(true);
         var clients = new List<TrackingClient>();
         var request = CreateRequest();
         var startedAt = DateTimeOffset.UtcNow;
@@ -67,7 +64,7 @@ public sealed class DiscordPresenceTests
     [Fact]
     public void ClearDropsCachedActivityBeforeLaterEnable()
     {
-        var preferences = new MutablePreferencesService(enabled: true);
+        var preferences = new MutablePreferencesService(true);
         var clients = new List<TrackingClient>();
         using var service = new DiscordPresenceService(preferences, "123", _ => AddClient(clients));
 
@@ -84,7 +81,7 @@ public sealed class DiscordPresenceTests
     [Fact]
     public void RpcExceptionsAreFailureIsolated()
     {
-        var preferences = new MutablePreferencesService(enabled: true);
+        var preferences = new MutablePreferencesService(true);
         var initializeFailure = new TrackingClient { ThrowOnInitialize = true };
         var setFailure = new TrackingClient { ThrowOnSet = true, ThrowOnClear = true, ThrowOnDispose = true };
         var clients = new Queue<TrackingClient>([initializeFailure, setFailure]);
@@ -100,7 +97,6 @@ public sealed class DiscordPresenceTests
         Assert.Equal(2, setFailure.ClearCount);
         Assert.Equal(1, setFailure.DisposeCount);
     }
-
 
 
     private static TrackingClient AddClient(ICollection<TrackingClient> clients)
@@ -130,7 +126,10 @@ public sealed class DiscordPresenceTests
 
         public event EventHandler<AppPreferences>? PreferencesChanged;
 
-        public AppPreferences GetPreferences() => _preferences;
+        public AppPreferences GetPreferences()
+        {
+            return _preferences;
+        }
 
         public void SavePreferences(AppPreferences preferences)
         {
@@ -138,7 +137,10 @@ public sealed class DiscordPresenceTests
             PreferencesChanged?.Invoke(this, preferences);
         }
 
-        public void SetEnabled(bool enabled) => SavePreferences(new AppPreferences { DiscordRichPresenceEnabled = enabled });
+        public void SetEnabled(bool enabled)
+        {
+            SavePreferences(new AppPreferences { DiscordRichPresenceEnabled = enabled });
+        }
     }
 
     private sealed class TrackingClient : IDiscordRpcClient

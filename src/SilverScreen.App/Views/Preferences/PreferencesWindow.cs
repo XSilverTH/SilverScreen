@@ -8,16 +8,16 @@ namespace SilverScreen.Views.Preferences;
 
 public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 {
-    private readonly SwitchRow _markWatchedRow;
     private readonly SwitchRow _discordRichPresenceRow;
+    private readonly SwitchRow _markWatchedRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly IPreferencesService _preferencesService;
-    private readonly Action<string> _reportStatus;
-    private readonly ComboRow _qualityRow;
     private readonly StringList _qualityModel;
-    private readonly ComboRow _themeRow;
+    private readonly ComboRow _qualityRow;
+    private readonly Action<string> _reportStatus;
     private readonly StringList _themeModel;
+    private readonly ComboRow _themeRow;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
@@ -69,9 +69,8 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private static int GetSelectionIndex(StringList model, string value)
     {
         for (uint i = 0; i < model.GetNItems(); i++)
-        {
-            if (model.GetString(i) == value) return (int)i;
-        }
+            if (model.GetString(i) == value)
+                return (int)i;
 
         return -1;
     }

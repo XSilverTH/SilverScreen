@@ -15,8 +15,8 @@ public sealed class HomeSessionValidator(IAuthenticatedHomeFeedService feedServi
         var isSuccess = result.Status == AuthenticatedHomeFeedStatus.Success;
         var videoCount = result.FeedPage?.Videos?.Count ?? 0;
         var hasContinuation = !string.IsNullOrEmpty(result.FeedPage?.ContinuationToken);
-        var requiresAuth = result.Status == AuthenticatedHomeFeedStatus.AuthenticationRequired ||
-                           result.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected;
+        var requiresAuth = result.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
+            or AuthenticatedHomeFeedStatus.AuthenticationRejected;
 
         return new HomeSessionValidationResult(
             isSuccess,

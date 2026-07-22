@@ -1,6 +1,6 @@
-using Serilog;
 using System.Security.Cryptography;
 using System.Text;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -13,8 +13,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
-    private ManualSessionCookies? _manualCookies;
     private bool _isAvailable = true;
+    private ManualSessionCookies? _manualCookies;
 
     public SecretServiceSessionService()
         : this(new LibSecretCookieStore())
@@ -36,8 +36,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
     }
 
-    public event EventHandler? SessionChanged;
-
     public bool IsAvailable
     {
         get
@@ -48,6 +46,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             }
         }
     }
+
+    public event EventHandler? SessionChanged;
 
     public AccountSession GetCurrentSession()
     {

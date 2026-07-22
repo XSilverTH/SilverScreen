@@ -8,14 +8,15 @@ namespace SilverScreen.Views.Popovers;
 public partial class AccountPopoverView : ViewBase<Box>
 {
     private readonly Stack _accountStack;
+    private readonly TextView _manualEditor;
+    private readonly Label _manualHeading;
     private readonly Action _openWebLogin;
     private readonly Action<bool> _sessionAppearanceChanged;
-    private readonly AccountViewModel _viewModel;
     private readonly Button _signedInValidateButton;
-    private readonly Label _manualHeading;
-    private readonly TextView _manualEditor;
+    private readonly AccountViewModel _viewModel;
     private bool _disposed;
     private bool _editing;
+
     public AccountPopoverView(
         AccountViewModel viewModel,
         Action openWebLogin,
@@ -94,11 +95,9 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private void OnManualSaveButtonClicked(object? sender, EventArgs args)
     {
-        if (_viewModel.SaveManualSession(GetText(_manualEditor)))
-        {
-            _editing = false;
-            Render();
-        }
+        if (!_viewModel.SaveManualSession(GetText(_manualEditor))) return;
+        _editing = false;
+        Render();
     }
 
     private static string GetText(TextView textView)

@@ -1,6 +1,6 @@
-using Serilog;
 using System.ComponentModel;
 using System.Text.Json;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.YouTube;
@@ -66,7 +66,8 @@ public sealed class YtDlpSearchService : ISearchService
         catch (Win32Exception exception)
         {
             Logger.Warning(exception, "yt-dlp is not installed or could not be started for search");
-            return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpUnavailable(activeOptions.ExecutablePath)}");
+            return SearchResultPage.Failed(
+                $"Search failed: {RuntimeDependencyGuidance.YtDlpUnavailable(activeOptions.ExecutablePath)}");
         }
         catch (JsonException exception)
         {

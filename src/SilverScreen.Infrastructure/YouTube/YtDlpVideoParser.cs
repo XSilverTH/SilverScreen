@@ -34,7 +34,7 @@ internal static class YtDlpVideoParser
         return videos;
     }
 
-    private static IReadOnlyList<VideoSummary> ParseRoot(JsonElement root)
+    private static VideoSummary[] ParseRoot(JsonElement root)
     {
         if (root.ValueKind == JsonValueKind.Object
             && root.TryGetProperty("entries", out var entries)
@@ -175,12 +175,11 @@ internal static class YtDlpVideoParser
                 : -1;
             var area = width > 0 && height > 0 ? width * height : -1;
 
-            if (bestUrl is null || preference > bestPreference || preference == bestPreference && area > bestArea)
-            {
-                bestUrl = url;
-                bestPreference = preference;
-                bestArea = area;
-            }
+            if (bestUrl is not null && preference <= bestPreference &&
+                (preference != bestPreference || !(area > bestArea))) continue;
+            bestUrl = url;
+            bestPreference = preference;
+            bestArea = area;
         }
 
         return bestUrl ?? FirstString(element, "thumbnail") ?? string.Empty;

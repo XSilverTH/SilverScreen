@@ -21,39 +21,40 @@ public sealed class QueueService : IQueueService
         return item;
     }
 
-    public QueueItem AddNext(VideoSummary video)
+    public void AddNext(VideoSummary video)
     {
         var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
         _items.Insert(0, item);
         Changed?.Invoke(this, EventArgs.Empty);
-        return item;
+        // return item;
     }
 
-    public bool Move(Guid itemId, int destinationIndex)
+    public void Move(Guid itemId, int destinationIndex)
     {
         var currentIndex = _items.FindIndex(item => item.Id == itemId);
         if (currentIndex < 0 ||
             destinationIndex < 0 ||
             destinationIndex >= _items.Count ||
             currentIndex == destinationIndex)
-            return false;
+            // return false;
+            return;
 
         var item = _items[currentIndex];
         _items.RemoveAt(currentIndex);
         _items.Insert(destinationIndex, item);
         Changed?.Invoke(this, EventArgs.Empty);
-        return true;
+        // return true;
     }
 
-    public bool Remove(Guid itemId)
+    public void Remove(Guid itemId)
     {
         var index = _items.FindIndex(item => item.Id == itemId);
         if (index < 0)
-            return false;
-
+            // return false;
+            return;
         _items.RemoveAt(index);
         Changed?.Invoke(this, EventArgs.Empty);
-        return true;
+        // return true;
     }
 
     public void Clear()

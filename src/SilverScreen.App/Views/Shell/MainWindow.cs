@@ -1,8 +1,9 @@
-using Serilog;
 using System.ComponentModel;
 using Adw;
 using Gio;
+using GObject;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
@@ -12,9 +13,11 @@ using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
 using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
+using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
 using Functions = GLib.Functions;
+using License = Gtk.License;
 using PreferencesWindow = SilverScreen.Views.Preferences.PreferencesWindow;
 using Window = Gtk.Window;
 
@@ -31,10 +34,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ToggleButton _queueButton;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
-    private readonly OverlaySplitView _queueSplitView;
-    private readonly Box _queueSidebarHost;
     private readonly SearchView _search;
-    private readonly Button _searchButton;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
     private readonly ApplicationServices _services;
@@ -50,14 +50,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _disposeApplicationServices = disposeApplicationServices;
         _stack = GetRequiredObject<ViewStack>("view_stack");
         var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
-        _searchButton = GetRequiredObject<Button>("search_button");
+        GetRequiredObject<Button>("search_button");
         _searchPopover = GetRequiredObject<Popover>("search_popover");
         _searchEntry = GetRequiredObject<Entry>("search_entry");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
         var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
-        _queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
-        _queueSidebarHost = GetRequiredObject<Box>("queue_sidebar_host");
+        var queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
+        var queueSidebarHost = GetRequiredObject<Box>("queue_sidebar_host");
         _statusLabel = GetRequiredObject<Label>("status_label");
 
         var actions = CreateVideoActions();
@@ -66,7 +66,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             actions);
         _queueViewModel = new QueueViewModel(services.Queue, services.Playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
-        _queueSidebarHost.Append(_queueView.Widget);
+        queueSidebarHost.Append(_queueView.Widget);
         _accountViewModel = new AccountViewModel(services.Session, services.SessionValidation, _shell);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
@@ -79,8 +79,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _accountButton.Popover = CreateAccountPopover();
-        _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
-            GObject.BindingFlags.Bidirectional | GObject.BindingFlags.SyncCreate);
+        _queueButton.BindProperty("active", queueSplitView, "show-sidebar",
+            BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         appMenuButton.MenuModel = CreateApplicationMenuModel();
         _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
@@ -128,10 +128,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchPopover.Popup();
         _searchEntry.GrabFocus();
     }
+
     private async void OnSearchEntryActivated(object? sender, EventArgs args)
     {
-        await _search.SubmitAsync(_searchEntry.GetText());
-        _searchPopover.Popdown();
+        try
+        {
+            await _search.SubmitAsync(_searchEntry.GetText());
+            _searchPopover.Popdown();
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e, "Failed to submit search: {Message}", e.Message);
+        }
     }
 
     private Popover CreateAccountPopover()
@@ -171,14 +179,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void PresentAboutDialog()
     {
-        var dialog = Adw.AboutDialog.New();
+        var dialog = AboutDialog.New();
         dialog.ApplicationName = ApplicationMetadata.ApplicationName;
         dialog.Version = ApplicationMetadata.Version;
         dialog.DeveloperName = ApplicationMetadata.DeveloperName;
         dialog.Developers = [ApplicationMetadata.DeveloperName];
         dialog.Comments = "A GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV.";
         dialog.Copyright = ApplicationMetadata.Copyright;
-        dialog.LicenseType = Gtk.License.Gpl30Only;
+        dialog.LicenseType = License.Gpl30Only;
         dialog.Website = ApplicationMetadata.SourceUrl;
         dialog.IssueUrl = ApplicationMetadata.IssueUrl;
         // dialog.DebugInfo = ApplicationMetadata.DebugInformation;

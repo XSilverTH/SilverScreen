@@ -1,12 +1,7 @@
 namespace SilverScreen.Core.Services;
 
-public sealed class PreferencesPersistenceException : IOException
+public sealed class PreferencesPersistenceException(string filePath, Exception innerException)
+    : IOException($"Failed to save preferences to '{filePath}'.", innerException)
 {
-    public PreferencesPersistenceException(string filePath, Exception innerException)
-        : base($"Failed to save preferences to '{filePath}'.", innerException)
-    {
-        FilePath = filePath;
-    }
-
-    public string FilePath { get; }
+    public string FilePath { get; } = filePath;
 }

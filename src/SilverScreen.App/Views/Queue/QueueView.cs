@@ -1,34 +1,33 @@
 using Adw;
-
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
+using Spinner = Gtk.Spinner;
 
 namespace SilverScreen.Views.Queue;
 
 public partial class QueueView : ViewBase<Box>
 {
-    private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
-    private readonly Button _clearButton;
     private readonly Action _closeRequested;
     private readonly StatusPage _emptyPage;
+    private readonly SignalListItemFactory _factory;
     private readonly Box _footer;
-    private readonly ListView _list;
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
+    private readonly ListView _list;
     private readonly Button _playButton;
-    private readonly Gtk.Spinner _playSpinner;
+    private readonly Spinner _playSpinner;
     private readonly Stack _playStack;
+    private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
     private readonly ScrolledWindow _scrolledWindow;
     private readonly NoSelection _selection;
-    private readonly SignalListItemFactory _factory;
     private readonly Label _summary;
     private readonly IThumbnailService _thumbnails;
     private readonly QueueViewModel _viewModel;
-    private IReadOnlyList<QueueItem> _displayedItems = [];
+    private QueueItem[] _displayedItems = [];
     private bool _disposed;
 
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, Action closeRequested)
@@ -36,11 +35,11 @@ public partial class QueueView : ViewBase<Box>
         _viewModel = viewModel;
         _thumbnails = thumbnails;
         _closeRequested = closeRequested;
-        _clearButton = GetRequiredObject<Button>("queue_clear_button");
+        GetRequiredObject<Button>("queue_clear_button");
         _emptyPage = GetRequiredObject<StatusPage>("queue_empty_page");
         _footer = GetRequiredObject<Box>("queue_footer");
         _playButton = GetRequiredObject<Button>("queue_play_button");
-        _playSpinner = GetRequiredObject<Gtk.Spinner>("queue_play_spinner");
+        _playSpinner = GetRequiredObject<Spinner>("queue_play_spinner");
         _playStack = GetRequiredObject<Stack>("queue_play_stack");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("queue_scrolled_window");
         _summary = GetRequiredObject<Label>("queue_summary_label");
@@ -103,18 +102,18 @@ public partial class QueueView : ViewBase<Box>
     {
         var nextItems = items.ToArray();
         var prefixLength = 0;
-        while (prefixLength < _displayedItems.Count && prefixLength < nextItems.Length &&
+        while (prefixLength < _displayedItems.Length && prefixLength < nextItems.Length &&
                _displayedItems[prefixLength].Id == nextItems[prefixLength].Id)
             prefixLength++;
 
         var suffixLength = 0;
-        while (_displayedItems.Count - suffixLength > prefixLength &&
+        while (_displayedItems.Length - suffixLength > prefixLength &&
                nextItems.Length - suffixLength > prefixLength &&
-               _displayedItems[_displayedItems.Count - suffixLength - 1].Id ==
+               _displayedItems[_displayedItems.Length - suffixLength - 1].Id ==
                nextItems[nextItems.Length - suffixLength - 1].Id)
             suffixLength++;
 
-        var removedMiddleCount = _displayedItems.Count - prefixLength - suffixLength;
+        var removedMiddleCount = _displayedItems.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextItems.Length - prefixLength - suffixLength;
         _itemsById.Clear();
         foreach (var item in nextItems)
@@ -140,22 +139,19 @@ public partial class QueueView : ViewBase<Box>
 
     private void OnRowBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
-        if (args.Object is not ListItem { Child: { } child, Item: StringObject itemId } ||
-            itemId.String is not { } id ||
+        if (args.Object is not ListItem { Child: { } child, Item: StringObject { String: { } id } } ||
             !_rowsByCell.TryGetValue(child, out var row) ||
             !_itemsById.TryGetValue(id, out var item))
             return;
 
-        row.Bind(item, GetItemIndex(item.Id), _displayedItems.Count);
+        row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length);
     }
 
     private int GetItemIndex(Guid itemId)
     {
-        for (var index = 0; index < _displayedItems.Count; index++)
-        {
+        for (var index = 0; index < _displayedItems.Length; index++)
             if (_displayedItems[index].Id == itemId)
                 return index;
-        }
 
         return -1;
     }

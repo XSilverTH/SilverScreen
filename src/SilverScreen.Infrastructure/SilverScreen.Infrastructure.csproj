@@ -7,8 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Serilog" Version="4.3.0" />
-        <ProjectReference Include="..\..\lib\Hi3Helper.SharpDiscordRPC\DiscordRPC\DiscordRPC.csproj" />
+        <PackageReference Include="Serilog" Version="4.3.0"/>
+        <ProjectReference Include="..\..\lib\Hi3Helper.SharpDiscordRPC\DiscordRPC\DiscordRPC.csproj"/>
         <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
         <InternalsVisibleTo Include="SilverScreen.Tests"/>
     </ItemGroup>

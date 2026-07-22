@@ -24,7 +24,7 @@ public sealed class YouTubeHomeClient(
 
     private YouTubeBootstrapConfig? _bootstrapConfig;
 
-    public Func<long> TimeSource { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    public Func<long> TimeSource { get; init; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public void Dispose()
     {
@@ -127,10 +127,10 @@ public sealed class YouTubeHomeClient(
             $"https://www.youtube.com/youtubei/v1/browse?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
         using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
 
-        request.Headers.UserAgent.ParseAdd(_options.UserAgent);
-        request.Headers.Add("Origin", _options.Origin);
-        request.Headers.Add("Referer", _options.Referer);
-        request.Headers.Add("X-Origin", _options.Origin);
+        request.Headers.UserAgent.ParseAdd(YouTubeHomeClientOptions.UserAgent);
+        request.Headers.Add("Origin", YouTubeHomeClientOptions.Origin);
+        request.Headers.Add("Referer", YouTubeHomeClientOptions.Referer);
+        request.Headers.Add("X-Origin", YouTubeHomeClientOptions.Origin);
         request.Headers.Add("Cookie", credentials.CookieHeader);
         request.Headers.Add("X-Youtube-Client-Name", "1");
         request.Headers.Add("X-Youtube-Client-Version", config.ClientVersion);
@@ -168,8 +168,7 @@ public sealed class YouTubeHomeClient(
         {
             if (!response.IsSuccessStatusCode)
             {
-                var isAuthError = response.StatusCode == HttpStatusCode.Unauthorized ||
-                                  response.StatusCode == HttpStatusCode.Forbidden;
+                var isAuthError = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
                 return new HomeFeedResult(
                     [],
                     null,
@@ -237,9 +236,9 @@ public sealed class YouTubeHomeClient(
                 return _bootstrapConfig;
 
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://www.youtube.com/");
-            request.Headers.UserAgent.ParseAdd(_options.UserAgent);
-            request.Headers.Add("Origin", _options.Origin);
-            request.Headers.Add("Referer", _options.Referer);
+            request.Headers.UserAgent.ParseAdd(YouTubeHomeClientOptions.UserAgent);
+            request.Headers.Add("Origin", YouTubeHomeClientOptions.Origin);
+            request.Headers.Add("Referer", YouTubeHomeClientOptions.Referer);
             request.Headers.Add("Cookie", credentials.CookieHeader);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);

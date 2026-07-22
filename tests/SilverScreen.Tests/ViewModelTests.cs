@@ -1,8 +1,6 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Queue;
-using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.ViewModels;
 
 namespace SilverScreen.Tests;
@@ -60,7 +58,8 @@ public sealed class ViewModelTests
     {
         var queue = new QueueService();
         var first = queue.Add(new VideoSummary("abc123_X-yZ", "First", "Channel", TimeSpan.FromMinutes(2), "", false));
-        var second = queue.Add(new VideoSummary("dQw4w9WgXcQ", "Second", "Channel", TimeSpan.FromMinutes(3), "", false));
+        var second =
+            queue.Add(new VideoSummary("dQw4w9WgXcQ", "Second", "Channel", TimeSpan.FromMinutes(3), "", false));
         var playback = new ControlledPlaybackService();
         var shell = new ShellViewModel();
         using var viewModel = new QueueViewModel(queue, playback, shell);
@@ -101,7 +100,6 @@ public sealed class ViewModelTests
     }
 
 
-
     private sealed class ControlledSearchService : ISearchService
     {
         public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests
@@ -134,6 +132,7 @@ public sealed class ViewModelTests
     private sealed class ControlledPlaybackService : IPlaybackService
     {
         public List<PlaybackRequest> Requests { get; } = [];
+
         public TaskCompletionSource<string> Completion { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -143,5 +142,4 @@ public sealed class ViewModelTests
             return Completion.Task;
         }
     }
-
 }

@@ -30,7 +30,6 @@ public sealed class SessionValidationCoordinatorTests
     }
 
 
-
     [Fact]
     public async Task DuplicateValidation_Prevention()
     {

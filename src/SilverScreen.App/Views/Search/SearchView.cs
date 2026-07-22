@@ -68,11 +68,9 @@ public class SearchView : ViewBase<Box, SearchViewModel>
             _cards.Add(card);
             var cardWidget = card.Widget;
             _results.Append(cardWidget);
-            if (cardWidget.GetParent() is FlowBoxChild flowBoxChild)
-            {
-                flowBoxChild.Halign = Align.Center;
-                flowBoxChild.Valign = Align.Start;
-            }
+            if (cardWidget.GetParent() is not FlowBoxChild flowBoxChild) continue;
+            flowBoxChild.Halign = Align.Center;
+            flowBoxChild.Valign = Align.Start;
         }
     }
 

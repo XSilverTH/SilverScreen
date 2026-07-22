@@ -1,3 +1,4 @@
+using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -18,7 +19,7 @@ public partial class HomeView : ViewBase<Box>
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
     private readonly Box _statusLoadingPage;
-    private readonly Adw.StatusPage _statusPage;
+    private readonly StatusPage _statusPage;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
@@ -27,7 +28,7 @@ public partial class HomeView : ViewBase<Box>
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private readonly NoSelection _videoSelection;
     private readonly HomeViewModel _viewModel;
-    private IReadOnlyList<VideoSummary> _displayedVideos = [];
+    private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 
     public HomeView(HomeViewModel viewModel, IThumbnailService thumbnails, VideoCardActions videoActions)
@@ -40,7 +41,7 @@ public partial class HomeView : ViewBase<Box>
         _messageLabel = GetRequiredObject<Label>("home_message_label");
         _statusHost = GetRequiredObject<Box>("home_status_host");
         _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
-        _statusPage = GetRequiredObject<Adw.StatusPage>("home_status_page");
+        _statusPage = GetRequiredObject<StatusPage>("home_status_page");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("home_scrolled_window");
         _loadMoreButton = GetRequiredObject<Button>("home_load_more_button");
 
@@ -88,7 +89,7 @@ public partial class HomeView : ViewBase<Box>
         if (state is { IsLoading: false, IsLoadingMore: false })
             ApplyVideos(NormalizeVideos(state.Videos));
 
-        var hasDisplayedVideos = _displayedVideos.Count > 0;
+        var hasDisplayedVideos = _displayedVideos.Length > 0;
         var isLoading = state.IsLoading || state.IsLoadingMore;
         _loadingRow.Visible = false;
         _messageLabel.Visible = false;
@@ -116,12 +117,10 @@ public partial class HomeView : ViewBase<Box>
             _messageLabel.Visible = true;
         }
 
-        if (state.HasContinuation)
-        {
-            _loadMoreButton.Label = isLoading && state.IsLoadingMore ? "Loading more…" : "Load more";
-            _loadMoreButton.Sensitive = !isLoading;
-            _loadMoreButton.Visible = true;
-        }
+        if (!state.HasContinuation) return;
+        _loadMoreButton.Label = isLoading && state.IsLoadingMore ? "Loading more…" : "Load more";
+        _loadMoreButton.Sensitive = !isLoading;
+        _loadMoreButton.Visible = true;
     }
 
     private void ShowStatus(HomeFeedState state)
@@ -154,7 +153,7 @@ public partial class HomeView : ViewBase<Box>
         _statusHost.Visible = true;
     }
 
-    private static IReadOnlyList<VideoSummary> NormalizeVideos(IReadOnlyList<VideoSummary> videos)
+    private static VideoSummary[] NormalizeVideos(VideoSummary[] videos)
     {
         return videos.Where(video => !video.IsShort).GroupBy(video => video.Id).Select(group => group.First())
             .ToArray();
@@ -164,18 +163,18 @@ public partial class HomeView : ViewBase<Box>
     {
         var nextVideos = videos.ToArray();
         var prefixLength = 0;
-        while (prefixLength < _displayedVideos.Count && prefixLength < nextVideos.Length &&
+        while (prefixLength < _displayedVideos.Length && prefixLength < nextVideos.Length &&
                _displayedVideos[prefixLength] == nextVideos[prefixLength])
             prefixLength++;
 
         var suffixLength = 0;
-        while (_displayedVideos.Count - suffixLength > prefixLength &&
+        while (_displayedVideos.Length - suffixLength > prefixLength &&
                nextVideos.Length - suffixLength > prefixLength &&
-               _displayedVideos[_displayedVideos.Count - suffixLength - 1] ==
+               _displayedVideos[_displayedVideos.Length - suffixLength - 1] ==
                nextVideos[nextVideos.Length - suffixLength - 1])
             suffixLength++;
 
-        var removedMiddleCount = _displayedVideos.Count - prefixLength - suffixLength;
+        var removedMiddleCount = _displayedVideos.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextVideos.Length - prefixLength - suffixLength;
         _videosById.Clear();
         foreach (var video in nextVideos)
@@ -207,8 +206,7 @@ public partial class HomeView : ViewBase<Box>
 
     private void OnVideoCardBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
-        if (args.Object is not ListItem { Child: { } child, Item: StringObject videoId } ||
-            videoId.String is not { } id ||
+        if (args.Object is not ListItem { Child: { } child, Item: StringObject { String: { } id } } ||
             !_cardsByCell.TryGetValue(child, out var card) ||
             !_videosById.TryGetValue(id, out var video))
             return;

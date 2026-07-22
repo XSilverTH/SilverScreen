@@ -1,13 +1,12 @@
 using System.Diagnostics.CodeAnalysis;
-using Adw;
 using GObject;
 using Gtk;
 using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.ViewModels;
 using WebKit;
-using Window = Adw.Window;
 using XSTH.Blueprint.Helpers;
+using Window = Adw.Window;
 
 namespace SilverScreen.Views.Account;
 
@@ -28,7 +27,6 @@ internal sealed class WebLoginWindow : WindowBase<Window>
     private readonly CookieManager _cookieManager;
     private readonly NetworkSession _networkSession;
     private readonly Label _statusLabel;
-    private readonly Box _webViewContainer;
     private readonly WebView _webView;
     private bool _closedInvoked;
     private bool _disposed;
@@ -39,7 +37,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
         _account = account;
         _closed = closed;
         _statusLabel = GetRequiredObject<Label>("web_login_status_label");
-        _webViewContainer = GetRequiredObject<Box>("web_view_container");
+        var webViewContainer = GetRequiredObject<Box>("web_view_container");
         Widget.TransientFor = parent;
 
         _networkSession = NetworkSession.NewEphemeral();
@@ -49,7 +47,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
         _webView.Vexpand = true;
         _webView.GetSettings().SetUserAgent(BrowserUserAgent);
 
-        _webViewContainer.Append(_webView);
+        webViewContainer.Append(_webView);
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,

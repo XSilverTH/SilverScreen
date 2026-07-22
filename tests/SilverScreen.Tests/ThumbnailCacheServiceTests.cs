@@ -50,7 +50,7 @@ public sealed class ThumbnailCacheServiceTests
             Content = new ByteArrayContent(new byte[11])
         }));
         using var client = new HttpClient(handler);
-        using var service = new ThumbnailCacheService(client, directory.Path, maxDownloadBytes: 10);
+        using var service = new ThumbnailCacheService(client, directory.Path, 10);
 
         var result = await service.GetThumbnailAsync("https://example.com/large.jpg");
 
@@ -62,7 +62,8 @@ public sealed class ThumbnailCacheServiceTests
     public async Task GetThumbnailAsync_WebPDownloadIsRejected()
     {
         using var directory = new TemporaryDirectory();
-        var webp = new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var webp = new byte[]
+            { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(webp)
@@ -88,7 +89,7 @@ public sealed class ThumbnailCacheServiceTests
 
         public void Dispose()
         {
-            if (Directory.Exists(Path)) Directory.Delete(Path, recursive: true);
+            if (Directory.Exists(Path)) Directory.Delete(Path, true);
         }
     }
 

@@ -162,7 +162,7 @@ internal static class WebLoginCookieReader
                 output.Append("#HttpOnly_");
 
             output.Append(cookie.Domain).Append('\t')
-                .Append(cookie.Domain.StartsWith(".", StringComparison.Ordinal) ? "TRUE" : "FALSE").Append('\t')
+                .Append(cookie.Domain.StartsWith('.') ? "TRUE" : "FALSE").Append('\t')
                 .Append(cookie.Path).Append('\t')
                 .Append(cookie.Secure ? "TRUE" : "FALSE").Append('\t')
                 .Append(cookie.ExpiresUnix > 0 ? cookie.ExpiresUnix : 0).Append('\t')
@@ -175,7 +175,7 @@ internal static class WebLoginCookieReader
 
     private static bool IsYouTubeDomain(string domain)
     {
-        var host = domain.StartsWith(".", StringComparison.Ordinal) ? domain[1..] : domain;
+        var host = domain.StartsWith('.') ? domain[1..] : domain;
         return host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) ||
                host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase);
     }

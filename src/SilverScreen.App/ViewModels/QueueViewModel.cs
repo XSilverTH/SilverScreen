@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-
 using System.ComponentModel;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -15,8 +14,8 @@ public sealed record QueuePresentationState(IReadOnlyList<QueueItem> Items, Time
 
 public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 {
-    private readonly IQueueService _queue;
     private readonly IPlaybackService _playback;
+    private readonly IQueueService _queue;
     private readonly ShellViewModel _shell;
     private bool _disposed;
     private bool _isLaunching;

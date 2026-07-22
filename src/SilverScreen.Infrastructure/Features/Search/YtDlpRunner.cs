@@ -6,16 +6,6 @@ namespace SilverScreen.Infrastructure.Features.Search;
 
 public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) : IYtDlpRunner, IYtDlpProcessRunner
 {
-    public async Task<ProcessResult> RunSearchAsync(
-        SearchRequest request,
-        YtDlpOptions options,
-        CancellationToken cancellationToken)
-    {
-        using var cookieFile = cookieFileProvider?.CreateCookieFile();
-        return await RunAsync(BuildSearchStartInfo(request, options, cookieFile?.Path), options.Timeout, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
         TimeSpan timeout,
@@ -26,12 +16,13 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process();
+        process.StartInfo = startInfo;
         if (!process.Start())
             throw new InvalidOperationException("yt-dlp did not start a process.");
 
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
         try
         {
@@ -50,7 +41,18 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         return new ProcessResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }
 
-    public static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options,
+    public async Task<ProcessResult> RunSearchAsync(
+        SearchRequest request,
+        YtDlpOptions options,
+        CancellationToken cancellationToken)
+    {
+        using var cookieFile = cookieFileProvider?.CreateCookieFile();
+        return await RunAsync(BuildSearchStartInfo(request, options, cookieFile?.Path), options.Timeout,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options,
         string? cookieFilePath = null)
     {
         var startInfo = CreateStartInfo(options.ExecutablePath);

@@ -11,11 +11,11 @@ public interface IQueueService
 
     QueueItem Add(VideoSummary video);
 
-    QueueItem AddNext(VideoSummary video);
+    void AddNext(VideoSummary video);
 
-    bool Move(Guid itemId, int destinationIndex);
+    void Move(Guid itemId, int destinationIndex);
 
-    bool Remove(Guid itemId);
+    void Remove(Guid itemId);
 
     void Clear();
 }

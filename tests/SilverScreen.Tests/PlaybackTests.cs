@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
@@ -122,5 +121,4 @@ public sealed class PlaybackTests
         {
         }
     }
-
 }

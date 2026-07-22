@@ -15,7 +15,7 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     private const string Label = "SilverScreen YouTube session";
     private const string ContentType = "application/octet-stream";
 
-    private static readonly object GlibFunctionsGate = new();
+    private static readonly Lock GlibFunctionsGate = new();
     private static IntPtr _sGlibLibrary;
     private static IntPtr _sStringHash;
     private static IntPtr _sStringEqual;
@@ -210,21 +210,19 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
     {
         lock (GlibFunctionsGate)
         {
-            if (_sGlibLibrary == IntPtr.Zero)
+            if (_sGlibLibrary != IntPtr.Zero) return new GlibFunctions(_sStringHash, _sStringEqual, _sFree);
+            var library = NativeLibrary.Load(LibGlib);
+            try
             {
-                var library = NativeLibrary.Load(LibGlib);
-                try
-                {
-                    _sStringHash = NativeLibrary.GetExport(library, "g_str_hash");
-                    _sStringEqual = NativeLibrary.GetExport(library, "g_str_equal");
-                    _sFree = NativeLibrary.GetExport(library, "g_free");
-                    _sGlibLibrary = library;
-                }
-                catch
-                {
-                    NativeLibrary.Free(library);
-                    throw;
-                }
+                _sStringHash = NativeLibrary.GetExport(library, "g_str_hash");
+                _sStringEqual = NativeLibrary.GetExport(library, "g_str_equal");
+                _sFree = NativeLibrary.GetExport(library, "g_free");
+                _sGlibLibrary = library;
+            }
+            catch
+            {
+                NativeLibrary.Free(library);
+                throw;
             }
 
             return new GlibFunctions(_sStringHash, _sStringEqual, _sFree);

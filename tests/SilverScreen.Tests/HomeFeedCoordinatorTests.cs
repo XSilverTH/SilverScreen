@@ -90,7 +90,7 @@ public sealed class HomeFeedCoordinatorTests
         await loadMoreTask1;
 
         // Assert - Unique IDs appended
-        Assert.Equal(3, coordinator.State.Videos.Count);
+        Assert.Equal(3, coordinator.State.Videos.Length);
         Assert.Equal(new[] { "1", "2", "3" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
         Assert.True(coordinator.State.HasContinuation);
         Assert.Equal(1, fakeFeed.LoadNextPageCallCount);
@@ -113,7 +113,7 @@ public sealed class HomeFeedCoordinatorTests
         await loadMoreTask2;
 
         // Assert - End of continuation hides continuation
-        Assert.Equal(4, coordinator.State.Videos.Count);
+        Assert.Equal(4, coordinator.State.Videos.Length);
         Assert.Equal(new[] { "1", "2", "3", "4" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
         Assert.False(coordinator.State.HasContinuation);
         Assert.Equal(2, fakeFeed.LoadNextPageCallCount);
@@ -268,7 +268,7 @@ public sealed class HomeFeedCoordinatorTests
         await fakeFeed.FirstPageCalledTask;
         await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
 
-        Assert.Equal(2, coordinator.State.Videos.Count);
+        Assert.Equal(2, coordinator.State.Videos.Length);
 
         // Step 2: Refresh again, returning TemporaryBackendFailure
         fakeFeed.ResetCalledTasks();
@@ -288,7 +288,7 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Equal(HomeFeedStateKind.SafeError, coordinator.State.Kind);
         Assert.Equal("Could not load YouTube recommendations.", coordinator.State.Message);
         // Existing video cards must be preserved!
-        Assert.Equal(2, coordinator.State.Videos.Count);
+        Assert.Equal(2, coordinator.State.Videos.Length);
         Assert.Equal(new[] { "1", "2" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
     }
 
@@ -304,11 +304,11 @@ public sealed class HomeFeedCoordinatorTests
 
         private TaskCompletionSource _nextPageCalledTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public int LoadFirstPageCallCount { get; set; }
-        public int LoadNextPageCallCount { get; set; }
+        public int LoadFirstPageCallCount { get; private set; }
+        public int LoadNextPageCallCount { get; private set; }
 
-        public List<CancellationToken> FirstPageTokens { get; } = new();
-        public List<CancellationToken> NextPageTokens { get; } = new();
+        public List<CancellationToken> FirstPageTokens { get; } = [];
+        private List<CancellationToken> NextPageTokens { get; } = [];
 
         public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
         public Task NextPageCalledTask => _nextPageCalledTcs.Task;

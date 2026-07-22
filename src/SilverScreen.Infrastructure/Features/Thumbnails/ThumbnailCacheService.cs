@@ -8,9 +8,9 @@ namespace SilverScreen.Infrastructure.Features.Thumbnails;
 
 public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 {
-    public const long DefaultMaxDownloadBytes = 3 * 1024 * 1024;
-    public const int DefaultMaxFileCount = 300;
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+    private const long DefaultMaxDownloadBytes = 3 * 1024 * 1024;
+    private const int DefaultMaxFileCount = 300;
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly HashSet<string> SafeExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,7 +58,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         _disposeHttpClient = disposeHttpClient;
     }
 
-    public string CacheDirectory { get; }
+    private string CacheDirectory { get; }
 
     public void Dispose()
     {
@@ -167,7 +167,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         return TryCreateHttpUri(thumbnailUrl, out var uri) ? GetCachePath(uri) : string.Empty;
     }
 
-    public static string CreateCacheKey(string thumbnailUrl)
+    private static string CreateCacheKey(string thumbnailUrl)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(thumbnailUrl));
         return Convert.ToHexString(bytes).ToLowerInvariant();

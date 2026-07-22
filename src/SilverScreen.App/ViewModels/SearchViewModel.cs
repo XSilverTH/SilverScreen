@@ -20,20 +20,19 @@ public sealed class SearchViewModel(
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
-    private SearchViewState _state = new([], "Search results will appear here.", false);
 
     public SearchViewState State
     {
-        get => _state;
+        get;
         private set
         {
-            _state = value;
+            field = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Summary));
             OnPropertyChanged(nameof(IsLoading));
             StateChanged?.Invoke(this, value);
         }
-    }
+    } = new([], "Search results will appear here.", false);
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;

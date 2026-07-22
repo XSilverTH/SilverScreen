@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 namespace SilverScreen;
 
@@ -17,7 +16,8 @@ internal static class ApplicationMetadata
     private static string GetVersion()
     {
         var assembly = typeof(ApplicationMetadata).Assembly;
-        var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var informationalVersion =
+            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
         return string.IsNullOrWhiteSpace(informationalVersion)
             ? assembly.GetName().Version?.ToString() ?? "Unknown"

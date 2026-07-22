@@ -77,7 +77,8 @@ public sealed class YouTubeHomeClientTests
         return content.ToString();
     }
 
-    private sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler
+    private sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> response)
+        : HttpMessageHandler
     {
         public int CallCount { get; private set; }
         public string? PostAuthorizationScheme { get; private set; }

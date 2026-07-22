@@ -67,28 +67,22 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public bool SaveManualSession(string cookieContent)
     {
-        if (string.IsNullOrWhiteSpace(cookieContent))
-        {
-            _shell.Status = "Manual YouTube session was not saved because no cookie content was entered.";
-            return false;
-        }
-
-        return PersistSession(
-            cookieContent.Trim(),
-            "Manual YouTube session saved securely.");
+        if (!string.IsNullOrWhiteSpace(cookieContent))
+            return PersistSession(
+                cookieContent.Trim(),
+                "Manual YouTube session saved securely.");
+        _shell.Status = "Manual YouTube session was not saved because no cookie content was entered.";
+        return false;
     }
 
     public bool SaveWebSession(string cookieContent)
     {
-        if (string.IsNullOrWhiteSpace(cookieContent))
-        {
-            _shell.Status = "YouTube web session was not saved because no cookie content was captured.";
-            return false;
-        }
-
-        return PersistSession(
-            cookieContent.Trim(),
-            "YouTube web session saved securely.");
+        if (!string.IsNullOrWhiteSpace(cookieContent))
+            return PersistSession(
+                cookieContent.Trim(),
+                "YouTube web session saved securely.");
+        _shell.Status = "YouTube web session was not saved because no cookie content was captured.";
+        return false;
     }
 
     private bool PersistSession(string cookieContent, string successMessage)

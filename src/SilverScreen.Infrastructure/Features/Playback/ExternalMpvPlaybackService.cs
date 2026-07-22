@@ -1,6 +1,6 @@
-using Serilog;
 using System.ComponentModel;
 using System.Diagnostics;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Session;
@@ -10,13 +10,13 @@ namespace SilverScreen.Infrastructure.Features.Playback;
 public sealed class ExternalMpvPlaybackService : IPlaybackService
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
+    private readonly Lock _activePlaybackLock = new();
+    private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
     private readonly MpvCommandBuilder _commandBuilder;
     private readonly ICookieFileProvider? _cookieFileProvider;
+    private readonly IPlaybackPresenceService? _playbackPresenceService;
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
-    private readonly IPlaybackPresenceService? _playbackPresenceService;
-    private readonly object _activePlaybackLock = new();
-    private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
     private long _nextPlaybackId;
 
     public ExternalMpvPlaybackService()
@@ -144,7 +144,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
     }
 
-    internal static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
+    private static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
     {
         try
         {
@@ -189,7 +189,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
     }
 
-    internal static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
+    private static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
     {
         if (cookieFileLease is null)
         {
@@ -277,5 +277,4 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     }
 
     private sealed record ActivePlayback(long Id, PlaybackRequest Request, DateTimeOffset StartedAt);
-
 }

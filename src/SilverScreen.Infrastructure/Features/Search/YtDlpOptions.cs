@@ -6,5 +6,5 @@ public sealed record YtDlpOptions
 
     public int MaxResults { get; init; } = 20;
 
-    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan Timeout { get; } = TimeSpan.FromSeconds(30);
 }

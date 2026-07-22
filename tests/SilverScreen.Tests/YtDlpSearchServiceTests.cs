@@ -41,7 +41,7 @@ public sealed class YtDlpSearchServiceTests
     [Fact]
     public async Task SearchAsync_ReportsRunnerFailureWithoutResults()
     {
-        var service = CreateService(string.Empty, exitCode: 1, standardError: "network unavailable");
+        var service = CreateService(string.Empty, 1, "network unavailable");
 
         var result = await service.SearchAsync(new SearchRequest("query"), CancellationToken.None);
 
@@ -49,12 +49,18 @@ public sealed class YtDlpSearchServiceTests
         Assert.Empty(result.Videos);
     }
 
-    private static YtDlpSearchService CreateService(string output, int exitCode = 0, string standardError = "") =>
-        new(new YtDlpOptions(), new FakeRunner(new ProcessResult(exitCode, output, standardError)));
+    private static YtDlpSearchService CreateService(string output, int exitCode = 0, string standardError = "")
+    {
+        return new YtDlpSearchService(new YtDlpOptions(),
+            new FakeRunner(new ProcessResult(exitCode, output, standardError)));
+    }
 
     private sealed class FakeRunner(ProcessResult result) : IYtDlpRunner
     {
         public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options,
-            CancellationToken cancellationToken) => Task.FromResult(result);
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(result);
+        }
     }
 }

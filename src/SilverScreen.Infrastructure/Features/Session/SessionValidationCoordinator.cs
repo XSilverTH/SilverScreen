@@ -83,15 +83,15 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
     private bool HasManualSession()
     {
         var session = _sessionService.GetCurrentSession();
-        return session.IsSignedIn && session.HasManualSession;
+        return session is { IsSignedIn: true, HasManualSession: true };
     }
 }
 
 public static class SessionValidationFormatter
 {
     public const string ValidatingMessage = "Validating YouTube session…";
-    public const string CancellationMessage = "Validation canceled.";
-    public const string UnexpectedErrorMessage = "Validation failed: An unexpected error occurred.";
+    private const string CancellationMessage = "Validation canceled.";
+    private const string UnexpectedErrorMessage = "Validation failed: An unexpected error occurred.";
     public const string NoActiveSessionMessage = "Validation failed: No YouTube session is active.";
     public const string AlreadyRunningMessage = "Validation is already in progress.";
 

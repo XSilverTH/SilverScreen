@@ -23,15 +23,16 @@ public sealed class RuntimeDependencyDiagnostics
     {
         _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
         _secretServiceAvailability = secretServiceAvailability ??
-                                      throw new ArgumentNullException(nameof(secretServiceAvailability));
-        _isExecutableAvailable = isExecutableAvailable ?? throw new ArgumentNullException(nameof(isExecutableAvailable));
+                                     throw new ArgumentNullException(nameof(secretServiceAvailability));
+        _isExecutableAvailable =
+            isExecutableAvailable ?? throw new ArgumentNullException(nameof(isExecutableAvailable));
     }
 
     /// <summary>Returns actionable setup warnings for dependencies unavailable at application startup.</summary>
     public IReadOnlyList<string> GetStartupWarnings()
     {
         var preferences = _preferencesService.GetPreferences();
-        var warnings = new List<string>(capacity: 3);
+        var warnings = new List<string>(3);
 
         if (!_isExecutableAvailable(preferences.YtDlpExecutablePath))
             warnings.Add(RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath));
@@ -45,7 +46,7 @@ public sealed class RuntimeDependencyDiagnostics
         return warnings;
     }
 
-    internal static bool IsExecutableAvailable(string executablePath)
+    private static bool IsExecutableAvailable(string executablePath)
     {
         if (string.IsNullOrWhiteSpace(executablePath)) return false;
 
@@ -56,16 +57,10 @@ public sealed class RuntimeDependencyDiagnostics
             return IsExecutableFile(trimmedPath);
 
         var searchPath = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(searchPath)) return false;
-
-        foreach (var directory in searchPath.Split(Path.PathSeparator, StringSplitOptions.None))
-        {
-            var candidate = Path.Combine(string.IsNullOrEmpty(directory) ? Environment.CurrentDirectory : directory,
-                trimmedPath);
-            if (IsExecutableFile(candidate)) return true;
-        }
-
-        return false;
+        return !string.IsNullOrWhiteSpace(searchPath) && searchPath.Split(Path.PathSeparator)
+            .Select(directory =>
+                Path.Combine(string.IsNullOrEmpty(directory) ? Environment.CurrentDirectory : directory, trimmedPath))
+            .Any(candidate => IsExecutableFile(candidate));
     }
 
     private static bool IsExecutableFile(string path)

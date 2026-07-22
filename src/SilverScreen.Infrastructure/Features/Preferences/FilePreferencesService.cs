@@ -1,5 +1,5 @@
-using Serilog;
 using System.Text.Json;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -9,7 +9,7 @@ public sealed class FilePreferencesService : IPreferencesService
 {
     private static readonly ILogger Logger = Log.ForContext<FilePreferencesService>();
     private readonly string _filePath;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private AppPreferences _current;
 
     public FilePreferencesService() : this(GetDefaultPreferencesFilePath())
@@ -55,6 +55,7 @@ public sealed class FilePreferencesService : IPreferencesService
 
         PreferencesChanged?.Invoke(this, Clone(cloned));
     }
+
     private void WriteAtomically(AppPreferences preferences)
     {
         var directory = Path.GetDirectoryName(_filePath);
@@ -66,19 +67,19 @@ public sealed class FilePreferencesService : IPreferencesService
 
         try
         {
-            using (var stream = new System.IO.FileStream(
+            using (var stream = new FileStream(
                        temporaryPath,
                        FileMode.CreateNew,
                        FileAccess.Write,
                        FileShare.None,
-                       bufferSize: 4096,
-                       options: FileOptions.WriteThrough))
+                       4096,
+                       FileOptions.WriteThrough))
             {
                 JsonSerializer.Serialize(stream, preferences, PreferencesJsonContext.Default.AppPreferences);
-                stream.Flush(flushToDisk: true);
+                stream.Flush(true);
             }
 
-            File.Move(temporaryPath, _filePath, overwrite: true);
+            File.Move(temporaryPath, _filePath, true);
         }
         finally
         {

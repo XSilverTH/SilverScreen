@@ -5,18 +5,11 @@ public interface ICookieFileProvider
     CookieFileLease? CreateCookieFile();
 }
 
-public sealed class CookieFileLease : IDisposable
+public sealed class CookieFileLease(string path, string? directoryPath = null) : IDisposable
 {
-    private readonly string? _directoryPath;
     private bool _disposed;
 
-    public CookieFileLease(string path, string? directoryPath = null)
-    {
-        Path = path;
-        _directoryPath = directoryPath;
-    }
-
-    public string Path { get; }
+    public string Path { get; } = path;
 
     public void Dispose()
     {
@@ -25,7 +18,7 @@ public sealed class CookieFileLease : IDisposable
         _disposed = true;
         TryDeleteFile(Path);
 
-        if (_directoryPath is not null) TryDeleteDirectory(_directoryPath);
+        if (directoryPath is not null) TryDeleteDirectory(directoryPath);
     }
 
     private static void TryDeleteFile(string path)

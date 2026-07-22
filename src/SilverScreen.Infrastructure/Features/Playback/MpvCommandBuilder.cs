@@ -24,11 +24,10 @@ public sealed class MpvCommandBuilder
             throw new InvalidOperationException("No videos were provided for playback.");
 
         var playbackUrls = new List<string>(request.Videos.Length);
-        foreach (var video in request.Videos)
+        foreach (var playbackUrl in request.Videos.Select(video => string.IsNullOrWhiteSpace(video.WatchUrl)
+                     ? PlaybackRequest.BuildWatchUrl(video.Id)
+                     : video.WatchUrl))
         {
-            var playbackUrl = string.IsNullOrWhiteSpace(video.WatchUrl)
-                ? PlaybackRequest.BuildWatchUrl(video.Id)
-                : video.WatchUrl;
             if (string.IsNullOrWhiteSpace(playbackUrl))
                 throw new InvalidOperationException("No playable URL is available.");
 
@@ -38,6 +37,7 @@ public sealed class MpvCommandBuilder
 
             playbackUrls.Add(playbackUrl);
         }
+
         var arguments = new List<string>();
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {

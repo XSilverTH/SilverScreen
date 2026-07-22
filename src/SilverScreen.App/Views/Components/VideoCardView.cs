@@ -2,7 +2,6 @@ using Gdk;
 using GdkPixbuf;
 using Gio;
 using Gtk;
-using Pango;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
@@ -25,9 +24,7 @@ public class VideoCardView : ViewBase<Box>
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private readonly VideoCardActions _actions;
-    private readonly Box _card;
     private readonly Label _channel;
-    private readonly Label _uploadDate;
     private readonly Label _duration;
     private readonly MenuButton _menu;
     private readonly Widget _placeholder;
@@ -35,6 +32,7 @@ public class VideoCardView : ViewBase<Box>
 
     private readonly IThumbnailService _thumbnails;
     private readonly Label _title;
+    private readonly Label _uploadDate;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -48,7 +46,7 @@ public class VideoCardView : ViewBase<Box>
         _thumbnails = thumbnails;
         _actions = actions;
 
-        _card = GetRequiredObject<Box>("card");
+        var card = GetRequiredObject<Box>("card");
         _thumbnail = GetRequiredObject<Overlay>("thumbnail");
         _placeholder = GetRequiredObject<Widget>("placeholder");
         _duration = GetRequiredObject<Label>("duration");
@@ -71,7 +69,7 @@ public class VideoCardView : ViewBase<Box>
             else if (sender.GetCurrentButton() == 2)
                 _actions.AddToQueue(video);
         };
-        _card.AddController(click);
+        card.AddController(click);
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -97,6 +95,7 @@ public class VideoCardView : ViewBase<Box>
             _uploadDate.SetText(string.Empty);
             _uploadDate.Visible = false;
         }
+
         _duration.SetText(FormatDuration(video.Duration));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         _menu.TooltipText = $"More actions for {video.Title}";
@@ -314,7 +313,7 @@ public class VideoCardView : ViewBase<Box>
             : $"{duration.Minutes}:{duration.Seconds:00}";
     }
 
-    internal static string FormatUploadAge(DateOnly uploadDate, DateOnly today)
+    private static string FormatUploadAge(DateOnly uploadDate, DateOnly today)
     {
         var elapsedDays = Math.Max(0, today.DayNumber - uploadDate.DayNumber);
         return elapsedDays switch
@@ -328,7 +327,7 @@ public class VideoCardView : ViewBase<Box>
         };
     }
 
-    internal static string FormatUploadAge(DateTimeOffset publishedAt, DateTimeOffset now)
+    private static string FormatUploadAge(DateTimeOffset publishedAt, DateTimeOffset now)
     {
         var elapsed = now - publishedAt;
         if (elapsed <= TimeSpan.Zero || elapsed < TimeSpan.FromMinutes(1))
