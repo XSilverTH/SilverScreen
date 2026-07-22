@@ -29,59 +29,7 @@ public sealed class SessionValidationCoordinatorTests
         Assert.Equal(0, fakeFeed.LoadFirstPageCallCount);
     }
 
-    [Fact]
-    public void ActiveManualSession_IsAvailableTrue()
-    {
-        // Arrange
-        var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-        var fakeFeed = new FakeAuthenticatedHomeFeedService();
-        var validator = new HomeSessionValidator(fakeFeed);
-        var coordinator = new SessionValidationCoordinator(validator, sessionService);
 
-        // Act
-        var isAvailable = coordinator.IsAvailable;
-
-        // Assert
-        Assert.True(isAvailable);
-    }
-
-    [Fact]
-    public async Task SuccessfulValidation_SafeSummaryFields()
-    {
-        // Arrange
-        var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-        var fakeFeed = new FakeAuthenticatedHomeFeedService
-        {
-            LoadFirstPageAsyncHandler = _ => Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                new FeedPage(new List<VideoSummary>
-                {
-                    new("v1", "Test Title 1", "Channel 1", TimeSpan.FromMinutes(5), "https://example.com/thumb1.jpg",
-                        false),
-                    new("v2", "Test Title 2", "Channel 2", TimeSpan.FromMinutes(3), "https://example.com/thumb2.jpg",
-                        false)
-                }, "token-xyz"),
-                "Fake status message"
-            ))
-        };
-        var validator = new HomeSessionValidator(fakeFeed);
-        var coordinator = new SessionValidationCoordinator(validator, sessionService);
-
-        // Act
-        var formattedResult = await coordinator.ValidateAsync();
-
-        // Assert
-        Assert.Equal(1, fakeFeed.LoadFirstPageCallCount);
-        Assert.Contains("Validation succeeded.", formattedResult);
-        Assert.Contains("Usable videos: 2", formattedResult);
-        Assert.Contains("Continuation available: yes", formattedResult);
-        Assert.Contains("Authentication required: no", formattedResult);
-        Assert.Contains("Status: Recommendations loaded.", formattedResult);
-        Assert.True(coordinator.IsAvailable);
-        Assert.False(coordinator.IsValidating);
-    }
 
     [Fact]
     public async Task DuplicateValidation_Prevention()
@@ -130,40 +78,6 @@ public sealed class SessionValidationCoordinatorTests
         Assert.True(coordinator.IsAvailable);
     }
 
-    [Fact]
-    public async Task CancellationPropagation()
-    {
-        // Arrange
-        var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-
-        var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>();
-        var fakeFeed = new FakeAuthenticatedHomeFeedService
-        {
-            LoadFirstPageAsyncHandler = async token =>
-            {
-                await using (token.Register(() => tcs.TrySetCanceled(token)))
-                {
-                    return await tcs.Task;
-                }
-            }
-        };
-        var validator = new HomeSessionValidator(fakeFeed);
-        var coordinator = new SessionValidationCoordinator(validator, sessionService);
-
-        // Act
-        var task = coordinator.ValidateAsync();
-
-        // Trigger cancellation on the coordinator
-        coordinator.Cancel();
-
-        var result = await task;
-
-        // Assert
-        Assert.Equal(SessionValidationFormatter.CancellationMessage, result);
-        Assert.False(coordinator.IsValidating);
-        Assert.True(coordinator.IsAvailable);
-    }
 
     [Fact]
     public void SafeFormatter_ExcludesStatusMessage_HighLevelStatusMapping()

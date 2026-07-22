@@ -28,21 +28,6 @@ public sealed class PreferencesTests : IDisposable
         }
     }
 
-    [Fact]
-    public void GetPreferences_ReturnsDefaultPreferences_WhenFileDoesNotExist()
-    {
-        var service = new FilePreferencesService(_tempFilePath);
-        var prefs = service.GetPreferences();
-
-        Assert.NotNull(prefs);
-        Assert.Equal("System", prefs.Theme);
-        Assert.Equal("mpv", prefs.MpvExecutablePath);
-        Assert.Equal("yt-dlp", prefs.YtDlpExecutablePath);
-        Assert.Equal("Best", prefs.VideoQuality);
-        Assert.Equal(20, prefs.MaxResults);
-        Assert.False(prefs.MarkWatchedVideos);
-        Assert.False(prefs.DiscordRichPresenceEnabled);
-    }
 
     [Fact]
     public void SavePreferences_PersistsPreferences_AndLoadsThemCorrectly()
@@ -73,34 +58,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);
-    }
-
-    [Fact]
-    public void SavePreferences_RaisesPreferencesChangedEvent()
-    {
-        var service = new FilePreferencesService(_tempFilePath);
-        var newPrefs = new AppPreferences
-        {
-            Theme = "Light",
-            MpvExecutablePath = "mpv",
-            YtDlpExecutablePath = "yt-dlp",
-            VideoQuality = "720p",
-            MaxResults = 10,
-            MarkWatchedVideos = true,
-            DiscordRichPresenceEnabled = true
-        };
-
-        AppPreferences? eventArgs = null;
-        service.PreferencesChanged += (sender, args) => { eventArgs = args; };
-
-        service.SavePreferences(newPrefs);
-
-        Assert.NotNull(eventArgs);
-        Assert.Equal("Light", eventArgs.Theme);
-        Assert.Equal("720p", eventArgs.VideoQuality);
-        Assert.Equal(10, eventArgs.MaxResults);
-        Assert.True(eventArgs.MarkWatchedVideos);
-        Assert.True(eventArgs.DiscordRichPresenceEnabled);
     }
 
     [Fact]

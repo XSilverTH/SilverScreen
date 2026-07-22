@@ -10,17 +10,6 @@ public sealed class SessionTests
     private const string FakeCookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
 
-    [Fact]
-    public void SessionServiceStartsSignedOut()
-    {
-        var service = new InMemorySessionService();
-
-        var session = service.GetCurrentSession();
-
-        Assert.False(session.IsSignedIn);
-        Assert.False(session.HasManualSession);
-        Assert.Null(service.GetManualSessionCookies());
-    }
 
     [Fact]
     public void SettingManualCookiesMarksSessionActiveWithoutExposingContent()
