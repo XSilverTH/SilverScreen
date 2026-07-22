@@ -32,7 +32,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Widget _placeholder;
     private readonly MenuButton _menu;
     private readonly SimpleActionGroup _actions;
-    private readonly Menu _menuModel;
     private readonly DragSource _dragSource;
     private readonly DropTarget _dropTarget;
     private readonly WidgetPaintable _dragPaintable;
@@ -55,73 +54,15 @@ public partial class QueueItemRowView : ViewBase<Box>
         _moveRequested = moveRequested;
         _dropRequested = dropRequested;
         _removeRequested = removeRequested;
-        Widget.Hexpand = true;
-        Widget.CssClasses = ["queue-row"];
-        Widget.Spacing = 8;
-        Widget.MarginTop = 3;
-        Widget.MarginBottom = 3;
-        Widget.MarginStart = 8;
-        Widget.MarginEnd = 8;
-        Widget.HeightRequest = 78;
-        Widget.Valign = Align.Start;
 
-        _grip = Image.NewFromIconName("list-drag-handle-symbolic");
-        _grip.TooltipText = "Drag to reorder";
-        _grip.MarginStart = 2;
-        _grip.MarginEnd = 2;
-        _grip.Valign = Align.Center;
-        Widget.Append(_grip);
-
-        _position = Label.New(string.Empty);
-        _position.CssClasses = ["caption", "dim-label"];
-        _position.Valign = Align.Start;
-        Widget.Append(_position);
-
-        _thumbnail = Overlay.New();
-        _thumbnail.WidthRequest = ThumbnailWidth;
-        _thumbnail.HeightRequest = ThumbnailHeight;
-        _thumbnail.CssClasses = ["queue-thumbnail"];
-        _thumbnail.Overflow = Overflow.Hidden;
-        _placeholder = Image.NewFromIconName("media-playback-start-symbolic");
-        _placeholder.Halign = Align.Center;
-        _placeholder.Valign = Align.Center;
-        _thumbnail.Child = _placeholder;
-        Widget.Append(_thumbnail);
-
-        var details = Box.New(Orientation.Vertical, 3);
-        details.Hexpand = true;
-        details.Valign = Align.Center;
-        _title = Label.New(string.Empty);
-        _title.Xalign = 0;
-        _title.Lines = 2;
-        _title.Ellipsize = EllipsizeMode.End;
-        _title.Wrap = true;
-        _title.Hexpand = true;
-        details.Append(_title);
-        var metadata = Box.New(Orientation.Horizontal, 6);
-        _channel = Label.New(string.Empty);
-        _channel.Xalign = 0;
-        _channel.Ellipsize = EllipsizeMode.End;
-        _channel.Hexpand = true;
-        _channel.CssClasses = ["caption", "dim-label"];
-        metadata.Append(_channel);
-        _duration = Label.New(string.Empty);
-        _duration.Xalign = 1;
-        _duration.CssClasses = ["caption", "dim-label"];
-        metadata.Append(_duration);
-        details.Append(metadata);
-        Widget.Append(details);
-
-        var remove = Button.NewFromIconName("user-trash-symbolic");
-        remove.TooltipText = "Remove from queue";
-        remove.CssClasses = ["flat", "circular"];
-        remove.Valign = Align.Center;
-        remove.OnClicked += (_, _) =>
-        {
-            if (_item is { } item)
-                _removeRequested(item.Id);
-        };
-        Widget.Append(remove);
+        _grip = GetRequiredObject<Image>("grip");
+        _position = GetRequiredObject<Label>("position");
+        _thumbnail = GetRequiredObject<Overlay>("thumbnail");
+        _placeholder = GetRequiredObject<Widget>("placeholder");
+        _title = GetRequiredObject<Label>("title");
+        _channel = GetRequiredObject<Label>("channel");
+        _duration = GetRequiredObject<Label>("duration");
+        _menu = GetRequiredObject<MenuButton>("menu");
 
         _actions = SimpleActionGroup.New();
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
@@ -134,18 +75,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
         _actions.AddAction(_removeAction);
-        _menuModel = Menu.New();
-        _menuModel.Append("Move up", "queue.move-up");
-        _menuModel.Append("Move down", "queue.move-down");
-        _menuModel.Append("Remove", "queue.remove");
-        _menu = MenuButton.New();
-        _menu.IconName = "view-more-symbolic";
-        _menu.TooltipText = "Queue item actions";
-        _menu.CssClasses = ["flat", "circular"];
-        _menu.Valign = Align.Center;
         _menu.InsertActionGroup("queue", _actions);
-        _menu.MenuModel = _menuModel;
-        Widget.Append(_menu);
 
         _dragSource = DragSource.New();
         _dragSource.Actions = DragAction.Move;
@@ -164,6 +94,12 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dropTarget = DropTarget.New(GObject.Type.String, DragAction.Move);
         _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
         Widget.AddController(_dropTarget);
+    }
+
+    private void OnRemoveButtonClicked(object? sender, EventArgs args)
+    {
+        if (_item is { } item)
+            _removeRequested(item.Id);
     }
 
     public void Bind(QueueItem item, int index, int itemCount)
@@ -329,7 +265,6 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dragSource.Dispose();
         _dropTarget.Dispose();
         _actions.Dispose();
-        _menuModel.Dispose();
         base.Dispose();
     }
 }

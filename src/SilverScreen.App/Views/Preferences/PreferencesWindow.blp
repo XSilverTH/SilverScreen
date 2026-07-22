@@ -15,8 +15,12 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "Appearance";
 
       Adw.ComboRow theme_row {
+        notify => $OnRowNotify();
         title: "Application Theme";
         subtitle: "Select your preferred color scheme";
+        model: Gtk.StringList theme_model {
+          strings: ["System", "Light", "Dark"];
+        };
       }
     }
 
@@ -24,10 +28,12 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "Search (yt-dlp)";
 
       Adw.EntryRow ytdlp_path_row {
+        changed => $OnRowChanged();
         title: "yt-dlp Executable Path";
       }
 
       Adw.EntryRow max_results_row {
+        changed => $OnRowChanged();
         title: "Max Search Results";
       }
     }
@@ -41,6 +47,7 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "MPV Configuration";
 
       Adw.EntryRow mpv_path_row {
+        changed => $OnRowChanged();
         title: "MPV Executable Path";
       }
     }
@@ -49,8 +56,12 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "Quality";
 
       Adw.ComboRow quality_row {
+        notify => $OnRowNotify();
         title: "Default Quality";
         subtitle: "Preferred video resolution";
+        model: Gtk.StringList quality_model {
+          strings: ["Best", "1080p", "720p", "480p", "360p"];
+        };
       }
     }
 
@@ -58,6 +69,7 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "YouTube";
 
       Adw.SwitchRow mark_watched_row {
+        notify => $OnRowNotify();
         title: "Mark watched on YouTube";
         subtitle: "Use your signed-in session to add played videos to watch history";
       }
@@ -67,6 +79,7 @@ Adw.PreferencesWindow PreferencesWindow {
       title: "Discord";
 
       Adw.SwitchRow discord_rich_presence_row {
+        notify => $OnRowNotify();
         title: "Share playback activity on Discord";
         subtitle: "Show the current video in your Discord profile";
       }

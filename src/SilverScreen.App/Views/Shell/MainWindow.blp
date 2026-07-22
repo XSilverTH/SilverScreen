@@ -21,11 +21,40 @@ Adw.ApplicationWindow MainWindow {
 
         [start]
         Button search_button {
-          icon-name: "system-search-symbolic";
           tooltip-text: "Search";
           clicked => $OnSearchButtonClicked();
-        }
 
+          child: Box {
+            Image {
+              icon-name: "system-search-symbolic";
+            }
+
+            Popover search_popover {
+              visible: false;
+              child: Box {
+                orientation: vertical;
+                spacing: 10;
+                margin-top: 12;
+                margin-bottom: 12;
+                margin-start: 12;
+                margin-end: 12;
+
+                Entry search_entry {
+                  placeholder-text: "Search or paste a YouTube URL";
+                  width-chars: 36;
+                  activate => $OnSearchEntryActivated();
+                }
+
+                Label {
+                  label: "Enter searches YouTube with yt-dlp or opens a supported YouTube URL.";
+                  xalign: 0;
+                  wrap: true;
+                  styles ["dim-label"]
+                }
+              };
+            }
+          };
+        }
         title-widget: Adw.ViewSwitcher view_switcher {
           policy: wide;
         };
@@ -60,6 +89,27 @@ Adw.ApplicationWindow MainWindow {
           vexpand: true;
           hhomogeneous: false;
           vhomogeneous: false;
+          Adw.ViewStackPage {
+            name: "subscriptions";
+            title: "Subscriptions";
+            icon-name: "emblem-favorite-symbolic";
+            child: Adw.StatusPage {
+              title: "Subscriptions";
+              description: "Subscription feeds will land after account/session support.";
+              icon-name: "applications-internet-symbolic";
+            };
+          }
+
+          Adw.ViewStackPage {
+            name: "history";
+            title: "History";
+            icon-name: "document-open-recent-symbolic";
+            child: Adw.StatusPage {
+              title: "History";
+              description: "Local watch history is intentionally not persisted in this shell step.";
+              icon-name: "applications-internet-symbolic";
+            };
+          }
         }
 
         Label status_label {

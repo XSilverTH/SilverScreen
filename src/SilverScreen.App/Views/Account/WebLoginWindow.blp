@@ -1,0 +1,31 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.Window WebLoginWindow {
+  title: "Sign in to YouTube";
+  default-width: 960;
+  default-height: 720;
+  modal: true;
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.Box web_view_container {
+      orientation: vertical;
+      hexpand: true;
+      vexpand: true;
+
+      Gtk.Label web_login_status_label {
+        label: "Sign in with your Google account. Close this window to cancel.";
+        xalign: 0;
+        wrap: true;
+        margin-top: 8;
+        margin-bottom: 8;
+        margin-start: 12;
+        margin-end: 12;
+        styles ["dim-label"]
+      }
+    };
+  };
+}

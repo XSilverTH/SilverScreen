@@ -17,6 +17,8 @@ public partial class HomeView : ViewBase<Box>
     private readonly Label _messageLabel;
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
+    private readonly Box _statusLoadingPage;
+    private readonly Adw.StatusPage _statusPage;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
@@ -37,6 +39,8 @@ public partial class HomeView : ViewBase<Box>
         _loadingLabel = GetRequiredObject<Label>("home_loading_label");
         _messageLabel = GetRequiredObject<Label>("home_message_label");
         _statusHost = GetRequiredObject<Box>("home_status_host");
+        _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
+        _statusPage = GetRequiredObject<Adw.StatusPage>("home_status_page");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("home_scrolled_window");
         _loadMoreButton = GetRequiredObject<Button>("home_load_more_button");
 
@@ -47,16 +51,9 @@ public partial class HomeView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        _videoGrid = GridView.New(_videoSelection, _videoFactory);
-        _videoGrid.MinColumns = 1;
-        _videoGrid.MaxColumns = 4;
-        _videoGrid.SingleClickActivate = false;
-        _videoGrid.MarginStart = 24;
-        _videoGrid.MarginEnd = 24;
-        _videoGrid.MarginTop = 12;
-        _videoGrid.Hexpand = true;
-        _videoGrid.Vexpand = true;
-        _scrolledWindow.Child = _videoGrid;
+        _videoGrid = GetRequiredObject<GridView>("home_video_grid");
+        _videoGrid.Model = _videoSelection;
+        _videoGrid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -129,18 +126,31 @@ public partial class HomeView : ViewBase<Box>
 
     private void ShowStatus(HomeFeedState state)
     {
-        Clear(_statusHost);
-        _statusHost.Append(state.Kind switch
+        _statusLoadingPage.Visible = false;
+        _statusPage.Visible = false;
+
+        if (state.Kind == HomeFeedStateKind.InitialLoading)
         {
-            HomeFeedStateKind.InitialLoading => LoadingPage(),
-            HomeFeedStateKind.SignedOut => StatusPage("Home", "Sign in to see your YouTube recommendations.",
-                "avatar-default-symbolic"),
-            HomeFeedStateKind.Empty or HomeFeedStateKind.Ready => StatusPage("Home",
-                "No recommendations are available right now.", "applications-internet-symbolic"),
-            HomeFeedStateKind.AuthenticationRequired => StatusPage("Home",
-                "Your YouTube session is no longer valid.", "dialog-password-symbolic"),
-            _ => StatusPage("Home", "Could not load YouTube recommendations.", "network-error-symbolic")
-        });
+            _statusLoadingPage.Visible = true;
+        }
+        else
+        {
+            var (description, icon) = state.Kind switch
+            {
+                HomeFeedStateKind.SignedOut => ("Sign in to see your YouTube recommendations.",
+                    "avatar-default-symbolic"),
+                HomeFeedStateKind.Empty or HomeFeedStateKind.Ready => ("No recommendations are available right now.",
+                    "applications-internet-symbolic"),
+                HomeFeedStateKind.AuthenticationRequired => ("Your YouTube session is no longer valid.",
+                    "dialog-password-symbolic"),
+                _ => ("Could not load YouTube recommendations.", "network-error-symbolic")
+            };
+            _statusPage.Title = "Home";
+            _statusPage.Description = description;
+            _statusPage.IconName = icon;
+            _statusPage.Visible = true;
+        }
+
         _statusHost.Visible = true;
     }
 
@@ -219,47 +229,6 @@ public partial class HomeView : ViewBase<Box>
 
         card.Unbind();
         card.Dispose();
-    }
-
-    private static Box LoadingPage()
-    {
-        var content = Box.New(Orientation.Vertical, 12);
-        content.Halign = Align.Center;
-        content.Valign = Align.Center;
-        content.Hexpand = true;
-        content.Vexpand = true;
-        var spinner = Spinner.New();
-        spinner.Halign = Align.Center;
-        spinner.Spinning = true;
-        content.Append(spinner);
-        content.Append(DimLabel("Loading YouTube recommendations…"));
-        return content;
-    }
-
-    private static Widget StatusPage(string title, string description, string icon)
-    {
-        var page = Adw.StatusPage.New();
-        page.Title = title;
-        page.Description = description;
-        page.IconName = icon;
-        page.Hexpand = true;
-        page.Vexpand = true;
-        return page;
-    }
-
-    private static Label DimLabel(string text)
-    {
-        var label = Label.New(text);
-        label.Xalign = 0;
-        label.Wrap = true;
-        label.CssClasses = ["dim-label"];
-        return label;
-    }
-
-    private static void Clear(Box box)
-    {
-        while (box.GetFirstChild() is { } child)
-            box.Remove(child);
     }
 
     public new void Dispose()

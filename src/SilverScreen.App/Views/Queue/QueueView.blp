@@ -1,7 +1,112 @@
 using Gtk 4.0;
+using Adw 1;
 
 Gtk.Box QueueView {
   orientation: vertical;
   width-request: 380;
+  vexpand: true;
   styles ["queue-panel"]
+
+  Gtk.Box {
+    orientation: horizontal;
+    spacing: 12;
+    margin-start: 16;
+    margin-end: 16;
+    margin-top: 16;
+    margin-bottom: 12;
+
+    Gtk.Box {
+      hexpand: true;
+      orientation: vertical;
+      spacing: 2;
+
+      Gtk.Label {
+        label: "Up next";
+        xalign: 0;
+        styles ["title-3"]
+      }
+
+      Gtk.Label queue_summary_label {
+        label: "0 videos · 0s";
+        xalign: 0;
+        styles ["caption", "dim-label"]
+      }
+    }
+
+    Gtk.Button queue_close_button {
+      icon-name: "window-close-symbolic";
+      tooltip-text: "Close queue";
+      clicked => $OnCloseButtonClicked();
+      styles ["flat", "circular"]
+    }
+  }
+
+  Adw.StatusPage queue_empty_page {
+    icon-name: "playlist-symbolic";
+    title: "Your queue is empty";
+    description: "Add videos from any video menu to watch them back to back.";
+    hexpand: true;
+    vexpand: true;
+  }
+
+  Gtk.ScrolledWindow queue_scrolled_window {
+    visible: false;
+    hexpand: true;
+    vexpand: true;
+  }
+
+  Gtk.Box queue_footer {
+    visible: false;
+    orientation: vertical;
+    spacing: 8;
+    margin-start: 16;
+    margin-end: 16;
+    margin-top: 12;
+    margin-bottom: 16;
+
+    Gtk.Button queue_play_button {
+      clicked => $OnPlayButtonClicked();
+      styles ["suggested-action"]
+      halign: fill;
+
+      child: Gtk.Stack queue_play_stack {
+        Gtk.StackPage {
+          name: "idle";
+          child: Gtk.Box {
+          halign: center;
+          spacing: 8;
+
+          Gtk.Image {
+            icon-name: "media-playlist-start-symbolic";
+          }
+
+          Gtk.Label {
+            label: "Play all";
+          }
+          };
+        }
+
+        Gtk.StackPage {
+          name: "launching";
+          child: Gtk.Box {
+          halign: center;
+          spacing: 8;
+
+          Gtk.Spinner queue_play_spinner {}
+
+          Gtk.Label {
+            label: "Opening MPV…";
+          }
+          };
+        }
+      };
+    }
+
+    Gtk.Button queue_clear_button {
+      clicked => $OnClearButtonClicked();
+      label: "Clear";
+      styles ["flat"]
+      halign: center;
+    }
+  }
 }

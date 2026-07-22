@@ -25,6 +25,7 @@ public class VideoCardView : ViewBase<Box>
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private readonly VideoCardActions _actions;
+    private readonly Box _card;
     private readonly Label _channel;
     private readonly Label _uploadDate;
     private readonly Label _duration;
@@ -47,84 +48,16 @@ public class VideoCardView : ViewBase<Box>
         _thumbnails = thumbnails;
         _actions = actions;
 
-        Widget.WidthRequest = CardWidth;
-        Widget.Halign = Align.Center;
-        Widget.Valign = Align.Start;
-        Widget.Hexpand = false;
+        _card = GetRequiredObject<Box>("card");
+        _thumbnail = GetRequiredObject<Overlay>("thumbnail");
+        _placeholder = GetRequiredObject<Widget>("placeholder");
+        _duration = GetRequiredObject<Label>("duration");
+        _title = GetRequiredObject<Label>("title");
+        _channel = GetRequiredObject<Label>("channel");
+        _uploadDate = GetRequiredObject<Label>("upload_date");
+        _menu = GetRequiredObject<MenuButton>("menu");
 
-        var card = Box.New(Orientation.Vertical, 0);
-        card.WidthRequest = CardWidth;
-        card.Halign = Align.Center;
-        card.Valign = Align.Start;
-        card.CssClasses = ["video-card"];
-        card.Overflow = Overflow.Hidden;
-        Widget.Append(card);
-
-        _thumbnail = Overlay.New();
-        _thumbnail.HeightRequest = ThumbnailHeight;
-        _thumbnail.WidthRequest = CardWidth;
-        _thumbnail.Hexpand = true;
-        _thumbnail.Overflow = Overflow.Hidden;
-        _thumbnail.CssClasses = ["video-thumbnail"];
-
-        var icon = Image.NewFromIconName("media-playback-start-symbolic");
-        icon.PixelSize = 44;
-        icon.Halign = Align.Center;
-        icon.Valign = Align.Center;
-        _placeholder = icon;
-        _thumbnail.Child = _placeholder;
-
-        _duration = Label.New(string.Empty);
-        _duration.Halign = Align.End;
-        _duration.Valign = Align.End;
-        _duration.MarginEnd = 10;
-        _duration.MarginBottom = 9;
-        _duration.CssClasses = ["caption", "duration-pill"];
-        _thumbnail.AddOverlay(_duration);
-        card.Append(_thumbnail);
-
-        var metadata = Overlay.New();
-        metadata.CssClasses = ["video-metadata"];
-        metadata.MarginStart = 12;
-        metadata.MarginEnd = 12;
-        metadata.MarginTop = 9;
-        metadata.MarginBottom = 10;
-
-        var text = Box.New(Orientation.Vertical, 2);
-        text.Hexpand = true;
-
-        _title = Label.New(string.Empty);
-        _title.Xalign = 0;
-        _title.Wrap = true;
-        _title.MaxWidthChars = 30;
-        _title.HeightRequest = 38;
-        _title.CssClasses = ["video-title"];
-        text.Append(_title);
-
-        var footer = Box.New(Orientation.Horizontal, 8);
-        footer.Hexpand = true;
-
-        _channel = DimLabel(string.Empty);
-        _channel.Xalign = 0;
-        _channel.Hexpand = true;
-        _channel.Wrap = false;
-        _channel.Ellipsize = EllipsizeMode.End;
-        footer.Append(_channel);
-
-        _uploadDate = DimLabel(string.Empty);
-        _uploadDate.Xalign = 1;
-        _uploadDate.Halign = Align.End;
-        _uploadDate.Wrap = false;
-        _uploadDate.Visible = false;
-        footer.Append(_uploadDate);
-        text.Append(footer);
-
-        metadata.Child = text;
-        _menu = CreateMenuButton();
-        _menu.Halign = Align.End;
-        _menu.Valign = Align.Start;
-        metadata.AddOverlay(_menu);
-        card.Append(metadata);
+        SetupMenuActions();
 
         var click = GestureClick.New();
         click.Button = 0;
@@ -138,7 +71,7 @@ public class VideoCardView : ViewBase<Box>
             else if (sender.GetCurrentButton() == 2)
                 _actions.AddToQueue(video);
         };
-        card.AddController(click);
+        _card.AddController(click);
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -277,13 +210,8 @@ public class VideoCardView : ViewBase<Box>
         _boundTexture = null;
     }
 
-    private MenuButton CreateMenuButton()
+    private void SetupMenuActions()
     {
-        var menu = MenuButton.New();
-        menu.IconName = "view-more-symbolic";
-        menu.Valign = Align.Start;
-        menu.CssClasses = ["flat"];
-
         var actions = SimpleActionGroup.New();
         actions.AddAction(CreateMenuAction("play", () =>
         {
@@ -303,7 +231,7 @@ public class VideoCardView : ViewBase<Box>
         actions.AddAction(CreateMenuAction(
             "open-channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
         actions.AddAction(CreateMenuAction("copy-link", CopyLink));
-        menu.InsertActionGroup("video", actions);
+        _menu.InsertActionGroup("video", actions);
 
         var menuModel = Menu.New();
         menuModel.Append("Play", "video.play");
@@ -311,8 +239,7 @@ public class VideoCardView : ViewBase<Box>
         menuModel.Append("Add next", "video.add-next");
         menuModel.Append("Open channel", "video.open-channel");
         menuModel.Append("Copy link", "video.copy-link");
-        menu.MenuModel = menuModel;
-        return menu;
+        _menu.MenuModel = menuModel;
     }
 
     private void StartPlay(VideoSummary video)
@@ -362,14 +289,6 @@ public class VideoCardView : ViewBase<Box>
         return action;
     }
 
-    private static Label DimLabel(string text)
-    {
-        var label = Label.New(text);
-        label.Xalign = 0;
-        label.Wrap = true;
-        label.CssClasses = ["dim-label"];
-        return label;
-    }
 
     private static string? BuildVideoUrl(VideoSummary video)
     {

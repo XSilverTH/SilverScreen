@@ -1,5 +1,93 @@
 using Gtk 4.0;
 
 Gtk.Box VideoCardView {
-  orientation: vertical;
+  width-request: 336;
+  halign: center;
+  valign: start;
+  hexpand: false;
+
+  Gtk.Box card {
+    orientation: vertical;
+    width-request: 336;
+    halign: center;
+    valign: start;
+    styles ["video-card"]
+    overflow: hidden;
+
+    Gtk.Overlay thumbnail {
+      height-request: 189;
+      width-request: 336;
+      hexpand: true;
+      overflow: hidden;
+      styles ["video-thumbnail"]
+
+      child: Gtk.Image placeholder {
+        icon-name: "media-playback-start-symbolic";
+        pixel-size: 44;
+        halign: center;
+        valign: center;
+      };
+
+      [overlay]
+      Gtk.Label duration {
+        halign: end;
+        valign: end;
+        margin-end: 10;
+        margin-bottom: 9;
+        styles ["caption", "duration-pill"]
+      }
+    }
+
+    Gtk.Overlay metadata {
+      margin-start: 12;
+      margin-end: 12;
+      margin-top: 9;
+      margin-bottom: 10;
+      styles ["video-metadata"]
+
+      child: Gtk.Box text {
+        orientation: vertical;
+        spacing: 2;
+        hexpand: true;
+
+        Gtk.Label title {
+          xalign: 0;
+          wrap: true;
+          max-width-chars: 30;
+          height-request: 38;
+          styles ["video-title"]
+        }
+
+        Gtk.Box footer {
+          orientation: horizontal;
+          spacing: 8;
+          hexpand: true;
+
+          Gtk.Label channel {
+            xalign: 0;
+            hexpand: true;
+            wrap: false;
+            ellipsize: end;
+            styles ["dim-label"]
+          }
+
+          Gtk.Label upload_date {
+            xalign: 1;
+            halign: end;
+            wrap: false;
+            visible: false;
+            styles ["dim-label"]
+          }
+        }
+      };
+
+      [overlay]
+      Gtk.MenuButton menu {
+        icon-name: "view-more-symbolic";
+        halign: end;
+        valign: start;
+        styles ["flat"]
+      }
+    }
+  }
 }

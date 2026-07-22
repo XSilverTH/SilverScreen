@@ -5,19 +5,26 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Popovers;
 
-public class AccountPopoverView : ViewBase<Box>
+public partial class AccountPopoverView : ViewBase<Box>
 {
+    private readonly Stack _accountStack;
     private readonly Action _openWebLogin;
     private readonly Action<bool> _sessionAppearanceChanged;
     private readonly AccountViewModel _viewModel;
+    private readonly Button _signedInValidateButton;
+    private readonly Label _manualHeading;
+    private readonly TextView _manualEditor;
     private bool _disposed;
     private bool _editing;
-
     public AccountPopoverView(
         AccountViewModel viewModel,
         Action openWebLogin,
         Action<bool> sessionAppearanceChanged)
     {
+        _accountStack = GetRequiredObject<Stack>("account_stack");
+        _signedInValidateButton = GetRequiredObject<Button>("signed_in_validate_button");
+        _manualHeading = GetRequiredObject<Label>("manual_heading");
+        _manualEditor = GetRequiredObject<TextView>("manual_editor");
         _viewModel = viewModel;
         _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
@@ -38,36 +45,19 @@ public class AccountPopoverView : ViewBase<Box>
 
     private void Render()
     {
-        _sessionAppearanceChanged(_viewModel.HasManualSession);
-        Clear(Widget);
+        var hasManualSession = _viewModel.HasManualSession;
+        _sessionAppearanceChanged(hasManualSession);
         if (_editing)
         {
-            RenderEditor();
+            _accountStack.VisibleChildName = "manual";
+            _manualHeading.SetText(hasManualSession
+                ? "Replace with manual session"
+                : "Add manual session");
             return;
         }
 
-        var heading = Label.New(_viewModel.HasManualSession ? "YouTube session" : "Not signed in");
-        heading.Xalign = 0;
-        heading.CssClasses = ["heading"];
-        Widget.Append(heading);
-        if (_viewModel.HasManualSession)
-        {
-            Widget.Append(DimLabel(
-                "YouTube session active. Cookies are stored in your desktop Secret Service keyring."));
-            Widget.Append(SuggestedActionButton("Refresh with Google", _openWebLogin));
-            var validate = ActionButton("Validate Home session", () => _ = _viewModel.ValidateAsync());
-            validate.Sensitive = !_viewModel.IsValidating;
-            Widget.Append(validate);
-            Widget.Append(ActionButton("Replace with manual session", OpenManualEditor));
-            Widget.Append(ActionButton("Clear session", _viewModel.ClearSession));
-        }
-        else
-        {
-            Widget.Append(DimLabel(
-                "Sign in with Google in an isolated window, or paste Netscape cookies.txt content manually. Values are not displayed after saving and are stored securely in your desktop keyring."));
-            Widget.Append(SuggestedActionButton("Sign in with Google", _openWebLogin));
-            Widget.Append(ActionButton("Add manual session", OpenManualEditor));
-        }
+        _accountStack.VisibleChildName = hasManualSession ? "signed_in" : "signed_out";
+        _signedInValidateButton.Sensitive = !_viewModel.IsValidating;
     }
 
     private void OpenManualEditor()
@@ -76,43 +66,39 @@ public class AccountPopoverView : ViewBase<Box>
         Render();
     }
 
-    private void RenderEditor()
+    private void OnWebLoginClicked(object? sender, EventArgs args)
     {
-        var heading = Label.New(_viewModel.HasManualSession ? "Replace with manual session" : "Add manual session");
-        heading.Xalign = 0;
-        heading.CssClasses = ["heading"];
-        Widget.Append(heading);
-        Widget.Append(DimLabel(
-            "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical."));
-        var editor = TextView.New();
-        editor.Monospace = true;
-        editor.WrapMode = WrapMode.Char;
-        editor.HeightRequest = 180;
-        var scrolled = ScrolledWindow.New();
-        scrolled.Hexpand = true;
-        scrolled.WidthRequest = 440;
-        scrolled.HeightRequest = 180;
-        scrolled.Child = editor;
-        Widget.Append(scrolled);
-        var actions = Box.New(Orientation.Horizontal, 6);
-        actions.Halign = Align.End;
-        actions.Append(ActionButton("Cancel", () =>
+        _openWebLogin();
+    }
+
+    private void OnOpenManualEditorClicked(object? sender, EventArgs args)
+    {
+        OpenManualEditor();
+    }
+
+    private void OnValidateButtonClicked(object? sender, EventArgs args)
+    {
+        _ = _viewModel.ValidateAsync();
+    }
+
+    private void OnClearButtonClicked(object? sender, EventArgs args)
+    {
+        _viewModel.ClearSession();
+    }
+
+    private void OnManualCancelButtonClicked(object? sender, EventArgs args)
+    {
+        _editing = false;
+        Render();
+    }
+
+    private void OnManualSaveButtonClicked(object? sender, EventArgs args)
+    {
+        if (_viewModel.SaveManualSession(GetText(_manualEditor)))
         {
             _editing = false;
             Render();
-        }));
-        var save = Button.NewWithLabel("Save session");
-        save.CssClasses = ["suggested-action"];
-        save.OnClicked += (_, _) =>
-        {
-            if (_viewModel.SaveManualSession(GetText(editor)))
-            {
-                _editing = false;
-                Render();
-            }
-        };
-        actions.Append(save);
-        Widget.Append(actions);
+        }
     }
 
     private static string GetText(TextView textView)
@@ -123,36 +109,6 @@ public class AccountPopoverView : ViewBase<Box>
         return buffer.GetText(start, end, true);
     }
 
-    private static Button ActionButton(string label, Action action)
-    {
-        var button = Button.NewWithLabel(label);
-        button.Halign = Align.Fill;
-        button.CssClasses = ["flat"];
-        button.OnClicked += (_, _) => action();
-        return button;
-    }
-
-    private static Button SuggestedActionButton(string label, Action action)
-    {
-        var button = ActionButton(label, action);
-        button.CssClasses = ["suggested-action"];
-        return button;
-    }
-
-    private static Label DimLabel(string text)
-    {
-        var label = Label.New(text);
-        label.Xalign = 0;
-        label.Wrap = true;
-        label.CssClasses = ["dim-label"];
-        return label;
-    }
-
-    private static void Clear(Box box)
-    {
-        while (box.GetFirstChild() is { } child)
-            box.Remove(child);
-    }
 
     public new void Dispose()
     {

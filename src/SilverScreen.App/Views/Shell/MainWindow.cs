@@ -51,6 +51,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack = GetRequiredObject<ViewStack>("view_stack");
         var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
         _searchButton = GetRequiredObject<Button>("search_button");
+        _searchPopover = GetRequiredObject<Popover>("search_popover");
+        _searchEntry = GetRequiredObject<Entry>("search_entry");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
         var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
@@ -74,18 +76,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         switcher.Stack = _stack;
         _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
         _stack.AddTitled(_search.Widget, "search", "Search").IconName = "system-search-symbolic";
-        _stack.AddTitled(Placeholder("Subscriptions", "Subscription feeds will land after account/session support."),
-            "subscriptions", "Subscriptions").IconName = "emblem-favorite-symbolic";
-        _stack.AddTitled(
-            Placeholder("History", "Local watch history is intentionally not persisted in this shell step."), "history",
-            "History").IconName = "document-open-recent-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _accountButton.Popover = CreateAccountPopover();
         _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
             GObject.BindingFlags.Bidirectional | GObject.BindingFlags.SyncCreate);
         appMenuButton.MenuModel = CreateApplicationMenuModel();
-        _searchPopover = CreateSearchPopover(out _searchEntry);
         _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
         UpdateQueueButton(_queueViewModel.State);
@@ -132,35 +128,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchPopover.Popup();
         _searchEntry.GrabFocus();
     }
-
-    private Popover CreateSearchPopover(out Entry entry)
+    private async void OnSearchEntryActivated(object? sender, EventArgs args)
     {
-        entry = Entry.New();
-        entry.PlaceholderText = "Search or paste a YouTube URL";
-        entry.WidthChars = 36;
-        var searchEntry = entry;
-        entry.OnActivate += async (_, _) =>
-        {
-            await _search.SubmitAsync(searchEntry.GetText());
-            _searchPopover.Popdown();
-        };
-        var content = Box.New(Orientation.Vertical, 10);
-        content.MarginTop = 12;
-        content.MarginBottom = 12;
-        content.MarginStart = 12;
-        content.MarginEnd = 12;
-        content.Append(entry);
-        var hint = Label.New("Enter searches YouTube with yt-dlp or opens a supported YouTube URL.");
-        hint.Xalign = 0;
-        hint.Wrap = true;
-        hint.CssClasses = ["dim-label"];
-        content.Append(hint);
-        var popover = Popover.New();
-        popover.Child = content;
-        popover.SetParent(_searchButton);
-        return popover;
+        await _search.SubmitAsync(_searchEntry.GetText());
+        _searchPopover.Popdown();
     }
-
 
     private Popover CreateAccountPopover()
     {
@@ -292,14 +264,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return false;
     }
 
-    private static StatusPage Placeholder(string title, string description)
-    {
-        var page = StatusPage.New();
-        page.Title = title;
-        page.Description = description;
-        page.IconName = "applications-internet-symbolic";
-        return page;
-    }
 
     private static Box QueueButtonContent(int count)
     {

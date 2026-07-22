@@ -6,10 +6,8 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Preferences;
 
-public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
+public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 {
-    private static readonly string[] Themes = ["System", "Light", "Dark"];
-    private static readonly string[] Qualities = ["Best", "1080p", "720p", "480p", "360p"];
     private readonly SwitchRow _markWatchedRow;
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly EntryRow _maxResultsRow;
@@ -17,7 +15,9 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private readonly IPreferencesService _preferencesService;
     private readonly Action<string> _reportStatus;
     private readonly ComboRow _qualityRow;
+    private readonly StringList _qualityModel;
     private readonly ComboRow _themeRow;
+    private readonly StringList _themeModel;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
@@ -34,9 +34,10 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _qualityRow = GetRequiredObject<ComboRow>("quality_row");
         _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
         _discordRichPresenceRow = GetRequiredObject<SwitchRow>("discord_rich_presence_row");
+        _themeModel = GetRequiredObject<StringList>("theme_model");
+        _qualityModel = GetRequiredObject<StringList>("quality_model");
 
         InitializeFields();
-        SetupEventHandlers();
     }
 
     private void InitializeFields()
@@ -47,14 +48,10 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             var prefs = _preferencesService.GetPreferences();
 
             // Populate theme dropdown
-            var themeList = StringList.New(Themes);
-            _themeRow.Model = themeList;
-            _themeRow.Selected = (uint)Array.IndexOf(Themes, prefs.Theme);
+            _themeRow.Selected = (uint)GetSelectionIndex(_themeModel, prefs.Theme);
 
             // Populate quality dropdown
-            var qualityList = StringList.New(Qualities);
-            _qualityRow.Model = qualityList;
-            _qualityRow.Selected = (uint)Array.IndexOf(Qualities, prefs.VideoQuality);
+            _qualityRow.Selected = (uint)GetSelectionIndex(_qualityModel, prefs.VideoQuality);
 
             // Set entry values
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
@@ -69,19 +66,25 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         }
     }
 
-    private void SetupEventHandlers()
+    private static int GetSelectionIndex(StringList model, string value)
     {
-        // Handle dropdown selection changes
-        _themeRow.OnNotify += OnRowNotify;
-        _qualityRow.OnNotify += OnRowNotify;
-        _markWatchedRow.OnNotify += OnRowNotify;
-        _discordRichPresenceRow.OnNotify += OnRowNotify;
+        for (uint i = 0; i < model.GetNItems(); i++)
+        {
+            if (model.GetString(i) == value) return (int)i;
+        }
 
-        // Handle text entry changes
-        ((Editable)_ytdlpPathRow).OnChanged += OnRowChanged;
-        ((Editable)_maxResultsRow).OnChanged += OnRowChanged;
-        ((Editable)_mpvPathRow).OnChanged += OnRowChanged;
+        return -1;
     }
+
+    private static string GetSelectedValue(StringList model, uint selected, string fallback)
+    {
+        var selectedIndex = (int)selected;
+        var itemCount = (int)model.GetNItems();
+        return selectedIndex >= 0 && selectedIndex < itemCount
+            ? model.GetString(selected) ?? fallback
+            : fallback;
+    }
+
 
     private void OnRowNotify(object? sender, EventArgs e)
     {
@@ -97,11 +100,9 @@ public class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 
     private void Save()
     {
-        var themeIndex = (int)_themeRow.Selected;
-        var theme = themeIndex >= 0 && themeIndex < Themes.Length ? Themes[themeIndex] : "System";
+        var theme = GetSelectedValue(_themeModel, _themeRow.Selected, "System");
 
-        var qualityIndex = (int)_qualityRow.Selected;
-        var quality = qualityIndex >= 0 && qualityIndex < Qualities.Length ? Qualities[qualityIndex] : "Best";
+        var quality = GetSelectedValue(_qualityModel, _qualityRow.Selected, "Best");
 
         var maxResultsText = ((Editable)_maxResultsRow).GetText();
         if (!int.TryParse(maxResultsText, out var maxResults)) maxResults = 20;

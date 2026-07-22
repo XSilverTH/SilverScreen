@@ -6,13 +6,13 @@ using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.ViewModels;
 using WebKit;
-using HeaderBar = Adw.HeaderBar;
 using Window = Adw.Window;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Account;
 
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
-internal sealed class WebLoginWindow : IDisposable
+internal sealed class WebLoginWindow : WindowBase<Window>
 {
     private const string LoginUri =
         "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
@@ -28,8 +28,8 @@ internal sealed class WebLoginWindow : IDisposable
     private readonly CookieManager _cookieManager;
     private readonly NetworkSession _networkSession;
     private readonly Label _statusLabel;
+    private readonly Box _webViewContainer;
     private readonly WebView _webView;
-    private readonly Window _window;
     private bool _closedInvoked;
     private bool _disposed;
     private bool _nativeDisposed;
@@ -38,11 +38,9 @@ internal sealed class WebLoginWindow : IDisposable
     {
         _account = account;
         _closed = closed;
-        _window = Window.New();
-        _window.TransientFor = parent;
-        _window.Modal = true;
-        _window.Title = "Sign in to YouTube";
-        _window.SetDefaultSize(960, 720);
+        _statusLabel = GetRequiredObject<Label>("web_login_status_label");
+        _webViewContainer = GetRequiredObject<Box>("web_view_container");
+        Widget.TransientFor = parent;
 
         _networkSession = NetworkSession.NewEphemeral();
         _cookieManager = _networkSession.GetCookieManager();
@@ -51,24 +49,7 @@ internal sealed class WebLoginWindow : IDisposable
         _webView.Vexpand = true;
         _webView.GetSettings().SetUserAgent(BrowserUserAgent);
 
-        var toolbarView = ToolbarView.New();
-        var headerBar = HeaderBar.New();
-        toolbarView.AddTopBar(headerBar);
-
-        _statusLabel = Label.New("Sign in with your Google account. Close this window to cancel.");
-        _statusLabel.Xalign = 0;
-        _statusLabel.Wrap = true;
-        _statusLabel.MarginTop = 8;
-        _statusLabel.MarginBottom = 8;
-        _statusLabel.MarginStart = 12;
-        _statusLabel.MarginEnd = 12;
-        _statusLabel.CssClasses = ["dim-label"];
-
-        var content = Box.New(Orientation.Vertical, 0);
-        content.Append(_statusLabel);
-        content.Append(_webView);
-        toolbarView.Content = content;
-        _window.Content = toolbarView;
+        _webViewContainer.Append(_webView);
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,
@@ -79,11 +60,11 @@ internal sealed class WebLoginWindow : IDisposable
 
         _cookieManager.OnChanged += OnCookieChanged;
         _webView.OnLoadChanged += OnLoadChanged;
-        _window.OnCloseRequest += OnCloseRequest;
+        Widget.OnCloseRequest += OnCloseRequest;
         _webView.LoadUri(LoginUri);
     }
 
-    public void Dispose()
+    public new void Dispose()
     {
         if (_disposed)
             return;
@@ -91,8 +72,8 @@ internal sealed class WebLoginWindow : IDisposable
         _disposed = true;
         _cookieManager.OnChanged -= OnCookieChanged;
         _webView.OnLoadChanged -= OnLoadChanged;
-        _window.OnCloseRequest -= OnCloseRequest;
-        _window.Hide();
+        Widget.OnCloseRequest -= OnCloseRequest;
+        Widget.Hide();
 
         if (!_closedInvoked)
         {
@@ -113,7 +94,7 @@ internal sealed class WebLoginWindow : IDisposable
     internal void Present()
     {
         if (!_disposed)
-            _window.Present();
+            Widget.Present();
     }
 
     private static WebView CreateWebView(NetworkSession session)
@@ -199,6 +180,6 @@ internal sealed class WebLoginWindow : IDisposable
         _webView.Dispose();
         _cookieManager.Dispose();
         _networkSession.Dispose();
-        _window.Dispose();
+        Widget.Dispose();
     }
 }

@@ -1,4 +1,5 @@
 using Gtk 4.0;
+using Adw 1;
 
 Gtk.Box HomeView {
   orientation: vertical;
@@ -39,12 +40,51 @@ Gtk.Box HomeView {
     orientation: vertical;
     hexpand: true;
     vexpand: true;
+
+    Gtk.Box home_status_loading_page {
+      visible: false;
+      orientation: vertical;
+      spacing: 12;
+      halign: center;
+      valign: center;
+      hexpand: true;
+      vexpand: true;
+
+      Gtk.Spinner home_status_loading_spinner {
+        halign: center;
+        spinning: true;
+      }
+
+      Gtk.Label home_status_loading_label {
+        label: "Loading YouTube recommendations…";
+        xalign: 0;
+        wrap: true;
+        styles ["dim-label"]
+      }
+    }
+
+    Adw.StatusPage home_status_page {
+      visible: false;
+      title: "Home";
+      hexpand: true;
+      vexpand: true;
+    }
   }
 
   Gtk.ScrolledWindow home_scrolled_window {
     visible: false;
     hexpand: true;
     vexpand: true;
+    child: Gtk.GridView home_video_grid {
+      min-columns: 1;
+      max-columns: 4;
+      single-click-activate: false;
+      margin-start: 24;
+      margin-end: 24;
+      margin-top: 12;
+      hexpand: true;
+      vexpand: true;
+    };
   }
 
   Gtk.Button home_load_more_button {

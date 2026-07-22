@@ -7,4 +7,144 @@ Gtk.Box AccountPopoverView {
   margin-bottom: 12;
   margin-start: 12;
   margin-end: 12;
+
+  Gtk.Stack account_stack {
+    hhomogeneous: false;
+    vhomogeneous: false;
+
+    Gtk.StackPage {
+      name: "signed_out";
+      child: Gtk.Box {
+      orientation: vertical;
+      spacing: 10;
+
+      Gtk.Label signed_out_heading {
+        label: "Not signed in";
+        xalign: 0;
+        styles ["heading"]
+      }
+
+      Gtk.Label {
+        label: "Sign in with Google in an isolated window, or paste Netscape cookies.txt content manually. Values are not displayed after saving and are stored securely in your desktop keyring.";
+        xalign: 0;
+        wrap: true;
+        styles ["dim-label"]
+      }
+
+      Gtk.Button signed_out_google_button {
+        clicked => $OnWebLoginClicked();
+        label: "Sign in with Google";
+        halign: fill;
+        styles ["suggested-action"]
+      }
+
+      Gtk.Button signed_out_manual_button {
+        clicked => $OnOpenManualEditorClicked();
+        label: "Add manual session";
+        halign: fill;
+        styles ["flat"]
+      }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "signed_in";
+      child: Gtk.Box {
+      orientation: vertical;
+      spacing: 10;
+
+      Gtk.Label signed_in_heading {
+        label: "YouTube session";
+        xalign: 0;
+        styles ["heading"]
+      }
+
+      Gtk.Label {
+        label: "YouTube session active. Cookies are stored in your desktop Secret Service keyring.";
+        xalign: 0;
+        wrap: true;
+        styles ["dim-label"]
+      }
+
+      Gtk.Button signed_in_refresh_button {
+        clicked => $OnWebLoginClicked();
+        label: "Refresh with Google";
+        halign: fill;
+        styles ["suggested-action"]
+      }
+
+      Gtk.Button signed_in_validate_button {
+        clicked => $OnValidateButtonClicked();
+        label: "Validate Home session";
+        halign: fill;
+        styles ["flat"]
+      }
+
+      Gtk.Button signed_in_replace_button {
+        clicked => $OnOpenManualEditorClicked();
+        label: "Replace with manual session";
+        halign: fill;
+        styles ["flat"]
+      }
+
+      Gtk.Button signed_in_clear_button {
+        clicked => $OnClearButtonClicked();
+        label: "Clear session";
+        halign: fill;
+        styles ["flat"]
+      }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "manual";
+      child: Gtk.Box {
+      orientation: vertical;
+      spacing: 10;
+
+      Gtk.Label manual_heading {
+        xalign: 0;
+        styles ["heading"]
+      }
+
+      Gtk.Label {
+        label: "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical.";
+        xalign: 0;
+        wrap: true;
+        styles ["dim-label"]
+      }
+
+      Gtk.ScrolledWindow {
+        hexpand: true;
+        width-request: 440;
+        height-request: 180;
+
+        Gtk.TextView manual_editor {
+          monospace: true;
+          wrap-mode: char;
+          height-request: 180;
+        }
+      }
+
+      Gtk.Box manual_editor_actions {
+        orientation: horizontal;
+        spacing: 6;
+        halign: end;
+
+        Gtk.Button manual_cancel_button {
+          clicked => $OnManualCancelButtonClicked();
+          label: "Cancel";
+          halign: fill;
+          styles ["flat"]
+        }
+
+        Gtk.Button manual_save_button {
+          clicked => $OnManualSaveButtonClicked();
+          label: "Save session";
+          styles ["suggested-action"]
+        }
+      }
+      };
+    }
+  }
 }
