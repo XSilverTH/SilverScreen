@@ -203,11 +203,21 @@ public class VideoCardView : ViewBase<Box>
 
     private void ClearThumbnail()
     {
-        _thumbnail.Child = _placeholder;
-        _boundPicture?.Dispose();
+        // A Picture owns a reference to its paintable.  Clear that reference before
+        // replacing the child so the previous texture is released on every rebind,
+        // rather than waiting for GTK to eventually dispose the detached widget.
+        var picture = _boundPicture;
+        var texture = _boundTexture;
         _boundPicture = null;
-        _boundTexture?.Dispose();
         _boundTexture = null;
+        _thumbnail.Child = _placeholder;
+        if (picture is not null)
+        {
+            picture.Paintable = null!;
+            picture.Dispose();
+        }
+
+        texture?.Dispose();
     }
 
     private void SetupMenuActions()

@@ -229,11 +229,21 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void ClearThumbnail()
     {
-        _thumbnail.Child = _placeholder;
-        _boundPicture?.Dispose();
+        // Release the paintable before detaching the widget.  This prevents a
+        // replaced thumbnail texture from remaining alive until GTK later collects
+        // the detached Picture.
+        var picture = _boundPicture;
+        var texture = _boundTexture;
         _boundPicture = null;
-        _boundTexture?.Dispose();
         _boundTexture = null;
+        _thumbnail.Child = _placeholder;
+        if (picture is not null)
+        {
+            picture.Paintable = null!;
+            picture.Dispose();
+        }
+
+        texture?.Dispose();
     }
 
     private static SimpleAction CreateAction(string name, Action callback)
