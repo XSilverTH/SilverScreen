@@ -6,11 +6,41 @@ Gtk.Overlay EmbeddedPlayerView {
   vexpand: true;
   styles ["embedded-player"]
 
-  child: Gtk.Box player_surface {
+  child: Gtk.GLArea player_surface {
+    auto-render: false;
     hexpand: true;
     vexpand: true;
+    realize => $OnPlayerSurfaceRealize();
+    unrealize => $OnPlayerSurfaceUnrealize();
+    render => $OnPlayerSurfaceRender();
     styles ["embedded-player-surface"]
   };
+
+  [overlay]
+  Gtk.Box player_loading_indicator {
+    orientation: vertical;
+    spacing: 12;
+    halign: center;
+    valign: center;
+    visible: false;
+    styles ["player-loading-indicator"]
+
+    Gtk.Spinner {
+      spinning: true;
+      width-request: 40;
+      height-request: 40;
+    }
+
+    Gtk.Label {
+      label: "Loading video…";
+      styles ["title-3", "player-loading-title"]
+    }
+
+    Gtk.Label {
+      label: "Preparing playback";
+      styles ["player-loading-subtitle"]
+    }
+  }
 
   [overlay]
   Adw.HeaderBar player_header_bar {
@@ -33,20 +63,23 @@ Gtk.Overlay EmbeddedPlayerView {
     valign: center;
     styles ["player-center-controls"]
 
-    Gtk.Button {
+    Gtk.Button player_rewind_button {
+      clicked => $OnRewindButtonClicked();
       icon-name: "media-seek-backward-symbolic";
       tooltip-text: "Rewind 10 seconds";
       styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
     }
 
-    Gtk.ToggleButton {
+    Gtk.ToggleButton player_play_pause_button {
+      toggled => $OnPlayPauseButtonToggled();
       active: false;
       icon-name: "media-playback-start-symbolic";
       tooltip-text: "Play";
       styles ["flat", "circular", "player-primary-control"]
     }
 
-    Gtk.Button {
+    Gtk.Button player_forward_button {
+      clicked => $OnForwardButtonClicked();
       icon-name: "media-seek-forward-symbolic";
       tooltip-text: "Forward 10 seconds";
       styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
@@ -89,7 +122,7 @@ Gtk.Overlay EmbeddedPlayerView {
         }
       }
 
-      Gtk.MenuButton {
+      Gtk.MenuButton player_volume_button {
         icon-name: "audio-volume-high-symbolic";
         tooltip-text: "Volume";
         styles ["flat", "circular", "player-overlay-button"]
@@ -110,7 +143,8 @@ Gtk.Overlay EmbeddedPlayerView {
               styles ["heading"]
             }
 
-            Gtk.Scale {
+            Gtk.Scale player_volume_scale {
+              value-changed => $OnVolumeScaleValueChanged();
               draw-value: false;
               adjustment: Gtk.Adjustment {
                 lower: 0;
@@ -154,9 +188,10 @@ Gtk.Overlay EmbeddedPlayerView {
                 hexpand: true;
               }
 
-              Gtk.DropDown {
+              Gtk.DropDown player_quality_dropdown {
+                notify => $OnQualityDropdownNotify();
                 model: Gtk.StringList {
-                  strings: ["Auto", "1080p", "720p", "480p"];
+                  strings: ["Best", "1080p", "720p", "480p", "360p"];
                 };
               }
             }
@@ -171,7 +206,8 @@ Gtk.Overlay EmbeddedPlayerView {
                 hexpand: true;
               }
 
-              Gtk.DropDown {
+              Gtk.DropDown player_speed_dropdown {
+                notify => $OnSpeedDropdownNotify();
                 model: Gtk.StringList {
                   strings: ["0.5×", "0.75×", "Normal", "1.25×", "1.5×", "2×"];
                 };
@@ -184,8 +220,10 @@ Gtk.Overlay EmbeddedPlayerView {
     }
 
     Gtk.Scale player_timeline {
+      value-changed => $OnTimelineValueChanged();
       draw-value: false;
       hexpand: true;
+      sensitive: false;
       adjustment: Gtk.Adjustment {
         lower: 0;
         upper: 100;
@@ -195,7 +233,7 @@ Gtk.Overlay EmbeddedPlayerView {
     }
 
     Gtk.Box player_time_row {
-      Gtk.Label {
+      Gtk.Label player_position_label {
         label: "0:00";
         xalign: 0;
         hexpand: true;

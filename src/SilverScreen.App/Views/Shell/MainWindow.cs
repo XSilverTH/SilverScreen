@@ -10,9 +10,9 @@ using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
+using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
-using SilverScreen.Views.Player;
 using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
@@ -32,16 +32,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly Action _disposeApplicationServices;
+    private readonly EmbeddedPlayerView _embeddedPlayer;
     private readonly HomeView _home;
+    private readonly Stack _mainStack;
+    private readonly IPlaybackService _playback;
     private readonly ToggleButton _queueButton;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly SearchView _search;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
-    private readonly EmbeddedPlayerView _embeddedPlayer;
-    private readonly Stack _mainStack;
-    private readonly IPlaybackService _playback;
     private readonly ApplicationServices _services;
     private readonly ShellViewModel _shell = new();
     private readonly ViewStack _stack;
@@ -67,7 +67,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var playerHost = GetRequiredObject<Box>("player_host");
         _statusLabel = GetRequiredObject<Label>("status_label");
 
-        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer);
+        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
+            services.CookieFiles, services.PlaybackPresence);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
@@ -289,6 +290,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _webLogin?.Dispose();
         _webLogin = null;
         _accountPopover.Dispose();
+        _embeddedPlayer.Dispose();
         _disposeApplicationServices();
         Dispose();
 

@@ -34,7 +34,10 @@ public sealed class PlaybackModeRoutingServiceTests
 
         public event EventHandler<AppPreferences>? PreferencesChanged;
 
-        public AppPreferences GetPreferences() => Current;
+        public AppPreferences GetPreferences()
+        {
+            return Current;
+        }
 
         public void SavePreferences(AppPreferences preferences)
         {

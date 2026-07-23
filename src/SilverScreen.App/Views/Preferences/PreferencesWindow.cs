@@ -9,14 +9,14 @@ namespace SilverScreen.Views.Preferences;
 public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 {
     private readonly SwitchRow _discordRichPresenceRow;
+    private readonly SwitchRow _fullscreenRow;
     private readonly SwitchRow _markWatchedRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
-    private readonly IPreferencesService _preferencesService;
-    private readonly StringList _qualityModel;
     private readonly StringList _playbackBackendModel;
     private readonly ComboRow _playbackBackendRow;
-    private readonly SwitchRow _fullscreenRow;
+    private readonly IPreferencesService _preferencesService;
+    private readonly StringList _qualityModel;
     private readonly ComboRow _qualityRow;
     private readonly Action<string> _reportStatus;
     private readonly StringList _themeModel;

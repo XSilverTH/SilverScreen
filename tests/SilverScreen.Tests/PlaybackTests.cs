@@ -63,6 +63,28 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void PlaybackUrlAndQualityHelpersMatchTheExternalMpvContract()
+    {
+        var urls = MpvCommandBuilder.GetPlaybackUrls(new PlaybackRequest([
+            CreateVideo("abc123_X-yZ"),
+            CreateVideo("dQw4w9WgXcQ", "https://example.test/video"),
+            CreateVideo("M7lc1UVf-VE", "https://youtu.be/M7lc1UVf-VE")
+        ]));
+
+        Assert.Equal([
+            "https://www.youtube.com/watch?v=abc123_X-yZ",
+            "https://example.test/video",
+            "https://youtu.be/M7lc1UVf-VE"
+        ], urls);
+        Assert.Null(MpvCommandBuilder.BuildYtdlFormat("Best"));
+        Assert.Equal("bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            MpvCommandBuilder.BuildYtdlFormat("1080p"));
+        Assert.Equal("bestvideo[height<=720]+bestaudio/best[height<=720]", MpvCommandBuilder.BuildYtdlFormat("720p"));
+        Assert.Equal("bestvideo[height<=480]+bestaudio/best[height<=480]", MpvCommandBuilder.BuildYtdlFormat("480p"));
+        Assert.Equal("bestvideo[height<=360]+bestaudio/best[height<=360]", MpvCommandBuilder.BuildYtdlFormat("360p"));
+    }
+
+    [Fact]
     public void MpvCommandBuilderRejectsMissingPlaybackUrlCleanly()
     {
         var request = new PlaybackRequest([CreateVideo(string.Empty)]);

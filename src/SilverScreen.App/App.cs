@@ -140,6 +140,15 @@ public partial class App
                                  background-color: #000000;
                                }
 
+                               .player-loading-indicator {
+                                 color: #ffffff;
+                                 margin-bottom: 28px;
+                               }
+
+                               .player-loading-subtitle {
+                                 color: alpha(#ffffff, 0.72);
+                               }
+
                                .player-headerbar,
                                .player-headerbar windowhandle,
                                .player-headerbar > windowhandle {

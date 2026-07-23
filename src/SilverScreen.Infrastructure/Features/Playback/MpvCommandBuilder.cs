@@ -20,6 +20,33 @@ public sealed class MpvCommandBuilder
         if (string.IsNullOrWhiteSpace(options.MpvExecutablePath))
             throw new InvalidOperationException(RuntimeDependencyGuidance.MpvUnavailable(options.MpvExecutablePath));
 
+        var playbackUrls = GetPlaybackUrls(request);
+
+        var arguments = new List<string>();
+        if (options.Fullscreen)
+            arguments.Add("--fs");
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        {
+            var ytdlOptions = $"cookies={cookieFilePath}";
+            if (options.MarkWatchedVideos)
+                ytdlOptions += ",mark-watched=";
+
+            arguments.Add($"--ytdl-raw-options={ytdlOptions}");
+        }
+
+        var ytdlFormat = BuildYtdlFormat(options.VideoQuality);
+        if (ytdlFormat is not null)
+            arguments.Add($"--ytdl-format={ytdlFormat}");
+
+        arguments.AddRange(playbackUrls);
+
+        return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
+    }
+
+    public static IReadOnlyList<string> GetPlaybackUrls(PlaybackRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (request.Videos.IsDefaultOrEmpty)
             throw new InvalidOperationException("No videos were provided for playback.");
 
@@ -38,29 +65,20 @@ public sealed class MpvCommandBuilder
             playbackUrls.Add(playbackUrl);
         }
 
-        var arguments = new List<string>();
-        if (options.Fullscreen)
-            arguments.Add("--fs");
-        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        return playbackUrls;
+    }
+
+    public static string? BuildYtdlFormat(string videoQuality)
+    {
+        return videoQuality switch
         {
-            var ytdlOptions = $"cookies={cookieFilePath}";
-            if (options.MarkWatchedVideos)
-                ytdlOptions += ",mark-watched=";
-
-            arguments.Add($"--ytdl-raw-options={ytdlOptions}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(options.VideoQuality) &&
-            !options.VideoQuality.Equals("Best", StringComparison.OrdinalIgnoreCase))
-        {
-            var heightStr = options.VideoQuality.Replace("p", "", StringComparison.OrdinalIgnoreCase);
-            if (int.TryParse(heightStr, out var height))
-                arguments.Add($"--ytdl-format=bestvideo[height<={height}]+bestaudio/best[height<={height}]");
-        }
-
-        arguments.AddRange(playbackUrls);
-
-        return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
+            "Best" => null,
+            "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "480p" => "bestvideo[height<=480]+bestaudio/best[height<=480]",
+            "360p" => "bestvideo[height<=360]+bestaudio/best[height<=360]",
+            _ => null
+        };
     }
 
     public static ProcessStartInfo BuildStartInfo(MpvPlaybackCommand command)

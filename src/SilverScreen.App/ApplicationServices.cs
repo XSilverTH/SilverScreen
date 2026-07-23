@@ -22,7 +22,9 @@ public sealed class ApplicationServices(
     IThumbnailService thumbnails,
     HomeFeedCoordinator homeFeed,
     SessionValidationCoordinator sessionValidation,
-    RuntimeDependencyDiagnostics runtimeDependencyDiagnostics)
+    RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
+    ICookieFileProvider cookieFiles,
+    IPlaybackPresenceService playbackPresence)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -33,6 +35,8 @@ public sealed class ApplicationServices(
     public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
+    public ICookieFileProvider CookieFiles { get; } = cookieFiles;
+    public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
 }
 
 /// <summary>Registers the application's production services.</summary>
