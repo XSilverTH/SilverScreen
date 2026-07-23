@@ -14,6 +14,9 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private readonly EntryRow _mpvPathRow;
     private readonly IPreferencesService _preferencesService;
     private readonly StringList _qualityModel;
+    private readonly StringList _playbackBackendModel;
+    private readonly ComboRow _playbackBackendRow;
+    private readonly SwitchRow _fullscreenRow;
     private readonly ComboRow _qualityRow;
     private readonly Action<string> _reportStatus;
     private readonly StringList _themeModel;
@@ -32,10 +35,13 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         _maxResultsRow = GetRequiredObject<EntryRow>("max_results_row");
         _mpvPathRow = GetRequiredObject<EntryRow>("mpv_path_row");
         _qualityRow = GetRequiredObject<ComboRow>("quality_row");
+        _playbackBackendRow = GetRequiredObject<ComboRow>("playback_backend_row");
+        _fullscreenRow = GetRequiredObject<SwitchRow>("fullscreen_row");
         _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
         _discordRichPresenceRow = GetRequiredObject<SwitchRow>("discord_rich_presence_row");
         _themeModel = GetRequiredObject<StringList>("theme_model");
         _qualityModel = GetRequiredObject<StringList>("quality_model");
+        _playbackBackendModel = GetRequiredObject<StringList>("playback_backend_model");
 
         InitializeFields();
     }
@@ -52,6 +58,9 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 
             // Populate quality dropdown
             _qualityRow.Selected = (uint)GetSelectionIndex(_qualityModel, prefs.VideoQuality);
+            _playbackBackendRow.Selected =
+                (uint)GetSelectionIndex(_playbackBackendModel, prefs.PlaybackBackend);
+            _fullscreenRow.Active = prefs.OpenInFullscreen;
 
             // Set entry values
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
@@ -112,6 +121,9 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             VideoQuality = quality,
             YtDlpExecutablePath = ((Editable)_ytdlpPathRow).GetText(),
             MpvExecutablePath = ((Editable)_mpvPathRow).GetText(),
+            PlaybackBackend = GetSelectedValue(_playbackBackendModel, _playbackBackendRow.Selected,
+                PlaybackBackends.ExternalMpv),
+            OpenInFullscreen = _fullscreenRow.Active,
             MaxResults = maxResults,
             MarkWatchedVideos = _markWatchedRow.Active,
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active

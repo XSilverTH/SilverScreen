@@ -134,6 +134,79 @@ public partial class App
                                  min-width: 1.5em;
                                  padding: 1px 5px;
                                }
+
+                               .embedded-player,
+                               .embedded-player-surface {
+                                 background-color: #000000;
+                               }
+
+                               .player-headerbar,
+                               .player-headerbar windowhandle,
+                               .player-headerbar > windowhandle {
+                                 background-color: transparent;
+                                 background-image: none;
+                                 box-shadow: none;
+                               }
+
+                               .player-controls {
+                                 background-image: linear-gradient(to top, alpha(#000000, 0.88), alpha(#000000, 0.48), transparent);
+                                 color: #ffffff;
+                                 padding: 28px 0 0;
+                               }
+
+                               .player-title,
+                               .player-subtitle,
+                               .player-time {
+                                 color: #ffffff;
+                               }
+
+                               .player-subtitle,
+                               .player-time {
+                                 color: alpha(#ffffff, 0.72);
+                               }
+
+                               .player-overlay-button,
+                               .player-primary-control,
+                               .player-headerbar button {
+                                 background-color: transparent;
+                                 color: #ffffff;
+                                 transition: background-color 160ms ease-out;
+                               }
+
+                               .player-overlay-button:hover,
+                               .player-primary-control:hover,
+                               .player-headerbar button:hover {
+                                 background-color: alpha(#ffffff, 0.16);
+                               }
+
+                               .player-center-controls {
+                                 margin-bottom: 28px;
+                               }
+
+                               .player-seek-button {
+                                 min-height: 40px;
+                                 min-width: 40px;
+                               }
+
+                               .player-primary-control {
+                                 min-height: 48px;
+                                 min-width: 48px;
+                               }
+
+                               .player-controls scale trough {
+                                 background-color: alpha(#ffffff, 0.28);
+                                 min-height: 4px;
+                               }
+
+                               .player-controls scale highlight {
+                                 background-color: #ffffff;
+                               }
+
+                               .player-controls scale slider {
+                                 background-color: #ffffff;
+                                 min-height: 18px;
+                                 min-width: 18px;
+                               }
                                """);
 
         StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);

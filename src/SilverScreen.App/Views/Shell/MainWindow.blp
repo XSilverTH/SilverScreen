@@ -6,7 +6,10 @@ Adw.ApplicationWindow MainWindow {
   default-height: 760;
   title: "SilverScreen";
 
-  content: Adw.OverlaySplitView queue_split_view {
+  content: Gtk.Stack main_stack {
+    Gtk.StackPage {
+      name: "shell";
+      child: Adw.OverlaySplitView queue_split_view {
     sidebar-position: end;
     collapsed: true;
 
@@ -129,5 +132,15 @@ Adw.ApplicationWindow MainWindow {
       hexpand: false;
       vexpand: true;
     };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "player";
+      child: Gtk.Box player_host {
+        hexpand: true;
+        vexpand: true;
+      };
+    }
   };
 }

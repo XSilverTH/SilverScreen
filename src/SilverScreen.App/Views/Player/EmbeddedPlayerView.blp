@@ -1,0 +1,212 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Overlay EmbeddedPlayerView {
+  hexpand: true;
+  vexpand: true;
+  styles ["embedded-player"]
+
+  child: Gtk.Box player_surface {
+    hexpand: true;
+    vexpand: true;
+    styles ["embedded-player-surface"]
+  };
+
+  [overlay]
+  Adw.HeaderBar player_header_bar {
+    valign: start;
+    styles ["flat", "player-headerbar"]
+
+    [start]
+    Gtk.Button player_back_button {
+      clicked => $OnBackButtonClicked();
+      icon-name: "go-previous-symbolic";
+      tooltip-text: "Back to SilverScreen";
+      styles ["flat", "circular", "player-overlay-button"]
+    }
+  }
+
+  [overlay]
+  Gtk.Box player_center_controls {
+    spacing: 24;
+    halign: center;
+    valign: center;
+    styles ["player-center-controls"]
+
+    Gtk.Button {
+      icon-name: "media-seek-backward-symbolic";
+      tooltip-text: "Rewind 10 seconds";
+      styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
+    }
+
+    Gtk.ToggleButton {
+      active: false;
+      icon-name: "media-playback-start-symbolic";
+      tooltip-text: "Play";
+      styles ["flat", "circular", "player-primary-control"]
+    }
+
+    Gtk.Button {
+      icon-name: "media-seek-forward-symbolic";
+      tooltip-text: "Forward 10 seconds";
+      styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
+    }
+  }
+
+  [overlay]
+  Gtk.Box player_controls {
+    orientation: vertical;
+    spacing: 10;
+    hexpand: true;
+    halign: fill;
+    valign: end;
+    margin-start: 32;
+    margin-end: 32;
+    margin-bottom: 24;
+    styles ["player-controls"]
+
+    Gtk.Box player_metadata_row {
+      spacing: 16;
+      valign: center;
+
+      Gtk.Box player_metadata {
+        orientation: vertical;
+        spacing: 2;
+        hexpand: true;
+
+        Gtk.Label player_title_label {
+          label: "Nothing playing";
+          xalign: 0;
+          ellipsize: end;
+          styles ["title-4", "player-title"]
+        }
+
+        Gtk.Label player_channel_label {
+          label: "Choose a video to preview the embedded player.";
+          xalign: 0;
+          ellipsize: end;
+          styles ["player-subtitle"]
+        }
+      }
+
+      Gtk.MenuButton {
+        icon-name: "audio-volume-high-symbolic";
+        tooltip-text: "Volume";
+        styles ["flat", "circular", "player-overlay-button"]
+
+        popover: Gtk.Popover {
+          child: Gtk.Box {
+            orientation: vertical;
+            spacing: 8;
+            margin-top: 12;
+            margin-bottom: 12;
+            margin-start: 12;
+            margin-end: 12;
+            width-request: 180;
+
+            Gtk.Label {
+              label: "Volume";
+              xalign: 0;
+              styles ["heading"]
+            }
+
+            Gtk.Scale {
+              draw-value: false;
+              adjustment: Gtk.Adjustment {
+                lower: 0;
+                upper: 100;
+                value: 100;
+                step-increment: 5;
+              };
+            }
+          };
+        };
+      }
+
+      Gtk.MenuButton {
+        icon-name: "preferences-system-symbolic";
+        tooltip-text: "Player settings";
+        styles ["flat", "circular", "player-overlay-button"]
+
+        popover: Gtk.Popover {
+          child: Gtk.Box {
+            orientation: vertical;
+            spacing: 12;
+            margin-top: 12;
+            margin-bottom: 12;
+            margin-start: 12;
+            margin-end: 12;
+            width-request: 240;
+
+            Gtk.Label {
+              label: "Player settings";
+              xalign: 0;
+              styles ["heading"]
+            }
+
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 12;
+
+              Gtk.Label {
+                label: "Quality";
+                xalign: 0;
+                hexpand: true;
+              }
+
+              Gtk.DropDown {
+                model: Gtk.StringList {
+                  strings: ["Auto", "1080p", "720p", "480p"];
+                };
+              }
+            }
+
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 12;
+
+              Gtk.Label {
+                label: "Playback speed";
+                xalign: 0;
+                hexpand: true;
+              }
+
+              Gtk.DropDown {
+                model: Gtk.StringList {
+                  strings: ["0.5×", "0.75×", "Normal", "1.25×", "1.5×", "2×"];
+                };
+                selected: 2;
+              }
+            }
+          };
+        };
+      }
+    }
+
+    Gtk.Scale player_timeline {
+      draw-value: false;
+      hexpand: true;
+      adjustment: Gtk.Adjustment {
+        lower: 0;
+        upper: 100;
+        value: 0;
+        step-increment: 1;
+      };
+    }
+
+    Gtk.Box player_time_row {
+      Gtk.Label {
+        label: "0:00";
+        xalign: 0;
+        hexpand: true;
+        styles ["caption", "player-time"]
+      }
+
+      Gtk.Label player_duration_label {
+        label: "0:00";
+        xalign: 1;
+        styles ["caption", "player-time"]
+      }
+    }
+  }
+}

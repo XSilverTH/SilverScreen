@@ -5,12 +5,14 @@ using GObject;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
+using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
+using SilverScreen.Views.Player;
 using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
@@ -37,6 +39,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly SearchView _search;
     private readonly Entry _searchEntry;
     private readonly Popover _searchPopover;
+    private readonly EmbeddedPlayerView _embeddedPlayer;
+    private readonly Stack _mainStack;
+    private readonly IPlaybackService _playback;
     private readonly ApplicationServices _services;
     private readonly ShellViewModel _shell = new();
     private readonly ViewStack _stack;
@@ -49,6 +54,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _services = services;
         _disposeApplicationServices = disposeApplicationServices;
         _stack = GetRequiredObject<ViewStack>("view_stack");
+        _mainStack = GetRequiredObject<Stack>("main_stack");
         var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
         GetRequiredObject<Button>("search_button");
         _searchPopover = GetRequiredObject<Popover>("search_popover");
@@ -58,13 +64,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
         var queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
         var queueSidebarHost = GetRequiredObject<Box>("queue_sidebar_host");
+        var playerHost = GetRequiredObject<Box>("player_host");
         _statusLabel = GetRequiredObject<Label>("status_label");
 
+        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer);
+        _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
+        playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _home = new HomeView(new HomeViewModel(services.HomeFeed), services.Thumbnails, actions);
-        _search = new SearchView(new SearchViewModel(services.Search, services.Playback, _shell), services.Thumbnails,
+        _search = new SearchView(new SearchViewModel(services.Search, _playback, _shell), services.Thumbnails,
             actions);
-        _queueViewModel = new QueueViewModel(services.Queue, services.Playback, _shell);
+        _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
         queueSidebarHost.Append(_queueView.Widget);
         _accountViewModel = new AccountViewModel(services.Session, services.SessionValidation, _shell);
@@ -94,7 +104,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return new VideoCardActions
         {
             PlayAsync = async video =>
-                _shell.Status = await _services.Playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
+                _shell.Status = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
             AddToQueue = video =>
             {
                 _services.Queue.Add(video);
@@ -107,6 +117,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             },
             ReportStatus = message => _shell.Status = message
         };
+    }
+
+    private void OpenEmbeddedPlayer()
+    {
+        _mainStack.VisibleChildName = "player";
+        if (_services.Preferences.GetPreferences().OpenInFullscreen)
+            Widget.Fullscreen();
+    }
+
+    private void CloseEmbeddedPlayer()
+    {
+        Widget.Unfullscreen();
+        _mainStack.VisibleChildName = "shell";
     }
 
     private void ReportStartupDependencyWarnings()

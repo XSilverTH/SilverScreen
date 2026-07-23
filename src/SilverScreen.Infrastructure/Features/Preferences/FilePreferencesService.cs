@@ -112,6 +112,8 @@ public sealed class FilePreferencesService : IPreferencesService
         {
             Theme = source.Theme,
             MpvExecutablePath = source.MpvExecutablePath,
+            PlaybackBackend = source.PlaybackBackend,
+            OpenInFullscreen = source.OpenInFullscreen,
             VideoQuality = source.VideoQuality,
             YtDlpExecutablePath = source.YtDlpExecutablePath,
             MaxResults = source.MaxResults,

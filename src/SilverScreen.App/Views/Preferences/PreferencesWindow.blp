@@ -44,6 +44,25 @@ Adw.PreferencesWindow PreferencesWindow {
     icon-name: "media-playback-start-symbolic";
 
     Adw.PreferencesGroup {
+      title: "Player";
+
+      Adw.ComboRow playback_backend_row {
+        notify => $OnRowNotify();
+        title: "Playback mode";
+        subtitle: "Choose whether videos open in MPV or in SilverScreen";
+        model: Gtk.StringList playback_backend_model {
+          strings: ["External MPV", "Embedded Player"];
+        };
+      }
+
+      Adw.SwitchRow fullscreen_row {
+        notify => $OnRowNotify();
+        title: "Open videos in fullscreen";
+        subtitle: "Automatically start video playback in full screen";
+      }
+    }
+
+    Adw.PreferencesGroup {
       title: "MPV Configuration";
 
       Adw.EntryRow mpv_path_row {

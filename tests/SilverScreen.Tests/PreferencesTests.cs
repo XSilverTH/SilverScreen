@@ -39,6 +39,8 @@ public sealed class PreferencesTests : IDisposable
             MpvExecutablePath = "/custom/mpv",
             YtDlpExecutablePath = "/custom/yt-dlp",
             VideoQuality = "1080p",
+            PlaybackBackend = PlaybackBackends.EmbeddedPlayer,
+            OpenInFullscreen = false,
             MaxResults = 50,
             MarkWatchedVideos = true,
             DiscordRichPresenceEnabled = true
@@ -55,6 +57,8 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("/custom/mpv", loaded.MpvExecutablePath);
         Assert.Equal("/custom/yt-dlp", loaded.YtDlpExecutablePath);
         Assert.Equal("1080p", loaded.VideoQuality);
+        Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
+        Assert.False(loaded.OpenInFullscreen);
         Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);

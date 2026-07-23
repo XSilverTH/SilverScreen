@@ -39,6 +39,8 @@ public sealed class MpvCommandBuilder
         }
 
         var arguments = new List<string>();
+        if (options.Fullscreen)
+            arguments.Add("--fs");
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {
             var ytdlOptions = $"cookies={cookieFilePath}";

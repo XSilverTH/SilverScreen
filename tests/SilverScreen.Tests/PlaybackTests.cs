@@ -52,6 +52,7 @@ public sealed class PlaybackTests
 
         Assert.Equal(
             [
+                "--fs",
                 "--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt",
                 "--ytdl-format=bestvideo[height<=720]+bestaudio/best[height<=720]",
                 "https://www.youtube.com/watch?v=abc123_X-yZ",
