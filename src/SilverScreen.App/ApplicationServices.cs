@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Diagnostics;
 using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Infrastructure.Features.Engagement;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Queue;
@@ -24,7 +25,9 @@ public sealed class ApplicationServices(
     SessionValidationCoordinator sessionValidation,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
     ICookieFileProvider cookieFiles,
-    IPlaybackPresenceService playbackPresence)
+    IPlaybackPresenceService playbackPresence,
+    IVideoEngagementService videoEngagement,
+    IYouTubeRatingService youtubeRating)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -37,6 +40,8 @@ public sealed class ApplicationServices(
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
     public ICookieFileProvider CookieFiles { get; } = cookieFiles;
     public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
+    public IVideoEngagementService VideoEngagement { get; } = videoEngagement;
+    public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
 }
 
 /// <summary>Registers the application's production services.</summary>
@@ -68,6 +73,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<IYtDlpProcessRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<ISearchService, YtDlpSearchService>();
+        services.AddSingleton<IVideoEngagementService, ReturnYouTubeDislikeService>();
+        services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
         services.AddSingleton<IYouTubeHomeClient>(provider =>
             new YtDlpHomeClient(

@@ -31,15 +31,7 @@ Gtk.Overlay EmbeddedPlayerView {
       height-request: 40;
     }
 
-    Gtk.Label {
-      label: "Loading video…";
-      styles ["title-3", "player-loading-title"]
-    }
 
-    Gtk.Label {
-      label: "Preparing playback";
-      styles ["player-loading-subtitle"]
-    }
   }
 
   [overlay]
@@ -70,9 +62,8 @@ Gtk.Overlay EmbeddedPlayerView {
       styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
     }
 
-    Gtk.ToggleButton player_play_pause_button {
-      toggled => $OnPlayPauseButtonToggled();
-      active: false;
+    Gtk.Button player_play_pause_button {
+      clicked => $OnPlayPauseButtonClicked();
       icon-name: "media-playback-start-symbolic";
       tooltip-text: "Play";
       styles ["flat", "circular", "player-primary-control"]
@@ -93,9 +84,6 @@ Gtk.Overlay EmbeddedPlayerView {
     hexpand: true;
     halign: fill;
     valign: end;
-    margin-start: 32;
-    margin-end: 32;
-    margin-bottom: 24;
     styles ["player-controls"]
 
     Gtk.Box player_metadata_row {
@@ -120,6 +108,51 @@ Gtk.Overlay EmbeddedPlayerView {
           ellipsize: end;
           styles ["player-subtitle"]
         }
+      }
+
+      Gtk.Box player_reactions {
+        spacing: 2;
+        valign: center;
+
+        Gtk.Button player_like_button {
+          clicked => $OnLikeButtonClicked();
+          tooltip-text: "Like this video on YouTube";
+          styles ["flat", "player-reaction-button"]
+
+          child: Gtk.Box {
+            spacing: 6;
+
+            Gtk.Label {
+              label: "Like";
+            }
+
+            Gtk.Label player_likes_label {
+              label: "—";
+              styles ["player-reaction-count"]
+            }
+          };
+        }
+
+        Gtk.Button player_dislike_button {
+          clicked => $OnDislikeButtonClicked();
+          tooltip-text: "Dislike this video on YouTube";
+          styles ["flat", "player-reaction-button"]
+
+          child: Gtk.Box {
+            spacing: 6;
+
+            Gtk.Label {
+              label: "Dislike";
+            }
+
+            Gtk.Label player_dislikes_label {
+              label: "—";
+              styles ["player-reaction-count"]
+            }
+          };
+        }
+
+        
       }
 
       Gtk.MenuButton player_volume_button {

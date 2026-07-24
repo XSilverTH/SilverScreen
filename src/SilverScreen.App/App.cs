@@ -157,10 +157,20 @@ public partial class App
                                  box-shadow: none;
                                }
 
+                               .player-headerbar,
+                               .player-center-controls,
                                .player-controls {
-                                 background-image: linear-gradient(to top, alpha(#000000, 0.88), alpha(#000000, 0.48), transparent);
+                                 transition: opacity 250ms ease-out;
+                               }
+
+                               .player-chrome-hidden {
+                                 opacity: 0;
+                               }
+
+                               .player-controls {
+                                 background-image: linear-gradient(to top, alpha(#000000, 0.78) 0%, alpha(#000000, 0.42) 42%, alpha(#000000, 0) 100%);
                                  color: #ffffff;
-                                 padding: 28px 0 0;
+                                 padding: 28px 32px 24px;
                                }
 
                                .player-title,
@@ -186,6 +196,36 @@ public partial class App
                                .player-primary-control:hover,
                                .player-headerbar button:hover {
                                  background-color: alpha(#ffffff, 0.16);
+                               }
+
+                               .player-reaction-button {
+                                 color: #ffffff;
+                                 min-height: 32px;
+                                 padding: 4px 8px;
+                               }
+
+                               button.player-reaction-button:disabled {
+                                 color: #ffffff;
+                                 opacity: 1;
+                               }
+
+                               button.player-reaction-button:disabled label {
+                                 color: #ffffff;
+                                 opacity: 1;
+                               }
+
+                               .player-reaction-selected {
+                                 background-color: alpha(#ffffff, 0.24);
+                               }
+
+                               .player-reaction-count {
+                                 font-weight: 600;
+                               }
+
+                               .player-ryd-attribution {
+                                 color: alpha(#ffffff, 0.72);
+                                 font-size: smaller;
+                                 padding: 4px;
                                }
 
                                .player-center-controls {

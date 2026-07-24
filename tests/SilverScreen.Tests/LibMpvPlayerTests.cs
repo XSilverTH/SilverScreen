@@ -69,6 +69,17 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void TogglePauseUsesMpvAtomicPauseCommand()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.TogglePause();
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Contains("cycle|pause"), TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
     public void NativeLoaderCreatesAndDestroysAnMpvHandle()
     {
         using var native = new LibMpvNative();

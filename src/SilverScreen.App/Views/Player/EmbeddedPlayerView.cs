@@ -18,42 +18,66 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
 {
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    private const long ControlsIdleDelayMilliseconds = 3_000;
+    private const uint ControlsVisibilityCheckMilliseconds = 250;
     private readonly Action _backRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
     private readonly ICookieFileProvider _cookieFiles;
     private readonly Label _durationLabel;
     private readonly Box _loadingIndicator;
+    private readonly Label _dislikesLabel;
+    private readonly Button _dislikeButton;
     private readonly IPlaybackPresenceService _playbackPresence;
     private readonly LibMpvPlayer _player;
+    private readonly ISessionService _session;
+    private readonly IVideoEngagementService _videoEngagement;
+    private readonly Widget _headerBar;
     private readonly GLArea _playerSurface;
-    private readonly ToggleButton _playPauseButton;
+    private readonly Button _playPauseButton;
     private readonly Label _positionLabel;
+    private readonly Button _likeButton;
+    private readonly Label _likesLabel;
     private readonly IPreferencesService _preferences;
+    private readonly Widget _playerControls;
     private readonly Action _presentRequested;
     private readonly DropDown _qualityDropdown;
     private readonly DropDown _speedDropdown;
     private readonly Scale _timeline;
     private readonly Label _titleLabel;
     private readonly MenuButton _volumeButton;
+    private readonly IYouTubeRatingService _youtubeRating;
     private readonly Scale _volumeScale;
+    private CancellationTokenSource? _engagementCancellation;
+    private long _engagementLoadVersion;
+    private string? _engagementVideoId;
+    private YouTubeRatingState _ratingState;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
     private bool _rendererReady;
     private PlaybackRequest? _request;
     private bool _updatingControls;
+    private bool _controlsVisible = true;
+    private long _lastActivityMilliseconds;
+    private uint _controlsAutohideSource;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
-        ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence)
+        ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence, IVideoEngagementService videoEngagement,
+        IYouTubeRatingService youtubeRating, ISessionService session)
     {
         _presentRequested = presentRequested;
         _backRequested = backRequested;
         _preferences = preferences;
         _cookieFiles = cookieFiles;
         _playbackPresence = playbackPresence;
+        _videoEngagement = videoEngagement;
+        _youtubeRating = youtubeRating;
+        _session = session;
         _playerSurface = GetRequiredObject<GLArea>("player_surface");
+        _headerBar = GetRequiredObject<Widget>("player_header_bar");
         _centerControls = GetRequiredObject<Box>("player_center_controls");
-        _playPauseButton = GetRequiredObject<ToggleButton>("player_play_pause_button");
+        _playerControls = GetRequiredObject<Widget>("player_controls");
+        _playPauseButton = GetRequiredObject<Button>("player_play_pause_button");
         _volumeButton = GetRequiredObject<MenuButton>("player_volume_button");
         _volumeScale = GetRequiredObject<Scale>("player_volume_scale");
         _qualityDropdown = GetRequiredObject<DropDown>("player_quality_dropdown");
@@ -64,6 +88,11 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _channelLabel = GetRequiredObject<Label>("player_channel_label");
         _positionLabel = GetRequiredObject<Label>("player_position_label");
         _durationLabel = GetRequiredObject<Label>("player_duration_label");
+        _likesLabel = GetRequiredObject<Label>("player_likes_label");
+        _likeButton = GetRequiredObject<Button>("player_like_button");
+        _dislikeButton = GetRequiredObject<Button>("player_dislike_button");
+        _dislikesLabel = GetRequiredObject<Label>("player_dislikes_label");
+        SetReactionSensitive(false);
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
             if (!_disposed) action();
@@ -74,11 +103,14 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _player.PlaybackFailed += OnPlaybackFailed;
         _player.PlaybackEnded += OnPlaybackEnded;
         SetControls(100, 1, "Best");
+        SetupControlsAutohide();
     }
 
     public new void Dispose()
     {
         if (_disposed) return;
+        if (_controlsAutohideSource != 0) Functions.SourceRemove(_controlsAutohideSource);
+        CancelEngagementLoad();
         _disposed = true;
         if (_rendererReady)
         {
@@ -121,6 +153,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
             _titleLabel.SetText(firstVideo.Title);
             _channelLabel.SetText(firstVideo.ChannelName);
             _durationLabel.SetText(FormatTime(firstVideo.Duration));
+            LoadEngagement(firstVideo);
+            RegisterActivity();
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             _playbackPresence.SetPlaying(request, DateTimeOffset.UtcNow);
             SetLoading(true);
@@ -162,6 +196,53 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         return true;
     }
 
+    private void SetupControlsAutohide()
+    {
+        var motion = EventControllerMotion.New();
+        motion.SetPropagationPhase(PropagationPhase.Capture);
+        motion.OnMotion += (_, _) => RegisterActivity();
+        Widget.AddController(motion);
+
+        var click = GestureClick.New();
+        click.Button = 0;
+        click.SetPropagationPhase(PropagationPhase.Capture);
+        click.OnPressed += (_, _) => RegisterActivity();
+        Widget.AddController(click);
+
+        RegisterActivity();
+        _controlsAutohideSource = Functions.TimeoutAdd(0, ControlsVisibilityCheckMilliseconds, () =>
+        {
+            if (_disposed) return false;
+            if (_controlsVisible && Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
+                SetControlsVisible(false);
+            return true;
+        });
+    }
+
+    private void RegisterActivity()
+    {
+        _lastActivityMilliseconds = Environment.TickCount64;
+        SetControlsVisible(true);
+    }
+
+    private void SetControlsVisible(bool visible)
+    {
+        if (_controlsVisible == visible) return;
+        _controlsVisible = visible;
+        SetControlVisible(_headerBar, visible);
+        SetControlVisible(_centerControls, visible);
+        SetControlVisible(_playerControls, visible);
+    }
+
+    private static void SetControlVisible(Widget control, bool visible)
+    {
+        control.SetSensitive(visible);
+        if (visible)
+            control.RemoveCssClass("player-chrome-hidden");
+        else
+            control.AddCssClass("player-chrome-hidden");
+    }
+
     private void OnBackButtonClicked(object? sender, EventArgs args)
     {
         EndSession(true);
@@ -178,9 +259,19 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _player.SeekRelative(10);
     }
 
-    private void OnPlayPauseButtonToggled(object? sender, EventArgs args)
+    private void OnPlayPauseButtonClicked(object? sender, EventArgs args)
     {
-        if (!_updatingControls) _player.SetPaused(!_playPauseButton.GetActive());
+        _player.TogglePause();
+    }
+
+    private void OnLikeButtonClicked(object? sender, EventArgs args)
+    {
+        SubmitVote(VideoVote.Like);
+    }
+
+    private void OnDislikeButtonClicked(object? sender, EventArgs args)
+    {
+        SubmitVote(VideoVote.Dislike);
     }
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
@@ -220,7 +311,6 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
-            _playPauseButton.SetActive(state.HasMedia && !state.IsPaused);
             _playPauseButton.SetIconName(state.HasMedia && !state.IsPaused
                 ? "media-playback-pause-symbolic"
                 : "media-playback-start-symbolic");
@@ -235,6 +325,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
                 var video = request.Videos[state.PlaylistIndex];
                 _titleLabel.SetText(video.Title);
                 _channelLabel.SetText(video.ChannelName);
+                if (!string.Equals(_engagementVideoId, video.Id, StringComparison.Ordinal))
+                    LoadEngagement(video);
             }
         }
         finally
@@ -255,6 +347,7 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         SetLoading(false);
         _channelLabel.SetText($"Embedded playback failed: {detail}");
         ResetTransport();
+        CancelEngagementLoad();
         _request = null;
         _player.Stop();
         ReleaseSession();
@@ -265,6 +358,7 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         if (stop) _player.Stop();
         ReleaseSession();
         _request = null;
+        CancelEngagementLoad();
         SetLoading(false);
     }
 
@@ -283,7 +377,6 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
             _timeline.SetRange(0, 0);
             _timeline.SetValue(0);
             _timeline.SetSensitive(false);
-            _playPauseButton.SetActive(false);
             _playPauseButton.SetIconName("media-playback-start-symbolic");
             _positionLabel.SetText("0:00");
         }
@@ -335,6 +428,153 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
     {
         return volume <= 0 ? "audio-volume-muted-symbolic" :
             volume <= 50 ? "audio-volume-low-symbolic" : "audio-volume-high-symbolic";
+    }
+
+    private void LoadEngagement(VideoSummary video)
+    {
+        CancelEngagementLoad();
+        _engagementVideoId = video.Id;
+        _likesLabel.SetText("—");
+        _dislikesLabel.SetText("—");
+        SetRatingState(YouTubeRatingState.None);
+        var hasNativeRatingSession = _session.GetCurrentSession().IsSignedIn;
+        SetReactionSensitive(PlaybackRequest.LooksLikeYouTubeVideoId(video.Id) && hasNativeRatingSession);
+        if (!PlaybackRequest.LooksLikeYouTubeVideoId(video.Id)) return;
+
+        var cancellation = new CancellationTokenSource();
+        _engagementCancellation = cancellation;
+        _ = UpdateEngagementAsync(video.Id, _engagementLoadVersion, cancellation.Token);
+        _ = UpdateRatingStateAsync(video.Id, _engagementLoadVersion, cancellation.Token);
+    }
+
+    private async Task UpdateEngagementAsync(string videoId, long version, CancellationToken cancellationToken)
+    {
+        VideoEngagement? engagement;
+        try
+        {
+            engagement = await _videoEngagement.GetEngagementAsync(videoId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Unable to load engagement counts for {VideoId}", videoId);
+            return;
+        }
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (_disposed || cancellationToken.IsCancellationRequested || version != _engagementLoadVersion)
+                return false;
+
+            _likesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Likes));
+            _dislikesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Dislikes));
+            return false;
+        });
+    }
+
+    private async Task UpdateRatingStateAsync(string videoId, long version, CancellationToken cancellationToken)
+    {
+        YouTubeRatingState ratingState;
+        try
+        {
+            ratingState = await _youtubeRating.GetRatingStateAsync(videoId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Unable to load the native YouTube rating for {VideoId}", videoId);
+            return;
+        }
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (_disposed || cancellationToken.IsCancellationRequested || version != _engagementLoadVersion)
+                return false;
+
+            SetRatingState(ratingState);
+            return false;
+        });
+    }
+
+    private void SubmitVote(VideoVote vote)
+    {
+        if (_engagementVideoId is not { } videoId || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return;
+
+        var removeVote = _ratingState == (vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
+        SetReactionSensitive(false);
+        _ = SubmitVoteAsync(videoId, vote, removeVote, _engagementLoadVersion);
+    }
+
+    private async Task SubmitVoteAsync(string videoId, VideoVote vote, bool removeVote, long version)
+    {
+        var succeeded = false;
+        try
+        {
+            succeeded = removeVote
+                ? await _youtubeRating.RemoveVoteAsync(videoId, vote).ConfigureAwait(false)
+                : await _youtubeRating.SubmitVoteAsync(videoId, vote).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Unable to submit {Vote} for {VideoId}", vote, videoId);
+        }
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (_disposed || version != _engagementLoadVersion || _engagementVideoId != videoId) return false;
+
+            SetReactionSensitive(true);
+            if (!succeeded) return false;
+
+            SetRatingState(removeVote
+                ? YouTubeRatingState.None
+                : vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
+
+            _ = UpdateEngagementAsync(videoId, version, CancellationToken.None);
+
+            return false;
+        });
+    }
+
+    private void SetReactionSensitive(bool sensitive)
+    {
+        _likeButton.SetSensitive(sensitive);
+        _dislikeButton.SetSensitive(sensitive);
+    }
+
+    private void SetRatingState(YouTubeRatingState ratingState)
+    {
+        _ratingState = ratingState;
+        if (ratingState == YouTubeRatingState.Like)
+            _likeButton.AddCssClass("player-reaction-selected");
+        else
+            _likeButton.RemoveCssClass("player-reaction-selected");
+
+        if (ratingState == YouTubeRatingState.Dislike)
+            _dislikeButton.AddCssClass("player-reaction-selected");
+        else
+            _dislikeButton.RemoveCssClass("player-reaction-selected");
+    }
+
+    private void CancelEngagementLoad()
+    {
+        _engagementLoadVersion++;
+        _engagementCancellation?.Cancel();
+        _engagementCancellation?.Dispose();
+        _engagementCancellation = null;
+        _engagementVideoId = null;
+        SetReactionSensitive(false);
+    }
+
+    private static string FormatCount(long value)
+    {
+        return value.ToString("N0");
     }
 
     private static string FormatTime(TimeSpan value)

@@ -200,6 +200,11 @@ public sealed class LibMpvPlayer : IDisposable
         Enqueue(() => Check(_native.SetPropertyFlag(_handle, "pause", paused)));
     }
 
+    public void TogglePause()
+    {
+        Enqueue(() => Check(_native.Command(_handle, "cycle", "pause")));
+    }
+
     public void SeekRelative(double seconds)
     {
         Enqueue(() => Check(_native.Command(_handle, "seek",

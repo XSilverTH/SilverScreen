@@ -6,6 +6,7 @@ namespace SilverScreen.Infrastructure.YouTube;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(BrowseRequestPayload))]
+[JsonSerializable(typeof(RatingRequestPayload))]
 internal sealed partial class YouTubeRequestJsonContext : JsonSerializerContext;
 
 internal sealed class BrowseRequestPayload
@@ -14,6 +15,19 @@ internal sealed class BrowseRequestPayload
     public string? BrowseId { get; init; }
     public string? Continuation { get; init; }
 }
+
+internal sealed class RatingRequestPayload
+{
+    public required BrowseRequestContext Context { get; init; }
+    public required RatingTarget Target { get; init; }
+    public string? Params { get; init; }
+}
+
+internal sealed class RatingTarget
+{
+    public required string VideoId { get; init; }
+}
+
 
 internal sealed class BrowseRequestContext
 {
