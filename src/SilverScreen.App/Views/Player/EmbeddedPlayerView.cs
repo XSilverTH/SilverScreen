@@ -534,7 +534,9 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
 
             SetRatingState(removeVote
                 ? YouTubeRatingState.None
-                : vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
+                : vote == VideoVote.Like
+                    ? YouTubeRatingState.Like
+                    : YouTubeRatingState.Dislike);
 
             _ = UpdateEngagementAsync(videoId, version, CancellationToken.None);
 
