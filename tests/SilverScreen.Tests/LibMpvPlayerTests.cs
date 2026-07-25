@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Playback;
+using SilverScreen.Views.Player;
 
 namespace SilverScreen.Tests;
 
@@ -34,7 +35,9 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("seek|42|absolute+exact", native.Commands);
         Assert.Contains(("volume", 100d), native.DoubleProperties);
         Assert.Contains(("speed", 1.5d), native.DoubleProperties);
-        Assert.Contains(("ytdl-raw-options", "cookies=/tmp/cookies.txt,mark-watched="), native.StringProperties);
+        Assert.Contains(("ytdl-raw-options",
+            "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt,mark-watched="),
+            native.StringProperties);
         Assert.Contains(("ytdl-format", "bestvideo[height<=720]+bestaudio/best[height<=720]"), native.StringProperties);
     }
 
@@ -78,7 +81,7 @@ public sealed class LibMpvPlayerTests
         Assert.True(SpinWait.SpinUntil(
             () => native.StringProperties.Count(property => property.Name == "ytdl-raw-options") >= 2,
             TimeSpan.FromSeconds(2)));
-        Assert.Equal(("ytdl-raw-options", string.Empty),
+        Assert.Equal(("ytdl-raw-options", "write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt"),
             native.StringProperties.Last(property => property.Name == "ytdl-raw-options"));
     }
 
@@ -91,6 +94,30 @@ public sealed class LibMpvPlayerTests
         player.TogglePause();
 
         Assert.True(SpinWait.SpinUntil(() => native.Commands.Contains("cycle|pause"), TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.SelectSubtitleTrack(42);
+        player.SelectSubtitleTrack(0);
+
+        Assert.True(SpinWait.SpinUntil(() => native.StringProperties.Count(property => property.Name == "sid") == 2,
+            TimeSpan.FromSeconds(2)));
+        Assert.Contains(("sid", "42"), native.StringProperties);
+        Assert.Contains(("sid", "no"), native.StringProperties);
+    }
+
+    [Theory]
+    [InlineData("en", "en")]
+    [InlineData("en-US", "en")]
+    [InlineData("pt-BR", "pt-PT")]
+    public void PreferredSubtitleLanguageMatchesRegionalVariants(string availableLanguage, string preferredLanguage)
+    {
+        Assert.True(EmbeddedPlayerView.SubtitleLanguageMatches(availableLanguage, preferredLanguage));
     }
 
     [Fact]
@@ -181,6 +208,11 @@ public sealed class LibMpvPlayerTests
         public int SetPropertyInt64(nint handle, string name, long value)
         {
             return 0;
+        }
+
+        public string? GetPropertyString(nint handle, string name)
+        {
+            return null;
         }
 
         public int Command(nint handle, params string[] arguments)

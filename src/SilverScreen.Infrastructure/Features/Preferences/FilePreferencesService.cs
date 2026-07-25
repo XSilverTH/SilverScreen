@@ -115,6 +115,7 @@ public sealed class FilePreferencesService : IPreferencesService
             PlaybackBackend = source.PlaybackBackend,
             OpenInFullscreen = source.OpenInFullscreen,
             VideoQuality = source.VideoQuality,
+            PreferredSubtitleLanguage = source.PreferredSubtitleLanguage,
             YtDlpExecutablePath = source.YtDlpExecutablePath,
             MaxResults = source.MaxResults,
             MarkWatchedVideos = source.MarkWatchedVideos,

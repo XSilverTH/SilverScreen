@@ -50,12 +50,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Action _presentRequested;
     private readonly DropDown _qualityDropdown;
     private readonly ISessionService _session;
+    private readonly Popover _settingsPopover;
     private readonly Dictionary<uint, Action> _shortcutMap = [];
     private readonly DropDown _speedDropdown;
+    private readonly DropDown _subtitleDropdown;
+    private readonly Button _subtitleButton;
+    private readonly StringList _subtitleModel;
     private readonly Scale _timeline;
     private readonly Label _titleLabel;
     private readonly IVideoEngagementService _videoEngagement;
     private readonly MenuButton _volumeButton;
+    private readonly Popover _volumePopover;
     private readonly Scale _volumeScale;
     private readonly IYouTubeRatingService _youtubeRating;
     private string? _commentsVideoId;
@@ -73,6 +78,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private YouTubeRatingState _ratingState;
     private bool _rendererReady;
     private PlaybackRequest? _request;
+    private IReadOnlyList<LibMpvSubtitleTrack> _subtitleTracks = [];
     private double _speed = 1;
     private bool _updatingControls;
 
@@ -96,8 +102,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _playPauseButton = GetRequiredObject<Button>("player_play_pause_button");
         _volumeButton = GetRequiredObject<MenuButton>("player_volume_button");
         _volumeScale = GetRequiredObject<Scale>("player_volume_scale");
+        _volumePopover = GetRequiredObject<Popover>("player_volume_popover");
+        _settingsPopover = GetRequiredObject<Popover>("player_settings_popover");
         _qualityDropdown = GetRequiredObject<DropDown>("player_quality_dropdown");
         _speedDropdown = GetRequiredObject<DropDown>("player_speed_dropdown");
+        _subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
+        _subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
@@ -110,6 +120,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _dislikeButton = GetRequiredObject<Button>("player_dislike_button");
         _dislikesLabel = GetRequiredObject<Label>("player_dislikes_label");
         _dislikeImage = GetRequiredObject<Image>("player_dislike_image");
+        _subtitleButton = GetRequiredObject<Button>("player_subtitle_button");
         _commentsButton = GetRequiredObject<ToggleButton>("player_comments_button");
         var commentsSidebarHost = GetRequiredObject<Box>("comments_sidebar_host");
         _commentsView = new CommentsView(comments, CloseComments);
@@ -214,6 +225,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Bind(() => _player.MovePlaylist(true), KEY_N, KEY_n);
         Bind(() => _player.MovePlaylist(false), KEY_P, KEY_p);
         Bind(ToggleFullscreen, KEY_F, KEY_f);
+        Bind(ShowPreferredSubtitle, KEY_C, KEY_c);
 
         void Bind(Action action, params uint[] keys)
         {
@@ -270,6 +282,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             if (_disposed) return false;
             if (_controlsVisible &&
+                !HasOpenControlPopover() &&
                 Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
                 SetControlsVisible(false);
             return true;
@@ -319,6 +332,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _lastPointerY = y;
         RegisterActivity();
     }
+
+    private bool HasOpenControlPopover() => _volumePopover.GetVisible() || _settingsPopover.GetVisible();
 
 
     private void SetControlsVisible(bool visible)
@@ -380,6 +395,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SubmitVote(VideoVote.Dislike);
     }
 
+    private void OnSubtitleButtonClicked(object? sender, EventArgs args)
+    {
+        ShowPreferredSubtitle();
+    }
+
     private void OnCommentsButtonToggled(object? sender, EventArgs args)
     {
         if (_commentsButton.Active)
@@ -406,6 +426,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (!_updatingControls) _player.SetSpeed(SpeedAt(_speedDropdown.GetSelected()));
     }
 
+    private void OnSubtitleDropdownNotify(object? sender, EventArgs args)
+    {
+        if (_updatingControls) return;
+        var selected = _subtitleDropdown.GetSelected();
+        if (selected is 0 or > int.MaxValue || selected > _subtitleTracks.Count)
+        {
+            _player.SelectSubtitleTrack(0);
+            return;
+        }
+
+        var track = _subtitleTracks[(int)selected - 1];
+        _player.SelectSubtitleTrack(track.Id);
+        SavePreferredSubtitle(track.Language);
+    }
+
+
     private void OnTimelineValueChanged(object? sender, EventArgs args)
     {
         if (!_updatingControls && _timeline.GetSensitive()) _player.SeekAbsolute(_timeline.GetValue());
@@ -427,6 +463,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow));
         SetLoading(state.IsLoading);
         _updatingControls = true;
+        UpdateSubtitleTracks(state.SubtitleTracks);
         try
         {
             _positionLabel.SetText(FormatTime(state.Position));
@@ -544,6 +581,85 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             _updatingControls = false;
         }
+    }
+
+    private void UpdateSubtitleTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks)
+    {
+        if (_subtitleTracks.SequenceEqual(tracks))
+        {
+            UpdateSubtitleButton();
+            return;
+        }
+
+        _subtitleTracks = tracks;
+        while (_subtitleModel.GetNItems() > 0) _subtitleModel.Remove(0);
+        _subtitleModel.Append("Off");
+        uint selected = 0;
+        for (var index = 0; index < tracks.Count; index++)
+        {
+            var track = tracks[index];
+            _subtitleModel.Append(track.Label);
+            if (track.IsSelected) selected = (uint)index + 1;
+        }
+
+        _subtitleDropdown.SetSelected(selected);
+        UpdateSubtitleButton();
+    }
+
+    private void ShowPreferredSubtitle()
+    {
+        var preferredLanguage = _preferences.GetPreferences().PreferredSubtitleLanguage;
+        var track = _subtitleTracks.FirstOrDefault(track =>
+            SubtitleLanguageMatches(track.Language, preferredLanguage));
+        if (track is not null) _player.SelectSubtitleTrack(track.IsSelected ? 0 : track.Id);
+    }
+
+    private void SavePreferredSubtitle(string language)
+    {
+        if (string.IsNullOrWhiteSpace(language)) return;
+        var preferences = _preferences.GetPreferences();
+        if (string.Equals(preferences.PreferredSubtitleLanguage, language, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateSubtitleButton();
+            return;
+        }
+
+        preferences.PreferredSubtitleLanguage = language;
+        try
+        {
+            _preferences.SavePreferences(preferences);
+            UpdateSubtitleButton();
+        }
+        catch (PreferencesPersistenceException exception)
+        {
+            Logger.Warning(exception, "Could not save preferred subtitle language");
+        }
+    }
+
+    private void UpdateSubtitleButton()
+    {
+        var preferredLanguage = _preferences.GetPreferences().PreferredSubtitleLanguage;
+        var track = _subtitleTracks.FirstOrDefault(track =>
+            SubtitleLanguageMatches(track.Language, preferredLanguage));
+        _subtitleButton.SetSensitive(track is not null);
+        _subtitleButton.SetTooltipText(track is null
+            ? "Choose a subtitle in player settings to set your preference"
+            : track.IsSelected
+                ? "Turn off preferred subtitles (C)"
+                : $"Use preferred subtitles: {preferredLanguage} (C)");
+    }
+
+    internal static bool SubtitleLanguageMatches(string language, string preferredLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(preferredLanguage)) return false;
+        if (string.Equals(language, preferredLanguage, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var languageSeparator = language.IndexOf('-');
+        var preferredLanguageSeparator = preferredLanguage.IndexOf('-');
+        return language.AsSpan(0, languageSeparator < 0 ? language.Length : languageSeparator)
+            .Equals(preferredLanguage.AsSpan(0,
+                preferredLanguageSeparator < 0 ? preferredLanguage.Length : preferredLanguageSeparator),
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeQuality(string quality)

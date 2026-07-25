@@ -167,6 +167,14 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           };
         }
 
+        Gtk.Button player_subtitle_button {
+          clicked => $OnSubtitleButtonClicked();
+          icon-name: "media-view-subtitles-symbolic";
+          tooltip-text: "Use preferred subtitles (C)";
+          sensitive: false;
+          styles ["flat", "circular", "player-reaction-button"]
+        }
+
         Gtk.ToggleButton player_comments_button {
           toggled => $OnCommentsButtonToggled();
           icon-name: "mail-message-new-symbolic";
@@ -182,7 +190,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
         tooltip-text: "Volume (M mutes; ↑/↓ adjust)";
         styles ["flat", "circular", "player-overlay-button"]
 
-        popover: Gtk.Popover {
+        popover: Gtk.Popover player_volume_popover {
           child: Gtk.Box {
             orientation: vertical;
             spacing: 8;
@@ -217,7 +225,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
         tooltip-text: "Player settings ([/]: speed)";
         styles ["flat", "circular", "player-overlay-button"]
 
-        popover: Gtk.Popover {
+        popover: Gtk.Popover player_settings_popover {
           child: Gtk.Box {
             orientation: vertical;
             spacing: 12;
@@ -267,6 +275,25 @@ Adw.OverlaySplitView EmbeddedPlayerView {
                   strings: ["0.5×", "0.75×", "Normal", "1.25×", "1.5×", "2×"];
                 };
                 selected: 2;
+              }
+            }
+
+
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 12;
+
+              Gtk.Label {
+                label: "Subtitles";
+                xalign: 0;
+                hexpand: true;
+              }
+
+              Gtk.DropDown player_subtitle_dropdown {
+                notify => $OnSubtitleDropdownNotify();
+                model: Gtk.StringList player_subtitle_model {
+                  strings: ["Off"];
+                };
               }
             }
           };

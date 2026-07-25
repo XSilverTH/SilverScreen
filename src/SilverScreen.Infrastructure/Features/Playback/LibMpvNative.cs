@@ -99,6 +99,7 @@ internal interface ILibMpvNativeApi : IDisposable
     int SetPropertyDouble(nint handle, string name, double value);
     int SetPropertyFlag(nint handle, string name, bool value);
     int SetPropertyInt64(nint handle, string name, long value);
+    string? GetPropertyString(nint handle, string name);
     int Command(nint handle, params string[] arguments);
     LibMpvEvent WaitEvent(nint handle, double timeout);
     void Wakeup(nint handle);
@@ -123,8 +124,10 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
     private readonly delegate* unmanaged[Cdecl]<byte*, nint> _eglGetProcAddress;
     private readonly delegate* unmanaged[Cdecl]<int, byte*> _errorString;
     private readonly delegate* unmanaged[Cdecl]<nint, void> _freeRenderContext;
+    private readonly delegate* unmanaged[Cdecl]<nint, void> _free;
     private readonly delegate* unmanaged[Cdecl]<byte*, nint> _glxGetProcAddress;
     private readonly delegate* unmanaged[Cdecl]<nint, int> _initialize;
+    private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*> _getPropertyString;
     private readonly delegate* unmanaged[Cdecl]<nint, ulong, byte*, LibMpvFormat, int> _observeProperty;
     private readonly delegate* unmanaged[Cdecl]<nint, LibMpvRenderParam*, int> _render;
     private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*, int> _setOptionString;
@@ -164,8 +167,10 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
             _setPropertyString =
                 (delegate* unmanaged[Cdecl]<nint, byte*, byte*, int>)GetExport("mpv_set_property_string");
             _command = (delegate* unmanaged[Cdecl]<nint, byte**, int>)GetExport("mpv_command");
+            _getPropertyString = (delegate* unmanaged[Cdecl]<nint, byte*, byte*>)GetExport("mpv_get_property_string");
             _waitEvent = (delegate* unmanaged[Cdecl]<nint, double, LibMpvEvent*>)GetExport("mpv_wait_event");
             _wakeup = (delegate* unmanaged[Cdecl]<nint, void>)GetExport("mpv_wakeup");
+            _free = (delegate* unmanaged[Cdecl]<nint, void>)GetExport("mpv_free");
             _errorString = (delegate* unmanaged[Cdecl]<int, byte*>)GetExport("mpv_error_string");
             _createRenderContext =
                 (delegate* unmanaged[Cdecl]<nint*, nint, LibMpvRenderParam*, int>)GetExport(
@@ -230,6 +235,24 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
         fixed (byte* valuePointer = nativeValue)
         {
             return _setPropertyString(handle, namePointer, valuePointer);
+        }
+    }
+
+    public string? GetPropertyString(nint handle, string name)
+    {
+        var nativeName = Utf8(name);
+        fixed (byte* namePointer = nativeName)
+        {
+            var value = _getPropertyString(handle, namePointer);
+            if (value == null) return null;
+            try
+            {
+                return Marshal.PtrToStringUTF8((nint)value);
+            }
+            finally
+            {
+                _free((nint)value);
+            }
         }
     }
 

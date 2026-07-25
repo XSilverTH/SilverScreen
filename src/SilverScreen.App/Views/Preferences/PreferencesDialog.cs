@@ -117,7 +117,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             OpenInFullscreen = _fullscreenRow.Active,
             MaxResults = maxResults,
             MarkWatchedVideos = _markWatchedRow.Active,
-            DiscordRichPresenceEnabled = _discordRichPresenceRow.Active
+            DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
+            PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage,
         };
 
         try

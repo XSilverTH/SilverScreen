@@ -7,6 +7,7 @@ public sealed class AppPreferences
     public bool OpenInFullscreen { get; set; } = true;
     public string MpvExecutablePath { get; set; } = "mpv";
     public string VideoQuality { get; set; } = "Best"; // "Best", "1080p", "720p", "480p", "360p"
+    public string PreferredSubtitleLanguage { get; set; } = string.Empty;
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public int MaxResults { get; set; } = 20;
     public bool MarkWatchedVideos { get; set; }

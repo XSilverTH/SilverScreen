@@ -6,6 +6,8 @@ using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
+public sealed record LibMpvSubtitleTrack(long Id, string Language, string Label, bool IsSelected);
+
 public sealed record LibMpvPlaybackState(
     int PlaylistIndex,
     TimeSpan Position,
@@ -16,7 +18,8 @@ public sealed record LibMpvPlaybackState(
     double Speed,
     bool IsSeekable,
     bool HasMedia,
-    bool IsLoading);
+    bool IsLoading,
+    IReadOnlyList<LibMpvSubtitleTrack> SubtitleTracks);
 
 public sealed class LibMpvPlayer : IDisposable
 {
@@ -42,7 +45,7 @@ public sealed class LibMpvPlayer : IDisposable
     private bool _resumeAfterRenderer;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
-        false);
+        false, []);
 
     private GCHandle _updateCallbackHandle;
 
@@ -75,6 +78,7 @@ public sealed class LibMpvPlayer : IDisposable
             Observe("seekable", LibMpvFormat.Flag);
             Observe("playlist-pos", LibMpvFormat.Int64);
             Observe("path", LibMpvFormat.String);
+            Observe("sid", LibMpvFormat.Int64);
             _commandPump = Task.Run(PumpCommandsAsync);
             _eventPump = Task.Run(PumpEvents);
         }
@@ -191,7 +195,7 @@ public sealed class LibMpvPlayer : IDisposable
                 ? "Best"
                 : preferences.VideoQuality;
             _reload = null;
-            _state = _state with { IsPaused = false, IsLoading = true };
+            _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [] };
         }
 
         PublishState();
@@ -250,6 +254,12 @@ public sealed class LibMpvPlayer : IDisposable
     public void SetSpeed(double speed)
     {
         Enqueue(() => Check(_native.SetPropertyDouble(_handle, "speed", speed)));
+    }
+
+    public void SelectSubtitleTrack(long trackId)
+    {
+        Enqueue(() => Check(_native.SetPropertyString(_handle, "sid",
+            trackId <= 0 ? "no" : trackId.ToString(CultureInfo.InvariantCulture))));
     }
 
     public void SetQuality(string quality)
@@ -317,7 +327,7 @@ public sealed class LibMpvPlayer : IDisposable
             _state = _state with
             {
                 PlaylistIndex = -1, Position = TimeSpan.Zero, Duration = TimeSpan.Zero, IsPaused = true,
-                IsSeekable = false, HasMedia = false, IsLoading = false
+                IsSeekable = false, HasMedia = false, IsLoading = false, SubtitleTracks = []
             };
         }
 
@@ -425,6 +435,10 @@ public sealed class LibMpvPlayer : IDisposable
                 {
                     PlaylistIndex = checked((int)Marshal.ReadInt64(property.Data))
                 },
+                "sid" when property.Format == LibMpvFormat.Int64 => _state with
+                {
+                    SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, Marshal.ReadInt64(property.Data))
+                },
                 _ => _state
             };
         }
@@ -434,10 +448,11 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void HandleFileLoaded()
     {
+        var subtitleTracks = ReadSubtitleTracks();
         ReloadSnapshot? reload;
         lock (_gate)
         {
-            _state = _state with { HasMedia = true, IsLoading = false };
+            _state = _state with { HasMedia = true, IsLoading = false, SubtitleTracks = subtitleTracks };
             reload = _reload;
         }
 
@@ -472,7 +487,10 @@ public sealed class LibMpvPlayer : IDisposable
             var itemCount = _request?.Videos.Length ?? 0;
             ended = _state.PlaylistIndex >= itemCount - 1;
             if (ended)
-                _state = _state with { HasMedia = false, IsPaused = true, Position = TimeSpan.Zero, IsLoading = false };
+                _state = _state with
+                {
+                    HasMedia = false, IsPaused = true, Position = TimeSpan.Zero, IsLoading = false, SubtitleTracks = []
+                };
         }
 
         if (!ended) return;
@@ -498,15 +516,62 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         var urls = MpvCommandBuilder.GetPlaybackUrls(request);
-        var rawOptions = string.IsNullOrWhiteSpace(cookieFilePath)
-            ? string.Empty
-            : $"cookies={cookieFilePath}" + (preferences.MarkWatchedVideos ? ",mark-watched=" : string.Empty);
+        var rawOptions = BuildYtdlRawOptions(cookieFilePath, preferences.MarkWatchedVideos);
         Check(_native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
         Check(_native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));
         Check(_native.Command(_handle, "loadfile", urls[0], "replace"));
         foreach (var url in urls.Skip(1)) Check(_native.Command(_handle, "loadfile", url, "append-play"));
         if (reload is not null) Check(_native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));
+    }
+
+    private IReadOnlyList<LibMpvSubtitleTrack> ReadSubtitleTracks()
+    {
+        if (!int.TryParse(_native.GetPropertyString(_handle, "track-list/count"),
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackCount) ||
+            trackCount <= 0)
+            return [];
+
+        var selectedTrackId = long.TryParse(_native.GetPropertyString(_handle, "sid"),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
+        var subtitleTracks = new List<LibMpvSubtitleTrack>();
+        for (var index = 0; index < trackCount; index++)
+        {
+            var propertyPrefix = $"track-list/{index}";
+            if (!string.Equals(_native.GetPropertyString(_handle, $"{propertyPrefix}/type"), "sub",
+                    StringComparison.Ordinal) ||
+                !long.TryParse(_native.GetPropertyString(_handle, $"{propertyPrefix}/id"),
+                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackId))
+                continue;
+
+            var title = _native.GetPropertyString(_handle, $"{propertyPrefix}/title");
+            var language = _native.GetPropertyString(_handle, $"{propertyPrefix}/lang");
+            var label = string.IsNullOrWhiteSpace(title) ? language : string.IsNullOrWhiteSpace(language) ||
+                string.Equals(title, language, StringComparison.OrdinalIgnoreCase)
+                ? title
+                : $"{title} ({language})";
+            subtitleTracks.Add(new LibMpvSubtitleTrack(trackId, language ?? label ?? $"Subtitle {trackId}",
+                label ?? $"Subtitle {trackId}", trackId == selectedTrackId));
+        }
+
+        return subtitleTracks;
+    }
+
+    private static IReadOnlyList<LibMpvSubtitleTrack> SelectSubtitleTrack(
+        IReadOnlyList<LibMpvSubtitleTrack> tracks, long selectedTrackId)
+    {
+        return tracks.Select(track => track with { IsSelected = track.Id == selectedTrackId }).ToArray();
+    }
+
+    private static string BuildYtdlRawOptions(string? cookieFilePath, bool markWatchedVideos)
+    {
+        var options = new List<string>
+        {
+            "write-subs=", "write-auto-subs=", "sub-langs=all", "sub-format=vtt"
+        };
+        if (!string.IsNullOrWhiteSpace(cookieFilePath)) options.Insert(0, $"cookies={cookieFilePath}");
+        if (markWatchedVideos) options.Add("mark-watched=");
+        return string.Join(',', options);
     }
 
     private void Observe(string name, LibMpvFormat format)
