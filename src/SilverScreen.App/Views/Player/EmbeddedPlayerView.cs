@@ -324,6 +324,11 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         ReturnToShell();
     }
 
+    private void OnFullscreenButtonClicked(object? sender, EventArgs args)
+    {
+        ToggleFullscreen();
+    }
+
     private void ReturnToShell()
     {
         EndSession(true);

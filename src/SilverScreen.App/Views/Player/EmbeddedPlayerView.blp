@@ -47,6 +47,14 @@ Gtk.Overlay EmbeddedPlayerView {
       tooltip-text: "Back to SilverScreen";
       styles ["flat", "circular", "player-overlay-button"]
     }
+
+    [end]
+    Gtk.Button player_fullscreen_button {
+      clicked => $OnFullscreenButtonClicked();
+      icon-name: "view-fullscreen-symbolic";
+      tooltip-text: "Toggle fullscreen (F)";
+      styles ["flat", "circular", "player-overlay-button"]
+    }
   }
 
   [overlay]
