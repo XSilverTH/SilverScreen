@@ -8,20 +8,28 @@ namespace SilverScreen.ViewModels;
 
 public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 {
+    private readonly IAccountProfileService _accountProfileService;
     private readonly ISessionService _sessionService;
     private readonly ShellViewModel _shell;
     private readonly SessionValidationCoordinator _validation;
+    private CancellationTokenSource? _profileCancellation;
+    private AccountProfile? _profile;
     private bool _disposed;
     private AccountSession _session;
 
-    public AccountViewModel(ISessionService sessionService, SessionValidationCoordinator validation,
-        ShellViewModel shell)
+    public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService,
+        SessionValidationCoordinator validation, ShellViewModel shell)
     {
+        _accountProfileService = accountProfileService;
         _sessionService = sessionService;
         _validation = validation;
         _shell = shell;
         _session = _sessionService.GetCurrentSession();
+        if (_session.HasManualSession)
+            _profile = _accountProfileService.GetCachedProfile();
+
         _sessionService.SessionChanged += OnSessionChanged;
+        RefreshProfile();
     }
 
     private AccountSession Session
@@ -30,13 +38,24 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _session = value;
+            _profile = null;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasManualSession));
+            OnPropertyChanged(nameof(DisplayName));
+            OnPropertyChanged(nameof(AvatarUrl));
             StateChanged?.Invoke(this, EventArgs.Empty);
+            RefreshProfile();
         }
     }
 
     public bool HasManualSession => Session.HasManualSession;
+
+    public string DisplayName => _profile?.DisplayName ?? (string.IsNullOrWhiteSpace(Session.DisplayName)
+        ? "YouTube session"
+        : Session.DisplayName);
+
+    public string? AvatarUrl => _profile?.AvatarUrl ?? Session.AvatarUrl;
+
 
     public bool IsValidating
     {
@@ -58,6 +77,8 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return;
 
         _disposed = true;
+        _profileCancellation?.Cancel();
+        _profileCancellation?.Dispose();
         _validation.Cancel();
         _sessionService.SessionChanged -= OnSessionChanged;
     }
@@ -142,6 +163,44 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     {
         if (!_disposed)
             Session = _sessionService.GetCurrentSession();
+    }
+
+    private void RefreshProfile()
+    {
+        _profileCancellation?.Cancel();
+        _profileCancellation?.Dispose();
+        _profileCancellation = null;
+
+        if (_disposed || !Session.HasManualSession)
+            return;
+
+        _profileCancellation = new CancellationTokenSource();
+        _ = LoadProfileAsync(_profileCancellation.Token);
+    }
+
+    private async Task LoadProfileAsync(CancellationToken cancellationToken)
+    {
+        AccountProfile? profile;
+        try
+        {
+            profile = await _accountProfileService.GetCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (_disposed || cancellationToken.IsCancellationRequested || profile is null)
+            return;
+
+        _profile = profile;
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(AvatarUrl));
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

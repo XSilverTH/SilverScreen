@@ -18,8 +18,14 @@ Adw.ApplicationWindow MainWindow {
       Adw.HeaderBar {
         [start]
         MenuButton account_button {
-          icon-name: "avatar-default-symbolic";
           tooltip-text: "Account";
+          styles ["flat", "circular"]
+
+          child: Adw.Avatar account_avatar {
+            size: 24;
+            text: "YouTube";
+            show-initials: true;
+          };
         }
 
         [start]

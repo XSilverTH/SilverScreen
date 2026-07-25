@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Adw;
+using Gdk;
 using Gio;
 using GObject;
 using Gtk;
@@ -30,6 +31,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly MenuButton _accountButton;
+    private readonly Avatar _accountAvatar;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly Action _disposeApplicationServices;
@@ -67,6 +69,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _homeRefreshSpinner = GetRequiredObject<Spinner>("home_refresh_spinner");
         _homeRefreshStack = GetRequiredObject<Stack>("home_refresh_stack");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
+        _accountAvatar = GetRequiredObject<Avatar>("account_avatar");
         var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
         var queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
@@ -89,9 +92,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
         queueSidebarHost.Append(_queueView.Widget);
-        _accountViewModel = new AccountViewModel(services.Session, services.SessionValidation, _shell);
+        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation,
+            _shell);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
+            services.Thumbnails,
             OpenWebLogin,
             UpdateAccountAppearance);
 
@@ -295,9 +300,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _webLogin.Present();
     }
 
-    private void UpdateAccountAppearance(bool hasManualSession)
+    private void UpdateAccountAppearance(bool hasManualSession, string displayName, Texture? avatar)
     {
         _accountButton.TooltipText = hasManualSession ? "YouTube session active" : "Account";
+        _accountAvatar.Text = hasManualSession ? displayName : string.Empty;
+        _accountAvatar.ShowInitials = hasManualSession;
+        _accountAvatar.CustomImage = avatar!;
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)

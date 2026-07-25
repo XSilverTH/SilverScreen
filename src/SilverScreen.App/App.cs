@@ -135,6 +135,32 @@ public partial class App
                                  padding: 1px 5px;
                                }
 
+                               .account-sign-in-actions button {
+                                 min-height: 40px;
+                               }
+
+                               .account-card {
+                                 padding: 0;
+                               }
+
+                               .account-display-name {
+                                 font-size: 1.05em;
+                                 font-weight: 700;
+                               }
+
+
+                               .account-sign-out-button {
+                                 background-color: alpha(@window_fg_color, 0.12);
+                                 min-height: 40px;
+                                 min-width: 40px;
+                                 padding: 0;
+                               }
+
+                               .account-sign-out-button:hover {
+                                 background-color: alpha(@window_fg_color, 0.18);
+                               }
+
+
                                .embedded-player,
                                .embedded-player-surface {
                                  background-color: #000000;

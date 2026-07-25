@@ -1,4 +1,8 @@
+using Gdk;
+using GdkPixbuf;
+using Adw;
 using Gtk;
+using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
@@ -7,26 +11,34 @@ namespace SilverScreen.Views.Popovers;
 
 public partial class AccountPopoverView : ViewBase<Box>
 {
+    private readonly IThumbnailService _thumbnails;
     private readonly Stack _accountStack;
     private readonly TextView _manualEditor;
     private readonly Label _manualHeading;
     private readonly Action _openWebLogin;
-    private readonly Action<bool> _sessionAppearanceChanged;
-    private readonly Button _signedInValidateButton;
+    private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
+    private readonly Avatar _signedInAvatar;
+    private readonly Label _signedInDisplayName;
     private readonly AccountViewModel _viewModel;
+    private CancellationTokenSource? _avatarCancellation;
+    private Texture? _avatarTexture;
+    private string? _avatarUrl;
     private bool _disposed;
     private bool _editing;
 
     public AccountPopoverView(
         AccountViewModel viewModel,
+        IThumbnailService thumbnails,
         Action openWebLogin,
-        Action<bool> sessionAppearanceChanged)
+        Action<bool, string, Texture?> sessionAppearanceChanged)
     {
         _accountStack = GetRequiredObject<Stack>("account_stack");
-        _signedInValidateButton = GetRequiredObject<Button>("signed_in_validate_button");
+        _signedInAvatar = GetRequiredObject<Avatar>("signed_in_avatar");
+        _signedInDisplayName = GetRequiredObject<Label>("signed_in_display_name");
         _manualHeading = GetRequiredObject<Label>("manual_heading");
         _manualEditor = GetRequiredObject<TextView>("manual_editor");
-        _viewModel = viewModel;
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
         _viewModel.StateChanged += OnStateChanged;
@@ -47,7 +59,6 @@ public partial class AccountPopoverView : ViewBase<Box>
     private void Render()
     {
         var hasManualSession = _viewModel.HasManualSession;
-        _sessionAppearanceChanged(hasManualSession);
         if (_editing)
         {
             _accountStack.VisibleChildName = "manual";
@@ -57,8 +68,89 @@ public partial class AccountPopoverView : ViewBase<Box>
             return;
         }
 
+        if (hasManualSession)
+        {
+            var displayName = _viewModel.DisplayName;
+            _signedInAvatar.Text = displayName;
+            _signedInDisplayName.SetText(displayName);
+            UpdateAvatar(_viewModel.AvatarUrl);
+        }
+        else
+        {
+            UpdateAvatar(null);
+        }
+
         _accountStack.VisibleChildName = hasManualSession ? "signed_in" : "signed_out";
-        _signedInValidateButton.Sensitive = !_viewModel.IsValidating;
+        _sessionAppearanceChanged(hasManualSession, _viewModel.DisplayName, _avatarTexture);
+    }
+
+    private void UpdateAvatar(string? avatarUrl)
+    {
+        if (string.Equals(_avatarUrl, avatarUrl, StringComparison.Ordinal))
+            return;
+
+        _avatarUrl = avatarUrl;
+        _avatarCancellation?.Cancel();
+        _avatarCancellation?.Dispose();
+        _avatarCancellation = null;
+        _signedInAvatar.CustomImage = null!;
+        _avatarTexture?.Dispose();
+        _avatarTexture = null;
+
+        if (string.IsNullOrWhiteSpace(avatarUrl))
+            return;
+
+        _avatarCancellation = new CancellationTokenSource();
+        _ = LoadAvatarAsync(avatarUrl, _avatarCancellation.Token);
+    }
+
+    private async Task LoadAvatarAsync(string avatarUrl, CancellationToken cancellationToken)
+    {
+        Pixbuf? pixbuf = null;
+        try
+        {
+            var thumbnail = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
+            if (thumbnail is null)
+                return;
+
+            pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 128, 128, true),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        var decodedPixbuf = pixbuf;
+        Functions.IdleAdd(0, () =>
+        {
+            try
+            {
+                if (_disposed || cancellationToken.IsCancellationRequested || !string.Equals(_avatarUrl, avatarUrl,
+                        StringComparison.Ordinal))
+                    return false;
+
+                var pixbufForTexture = decodedPixbuf ??
+                                       throw new InvalidOperationException("Avatar image decode returned no pixbuf.");
+                var texture = Texture.NewForPixbuf(pixbufForTexture);
+                pixbufForTexture.Dispose();
+                decodedPixbuf = null;
+                _signedInAvatar.CustomImage = texture;
+                _avatarTexture = texture;
+                _sessionAppearanceChanged(true, _viewModel.DisplayName, texture);
+            }
+            finally
+            {
+                decodedPixbuf?.Dispose();
+            }
+
+            return false;
+        });
     }
 
     private void OpenManualEditor()
@@ -77,10 +169,6 @@ public partial class AccountPopoverView : ViewBase<Box>
         OpenManualEditor();
     }
 
-    private void OnValidateButtonClicked(object? sender, EventArgs args)
-    {
-        _ = _viewModel.ValidateAsync();
-    }
 
     private void OnClearButtonClicked(object? sender, EventArgs args)
     {
@@ -115,6 +203,10 @@ public partial class AccountPopoverView : ViewBase<Box>
             return;
 
         _disposed = true;
+        _avatarCancellation?.Cancel();
+        _avatarCancellation?.Dispose();
+        _signedInAvatar.CustomImage = null!;
+        _avatarTexture?.Dispose();
         _viewModel.StateChanged -= OnStateChanged;
         _viewModel.Dispose();
         base.Dispose();

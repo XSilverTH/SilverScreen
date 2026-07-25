@@ -18,6 +18,7 @@ public sealed class ApplicationServices(
     IPreferencesService preferences,
     IQueueService queue,
     ISessionService session,
+    IAccountProfileService accountProfile,
     IPlaybackService playback,
     ISearchService search,
     IThumbnailService thumbnails,
@@ -33,6 +34,7 @@ public sealed class ApplicationServices(
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
     public ISessionService Session { get; } = session;
+    public IAccountProfileService AccountProfile { get; } = accountProfile;
     public IPlaybackService Playback { get; } = playback;
     public ISearchService Search { get; } = search;
     public IThumbnailService Thumbnails { get; } = thumbnails;
@@ -65,6 +67,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<ISecretServiceAvailability>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ICookieFileProvider, TemporaryCookieFileProvider>();
+        services.AddSingleton<IAccountProfileService>(provider =>
+            new YouTubeAccountProfileService(
+                new HttpClient(),
+                provider.GetRequiredService<ISessionService>()));
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
             new DiscordPresenceService(
