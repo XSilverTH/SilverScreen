@@ -35,6 +35,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Box _loadingIndicator;
     private readonly Label _dislikesLabel;
     private readonly Button _dislikeButton;
+    private readonly Image _dislikeImage;
     private readonly IPlaybackPresenceService _playbackPresence;
     private readonly LibMpvPlayer _player;
     private readonly ISessionService _session;
@@ -44,6 +45,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Button _playPauseButton;
     private readonly Label _positionLabel;
     private readonly Button _likeButton;
+    private readonly Image _likeImage;
     private readonly Label _likesLabel;
     private readonly IPreferencesService _preferences;
     private readonly Widget _playerControls;
@@ -104,8 +106,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _durationLabel = GetRequiredObject<Label>("player_duration_label");
         _likesLabel = GetRequiredObject<Label>("player_likes_label");
         _likeButton = GetRequiredObject<Button>("player_like_button");
+        _likeImage = GetRequiredObject<Image>("player_like_image");
         _dislikeButton = GetRequiredObject<Button>("player_dislike_button");
         _dislikesLabel = GetRequiredObject<Label>("player_dislikes_label");
+        _dislikeImage = GetRequiredObject<Image>("player_dislike_image");
         _commentsButton = GetRequiredObject<ToggleButton>("player_comments_button");
         var commentsSidebarHost = GetRequiredObject<Box>("comments_sidebar_host");
         _commentsView = new CommentsView(comments, CloseComments);
@@ -691,15 +695,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void SetRatingState(YouTubeRatingState ratingState)
     {
         _ratingState = ratingState;
-        if (ratingState == YouTubeRatingState.Like)
-            _likeButton.AddCssClass("player-reaction-selected");
-        else
-            _likeButton.RemoveCssClass("player-reaction-selected");
-
-        if (ratingState == YouTubeRatingState.Dislike)
-            _dislikeButton.AddCssClass("player-reaction-selected");
-        else
-            _dislikeButton.RemoveCssClass("player-reaction-selected");
+        _likeImage.SetFromResource(ratingState == YouTubeRatingState.Like
+            ? "/SilverScreen/Assets/liked-symbolic.svg"
+            : "/SilverScreen/Assets/like-symbolic.svg");
+        _dislikeImage.SetFromResource(ratingState == YouTubeRatingState.Dislike
+            ? "/SilverScreen/Assets/disliked-symbolic.svg"
+            : "/SilverScreen/Assets/dislike-symbolic.svg");
     }
 
     private void CancelEngagementLoad()

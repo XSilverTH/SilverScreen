@@ -213,9 +213,6 @@ public partial class App
                                  opacity: 1;
                                }
 
-                               .player-reaction-selected {
-                                 background-color: alpha(#ffffff, 0.24);
-                               }
 
                                .player-reaction-count {
                                  font-weight: 600;
