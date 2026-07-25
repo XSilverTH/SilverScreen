@@ -19,8 +19,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
 {
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    private const long ControlsIdleDelayMilliseconds = 3_000;
-    private const uint ControlsVisibilityCheckMilliseconds = 250;
+    private const long ControlsIdleDelayMilliseconds = 1_500;
+    private const uint ControlsVisibilityCheckMilliseconds = 100;
     private readonly Action _backRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
