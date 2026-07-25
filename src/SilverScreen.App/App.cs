@@ -193,7 +193,6 @@ public partial class App
                                }
 
                                .player-overlay-button:hover,
-                               .player-primary-control:hover,
                                .player-headerbar button:hover {
                                  background-color: alpha(#ffffff, 0.16);
                                }
@@ -238,8 +237,9 @@ public partial class App
                                }
 
                                .player-primary-control {
-                                 min-height: 48px;
-                                 min-width: 48px;
+                                 min-height: 72px;
+                                 min-width: 72px;
+                                 -gtk-icon-size: 64px;
                                }
 
                                .player-controls scale trough {
