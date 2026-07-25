@@ -69,6 +69,33 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         return startInfo;
     }
 
+    public static ProcessStartInfo BuildCommentsStartInfo(string executablePath, string videoId,
+        YouTubeCommentSort sort, string? cookieFilePath = null)
+    {
+        var startInfo = CreateStartInfo(executablePath);
+        startInfo.ArgumentList.Add("--dump-single-json");
+        startInfo.ArgumentList.Add("--skip-download");
+        startInfo.ArgumentList.Add("--no-playlist");
+        startInfo.ArgumentList.Add("--write-comments");
+        startInfo.ArgumentList.Add("--extractor-args");
+        startInfo.ArgumentList.Add(sort switch
+        {
+            YouTubeCommentSort.Top => "youtube:comment_sort=top;max_comments=100,100,0,0,1",
+            YouTubeCommentSort.Newest => "youtube:comment_sort=new;max_comments=100,100,0,0,1",
+            _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, null)
+        });
+
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        {
+            startInfo.ArgumentList.Add("--cookies");
+            startInfo.ArgumentList.Add(cookieFilePath);
+        }
+
+        startInfo.ArgumentList.Add(PlaybackRequest.BuildWatchUrl(videoId)
+            ?? throw new ArgumentException("A valid YouTube video ID is required.", nameof(videoId)));
+        return startInfo;
+    }
+
     private static ProcessStartInfo CreateStartInfo(string executablePath)
     {
         return new ProcessStartInfo

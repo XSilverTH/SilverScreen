@@ -1,12 +1,16 @@
+using Adw;
 using static Gdk.Constants;
 using Gtk;
+using GObject;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Session;
 using XSTH.Blueprint.Helpers;
+using SilverScreen.Views.Comments;
 using Functions = GLib.Functions;
+using Window = Gtk.Window;
 
 namespace SilverScreen.Views.Player;
 
@@ -15,7 +19,7 @@ internal interface IEmbeddedPlayerPresenter
     Task<string> PresentAsync(PlaybackRequest request);
 }
 
-public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPresenter, IDisposable
+public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -24,6 +28,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
     private readonly Action _backRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
+    private readonly CommentsView _commentsView;
+    private readonly ToggleButton _commentsButton;
     private readonly ICookieFileProvider _cookieFiles;
     private readonly Label _durationLabel;
     private readonly Box _loadingIndicator;
@@ -52,6 +58,7 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
     private CancellationTokenSource? _engagementCancellation;
     private long _engagementLoadVersion;
     private string? _engagementVideoId;
+    private string? _commentsVideoId;
     private YouTubeRatingState _ratingState;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
@@ -70,7 +77,7 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
         ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
         IVideoEngagementService videoEngagement,
-        IYouTubeRatingService youtubeRating, ISessionService session)
+        IYouTubeRatingService youtubeRating, ISessionService session, IYouTubeCommentService comments)
     {
         _presentRequested = presentRequested;
         _backRequested = backRequested;
@@ -99,6 +106,12 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _likeButton = GetRequiredObject<Button>("player_like_button");
         _dislikeButton = GetRequiredObject<Button>("player_dislike_button");
         _dislikesLabel = GetRequiredObject<Label>("player_dislikes_label");
+        _commentsButton = GetRequiredObject<ToggleButton>("player_comments_button");
+        var commentsSidebarHost = GetRequiredObject<Box>("comments_sidebar_host");
+        _commentsView = new CommentsView(comments, CloseComments);
+        commentsSidebarHost.Append(_commentsView.Widget);
+        _commentsButton.BindProperty("active", Widget, "show-sidebar",
+            BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         SetReactionSensitive(false);
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
@@ -146,6 +159,7 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         if (_disposed) return;
         if (_controlsAutohideSource != 0) Functions.SourceRemove(_controlsAutohideSource);
         CancelEngagementLoad();
+        _commentsView.Dispose();
         _disposed = true;
         if (_rendererReady)
         {
@@ -189,6 +203,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
             _channelLabel.SetText(firstVideo.ChannelName);
             _durationLabel.SetText(FormatTime(firstVideo.Duration));
             LoadEngagement(firstVideo);
+            _commentsVideoId = firstVideo.Id;
+            _commentsView.SetVideo(firstVideo.Id);
             RegisterActivity();
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
@@ -359,6 +375,17 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         SubmitVote(VideoVote.Dislike);
     }
 
+    private void OnCommentsButtonToggled(object? sender, EventArgs args)
+    {
+        if (_commentsButton.Active)
+            _commentsView.EnsureLoaded();
+    }
+
+    private void CloseComments()
+    {
+        _commentsButton.Active = false;
+    }
+
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
     {
         if (!_updatingControls) _player.SetVolume(_volumeScale.GetValue());
@@ -421,6 +448,14 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
                 _channelLabel.SetText(video.ChannelName);
                 if (!string.Equals(_engagementVideoId, video.Id, StringComparison.Ordinal))
                     LoadEngagement(video);
+
+                if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
+                {
+                    _commentsVideoId = video.Id;
+                    _commentsView.SetVideo(video.Id);
+                    if (_commentsButton.Active)
+                        _commentsView.EnsureLoaded();
+                }
             }
         }
         finally
@@ -443,6 +478,8 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _channelLabel.SetText($"Embedded playback failed: {detail}");
         ResetTransport();
         CancelEngagementLoad();
+        _commentsView.SetVideo(null);
+        _commentsVideoId = null;
         _request = null;
         _hasMedia = false;
         _player.Stop();
@@ -456,6 +493,9 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         _request = null;
         _hasMedia = false;
         CancelEngagementLoad();
+        _commentsView.SetVideo(null);
+        _commentsVideoId = null;
+        _commentsButton.Active = false;
         SetLoading(false);
     }
 

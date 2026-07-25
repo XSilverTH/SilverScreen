@@ -1,0 +1,143 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box CommentsView {
+  orientation: vertical;
+  width-request: 380;
+  vexpand: true;
+  styles ["queue-panel"]
+
+  Gtk.Box {
+    orientation: horizontal;
+    spacing: 12;
+    margin-start: 16;
+    margin-end: 16;
+    margin-top: 16;
+    margin-bottom: 12;
+
+    Gtk.Box {
+      orientation: vertical;
+      spacing: 2;
+      hexpand: true;
+
+      Gtk.Label {
+        label: "Comments";
+        xalign: 0;
+        styles ["title-3"]
+      }
+
+      Gtk.Label comments_summary_label {
+        label: "0 loaded";
+        xalign: 0;
+        styles ["caption", "dim-label"]
+      }
+    }
+
+    Gtk.Button comments_close_button {
+      icon-name: "window-close-symbolic";
+      tooltip-text: "Close comments";
+      clicked => $OnCloseButtonClicked();
+      styles ["flat", "circular"]
+    }
+  }
+
+  Gtk.DropDown comments_sort_dropdown {
+    margin-start: 16;
+    margin-end: 16;
+    margin-bottom: 12;
+    notify => $OnSortDropdownNotify();
+    model: Gtk.StringList {
+      strings: ["Top comments", "Newest first"];
+    };
+    selected: 0;
+  }
+
+  Gtk.Stack comments_stack {
+    hexpand: true;
+    vexpand: true;
+
+    Gtk.StackPage {
+      name: "unavailable";
+      child: Adw.StatusPage {
+        icon-name: "mail-message-new-symbolic";
+        title: "Comments unavailable";
+        description: "Play a YouTube video to view comments.";
+      };
+    }
+
+    Gtk.StackPage {
+      name: "loading";
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 12;
+        halign: center;
+        valign: center;
+
+        Gtk.Spinner comments_loading_spinner {
+          spinning: true;
+        }
+
+        Gtk.Label {
+          label: "Loading comments…";
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "list";
+      child: Gtk.ScrolledWindow comments_scrolled_window {
+        hexpand: true;
+        vexpand: true;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "empty";
+      child: Adw.StatusPage comments_empty_page {
+        icon-name: "mail-read-symbolic";
+        title: "No comments";
+        description: "No comments are available for this video.";
+      };
+    }
+
+    Gtk.StackPage {
+      name: "error";
+      child: Adw.StatusPage comments_error_page {
+        icon-name: "dialog-error-symbolic";
+        title: "Couldn’t load comments";
+        description: "Try again shortly.";
+
+        child: Gtk.Button {
+          label: "Retry";
+          clicked => $OnRetryButtonClicked();
+          styles ["suggested-action"]
+        };
+      };
+    }
+  }
+
+  Gtk.Box {
+    orientation: horizontal;
+    spacing: 8;
+    margin-start: 16;
+    margin-end: 16;
+    margin-top: 12;
+    margin-bottom: 16;
+
+    Gtk.TextView comments_draft_text {
+      hexpand: true;
+      wrap-mode: word;
+      top-margin: 8;
+      bottom-margin: 8;
+      left-margin: 8;
+      right-margin: 8;
+    }
+
+    Gtk.Button {
+      label: "Post";
+      sensitive: false;
+      tooltip-text: "Posting comments is not available yet.";
+      valign: end;
+    }
+  }
+}

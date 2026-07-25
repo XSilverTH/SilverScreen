@@ -1,13 +1,17 @@
 using Gtk 4.0;
 using Adw 1;
 
-Gtk.Overlay EmbeddedPlayerView {
-  hexpand: true;
-  vexpand: true;
-  styles ["embedded-player"]
+Adw.OverlaySplitView EmbeddedPlayerView {
+  sidebar-position: end;
+  collapsed: true;
   focusable: true;
 
-  child: Gtk.GLArea player_surface {
+  content: Gtk.Overlay {
+    hexpand: true;
+    vexpand: true;
+    styles ["embedded-player"]
+
+    child: Gtk.GLArea player_surface {
     auto-render: false;
     hexpand: true;
     vexpand: true;
@@ -163,6 +167,13 @@ Gtk.Overlay EmbeddedPlayerView {
           };
         }
 
+        Gtk.ToggleButton player_comments_button {
+          toggled => $OnCommentsButtonToggled();
+          icon-name: "mail-message-new-symbolic";
+          tooltip-text: "Comments";
+          styles ["flat", "circular", "player-reaction-button"]
+        }
+
         
       }
 
@@ -291,4 +302,10 @@ Gtk.Overlay EmbeddedPlayerView {
       }
     }
   }
+  };
+
+  sidebar: Gtk.Box comments_sidebar_host {
+    hexpand: false;
+    vexpand: true;
+  };
 }

@@ -27,7 +27,8 @@ public sealed class ApplicationServices(
     ICookieFileProvider cookieFiles,
     IPlaybackPresenceService playbackPresence,
     IVideoEngagementService videoEngagement,
-    IYouTubeRatingService youtubeRating)
+    IYouTubeRatingService youtubeRating,
+    IYouTubeCommentService comments)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -42,6 +43,7 @@ public sealed class ApplicationServices(
     public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
     public IVideoEngagementService VideoEngagement { get; } = videoEngagement;
     public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
+    public IYouTubeCommentService Comments { get; } = comments;
 }
 
 /// <summary>Registers the application's production services.</summary>
@@ -79,6 +81,11 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeHomeClient>(provider =>
             new YtDlpHomeClient(
                 provider.GetRequiredService<ISessionService>(),
+                provider.GetRequiredService<ICookieFileProvider>(),
+                provider.GetRequiredService<IPreferencesService>().GetPreferences().YtDlpExecutablePath,
+                processRunner: provider.GetRequiredService<IYtDlpProcessRunner>()));
+        services.AddSingleton<IYouTubeCommentService>(provider =>
+            new YtDlpCommentService(
                 provider.GetRequiredService<ICookieFileProvider>(),
                 provider.GetRequiredService<IPreferencesService>().GetPreferences().YtDlpExecutablePath,
                 processRunner: provider.GetRequiredService<IYtDlpProcessRunner>()));

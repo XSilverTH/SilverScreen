@@ -75,7 +75,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _statusLabel = GetRequiredObject<Label>("status_label");
 
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
-            services.CookieFiles, services.PlaybackPresence, services.VideoEngagement, services.YouTubeRating, services.Session);
+            services.CookieFiles, services.PlaybackPresence, services.VideoEngagement, services.YouTubeRating, services.Session,
+            services.Comments);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
