@@ -49,19 +49,24 @@ internal static class YtDlpVideoParser
     {
         if (element.ValueKind != JsonValueKind.Object) return null;
 
-        var id = FirstString(element, "id", "display_id") ?? string.Empty;
+        var id = FirstString(element, "id", "display_id");
         var rawUrl = FirstString(element, "webpage_url", "original_url", "url");
         var parsedUrl = YouTubeUrlParser.Parse(rawUrl);
-        if (string.IsNullOrWhiteSpace(id) && parsedUrl.VideoId is not null) id = parsedUrl.VideoId;
+        var mixVideoId = GetMixVideoId(parsedUrl.PlaylistId);
+        var videoId = mixVideoId
+                      ?? parsedUrl.VideoId
+                      ?? (id is not null && PlaybackRequest.LooksLikeYouTubeVideoId(id) ? id : null);
 
-        if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(rawUrl)) return null;
+        // Home recommendations can contain ordinary playlists, which have no single video to play.
+        // A YouTube Mix is different: its radio playlist ID embeds the seed video's ID.
+        if (videoId is null) return null;
 
-        var canonicalWatchUrl = PlaybackRequest.LooksLikeYouTubeVideoId(id)
-            ? PlaybackRequest.BuildWatchUrl(id)
-            : parsedUrl.CanonicalWatchUrl ?? rawUrl;
+        var canonicalWatchUrl = mixVideoId is null
+            ? PlaybackRequest.BuildWatchUrl(videoId)
+            : $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}&list={Uri.EscapeDataString(parsedUrl.PlaylistId!)}&start_radio=1";
 
         return new VideoSummary(
-            string.IsNullOrWhiteSpace(id) ? canonicalWatchUrl ?? "unknown" : id,
+            videoId,
             FirstString(element, "title", "fulltitle") ?? "Untitled YouTube video",
             FirstString(element, "channel", "uploader", "channel_id", "uploader_id") ?? "YouTube",
             GetDuration(element),
@@ -70,6 +75,24 @@ internal static class YtDlpVideoParser
             canonicalWatchUrl,
             GetApproximateUploadDate(element),
             GetPublishedAt(element));
+    }
+
+    private static string? GetMixVideoId(string? playlistId)
+    {
+        if (string.IsNullOrWhiteSpace(playlistId)
+            || !playlistId.StartsWith("RD", StringComparison.Ordinal)) return null;
+
+        var candidate = playlistId.Length == 13
+            ? playlistId[2..]
+            : playlistId.LastIndexOf("VM", StringComparison.Ordinal) is var markerIndex
+              && markerIndex >= 0
+              && markerIndex + 13 == playlistId.Length
+                ? playlistId[(markerIndex + 2)..]
+                : null;
+
+        return candidate is not null && PlaybackRequest.LooksLikeYouTubeVideoId(candidate)
+            ? candidate
+            : null;
     }
 
     private static bool IsShort(JsonElement element, string? rawUrl)
