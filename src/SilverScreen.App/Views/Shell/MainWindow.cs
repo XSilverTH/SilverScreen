@@ -235,12 +235,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         dialog.Version = ApplicationMetadata.Version;
         dialog.DeveloperName = ApplicationMetadata.DeveloperName;
         dialog.Developers = [ApplicationMetadata.DeveloperName];
-        dialog.Comments = "A GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV.";
+        dialog.Comments = "A GTK 4 and Libadwaita desktop app for YouTube.";
         dialog.Copyright = ApplicationMetadata.Copyright;
         dialog.LicenseType = License.Gpl30Only;
         dialog.Website = ApplicationMetadata.SourceUrl;
         dialog.IssueUrl = ApplicationMetadata.IssueUrl;
-        // dialog.DebugInfo = ApplicationMetadata.DebugInformation;
         dialog.Present(Widget);
     }
 
