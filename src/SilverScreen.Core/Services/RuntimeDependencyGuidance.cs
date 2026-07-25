@@ -9,6 +9,9 @@ public static class RuntimeDependencyGuidance
     public const string YtDlpTimedOut =
         "yt-dlp timed out. Verify your network connection, update yt-dlp, and retry.";
 
+    public const string LibMpvUnavailable =
+        "Embedded playback requires libmpv. Install the libmpv runtime library, then restart SilverScreen.";
+
     public static string YtDlpUnavailable(string executablePath)
     {
         return

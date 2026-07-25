@@ -1,18 +1,18 @@
 <Solution>
-  <Configurations>
-    <Platform Name="x64" />
-  </Configurations>
-  <Folder Name="/lib/">
-    <Project Path="lib/Hi3Helper.SharpDiscordRPC/DiscordRPC/DiscordRPC.csproj">
-      <Platform Project="x64" />
-    </Project>
-  </Folder>
-  <Folder Name="/src/">
-    <Project Path="src/SilverScreen.App/SilverScreen.App.csproj" />
-    <Project Path="src/SilverScreen.Core/SilverScreen.Core.csproj" />
-    <Project Path="src/SilverScreen.Infrastructure/SilverScreen.Infrastructure.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/SilverScreen.Tests/SilverScreen.Tests.csproj" />
-  </Folder>
+    <Configurations>
+        <Platform Name="x64"/>
+    </Configurations>
+    <Folder Name="/lib/">
+        <Project Path="lib/Hi3Helper.SharpDiscordRPC/DiscordRPC/DiscordRPC.csproj">
+            <Platform Project="x64"/>
+        </Project>
+    </Folder>
+    <Folder Name="/src/">
+        <Project Path="src/SilverScreen.App/SilverScreen.App.csproj"/>
+        <Project Path="src/SilverScreen.Core/SilverScreen.Core.csproj"/>
+        <Project Path="src/SilverScreen.Infrastructure/SilverScreen.Infrastructure.csproj"/>
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/SilverScreen.Tests/SilverScreen.Tests.csproj"/>
+    </Folder>
 </Solution>

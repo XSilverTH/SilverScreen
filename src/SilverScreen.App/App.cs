@@ -134,6 +134,128 @@ public partial class App
                                  min-width: 1.5em;
                                  padding: 1px 5px;
                                }
+
+                               .embedded-player,
+                               .embedded-player-surface {
+                                 background-color: #000000;
+                               }
+
+                               .player-loading-indicator {
+                                 color: #ffffff;
+                                 margin-bottom: 28px;
+                               }
+
+                               .player-loading-subtitle {
+                                 color: alpha(#ffffff, 0.72);
+                               }
+
+                               .player-headerbar,
+                               .player-headerbar windowhandle,
+                               .player-headerbar > windowhandle {
+                                 background-color: transparent;
+                                 background-image: none;
+                                 box-shadow: none;
+                               }
+
+                               .player-headerbar,
+                               .player-center-controls,
+                               .player-controls {
+                                 transition: opacity 250ms ease-out;
+                               }
+
+                               .player-chrome-hidden {
+                                 opacity: 0;
+                               }
+
+                               .player-controls {
+                                 background-image: linear-gradient(to top, alpha(#000000, 0.78) 0%, alpha(#000000, 0.42) 42%, alpha(#000000, 0) 100%);
+                                 color: #ffffff;
+                                 padding: 28px 32px 24px;
+                               }
+
+                               .player-title,
+                               .player-subtitle,
+                               .player-time {
+                                 color: #ffffff;
+                               }
+
+                               .player-subtitle,
+                               .player-time {
+                                 color: alpha(#ffffff, 0.72);
+                               }
+
+                               .player-overlay-button,
+                               .player-primary-control,
+                               .player-headerbar button {
+                                 background-color: transparent;
+                                 color: #ffffff;
+                                 transition: background-color 160ms ease-out;
+                               }
+
+                               .player-overlay-button:hover,
+                               .player-headerbar button:hover {
+                                 background-color: alpha(#ffffff, 0.16);
+                               }
+
+                               .player-reaction-button {
+                                 color: #ffffff;
+                                 min-height: 32px;
+                                 padding: 4px 8px;
+                               }
+
+                               button.player-reaction-button:disabled {
+                                 color: #ffffff;
+                                 opacity: 1;
+                               }
+
+                               button.player-reaction-button:disabled label {
+                                 color: #ffffff;
+                                 opacity: 1;
+                               }
+
+                               .player-reaction-selected {
+                                 background-color: alpha(#ffffff, 0.24);
+                               }
+
+                               .player-reaction-count {
+                                 font-weight: 600;
+                               }
+
+                               .player-ryd-attribution {
+                                 color: alpha(#ffffff, 0.72);
+                                 font-size: smaller;
+                                 padding: 4px;
+                               }
+
+                               .player-center-controls {
+                                 margin-bottom: 28px;
+                               }
+
+                               .player-seek-button {
+                                 min-height: 40px;
+                                 min-width: 40px;
+                               }
+
+                               .player-primary-control {
+                                 min-height: 72px;
+                                 min-width: 72px;
+                                 -gtk-icon-size: 64px;
+                               }
+
+                               .player-controls scale trough {
+                                 background-color: alpha(#ffffff, 0.28);
+                                 min-height: 4px;
+                               }
+
+                               .player-controls scale highlight {
+                                 background-color: #ffffff;
+                               }
+
+                               .player-controls scale slider {
+                                 background-color: #ffffff;
+                                 min-height: 18px;
+                                 min-width: 18px;
+                               }
                                """);
 
         StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);

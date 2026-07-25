@@ -9,4 +9,5 @@ public sealed class PlaybackOptions
     public string VideoQuality { get; init; } = "Best";
 
     public bool MarkWatchedVideos { get; init; }
+    public bool Fullscreen { get; init; } = true;
 }

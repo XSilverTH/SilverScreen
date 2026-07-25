@@ -1,4 +1,6 @@
+using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure.Features.Playback;
 
 namespace SilverScreen.Infrastructure.Features.Diagnostics;
 
@@ -6,26 +8,29 @@ namespace SilverScreen.Infrastructure.Features.Diagnostics;
 public sealed class RuntimeDependencyDiagnostics
 {
     private readonly Func<string, bool> _isExecutableAvailable;
+    private readonly Func<bool> _isLibMpvAvailable;
     private readonly IPreferencesService _preferencesService;
     private readonly ISecretServiceAvailability _secretServiceAvailability;
 
     public RuntimeDependencyDiagnostics(
         IPreferencesService preferencesService,
         ISecretServiceAvailability secretServiceAvailability)
-        : this(preferencesService, secretServiceAvailability, IsExecutableAvailable)
+        : this(preferencesService, secretServiceAvailability, IsExecutableAvailable, LibMpvNative.IsAvailable)
     {
     }
 
     internal RuntimeDependencyDiagnostics(
         IPreferencesService preferencesService,
         ISecretServiceAvailability secretServiceAvailability,
-        Func<string, bool> isExecutableAvailable)
+        Func<string, bool> isExecutableAvailable,
+        Func<bool> isLibMpvAvailable)
     {
         _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
         _secretServiceAvailability = secretServiceAvailability ??
                                      throw new ArgumentNullException(nameof(secretServiceAvailability));
         _isExecutableAvailable =
             isExecutableAvailable ?? throw new ArgumentNullException(nameof(isExecutableAvailable));
+        _isLibMpvAvailable = isLibMpvAvailable ?? throw new ArgumentNullException(nameof(isLibMpvAvailable));
     }
 
     /// <summary>Returns actionable setup warnings for dependencies unavailable at application startup.</summary>
@@ -37,8 +42,11 @@ public sealed class RuntimeDependencyDiagnostics
         if (!_isExecutableAvailable(preferences.YtDlpExecutablePath))
             warnings.Add(RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath));
 
-        if (!_isExecutableAvailable(preferences.MpvExecutablePath))
+        if (preferences.PlaybackBackend == PlaybackBackends.ExternalMpv &&
+            !_isExecutableAvailable(preferences.MpvExecutablePath))
             warnings.Add(RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath));
+        else if (preferences.PlaybackBackend == PlaybackBackends.EmbeddedPlayer && !_isLibMpvAvailable())
+            warnings.Add(RuntimeDependencyGuidance.LibMpvUnavailable);
 
         if (!_secretServiceAvailability.IsAvailable)
             warnings.Add(RuntimeDependencyGuidance.SecretServiceUnavailable);
@@ -60,7 +68,7 @@ public sealed class RuntimeDependencyDiagnostics
         return !string.IsNullOrWhiteSpace(searchPath) && searchPath.Split(Path.PathSeparator)
             .Select(directory =>
                 Path.Combine(string.IsNullOrEmpty(directory) ? Environment.CurrentDirectory : directory, trimmedPath))
-            .Any(candidate => IsExecutableFile(candidate));
+            .Any(IsExecutableFile);
     }
 
     private static bool IsExecutableFile(string path)

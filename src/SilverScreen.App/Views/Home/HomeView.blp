@@ -5,35 +5,7 @@ Gtk.Box HomeView {
   orientation: vertical;
   hexpand: true;
   vexpand: true;
-
-
-  Gtk.Box home_loading_row {
-    visible: false;
-    orientation: horizontal;
-    spacing: 8;
-    margin-top: 12;
-    margin-start: 18;
-    margin-end: 18;
-
-    Gtk.Spinner home_loading_spinner {
-      spinning: true;
-    }
-
-    Gtk.Label home_loading_label {
-      xalign: 0;
-      styles ["dim-label"]
-    }
-  }
-
-  Gtk.Label home_message_label {
-    visible: false;
-    xalign: 0;
-    wrap: true;
-    margin-top: 12;
-    margin-start: 18;
-    margin-end: 18;
-    styles ["dim-label"]
-  }
+  
 
   Gtk.Box home_status_host {
     visible: false;
@@ -53,13 +25,6 @@ Gtk.Box HomeView {
       Gtk.Spinner home_status_loading_spinner {
         halign: center;
         spinning: true;
-      }
-
-      Gtk.Label home_status_loading_label {
-        label: "Loading YouTube recommendations…";
-        xalign: 0;
-        wrap: true;
-        styles ["dim-label"]
       }
     }
 

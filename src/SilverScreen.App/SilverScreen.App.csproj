@@ -44,6 +44,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <GResource Include="Assets\*"/>
+    </ItemGroup>
+
+
+    <ItemGroup>
         <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
         <ProjectReference Include="..\SilverScreen.Infrastructure\SilverScreen.Infrastructure.csproj"/>
     </ItemGroup>

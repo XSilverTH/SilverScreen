@@ -6,7 +6,10 @@ Adw.ApplicationWindow MainWindow {
   default-height: 760;
   title: "SilverScreen";
 
-  content: Adw.OverlaySplitView queue_split_view {
+  content: Gtk.Stack main_stack {
+    Gtk.StackPage {
+      name: "shell";
+      child: Adw.OverlaySplitView queue_split_view {
     sidebar-position: end;
     collapsed: true;
 
@@ -61,9 +64,22 @@ Adw.ApplicationWindow MainWindow {
 
         [end]
         Button home_refresh_button {
-          icon-name: "view-refresh-symbolic";
           tooltip-text: "Refresh Home";
           clicked => $OnHomeRefreshButtonClicked();
+
+          child: Stack home_refresh_stack {
+            StackPage {
+              name: "idle";
+              child: Image {
+                icon-name: "view-refresh-symbolic";
+              };
+            }
+
+            StackPage {
+              name: "loading";
+              child: Spinner home_refresh_spinner {};
+            }
+          };
         }
 
         [end]
@@ -129,5 +145,15 @@ Adw.ApplicationWindow MainWindow {
       hexpand: false;
       vexpand: true;
     };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "player";
+      child: Gtk.Box player_host {
+        hexpand: true;
+        vexpand: true;
+      };
+    }
   };
 }
