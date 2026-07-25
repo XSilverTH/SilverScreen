@@ -64,9 +64,22 @@ Adw.ApplicationWindow MainWindow {
 
         [end]
         Button home_refresh_button {
-          icon-name: "view-refresh-symbolic";
           tooltip-text: "Refresh Home";
           clicked => $OnHomeRefreshButtonClicked();
+
+          child: Stack home_refresh_stack {
+            StackPage {
+              name: "idle";
+              child: Image {
+                icon-name: "view-refresh-symbolic";
+              };
+            }
+
+            StackPage {
+              name: "loading";
+              child: Spinner home_refresh_spinner {};
+            }
+          };
         }
 
         [end]

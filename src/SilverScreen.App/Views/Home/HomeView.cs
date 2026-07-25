@@ -12,10 +12,7 @@ namespace SilverScreen.Views.Home;
 public partial class HomeView : ViewBase<Box>
 {
     private readonly Dictionary<Widget, VideoCardView> _cardsByCell = [];
-    private readonly Label _loadingLabel;
-    private readonly Widget _loadingRow;
     private readonly Button _loadMoreButton;
-    private readonly Label _messageLabel;
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
     private readonly Box _statusLoadingPage;
@@ -36,9 +33,6 @@ public partial class HomeView : ViewBase<Box>
         _viewModel = viewModel;
         _thumbnails = thumbnails;
         _videoActions = videoActions;
-        _loadingRow = GetRequiredObject<Widget>("home_loading_row");
-        _loadingLabel = GetRequiredObject<Label>("home_loading_label");
-        _messageLabel = GetRequiredObject<Label>("home_message_label");
         _statusHost = GetRequiredObject<Box>("home_status_host");
         _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
         _statusPage = GetRequiredObject<StatusPage>("home_status_page");
@@ -59,6 +53,10 @@ public partial class HomeView : ViewBase<Box>
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
     }
+
+    public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
+
+    public event EventHandler<bool>? RefreshLoadingChanged;
 
     public Task RefreshAsync()
     {
@@ -91,11 +89,10 @@ public partial class HomeView : ViewBase<Box>
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
         var isLoading = state.IsLoading || state.IsLoadingMore;
-        _loadingRow.Visible = false;
-        _messageLabel.Visible = false;
         _statusHost.Visible = false;
         _scrolledWindow.Visible = false;
         _loadMoreButton.Visible = false;
+        RefreshLoadingChanged?.Invoke(this, isLoading);
 
         if (!hasDisplayedVideos)
         {
@@ -104,18 +101,6 @@ public partial class HomeView : ViewBase<Box>
         }
 
         _scrolledWindow.Visible = true;
-        if (isLoading)
-        {
-            _loadingLabel.SetText(state.IsLoadingMore
-                ? "Loading more recommendations…"
-                : "Loading YouTube recommendations…");
-            _loadingRow.Visible = true;
-        }
-        else if (!string.IsNullOrEmpty(state.Message))
-        {
-            _messageLabel.SetText(state.Message);
-            _messageLabel.Visible = true;
-        }
 
         if (!state.HasContinuation) return;
         _loadMoreButton.Label = isLoading && state.IsLoadingMore ? "Loading more…" : "Load more";

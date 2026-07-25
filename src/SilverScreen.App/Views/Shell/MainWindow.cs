@@ -20,6 +20,7 @@ using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
 using Functions = GLib.Functions;
 using License = Gtk.License;
+using Spinner = Gtk.Spinner;
 using PreferencesWindow = SilverScreen.Views.Preferences.PreferencesWindow;
 using Window = Gtk.Window;
 
@@ -34,6 +35,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly Action _disposeApplicationServices;
     private readonly EmbeddedPlayerView _embeddedPlayer;
     private readonly HomeView _home;
+    private readonly Button _homeRefreshButton;
+    private readonly Spinner _homeRefreshSpinner;
+    private readonly Stack _homeRefreshStack;
     private readonly Stack _mainStack;
     private readonly IPlaybackService _playback;
     private readonly ToggleButton _queueButton;
@@ -59,6 +63,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         GetRequiredObject<Button>("search_button");
         _searchPopover = GetRequiredObject<Popover>("search_popover");
         _searchEntry = GetRequiredObject<Entry>("search_entry");
+        _homeRefreshButton = GetRequiredObject<Button>("home_refresh_button");
+        _homeRefreshSpinner = GetRequiredObject<Spinner>("home_refresh_spinner");
+        _homeRefreshStack = GetRequiredObject<Stack>("home_refresh_stack");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
         var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
@@ -73,6 +80,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _home = new HomeView(new HomeViewModel(services.HomeFeed), services.Thumbnails, actions);
+        _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
+        UpdateHomeRefreshButton(_home.IsLoading);
         _search = new SearchView(new SearchViewModel(services.Search, _playback, _shell), services.Thumbnails,
             actions);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
@@ -145,6 +154,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
         _ = _home.RefreshAsync();
+    }
+
+    private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
+    {
+        if (!_closed)
+            UpdateHomeRefreshButton(isLoading);
+    }
+
+    private void UpdateHomeRefreshButton(bool isLoading)
+    {
+        _homeRefreshButton.Sensitive = !isLoading;
+        _homeRefreshStack.VisibleChildName = isLoading ? "loading" : "idle";
+        _homeRefreshSpinner.Spinning = isLoading;
     }
 
     private void OnSearchButtonClicked(object? sender, EventArgs args)
@@ -284,6 +306,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _closed = true;
         _shell.PropertyChanged -= OnShellPropertyChanged;
         _queueViewModel.StateChanged -= OnQueueStateChanged;
+        _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged;
         _home.Dispose();
         _search.Dispose();
         _queueView.Dispose();
