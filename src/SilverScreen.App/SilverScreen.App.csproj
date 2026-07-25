@@ -11,7 +11,7 @@
         <RootNamespace>SilverScreen</RootNamespace>
         <Authors>XSilverTH</Authors>
         <Copyright>Copyright © XSilverTH</Copyright>
-        <Description>A GTK 4 and Libadwaita desktop app for finding YouTube videos and opening them in MPV.</Description>
+        <Description>A GTK 4 and Libadwaita desktop app for YouTube</Description>
         <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/XSilverTH/SilverScreen</PackageProjectUrl>
         <RepositoryUrl>https://github.com/XSilverTH/SilverScreen.git</RepositoryUrl>
