@@ -12,12 +12,12 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
-    private readonly ConcurrentDictionary<string, VideoEngagement> _engagementByVideoId = new(StringComparer.Ordinal);
     private readonly bool _disposeHttpClient;
+    private readonly ConcurrentDictionary<string, VideoEngagement> _engagementByVideoId = new(StringComparer.Ordinal);
     private readonly HttpClient _httpClient;
 
     public ReturnYouTubeDislikeService()
-        : this(CreateDefaultHttpClient(), disposeHttpClient: true)
+        : this(CreateDefaultHttpClient(), true)
     {
     }
 
@@ -52,7 +52,8 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
                 return null;
 
-            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            await using var responseStream =
+                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var payload = await JsonSerializer.DeserializeAsync(responseStream,
                     ReturnYouTubeDislikeJsonContext.Default.ReturnYouTubeDislikeResponse, cancellationToken)
                 .ConfigureAwait(false);
@@ -84,6 +85,4 @@ internal sealed record ReturnYouTubeDislikeResponse(string Id, long Likes, long 
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(ReturnYouTubeDislikeResponse))]
-internal partial class ReturnYouTubeDislikeJsonContext : JsonSerializerContext
-{
-}
+internal partial class ReturnYouTubeDislikeJsonContext : JsonSerializerContext;

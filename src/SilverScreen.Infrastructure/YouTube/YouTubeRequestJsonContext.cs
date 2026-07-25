@@ -28,7 +28,6 @@ internal sealed class RatingTarget
     public required string VideoId { get; init; }
 }
 
-
 internal sealed class BrowseRequestContext
 {
     public required BrowseRequestClientContext Client { get; init; }

@@ -42,11 +42,16 @@ public sealed class RuntimeDependencyDiagnostics
         if (!_isExecutableAvailable(preferences.YtDlpExecutablePath))
             warnings.Add(RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath));
 
-        if (preferences.PlaybackBackend == PlaybackBackends.ExternalMpv &&
-            !_isExecutableAvailable(preferences.MpvExecutablePath))
-            warnings.Add(RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath));
-        else if (preferences.PlaybackBackend == PlaybackBackends.EmbeddedPlayer && !_isLibMpvAvailable())
-            warnings.Add(RuntimeDependencyGuidance.LibMpvUnavailable);
+        switch (preferences.PlaybackBackend)
+        {
+            case PlaybackBackends.ExternalMpv when
+                !_isExecutableAvailable(preferences.MpvExecutablePath):
+                warnings.Add(RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath));
+                break;
+            case PlaybackBackends.EmbeddedPlayer when !_isLibMpvAvailable():
+                warnings.Add(RuntimeDependencyGuidance.LibMpvUnavailable);
+                break;
+        }
 
         if (!_secretServiceAvailability.IsAvailable)
             warnings.Add(RuntimeDependencyGuidance.SecretServiceUnavailable);

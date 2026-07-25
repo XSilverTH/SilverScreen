@@ -18,7 +18,8 @@ public sealed class YouTubeRatingServiceTests
             if (request.Method == HttpMethod.Get)
             {
                 Assert.Equal("https://www.youtube.com/", request.RequestUri!.AbsoluteUri);
-                return HtmlResponse(""" { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00", "VISITOR_DATA": "visitor" } """);
+                return HtmlResponse(
+                    """ { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00", "VISITOR_DATA": "visitor" } """);
             }
 
             Assert.Equal(HttpMethod.Post, request.Method);
@@ -65,10 +66,12 @@ public sealed class YouTubeRatingServiceTests
         var handler = new FakeHttpMessageHandler((request, _) =>
         {
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/watch")
-                return Task.FromResult(HtmlResponse(""" { "likeStatus": "LIKE", "removeLikeParams": "remove-token" } """));
+                return Task.FromResult(
+                    HtmlResponse(""" { "likeStatus": "LIKE", "removeLikeParams": "remove-token" } """));
 
             if (request.Method == HttpMethod.Get)
-                return Task.FromResult(HtmlResponse(""" { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00" } """));
+                return Task.FromResult(HtmlResponse(
+                    """ { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00" } """));
 
             Assert.Equal("https://www.youtube.com/youtubei/v1/like/removelike?key=test-key&prettyPrint=false",
                 request.RequestUri!.AbsoluteUri);
@@ -106,19 +109,51 @@ public sealed class YouTubeRatingServiceTests
         private const string Cookies = ".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\tsapisid";
 
         public event EventHandler? SessionChanged;
-        public AccountSession GetCurrentSession() => new(true, HasManualSession: true);
-        public ManualSessionCookies? GetManualSessionCookies() => new(SessionCookieFormat.NetscapeCookiesText, Cookies);
-        public void SetManualSession(string cookieContent, SessionCookieFormat format) => SessionChanged?.Invoke(this, EventArgs.Empty);
-        public void ClearSession() => SessionChanged?.Invoke(this, EventArgs.Empty);
+
+        public AccountSession GetCurrentSession()
+        {
+            return new AccountSession(true, HasManualSession: true);
+        }
+
+        public ManualSessionCookies? GetManualSessionCookies()
+        {
+            return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, Cookies);
+        }
+
+        public void SetManualSession(string cookieContent, SessionCookieFormat format)
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ClearSession()
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private sealed class SignedOutSessionService : ISessionService
     {
         public event EventHandler? SessionChanged;
-        public AccountSession GetCurrentSession() => AccountSession.SignedOut;
-        public ManualSessionCookies? GetManualSessionCookies() => null;
-        public void SetManualSession(string cookieContent, SessionCookieFormat format) => SessionChanged?.Invoke(this, EventArgs.Empty);
-        public void ClearSession() => SessionChanged?.Invoke(this, EventArgs.Empty);
+
+        public AccountSession GetCurrentSession()
+        {
+            return AccountSession.SignedOut;
+        }
+
+        public ManualSessionCookies? GetManualSessionCookies()
+        {
+            return null;
+        }
+
+        public void SetManualSession(string cookieContent, SessionCookieFormat format)
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ClearSession()
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private sealed class FakeHttpMessageHandler(

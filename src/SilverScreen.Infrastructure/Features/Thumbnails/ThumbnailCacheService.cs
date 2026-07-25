@@ -162,10 +162,12 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
     }
 
+/*
     public string GetCachePathForUrl(string thumbnailUrl)
     {
         return TryCreateHttpUri(thumbnailUrl, out var uri) ? GetCachePath(uri) : string.Empty;
     }
+*/
 
     private static string CreateCacheKey(string thumbnailUrl)
     {

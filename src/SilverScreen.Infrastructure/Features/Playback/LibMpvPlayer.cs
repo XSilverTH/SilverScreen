@@ -33,7 +33,6 @@ public sealed class LibMpvPlayer : IDisposable
     private readonly Lock _gate = new();
     private readonly ILibMpvNativeApi _native;
     private string? _cookieFilePath;
-    private long _generation;
     private nint _handle;
     private AppPreferences? _preferences;
     private string _quality = "Best";
@@ -104,6 +103,7 @@ public sealed class LibMpvPlayer : IDisposable
             }
             catch
             {
+                // ignored
             }
 
         _commands.Writer.TryComplete();
@@ -113,6 +113,7 @@ public sealed class LibMpvPlayer : IDisposable
         }
         catch
         {
+            // ignored
         }
 
         if (_handle != 0) _native.Wakeup(_handle);
@@ -122,6 +123,7 @@ public sealed class LibMpvPlayer : IDisposable
         }
         catch
         {
+            // ignored
         }
 
         nint renderContext;
@@ -164,11 +166,9 @@ public sealed class LibMpvPlayer : IDisposable
                     GCHandle.ToIntPtr(_updateCallbackHandle));
             }
 
-            if (_resumeAfterRenderer)
-            {
-                _resumeAfterRenderer = false;
-                Enqueue(LoadCurrentRequest);
-            }
+            if (!_resumeAfterRenderer) return;
+            _resumeAfterRenderer = false;
+            Enqueue(LoadCurrentRequest);
         }
         catch (Exception exception)
         {
@@ -184,7 +184,6 @@ public sealed class LibMpvPlayer : IDisposable
         lock (_gate)
         {
             if (IsDisposing || !IsAvailable) return;
-            _generation++;
             _request = request;
             _preferences = preferences;
             _cookieFilePath = cookieFilePath;
@@ -192,7 +191,7 @@ public sealed class LibMpvPlayer : IDisposable
                 ? "Best"
                 : preferences.VideoQuality;
             _reload = null;
-            _state = _state with { IsLoading = true };
+            _state = _state with { IsPaused = false, IsLoading = true };
         }
 
         PublishState();
@@ -263,7 +262,6 @@ public sealed class LibMpvPlayer : IDisposable
             if (IsDisposing || !IsAvailable) return;
             _quality = quality;
             if (!_state.HasMedia || _request is null) return;
-            _generation++;
             _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
                 _state.Speed);
         }
@@ -314,7 +312,6 @@ public sealed class LibMpvPlayer : IDisposable
         lock (_gate)
         {
             if (IsDisposing || !IsAvailable) return;
-            _generation++;
             _reload = null;
             _resumeAfterRenderer = false;
             _state = _state with
@@ -349,15 +346,23 @@ public sealed class LibMpvPlayer : IDisposable
         while (!IsDisposing && _handle != 0)
         {
             var mpvEvent = _native.WaitEvent(_handle, -1);
-            if (mpvEvent.EventId == (int)LibMpvEventId.None) continue;
-            if (mpvEvent.EventId == (int)LibMpvEventId.Shutdown) return;
-            try
+            switch (mpvEvent.EventId)
             {
-                HandleEvent(mpvEvent);
-            }
-            catch (Exception exception)
-            {
-                PublishFailure(exception.Message);
+                case (int)LibMpvEventId.None:
+                    continue;
+                case (int)LibMpvEventId.Shutdown:
+                    return;
+                default:
+                    try
+                    {
+                        HandleEvent(mpvEvent);
+                    }
+                    catch (Exception exception)
+                    {
+                        PublishFailure(exception.Message);
+                    }
+
+                    break;
             }
         }
     }
@@ -556,11 +561,12 @@ public sealed class LibMpvPlayer : IDisposable
     {
         try
         {
-            if (GCHandle.FromIntPtr(context).Target is LibMpvPlayer player && !player.IsDisposing)
+            if (GCHandle.FromIntPtr(context).Target is LibMpvPlayer { IsDisposing: false } player)
                 player.Dispatch(() => player.RenderRequested?.Invoke(player, EventArgs.Empty));
         }
         catch
         {
+            // ignored
         }
     }
 

@@ -92,7 +92,8 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         }
 
         startInfo.ArgumentList.Add(PlaybackRequest.BuildWatchUrl(videoId)
-            ?? throw new ArgumentException("A valid YouTube video ID is required.", nameof(videoId)));
+                                   ?? throw new ArgumentException("A valid YouTube video ID is required.",
+                                       nameof(videoId)));
         return startInfo;
     }
 

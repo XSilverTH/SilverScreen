@@ -106,7 +106,7 @@ public sealed class YtDlpCommentServiceTests
     }
 
     [Theory]
-    [InlineData("{}")] 
+    [InlineData("{}")]
     [InlineData("{ \"comments\": null }")]
     public async Task GetCommentsAsync_MissingOrNullCommentsIsSuccessfulEmpty(string output)
     {
@@ -128,7 +128,8 @@ public sealed class YtDlpCommentServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Empty(result.Comments);
-        Assert.Equal(RuntimeDependencyGuidance.YtDlpFailed("the comment output could not be read."), result.StatusMessage);
+        Assert.Equal(RuntimeDependencyGuidance.YtDlpFailed("the comment output could not be read."),
+            result.StatusMessage);
     }
 
     [Theory]
@@ -137,7 +138,8 @@ public sealed class YtDlpCommentServiceTests
     [InlineData(0, "not json")]
     public async Task GetCommentsAsync_MapsProcessAndOutputFailures(int exitCode, string output)
     {
-        var service = CreateService(new CapturingRunner(_ => Task.FromResult(new ProcessResult(exitCode, output, "error"))));
+        var service =
+            CreateService(new CapturingRunner(_ => Task.FromResult(new ProcessResult(exitCode, output, "error"))));
 
         var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
 
@@ -154,7 +156,8 @@ public sealed class YtDlpCommentServiceTests
     [Fact]
     public async Task GetCommentsAsync_MapsTimeoutToGuidance()
     {
-        var service = CreateService(new CapturingRunner(_ => Task.FromException<ProcessResult>(new TimeoutException())));
+        var service =
+            CreateService(new CapturingRunner(_ => Task.FromException<ProcessResult>(new TimeoutException())));
 
         var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
 
@@ -165,7 +168,8 @@ public sealed class YtDlpCommentServiceTests
     [Fact]
     public async Task GetCommentsAsync_MapsUnavailableProcessToGuidance()
     {
-        var service = CreateService(new CapturingRunner(_ => Task.FromException<ProcessResult>(new InvalidOperationException())));
+        var service =
+            CreateService(new CapturingRunner(_ => Task.FromException<ProcessResult>(new InvalidOperationException())));
 
         var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
 
@@ -191,7 +195,10 @@ public sealed class YtDlpCommentServiceTests
             processRunner: runner);
     }
 
-    private static ProcessResult Success(string output) => new(0, output, "");
+    private static ProcessResult Success(string output)
+    {
+        return new ProcessResult(0, output, "");
+    }
 
     private sealed class CapturingRunner(Func<ProcessStartInfo, Task<ProcessResult>> run) : IYtDlpProcessRunner
     {

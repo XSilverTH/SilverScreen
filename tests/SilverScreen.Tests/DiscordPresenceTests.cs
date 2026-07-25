@@ -183,8 +183,18 @@ public sealed class DiscordPresenceTests
         public bool ThrowOnDispose { get; init; }
         public bool ThrowOnInitialize { get; init; }
         public bool ThrowOnSet { get; init; }
-        public event EventHandler? Ready { add { } remove { } }
-        public event EventHandler? ConnectionFailed { add { } remove { } }
+
+        public event EventHandler? Ready
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler? ConnectionFailed
+        {
+            add { }
+            remove { }
+        }
 
         public bool Initialize()
         {

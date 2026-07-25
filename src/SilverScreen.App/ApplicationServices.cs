@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Diagnostics;
-using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Engagement;
+using SilverScreen.Infrastructure.Features.Feed;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Preferences;
 using SilverScreen.Infrastructure.Features.Queue;

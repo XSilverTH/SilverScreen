@@ -6,7 +6,7 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Preferences;
 
-public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
+public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly SwitchRow _fullscreenRow;
@@ -25,7 +25,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
 
     private bool _loading;
 
-    public PreferencesWindow(IPreferencesService preferencesService, Action<string> reportStatus)
+    public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)
     {
         _preferencesService = preferencesService;
         _reportStatus = reportStatus;
@@ -52,17 +52,11 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
         try
         {
             var prefs = _preferencesService.GetPreferences();
-
-            // Populate theme dropdown
             _themeRow.Selected = (uint)GetSelectionIndex(_themeModel, prefs.Theme);
-
-            // Populate quality dropdown
             _qualityRow.Selected = (uint)GetSelectionIndex(_qualityModel, prefs.VideoQuality);
             _playbackBackendRow.Selected =
                 (uint)GetSelectionIndex(_playbackBackendModel, prefs.PlaybackBackend);
             _fullscreenRow.Active = prefs.OpenInFullscreen;
-
-            // Set entry values
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
             ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
@@ -93,7 +87,6 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
             : fallback;
     }
 
-
     private void OnRowNotify(object? sender, EventArgs e)
     {
         if (_loading) return;
@@ -109,9 +102,7 @@ public partial class PreferencesWindow : WindowBase<Adw.PreferencesWindow>
     private void Save()
     {
         var theme = GetSelectedValue(_themeModel, _themeRow.Selected, "System");
-
         var quality = GetSelectedValue(_qualityModel, _qualityRow.Selected, "Best");
-
         var maxResultsText = ((Editable)_maxResultsRow).GetText();
         if (!int.TryParse(maxResultsText, out var maxResults)) maxResults = 20;
 

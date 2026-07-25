@@ -59,12 +59,12 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
     private readonly Lock _lock = new();
     private readonly IPreferencesService _preferencesService;
     private CachedActivity? _cachedActivity;
-    private CachedActivity? _lastPublishedActivity;
 
     private IDiscordRpcClient? _client;
     private bool _clientReady;
     private bool _disposed;
     private bool _enabled;
+    private CachedActivity? _lastPublishedActivity;
 
     public DiscordPresenceService(IPreferencesService preferencesService, string? applicationId)
         : this(preferencesService, applicationId, static id => new DiscordRpcClientAdapter(id))
@@ -193,6 +193,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
             DisposeClientQuietly(client);
             _clientReady = false;
         }
+
         if (_client is not null) ScheduleConnectionTimeout(_client);
     }
 
@@ -296,11 +297,9 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         _client = null;
         _lastPublishedActivity = null;
         _clientReady = false;
-        if (client is not null)
-        {
-            UnsubscribeClientEvents(client);
-            DisposeClientQuietly(client);
-        }
+        if (client is null) return;
+        UnsubscribeClientEvents(client);
+        DisposeClientQuietly(client);
     }
 
     private void ClearPresenceLocked()

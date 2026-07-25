@@ -1,14 +1,14 @@
 using Adw;
-using static Gdk.Constants;
-using Gtk;
 using GObject;
+using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.Infrastructure.Features.Session;
-using XSTH.Blueprint.Helpers;
 using SilverScreen.Views.Comments;
+using XSTH.Blueprint.Helpers;
+using static Gdk.Constants;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
 
@@ -21,60 +21,60 @@ internal interface IEmbeddedPlayerPresenter
 
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-    private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
+    private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
+    private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     private readonly Action _backRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
-    private readonly CommentsView _commentsView;
     private readonly ToggleButton _commentsButton;
+    private readonly CommentsView _commentsView;
     private readonly ICookieFileProvider _cookieFiles;
-    private readonly Label _durationLabel;
-    private readonly Box _loadingIndicator;
-    private readonly Label _dislikesLabel;
     private readonly Button _dislikeButton;
     private readonly Image _dislikeImage;
-    private readonly IPlaybackPresenceService _playbackPresence;
-    private readonly LibMpvPlayer _player;
-    private readonly ISessionService _session;
-    private readonly IVideoEngagementService _videoEngagement;
+    private readonly Label _dislikesLabel;
+    private readonly Label _durationLabel;
     private readonly Widget _headerBar;
-    private readonly GLArea _playerSurface;
-    private readonly Button _playPauseButton;
-    private readonly Label _positionLabel;
     private readonly Button _likeButton;
     private readonly Image _likeImage;
     private readonly Label _likesLabel;
-    private readonly IPreferencesService _preferences;
+    private readonly Box _loadingIndicator;
+    private readonly IPlaybackPresenceService _playbackPresence;
+    private readonly LibMpvPlayer _player;
     private readonly Widget _playerControls;
+    private readonly GLArea _playerSurface;
+    private readonly Button _playPauseButton;
+    private readonly Label _positionLabel;
+    private readonly IPreferencesService _preferences;
     private readonly Action _presentRequested;
     private readonly DropDown _qualityDropdown;
+    private readonly ISessionService _session;
+    private readonly Dictionary<uint, Action> _shortcutMap = [];
     private readonly DropDown _speedDropdown;
     private readonly Scale _timeline;
     private readonly Label _titleLabel;
+    private readonly IVideoEngagementService _videoEngagement;
     private readonly MenuButton _volumeButton;
-    private readonly IYouTubeRatingService _youtubeRating;
     private readonly Scale _volumeScale;
+    private readonly IYouTubeRatingService _youtubeRating;
+    private string? _commentsVideoId;
+    private uint _controlsAutohideSource;
+    private bool _controlsVisible = true;
+    private CookieFileLease? _cookieFile;
+    private bool _disposed;
     private CancellationTokenSource? _engagementCancellation;
     private long _engagementLoadVersion;
     private string? _engagementVideoId;
-    private string? _commentsVideoId;
-    private YouTubeRatingState _ratingState;
-    private CookieFileLease? _cookieFile;
-    private bool _disposed;
     private bool _hasMedia;
-    private bool _rendererReady;
-    private PlaybackRequest? _request;
-    private bool _updatingControls;
-    private bool _controlsVisible = true;
-    private double _speed = 1;
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
-    private uint _controlsAutohideSource;
-    private readonly Dictionary<uint, Action> _shortcutMap = [];
+    private YouTubeRatingState _ratingState;
+    private bool _rendererReady;
+    private PlaybackRequest? _request;
+    private double _speed = 1;
+    private bool _updatingControls;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
         ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
@@ -131,31 +131,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetupKeyboardShortcuts();
 
         DeclareBindings();
-    }
-
-    private void DeclareBindings()
-    {
-        Bind(_player.TogglePause, KEY_space, KEY_K, KEY_k);
-        Bind(() => _player.SeekRelative(-10), KEY_Left, KEY_J, KEY_j);
-        Bind(() => _player.SeekRelative(10), KEY_Right, KEY_L, KEY_l);
-        Bind(() => _player.StepFrame(false), KEY_comma, KEY_less);
-        Bind(() => _player.StepFrame(true), KEY_period, KEY_greater);
-        Bind(_player.ToggleMute, KEY_M, KEY_m);
-        Bind(() => _player.AdjustVolume(5), KEY_Up);
-        Bind(() => _player.AdjustVolume(-5), KEY_Down);
-        Bind(() => _player.SeekAbsolute(0), KEY_0, KEY_Home);
-        Bind(ReturnToShell, KEY_Escape);
-        Bind(() => AdjustSpeed(-1), KEY_bracketleft, KEY_braceleft);
-        Bind(() => AdjustSpeed(1), KEY_bracketright, KEY_braceright);
-        Bind(() => _player.MovePlaylist(true), KEY_N, KEY_n);
-        Bind(() => _player.MovePlaylist(false), KEY_P, KEY_p);
-        Bind(ToggleFullscreen, KEY_F, KEY_f);
-
-        void Bind(Action action, params uint[] keys)
-        {
-            foreach (var key in keys)
-                _shortcutMap[key] = action;
-        }
     }
 
     public new void Dispose()
@@ -220,6 +195,31 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         });
 
         return Task.FromResult("Opening embedded player.");
+    }
+
+    private void DeclareBindings()
+    {
+        Bind(_player.TogglePause, KEY_space, KEY_K, KEY_k);
+        Bind(() => _player.SeekRelative(-10), KEY_Left, KEY_J, KEY_j);
+        Bind(() => _player.SeekRelative(10), KEY_Right, KEY_L, KEY_l);
+        Bind(() => _player.StepFrame(false), KEY_comma, KEY_less);
+        Bind(() => _player.StepFrame(true), KEY_period, KEY_greater);
+        Bind(_player.ToggleMute, KEY_M, KEY_m);
+        Bind(() => _player.AdjustVolume(5), KEY_Up);
+        Bind(() => _player.AdjustVolume(-5), KEY_Down);
+        Bind(() => _player.SeekAbsolute(0), KEY_0, KEY_Home);
+        Bind(ReturnToShell, KEY_Escape);
+        Bind(() => AdjustSpeed(-1), KEY_bracketleft, KEY_braceleft);
+        Bind(() => AdjustSpeed(1), KEY_bracketright, KEY_braceright);
+        Bind(() => _player.MovePlaylist(true), KEY_N, KEY_n);
+        Bind(() => _player.MovePlaylist(false), KEY_P, KEY_p);
+        Bind(ToggleFullscreen, KEY_F, KEY_f);
+
+        void Bind(Action action, params uint[] keys)
+        {
+            foreach (var key in keys)
+                _shortcutMap[key] = action;
+        }
     }
 
     private void OnPlayerSurfaceRealize(object? sender, EventArgs args)
@@ -288,9 +288,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (!_hasMedia || !_shortcutMap.TryGetValue(keyval, out var action))
             return false;
-        
+
         action();
-        
+
         RegisterActivity();
         return true;
     }
@@ -311,6 +311,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _lastActivityMilliseconds = Environment.TickCount64;
         SetControlsVisible(true);
     }
+
     private void RegisterPointerActivity(double x, double y)
     {
         if (Math.Abs(x - _lastPointerX) < 0.2 && Math.Abs(y - _lastPointerY) < 0.2) return;
@@ -421,10 +422,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _hasMedia = state.HasMedia;
         _speed = state.Speed;
         if (_request is { } playbackRequest && state.HasMedia)
-        {
-            _playbackPresence.SetPlaybackState(playbackRequest, new PlaybackPresenceState(state.PlaylistIndex, state.Position,
+            _playbackPresence.SetPlaybackState(playbackRequest, new PlaybackPresenceState(state.PlaylistIndex,
+                state.Position,
                 state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow));
-        }
         SetLoading(state.IsLoading);
         _updatingControls = true;
         try
@@ -434,33 +434,29 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
-            _playPauseButton.SetIconName(state.HasMedia && !state.IsPaused
+            _playPauseButton.SetIconName(state is { HasMedia: true, IsPaused: false }
                 ? "media-playback-pause-symbolic"
                 : "media-playback-start-symbolic");
-            _playPauseButton.SetTooltipText(state.HasMedia && !state.IsPaused
+            _playPauseButton.SetTooltipText(state is { HasMedia: true, IsPaused: false }
                 ? "Pause (Space or K)"
                 : "Play (Space or K)");
             _volumeScale.SetValue(Math.Clamp(state.Volume, 0, 100));
             _volumeButton.SetIconName(VolumeIcon(state.Volume, state.IsMuted));
             var speedIndex = Array.IndexOf(Speeds, state.Speed);
             _speedDropdown.SetSelected((uint)(speedIndex < 0 ? 2 : speedIndex));
-            if (_request is { } request && state.PlaylistIndex is >= 0 and < int.MaxValue &&
-                state.PlaylistIndex < request.Videos.Length)
-            {
-                var video = request.Videos[state.PlaylistIndex];
-                _titleLabel.SetText(video.Title);
-                _channelLabel.SetText(video.ChannelName);
-                if (!string.Equals(_engagementVideoId, video.Id, StringComparison.Ordinal))
-                    LoadEngagement(video);
+            if (_request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
+                state.PlaylistIndex >= request.Videos.Length) return;
+            var video = request.Videos[state.PlaylistIndex];
+            _titleLabel.SetText(video.Title);
+            _channelLabel.SetText(video.ChannelName);
+            if (!string.Equals(_engagementVideoId, video.Id, StringComparison.Ordinal))
+                LoadEngagement(video);
 
-                if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
-                {
-                    _commentsVideoId = video.Id;
-                    _commentsView.SetVideo(video.Id);
-                    if (_commentsButton.Active)
-                        _commentsView.EnsureLoaded();
-                }
-            }
+            if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
+            _commentsVideoId = video.Id;
+            _commentsView.SetVideo(video.Id);
+            if (_commentsButton.Active)
+                _commentsView.EnsureLoaded();
         }
         finally
         {
@@ -542,7 +538,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _volumeButton.SetIconName(VolumeIcon(volume, false));
             _speedDropdown.SetSelected((uint)Math.Max(0, Array.IndexOf(Speeds, speed)));
             _qualityDropdown.SetSelected(
-                (uint)Array.IndexOf(new[] { "Best", "1080p", "720p", "480p", "360p" }, quality));
+                (uint)Array.IndexOf(["Best", "1080p", "720p", "480p", "360p"], quality));
         }
         finally
         {

@@ -11,10 +11,11 @@ public sealed class ReturnYouTubeDislikeServiceTests
         var handler = new FakeHttpMessageHandler((request, _) =>
         {
             Assert.Equal(HttpMethod.Get, request.Method);
-            Assert.Equal("https://returnyoutubedislikeapi.com/votes?videoId=dQw4w9WgXcQ", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("https://returnyoutubedislikeapi.com/votes?videoId=dQw4w9WgXcQ",
+                request.RequestUri!.AbsoluteUri);
             return Task.FromResult(JsonResponse("""
-                { "id": "dQw4w9WgXcQ", "likes": 19270043, "dislikes": 515621 }
-                """));
+                                                { "id": "dQw4w9WgXcQ", "likes": 19270043, "dislikes": 515621 }
+                                                """));
         });
         using var client = new HttpClient(handler);
         using var service = new ReturnYouTubeDislikeService(client);
@@ -72,5 +73,4 @@ public sealed class ReturnYouTubeDislikeServiceTests
             return handler(request, cancellationToken);
         }
     }
-
 }

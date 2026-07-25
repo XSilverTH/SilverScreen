@@ -71,7 +71,7 @@ public sealed class YtDlpCommentService(
         }
     }
 
-    private static IReadOnlyList<YouTubeComment> ParseComments(string output)
+    private static List<YouTubeComment> ParseComments(string output)
     {
         using var document = JsonDocument.Parse(output);
         var root = document.RootElement;

@@ -21,7 +21,7 @@ using ApplicationWindow = Adw.ApplicationWindow;
 using Functions = GLib.Functions;
 using License = Gtk.License;
 using Spinner = Gtk.Spinner;
-using PreferencesWindow = SilverScreen.Views.Preferences.PreferencesWindow;
+using PreferencesDialog = SilverScreen.Views.Preferences.PreferencesDialog;
 using Window = Gtk.Window;
 
 namespace SilverScreen.Views.Shell;
@@ -75,7 +75,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _statusLabel = GetRequiredObject<Label>("status_label");
 
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
-            services.CookieFiles, services.PlaybackPresence, services.VideoEngagement, services.YouTubeRating, services.Session,
+            services.CookieFiles, services.PlaybackPresence, services.VideoEngagement, services.YouTubeRating,
+            services.Session,
             services.Comments);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
@@ -201,11 +202,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var preferencesAction = SimpleAction.New("preferences", null);
         preferencesAction.OnActivate += (_, _) =>
         {
-            var preferencesWindowWrapper = new PreferencesWindow(_services.Preferences,
+            var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences,
                 message => _shell.Status = message);
-            var preferencesWindow = preferencesWindowWrapper.Widget;
-            preferencesWindow.TransientFor = Widget;
-            preferencesWindow.Present();
+            preferencesDialogWrapper.Widget.Present(Widget);
         };
         Widget.AddAction(preferencesAction);
 

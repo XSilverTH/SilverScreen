@@ -1,8 +1,9 @@
-using System.Globalization;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -13,10 +14,12 @@ namespace SilverScreen.Infrastructure.Features.Engagement;
 public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+
     private static readonly Regex LikeStatusRegex = new(
         """\\?"likeStatus\\?"\s*:\s*\\?"(LIKE|DISLIKE|INDIFFERENT)\\?""",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
+
     private static readonly Regex LikeParamsRegex = CreateParameterRegex("likeParams");
     private static readonly Regex DislikeParamsRegex = CreateParameterRegex("dislikeParams");
     private static readonly Regex RemoveLikeParamsRegex = CreateParameterRegex("removeLikeParams");
@@ -24,9 +27,12 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
     private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
     private readonly YouTubeHomeClientOptions _options;
+
+    private readonly ConcurrentDictionary<string, RatingMetadata>
+        _ratingMetadataByVideoId = new(StringComparer.Ordinal);
+
     private readonly ISessionService _sessionService;
     private YouTubeBootstrapConfig? _bootstrapConfig;
-    private readonly ConcurrentDictionary<string, RatingMetadata> _ratingMetadataByVideoId = new(StringComparer.Ordinal);
 
     public YouTubeRatingService(ISessionService sessionService)
         : this(CreateDefaultHttpClient(), sessionService, disposeHttpClient: true)
@@ -101,7 +107,8 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
         {
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException
+                                              or InvalidOperationException)
         {
             return false;
         }
@@ -158,9 +165,9 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
         };
     }
 
-    private async Task<AuthenticatedRequest<T>?> CreateAuthenticatedRequestAsync<T>(string endpoint, string videoId,
+    private async Task<AuthenticatedRequest?> CreateAuthenticatedRequestAsync<T>(string endpoint, string videoId,
         Func<BrowseRequestContext, T> createPayload,
-        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> payloadTypeInfo,
+        JsonTypeInfo<T> payloadTypeInfo,
         CancellationToken cancellationToken) where T : class
     {
         var credentials = GetCredentials();
@@ -171,13 +178,15 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
 
         var payload = createPayload(CreateContext(videoId, config));
 
-        var requestUrl = $"https://www.youtube.com/youtubei/v1/{endpoint}?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
+        var requestUrl =
+            $"https://www.youtube.com/youtubei/v1/{endpoint}?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
         var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
         {
-            Content = new StringContent(JsonSerializer.Serialize(payload, payloadTypeInfo), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(payload, payloadTypeInfo), Encoding.UTF8,
+                "application/json")
         };
         AddAuthenticatedHeaders(request, credentials, config);
-        return new AuthenticatedRequest<T>(request);
+        return new AuthenticatedRequest(request);
     }
 
     private YouTubeCredentials? GetCredentials()
@@ -187,6 +196,7 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
             ? YouTubeCredentials.ParseNetscape(cookies.Content)
             : null;
     }
+
     private BrowseRequestContext CreateContext(string videoId, YouTubeBootstrapConfig config)
     {
         return new BrowseRequestContext
@@ -267,8 +277,11 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
         return new HttpClient { Timeout = DefaultTimeout };
     }
 
-    private sealed record RatingMetadata(YouTubeRatingState State, string LikeParams, string DislikeParams,
+    private sealed record RatingMetadata(
+        YouTubeRatingState State,
+        string LikeParams,
+        string DislikeParams,
         string RemoveLikeParams);
 
-    private sealed record AuthenticatedRequest<T>(HttpRequestMessage Request) where T : class;
+    private sealed record AuthenticatedRequest(HttpRequestMessage Request);
 }

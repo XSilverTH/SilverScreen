@@ -25,12 +25,6 @@ Gtk.Box CommentsView {
         xalign: 0;
         styles ["title-3"]
       }
-
-      Gtk.Label comments_summary_label {
-        label: "0 loaded";
-        xalign: 0;
-        styles ["caption", "dim-label"]
-      }
     }
 
     Gtk.Button comments_close_button {
@@ -75,10 +69,6 @@ Gtk.Box CommentsView {
 
         Gtk.Spinner comments_loading_spinner {
           spinning: true;
-        }
-
-        Gtk.Label {
-          label: "Loading comments…";
         }
       };
     }

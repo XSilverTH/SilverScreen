@@ -12,12 +12,6 @@ namespace SilverScreen.Views.Home;
 
 public partial class HomeView : ViewBase<Box>
 {
-    private sealed class VideoCardCell(Box cell, VideoCardView card)
-    {
-        public Box Cell { get; } = cell;
-        public VideoCardView Card { get; } = card;
-    }
-
     private readonly ConditionalWeakTable<ListItem, VideoCardCell> _cardsByListItem = new();
     private readonly Button _loadMoreButton;
     private readonly ScrolledWindow _scrolledWindow;
@@ -256,5 +250,11 @@ public partial class HomeView : ViewBase<Box>
         _videoIds.Dispose();
         _viewModel.Dispose();
         base.Dispose();
+    }
+
+    private sealed class VideoCardCell(Box cell, VideoCardView card)
+    {
+        public Box Cell { get; } = cell;
+        public VideoCardView Card { get; } = card;
     }
 }

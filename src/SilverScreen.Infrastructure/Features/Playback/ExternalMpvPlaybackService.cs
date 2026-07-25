@@ -17,8 +17,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     private readonly IPlaybackPresenceService? _playbackPresenceService;
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
-    private long _nextPlaybackId;
     private bool _disposed;
+    private long _nextPlaybackId;
 
     public ExternalMpvPlaybackService()
         : this(new PlaybackOptions(), new MpvCommandBuilder())
@@ -49,6 +49,17 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
         _playbackPresenceService = playbackPresenceService;
+    }
+
+    public void Dispose()
+    {
+        lock (_activePlaybackLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            foreach (var playback in _activePlaybacks.Values) playback.Observer?.Dispose();
+            _activePlaybacks.Clear();
+        }
     }
 
     public async Task<string> PlayAsync(PlaybackRequest request)
@@ -172,17 +183,6 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
                 SetPresenceQuietly(currentPlayback.Request, state);
             else
                 ClearPresenceQuietly();
-        }
-    }
-
-    public void Dispose()
-    {
-        lock (_activePlaybackLock)
-        {
-            if (_disposed) return;
-            _disposed = true;
-            foreach (var playback in _activePlaybacks.Values) playback.Observer?.Dispose();
-            _activePlaybacks.Clear();
         }
     }
 

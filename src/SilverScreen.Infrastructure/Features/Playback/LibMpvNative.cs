@@ -115,7 +115,7 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
 {
     private static readonly string[] MpvLibraryNames = ["libmpv.so.2", "libmpv.so.1", "libmpv.so"];
     private static readonly string[] EpoxyLibraryNames = ["libepoxy.so.0", "libepoxy.so"];
-    private static LibMpvNative? CurrentForOpenGl;
+    private static LibMpvNative? _currentForOpenGl;
     private readonly delegate* unmanaged[Cdecl]<nint, byte**, int> _command;
     private readonly delegate* unmanaged[Cdecl]<nint> _create;
     private readonly delegate* unmanaged[Cdecl]<nint*, nint, LibMpvRenderParam*, int> _createRenderContext;
@@ -177,7 +177,7 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
             _destroy = (delegate* unmanaged[Cdecl]<nint, void>)GetExport("mpv_terminate_destroy");
             _eglGetProcAddress = GetEpoxyResolver("epoxy_eglGetProcAddress");
             _glxGetProcAddress = GetEpoxyResolver("epoxy_glXGetProcAddress");
-            CurrentForOpenGl = this;
+            _currentForOpenGl = this;
             IsLoaded = true;
         }
         catch (Exception exception)
@@ -360,18 +360,16 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
 
     public void Dispose()
     {
-        if (ReferenceEquals(CurrentForOpenGl, this)) CurrentForOpenGl = null;
+        if (ReferenceEquals(_currentForOpenGl, this)) _currentForOpenGl = null;
         if (_epoxyLibrary != 0)
         {
             NativeLibrary.Free(_epoxyLibrary);
             _epoxyLibrary = 0;
         }
 
-        if (_mpvLibrary != 0)
-        {
-            NativeLibrary.Free(_mpvLibrary);
-            _mpvLibrary = 0;
-        }
+        if (_mpvLibrary == 0) return;
+        NativeLibrary.Free(_mpvLibrary);
+        _mpvLibrary = 0;
     }
 
     public static bool IsAvailable()
@@ -384,8 +382,8 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static nint GetOpenGlProcAddress(nint context, byte* name)
     {
-        var native = CurrentForOpenGl;
-        return native is null ? 0 : native.ResolveOpenGlProcAddress(name);
+        var native = _currentForOpenGl;
+        return native?.ResolveOpenGlProcAddress(name) ?? 0;
     }
 
     private nint GetExport(string name)

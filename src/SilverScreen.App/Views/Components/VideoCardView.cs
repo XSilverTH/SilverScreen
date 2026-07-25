@@ -28,8 +28,8 @@ public class VideoCardView : ViewBase<Box>
     private readonly GestureClick _click;
     private readonly Label _duration;
     private readonly MenuButton _menu;
-    private readonly SimpleActionGroup _menuActions;
     private readonly SimpleAction[] _menuActionItems;
+    private readonly SimpleActionGroup _menuActions;
     private readonly Menu _menuModel;
     private readonly Widget _placeholder;
     private readonly Overlay _thumbnail;

@@ -81,11 +81,6 @@ public sealed class YtDlpSearchService : ISearchService
         }
     }
 
-    public bool IsLikelyYouTubeUrl(string text)
-    {
-        return YouTubeUrlParser.Parse(text).Kind is not YouTubeUrlKind.NotYouTube and not YouTubeUrlKind.Invalid;
-    }
-
     private YtDlpOptions GetActiveOptions()
     {
         if (_preferencesService is null) return _staticOptions;

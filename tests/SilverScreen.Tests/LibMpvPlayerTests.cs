@@ -52,6 +52,20 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void LoadAssumesPlaybackStartsUnpausedUntilMpvReportsOtherwise()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var states = new ConcurrentQueue<LibMpvPlaybackState>();
+        player.StateChanged += (_, state) => states.Enqueue(state);
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), new AppPreferences(), null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => states.Any(state => state.IsLoading && !state.IsPaused), TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
     public void CookieLessLoadClearsPreviousYtdlRawOptions()
     {
         using var native = new RecordingNative();

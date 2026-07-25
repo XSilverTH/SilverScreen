@@ -10,6 +10,7 @@ namespace SilverScreen.Views.Comments;
 public partial class CommentsView : ViewBase<Box>
 {
     private readonly Action _closeRequested;
+    private readonly IYouTubeCommentService _comments;
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;
@@ -19,14 +20,12 @@ public partial class CommentsView : ViewBase<Box>
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly ScrolledWindow _scrolledWindow;
     private readonly NoSelection _selection;
-    private readonly Label _summary;
     private readonly DropDown _sortDropdown;
     private readonly Stack _stack;
-    private readonly IYouTubeCommentService _comments;
-    private CancellationTokenSource? _loadCancellation;
-    private long _loadGeneration;
     private bool _disposed;
     private bool _hasLoadedCurrentVideo;
+    private CancellationTokenSource? _loadCancellation;
+    private long _loadGeneration;
     private string? _videoId;
 
     public CommentsView(IYouTubeCommentService comments, Action closeRequested)
@@ -34,7 +33,6 @@ public partial class CommentsView : ViewBase<Box>
         _comments = comments ?? throw new ArgumentNullException(nameof(comments));
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _sortDropdown = GetRequiredObject<DropDown>("comments_sort_dropdown");
-        _summary = GetRequiredObject<Label>("comments_summary_label");
         _stack = GetRequiredObject<Stack>("comments_stack");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("comments_scrolled_window");
         _emptyPage = GetRequiredObject<StatusPage>("comments_empty_page");
@@ -63,7 +61,6 @@ public partial class CommentsView : ViewBase<Box>
         _videoId = validVideoId;
         _hasLoadedCurrentVideo = false;
         ClearComments();
-        _summary.SetText("0 loaded");
         _stack.VisibleChildName = "unavailable";
     }
 
@@ -99,7 +96,6 @@ public partial class CommentsView : ViewBase<Box>
         CancelLoad();
         _hasLoadedCurrentVideo = false;
         ClearComments();
-        _summary.SetText("0 loaded");
         _stack.VisibleChildName = "loading";
         var cancellation = new CancellationTokenSource();
         _loadCancellation = cancellation;
@@ -143,7 +139,6 @@ public partial class CommentsView : ViewBase<Box>
         if (!result.IsSuccess)
         {
             ClearComments();
-            _summary.SetText("0 loaded");
             _errorPage.Description = string.IsNullOrWhiteSpace(result.StatusMessage)
                 ? "Comments could not be loaded. Try again shortly."
                 : result.StatusMessage;
@@ -152,7 +147,6 @@ public partial class CommentsView : ViewBase<Box>
         }
 
         ApplyComments(result.Comments);
-        _summary.SetText($"{result.Comments.Count} loaded");
         if (result.Comments.Count == 0)
         {
             _emptyPage.Description = result.StatusMessage;

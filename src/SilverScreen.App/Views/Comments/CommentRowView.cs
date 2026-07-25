@@ -4,7 +4,7 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Comments;
 
-public partial class CommentRowView : ViewBase<Box>
+public class CommentRowView : ViewBase<Box>
 {
     private readonly Label _author;
     private readonly Label _likes;

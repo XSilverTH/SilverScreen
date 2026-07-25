@@ -9,15 +9,15 @@ namespace SilverScreen.Infrastructure.Features.Playback;
 
 internal sealed class MpvIpcPlaybackObserver : IDisposable
 {
+    private const int PropertyRequestIdOffset = 100;
     private static readonly ILogger Logger = Log.ForContext<MpvIpcPlaybackObserver>();
     private static readonly string[] ObservedProperties = ["time-pos", "duration", "pause", "playlist-pos", "speed"];
-    private const int PropertyRequestIdOffset = 100;
-    private readonly Action<PlaybackPresenceState> _stateChanged;
     private readonly CancellationTokenSource _cancellation = new();
     private readonly string _endpoint;
     private readonly DirectoryInfo _endpointDirectory;
-    private readonly Process _process;
     private readonly Task _observation;
+    private readonly Process _process;
+    private readonly Action<PlaybackPresenceState> _stateChanged;
     private int _disposed;
 
     public MpvIpcPlaybackObserver(Process process, string endpoint, DirectoryInfo endpointDirectory,
@@ -61,8 +61,9 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
             using var socket = await ConnectAsync(_cancellation.Token).ConfigureAwait(false);
             if (socket is null) return;
 
-            await using var stream = new NetworkStream(socket, ownsSocket: false);
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
+            await using var stream = new NetworkStream(socket, false);
+            await using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
+            writer.AutoFlush = true;
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
             await SubscribeAsync(writer, _cancellation.Token).ConfigureAwait(false);
 
@@ -77,8 +78,16 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
                 {
                     var previousPosition = state.Position;
                     if (!MpvIpcPlaybackProtocol.TryApply(line, ref state, out var property)) continue;
-                    if (property == "pause") hasPause = true;
-                    if (property is "time-pos" or "duration") hasTimeline = true;
+                    switch (property)
+                    {
+                        case "pause":
+                            hasPause = true;
+                            break;
+                        case "time-pos" or "duration":
+                            hasTimeline = true;
+                            break;
+                    }
+
                     if (property == "time-pos" && state.Position > previousPosition)
                         state = state with { IsPaused = false };
                     if (hasPause && hasTimeline) _stateChanged(state);
@@ -116,7 +125,8 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             try
             {
-                await socket.ConnectAsync(new UnixDomainSocketEndPoint(_endpoint), cancellationToken).ConfigureAwait(false);
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(_endpoint), cancellationToken)
+                    .ConfigureAwait(false);
                 return socket;
             }
             catch (SocketException)
@@ -145,13 +155,15 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             for (var index = 0; index < ObservedProperties.Length; index++)
-                await RequestPropertyAsync(writer, ObservedProperties[index], index, cancellationToken).ConfigureAwait(false);
+                await RequestPropertyAsync(writer, ObservedProperties[index], index, cancellationToken)
+                    .ConfigureAwait(false);
     }
 
     private static Task RequestPropertyAsync(StreamWriter writer, string property, int index,
         CancellationToken cancellationToken)
     {
-        var request = $"{{\"command\":[\"get_property\",\"{property}\"],\"request_id\":{PropertyRequestIdOffset + index}}}";
+        var request =
+            $"{{\"command\":[\"get_property\",\"{property}\"],\"request_id\":{PropertyRequestIdOffset + index}}}";
         return writer.WriteLineAsync(request.AsMemory(), cancellationToken);
     }
 
@@ -182,12 +194,14 @@ internal static class MpvIpcPlaybackProtocol
             var root = document.RootElement;
             if (root.TryGetProperty("event", out var eventName) && eventName.GetString() == "property-change")
             {
-                if (!root.TryGetProperty("name", out var name) || !root.TryGetProperty("data", out var data)) return false;
+                if (!root.TryGetProperty("name", out var name) || !root.TryGetProperty("data", out var data))
+                    return false;
                 property = name.GetString();
                 return property is not null && TryApplyProperty(property, data, ref state);
             }
 
-            if (!root.TryGetProperty("request_id", out var requestId) || !root.TryGetProperty("data", out var responseData) ||
+            if (!root.TryGetProperty("request_id", out var requestId) ||
+                !root.TryGetProperty("data", out var responseData) ||
                 !requestId.TryGetInt32(out var requestIdValue)) return false;
             property = PropertyForRequestId(requestIdValue);
             return property is not null && TryApplyProperty(property, responseData, ref state);
