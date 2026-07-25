@@ -5,7 +5,6 @@ using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
-using Action = System.Action;
 using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;
 
@@ -24,12 +23,16 @@ public class VideoCardView : ViewBase<Box>
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private readonly VideoCardActions _actions;
+    private readonly Box _card;
     private readonly Label _channel;
+    private readonly GestureClick _click;
     private readonly Label _duration;
     private readonly MenuButton _menu;
+    private readonly SimpleActionGroup _menuActions;
+    private readonly SimpleAction[] _menuActionItems;
+    private readonly Menu _menuModel;
     private readonly Widget _placeholder;
     private readonly Overlay _thumbnail;
-
     private readonly IThumbnailService _thumbnails;
     private readonly Label _title;
     private readonly Label _uploadDate;
@@ -46,7 +49,7 @@ public class VideoCardView : ViewBase<Box>
         _thumbnails = thumbnails;
         _actions = actions;
 
-        var card = GetRequiredObject<Box>("card");
+        _card = GetRequiredObject<Box>("card");
         _thumbnail = GetRequiredObject<Overlay>("thumbnail");
         _placeholder = GetRequiredObject<Widget>("placeholder");
         _duration = GetRequiredObject<Label>("duration");
@@ -55,21 +58,34 @@ public class VideoCardView : ViewBase<Box>
         _uploadDate = GetRequiredObject<Label>("upload_date");
         _menu = GetRequiredObject<MenuButton>("menu");
 
-        SetupMenuActions();
-
-        var click = GestureClick.New();
-        click.Button = 0;
-        click.OnReleased += (sender, _) =>
+        _menuActions = SimpleActionGroup.New();
+        _menuActionItems =
+        [
+            CreateMenuAction("play"),
+            CreateMenuAction("add-to-queue"),
+            CreateMenuAction("add-next"),
+            CreateMenuAction("open-channel"),
+            CreateMenuAction("copy-link")
+        ];
+        foreach (var action in _menuActionItems)
         {
-            if (_video is not { } video)
-                return;
+            action.OnActivate += OnMenuActionActivated;
+            _menuActions.AddAction(action);
+        }
 
-            if (sender.GetCurrentButton() == 1)
-                StartPlay(video);
-            else if (sender.GetCurrentButton() == 2)
-                _actions.AddToQueue(video);
-        };
-        card.AddController(click);
+        _menu.InsertActionGroup("video", _menuActions);
+        _menuModel = Menu.New();
+        _menuModel.Append("Play", "video.play");
+        _menuModel.Append("Add to queue", "video.add-to-queue");
+        _menuModel.Append("Add next", "video.add-next");
+        _menuModel.Append("Open channel", "video.open-channel");
+        _menuModel.Append("Copy link", "video.copy-link");
+        _menu.MenuModel = _menuModel;
+
+        _click = GestureClick.New();
+        _click.Button = 0;
+        _click.OnReleased += OnCardReleased;
+        _card.AddController(_click);
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -219,36 +235,47 @@ public class VideoCardView : ViewBase<Box>
         texture?.Dispose();
     }
 
-    private void SetupMenuActions()
+    private void OnCardReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
     {
-        var actions = SimpleActionGroup.New();
-        actions.AddAction(CreateMenuAction("play", () =>
+        if (_video is not { } video)
+            return;
+
+        if (sender.GetCurrentButton() == 1)
+            StartPlay(video);
+        else if (sender.GetCurrentButton() == 2)
+            _actions.AddToQueue(video);
+    }
+
+    private void OnMenuActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
+    {
+        if (ReferenceEquals(sender, _menuActionItems[0]))
         {
             if (_video is { } video)
                 StartPlay(video);
-        }));
-        actions.AddAction(CreateMenuAction("add-to-queue", () =>
+        }
+        else if (ReferenceEquals(sender, _menuActionItems[1]))
         {
             if (_video is { } video)
                 _actions.AddToQueue(video);
-        }));
-        actions.AddAction(CreateMenuAction("add-next", () =>
+        }
+        else if (ReferenceEquals(sender, _menuActionItems[2]))
         {
             if (_video is { } video)
                 _actions.AddNext(video);
-        }));
-        actions.AddAction(CreateMenuAction(
-            "open-channel", () => _actions.ReportStatus("Opening channels is not implemented.")));
-        actions.AddAction(CreateMenuAction("copy-link", CopyLink));
-        _menu.InsertActionGroup("video", actions);
+        }
+        else if (ReferenceEquals(sender, _menuActionItems[3]))
+        {
+            _actions.ReportStatus("Opening channels is not implemented.");
+        }
+        else if (ReferenceEquals(sender, _menuActionItems[4]))
+        {
+            CopyLink();
+        }
+    }
 
-        var menuModel = Menu.New();
-        menuModel.Append("Play", "video.play");
-        menuModel.Append("Add to queue", "video.add-to-queue");
-        menuModel.Append("Add next", "video.add-next");
-        menuModel.Append("Open channel", "video.open-channel");
-        menuModel.Append("Copy link", "video.copy-link");
-        _menu.MenuModel = menuModel;
+    private static SimpleAction CreateMenuAction(string name)
+    {
+        return SimpleAction.New(name, null);
     }
 
     private void StartPlay(VideoSummary video)
@@ -291,20 +318,13 @@ public class VideoCardView : ViewBase<Box>
         _actions.ReportStatus("Video link copied to the clipboard.");
     }
 
-    private static SimpleAction CreateMenuAction(string name, Action activate)
-    {
-        var action = SimpleAction.New(name, null);
-        action.OnActivate += (_, _) => activate();
-        return action;
-    }
-
-
     private static string? BuildVideoUrl(VideoSummary video)
     {
         return string.IsNullOrWhiteSpace(video.WatchUrl)
             ? PlaybackRequest.BuildWatchUrl(video.Id)
             : video.WatchUrl;
     }
+
 
     private static string FormatDuration(TimeSpan duration)
     {
@@ -356,6 +376,25 @@ public class VideoCardView : ViewBase<Box>
 
         _disposed = true;
         Unbind();
+
+        _click.OnReleased -= OnCardReleased;
+        _card.RemoveController(_click);
+        _click.Dispose();
+
+        _menu.MenuModel = null;
+        _menu.InsertActionGroup("video", null);
+        foreach (var action in _menuActionItems)
+        {
+            action.OnActivate -= OnMenuActionActivated;
+            _menuActions.RemoveAction(action.Name!);
+            action.Dispose();
+        }
+
+        _menuModel.RemoveAll();
+        _menuModel.Dispose();
+        _menuActions.Dispose();
         base.Dispose();
+        Builder.Dispose();
+        Widget.Dispose();
     }
 }

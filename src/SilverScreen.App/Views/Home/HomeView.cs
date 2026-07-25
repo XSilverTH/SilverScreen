@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
@@ -11,7 +12,13 @@ namespace SilverScreen.Views.Home;
 
 public partial class HomeView : ViewBase<Box>
 {
-    private readonly Dictionary<Widget, VideoCardView> _cardsByCell = [];
+    private sealed class VideoCardCell(Box cell, VideoCardView card)
+    {
+        public Box Cell { get; } = cell;
+        public VideoCardView Card { get; } = card;
+    }
+
+    private readonly ConditionalWeakTable<ListItem, VideoCardCell> _cardsByListItem = new();
     private readonly Button _loadMoreButton;
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
@@ -186,32 +193,40 @@ public partial class HomeView : ViewBase<Box>
         var card = new VideoCardView(_thumbnails, _videoActions);
         cell.Append(card.Widget);
         listItem.Child = cell;
-        _cardsByCell[cell] = card;
+        _cardsByListItem.Add(listItem, new VideoCardCell(cell, card));
     }
 
     private void OnVideoCardBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
-        if (args.Object is not ListItem { Child: { } child, Item: StringObject { String: { } id } } ||
-            !_cardsByCell.TryGetValue(child, out var card) ||
+        if (args.Object is not ListItem { Item: StringObject { String: { } id } } listItem ||
+            !_cardsByListItem.TryGetValue(listItem, out var cell) ||
             !_videosById.TryGetValue(id, out var video))
             return;
 
-        card.Bind(video);
+        cell.Card.Bind(video);
     }
 
     private void OnVideoCardUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
     {
-        if (args.Object is ListItem { Child: { } child } && _cardsByCell.TryGetValue(child, out var card))
-            card.Unbind();
+        if (args.Object is ListItem listItem && _cardsByListItem.TryGetValue(listItem, out var cell))
+            cell.Card.Unbind();
     }
 
     private void OnVideoCardTeardown(object? sender, SignalListItemFactory.TeardownSignalArgs args)
     {
-        if (args.Object is not ListItem { Child: { } child } || !_cardsByCell.Remove(child, out var card))
+        if (args.Object is not ListItem listItem || !_cardsByListItem.TryGetValue(listItem, out var cell))
             return;
 
-        card.Unbind();
-        card.Dispose();
+        _cardsByListItem.Remove(listItem);
+        DisposeVideoCardCell(listItem, cell);
+    }
+
+    private static void DisposeVideoCardCell(ListItem listItem, VideoCardCell cell)
+    {
+        listItem.Child = null;
+        cell.Cell.Remove(cell.Card.Widget);
+        cell.Card.Dispose();
+        cell.Cell.Dispose();
     }
 
     public new void Dispose()
@@ -221,15 +236,20 @@ public partial class HomeView : ViewBase<Box>
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
+
+        // Dropping the factory tears down its live/recycled list items while the
+        // lifecycle handlers are still connected.  Any defensive leftovers are
+        // weakly keyed and disposed below without retaining historical cells.
+        _videoGrid.Factory = null;
+        foreach (var association in _cardsByListItem)
+            DisposeVideoCardCell(association.Key, association.Value);
+        _cardsByListItem.Clear();
+
         _videoFactory.OnSetup -= OnVideoCardSetup;
         _videoFactory.OnBind -= OnVideoCardBind;
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
         _scrolledWindow.Child = null;
-        foreach (var card in _cardsByCell.Values)
-            card.Dispose();
-
-        _cardsByCell.Clear();
         _videoGrid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
