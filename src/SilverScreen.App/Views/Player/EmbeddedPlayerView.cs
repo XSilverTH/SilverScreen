@@ -191,7 +191,6 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
             LoadEngagement(firstVideo);
             RegisterActivity();
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
-            _playbackPresence.SetPlaying(request, DateTimeOffset.UtcNow);
             SetLoading(true);
             _hasMedia = false;
             _presentRequested();
@@ -390,6 +389,11 @@ public partial class EmbeddedPlayerView : ViewBase<Overlay>, IEmbeddedPlayerPres
         if (_disposed) return;
         _hasMedia = state.HasMedia;
         _speed = state.Speed;
+        if (_request is { } playbackRequest && state.HasMedia)
+        {
+            _playbackPresence.SetPlaybackState(playbackRequest, new PlaybackPresenceState(state.PlaylistIndex, state.Position,
+                state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow));
+        }
         SetLoading(state.IsLoading);
         _updatingControls = true;
         try

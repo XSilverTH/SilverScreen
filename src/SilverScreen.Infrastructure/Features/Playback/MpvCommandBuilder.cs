@@ -9,7 +9,7 @@ public sealed record MpvPlaybackCommand(string ExecutablePath, IReadOnlyList<str
 public sealed class MpvCommandBuilder
 {
     public static MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options,
-        string? cookieFilePath = null)
+        string? cookieFilePath = null, string? inputIpcServerPath = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -37,6 +37,8 @@ public sealed class MpvCommandBuilder
         var ytdlFormat = BuildYtdlFormat(options.VideoQuality);
         if (ytdlFormat is not null)
             arguments.Add($"--ytdl-format={ytdlFormat}");
+        if (!string.IsNullOrWhiteSpace(inputIpcServerPath))
+            arguments.Add($"--input-ipc-server={inputIpcServerPath}");
 
         arguments.AddRange(playbackUrls);
 

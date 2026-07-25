@@ -22,14 +22,14 @@ public sealed class DiscordPresenceTests
             return client;
         });
 
-        service.SetPlaying(request, DateTimeOffset.UtcNow);
+        service.SetPlaybackState(request, PlayingState());
         preferences.SetEnabled(true);
 
         Assert.Equal(1, first.InitializeCount);
         Assert.Equal(1, first.DisposeCount);
         Assert.Empty(first.Presences);
 
-        service.SetPlaying(request, DateTimeOffset.UtcNow);
+        service.SetPlaybackState(request, PlayingState());
 
         Assert.Equal(2, clients.Count);
         Assert.Equal(1, second.InitializeCount);
@@ -45,7 +45,7 @@ public sealed class DiscordPresenceTests
         var startedAt = DateTimeOffset.UtcNow;
         using var service = new DiscordPresenceService(preferences, "123", _ => AddClient(clients));
 
-        service.SetPlaying(request, startedAt);
+        service.SetPlaybackState(request, PlayingState(startedAt));
         var first = Assert.Single(clients);
         preferences.SetEnabled(false);
 
@@ -68,13 +68,13 @@ public sealed class DiscordPresenceTests
         var clients = new List<TrackingClient>();
         using var service = new DiscordPresenceService(preferences, "123", _ => AddClient(clients));
 
-        service.SetPlaying(CreateRequest(), DateTimeOffset.UtcNow);
+        service.SetPlaybackState(CreateRequest(), PlayingState());
         service.Clear();
         preferences.SetEnabled(false);
         preferences.SetEnabled(true);
 
-        Assert.Equal(2, clients.Count);
-        Assert.Empty(clients[1].Presences);
+        Assert.Single(clients);
+        Assert.Single(clients[0].Presences);
     }
 
 
@@ -88,7 +88,8 @@ public sealed class DiscordPresenceTests
         var exception = Record.Exception(() =>
         {
             using var service = new DiscordPresenceService(preferences, "123", _ => clients.Dequeue());
-            service.SetPlaying(CreateRequest(), DateTimeOffset.UtcNow);
+            service.SetPlaybackState(CreateRequest(), PlayingState());
+            service.SetPlaybackState(CreateRequest(), PlayingState());
             service.Clear();
         });
 
@@ -112,6 +113,34 @@ public sealed class DiscordPresenceTests
             new VideoSummary("abc123_X-yZ", "Video abc123_X-yZ", "Test Channel", TimeSpan.FromMinutes(3),
                 "https://i.ytimg.com/vi/abc/maxresdefault.jpg", false)
         ]);
+    }
+
+    [Fact]
+    public void PausedPlaybackHasNoRunningTimestampAndResumesFromItsPosition()
+    {
+        var preferences = new MutablePreferencesService(true);
+        var clients = new List<TrackingClient>();
+        var request = CreateRequest();
+        var pausedAt = DateTimeOffset.UtcNow;
+        using var service = new DiscordPresenceService(preferences, "123", _ => AddClient(clients));
+
+        service.SetPlaybackState(request, new PlaybackPresenceState(0, TimeSpan.FromSeconds(45),
+            TimeSpan.FromMinutes(3), true, 1, pausedAt));
+        service.SetPlaybackState(request, new PlaybackPresenceState(0, TimeSpan.FromSeconds(45),
+            TimeSpan.FromMinutes(3), false, 1, pausedAt.AddSeconds(2)));
+
+        var paused = clients[0].Presences[0];
+        var resumed = clients[0].Presences[1];
+        Assert.Null(paused.Timestamps);
+        Assert.Equal("Paused · by Test Channel", paused.State);
+        Assert.NotNull(resumed.Timestamps);
+        Assert.Equal(pausedAt.AddSeconds(-43).UtcDateTime, resumed.Timestamps!.Start);
+    }
+
+    private static PlaybackPresenceState PlayingState(DateTimeOffset? observedAt = null)
+    {
+        return new PlaybackPresenceState(0, TimeSpan.Zero, TimeSpan.FromMinutes(3), false, 1,
+            observedAt ?? DateTimeOffset.UtcNow);
     }
 
     private sealed class MutablePreferencesService : IPreferencesService
@@ -154,6 +183,8 @@ public sealed class DiscordPresenceTests
         public bool ThrowOnDispose { get; init; }
         public bool ThrowOnInitialize { get; init; }
         public bool ThrowOnSet { get; init; }
+        public event EventHandler? Ready { add { } remove { } }
+        public event EventHandler? ConnectionFailed { add { } remove { } }
 
         public bool Initialize()
         {

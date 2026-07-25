@@ -7,7 +7,7 @@ using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
-public sealed class ExternalMpvPlaybackService : IPlaybackService
+public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
     private readonly Lock _activePlaybackLock = new();
@@ -18,6 +18,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
     private long _nextPlaybackId;
+    private bool _disposed;
 
     public ExternalMpvPlaybackService()
         : this(new PlaybackOptions(), new MpvCommandBuilder())
@@ -53,13 +54,16 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
     public async Task<string> PlayAsync(PlaybackRequest request)
     {
         CookieFileLease? cookieFile = null;
+        DirectoryInfo? ipcDirectory = null;
         var activeOptions = _staticOptions;
 
         try
         {
             cookieFile = _cookieFileProvider?.CreateCookieFile();
             activeOptions = GetActiveOptions();
-            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path);
+            ipcDirectory = Directory.CreateTempSubdirectory("silverscreen-mpv-");
+            var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
+            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint);
             Logger.Information(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}",
                 command.ExecutablePath,
@@ -73,11 +77,16 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             {
                 Logger.Warning("MPV process start returned no process");
                 CleanupCookieLeaseQuietly(cookieFile, "MPV start returned no process");
+                CleanupIpcDirectoryQuietly(ipcDirectory);
                 return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
             }
 
             Logger.Information("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
-            var playbackId = RegisterActivePlayback(request, DateTimeOffset.UtcNow);
+            var playbackId = RegisterActivePlayback(request);
+            var observer = new MpvIpcPlaybackObserver(started, ipcEndpoint, ipcDirectory,
+                state => UpdateActivePlayback(playbackId, state));
+            AttachObserver(playbackId, observer);
+            ipcDirectory = null;
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
 
@@ -89,12 +98,14 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         {
             Logger.Warning(ex, "MPV process start failed");
             CleanupCookieLeaseQuietly(cookieFile, "MPV executable start failed");
+            CleanupIpcDirectoryQuietly(ipcDirectory);
             return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
         }
         catch (InvalidOperationException ex)
         {
             Logger.Warning(ex, "MPV playback request rejected");
             CleanupCookieLeaseQuietly(cookieFile, "MPV playback request rejected");
+            CleanupIpcDirectoryQuietly(ipcDirectory);
             return ex.Message;
         }
     }
@@ -113,14 +124,35 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         };
     }
 
-    internal long RegisterActivePlayback(PlaybackRequest request, DateTimeOffset startedAt)
+    internal long RegisterActivePlayback(PlaybackRequest request)
     {
         lock (_activePlaybackLock)
         {
-            var playback = new ActivePlayback(++_nextPlaybackId, request, startedAt);
+            var playback = new ActivePlayback(++_nextPlaybackId, request);
             _activePlaybacks.Add(playback.Id, playback);
-            SetPresenceQuietly(playback.Request, playback.StartedAt);
             return playback.Id;
+        }
+    }
+
+    internal void UpdateActivePlayback(long playbackId, PlaybackPresenceState state)
+    {
+        lock (_activePlaybackLock)
+        {
+            if (!_activePlaybacks.TryGetValue(playbackId, out var playback)) return;
+
+            playback.State = state;
+            if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
+        }
+    }
+
+    private void AttachObserver(long playbackId, IDisposable observer)
+    {
+        lock (_activePlaybackLock)
+        {
+            if (_activePlaybacks.TryGetValue(playbackId, out var playback))
+                playback.Observer = observer;
+            else
+                observer.Dispose();
         }
     }
 
@@ -132,16 +164,25 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
 
             var wasMostRecent = _activePlaybacks.Keys.Max() == completedPlayback.Id;
             _activePlaybacks.Remove(playbackId);
+            completedPlayback.Observer?.Dispose();
             if (!wasMostRecent) return;
 
-            if (_activePlaybacks.Count == 0)
-            {
+            var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id);
+            if (currentPlayback?.State is { } state)
+                SetPresenceQuietly(currentPlayback.Request, state);
+            else
                 ClearPresenceQuietly();
-                return;
-            }
+        }
+    }
 
-            var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id)!;
-            SetPresenceQuietly(currentPlayback.Request, currentPlayback.StartedAt);
+    public void Dispose()
+    {
+        lock (_activePlaybackLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            foreach (var playback in _activePlaybacks.Values) playback.Observer?.Dispose();
+            _activePlaybacks.Clear();
         }
     }
 
@@ -249,13 +290,13 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
             argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
     }
 
-    private void SetPresenceQuietly(PlaybackRequest request, DateTimeOffset startedAt)
+    private void SetPresenceQuietly(PlaybackRequest request, PlaybackPresenceState state)
     {
         if (_playbackPresenceService is null) return;
 
         try
         {
-            _playbackPresenceService.SetPlaying(request, startedAt);
+            _playbackPresenceService.SetPlaybackState(request, state);
         }
         catch (Exception ex)
         {
@@ -277,5 +318,26 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService
         }
     }
 
-    private sealed record ActivePlayback(long Id, PlaybackRequest Request, DateTimeOffset StartedAt);
+    private static void CleanupIpcDirectoryQuietly(DirectoryInfo? directory)
+    {
+        if (directory is null) return;
+        try
+        {
+            directory.Delete(true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private sealed class ActivePlayback(long id, PlaybackRequest request)
+    {
+        public long Id { get; } = id;
+        public PlaybackRequest Request { get; } = request;
+        public IDisposable? Observer { get; set; }
+        public PlaybackPresenceState? State { get; set; }
+    }
 }

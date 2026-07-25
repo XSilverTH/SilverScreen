@@ -4,6 +4,6 @@ namespace SilverScreen.Core.Services;
 
 public interface IPlaybackPresenceService : IDisposable
 {
-    void SetPlaying(PlaybackRequest request, DateTimeOffset startedAt);
+    void SetPlaybackState(PlaybackRequest request, PlaybackPresenceState state);
     void Clear();
 }

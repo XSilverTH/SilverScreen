@@ -18,9 +18,12 @@ public sealed class PlaybackTests
         var secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         var thirdStartedAt = DateTimeOffset.UtcNow;
 
-        var firstId = service.RegisterActivePlayback(firstRequest, firstStartedAt);
-        var secondId = service.RegisterActivePlayback(secondRequest, secondStartedAt);
-        var thirdId = service.RegisterActivePlayback(thirdRequest, thirdStartedAt);
+        var firstId = service.RegisterActivePlayback(firstRequest);
+        service.UpdateActivePlayback(firstId, PlayingState(firstStartedAt));
+        var secondId = service.RegisterActivePlayback(secondRequest);
+        service.UpdateActivePlayback(secondId, PlayingState(secondStartedAt));
+        var thirdId = service.RegisterActivePlayback(thirdRequest);
+        service.UpdateActivePlayback(thirdId, PlayingState(thirdStartedAt));
         service.CompleteActivePlayback(secondId);
 
         Assert.Equal(3, presence.SetCalls.Count);
@@ -29,7 +32,7 @@ public sealed class PlaybackTests
         service.CompleteActivePlayback(thirdId);
 
         Assert.Equal(firstRequest, presence.SetCalls[^1].Request);
-        Assert.Equal(firstStartedAt, presence.SetCalls[^1].StartedAt);
+        Assert.Equal(firstStartedAt, presence.SetCalls[^1].State.ObservedAt);
 
         service.CompleteActivePlayback(firstId);
         Assert.Equal(1, presence.ClearCount);
@@ -60,6 +63,37 @@ public sealed class PlaybackTests
                 "https://www.youtube.com/watch?v=M7lc1UVf-VE"
             ],
             command.Arguments);
+    }
+
+    [Fact]
+    public void MpvCommandBuilderAddsTheOptionalIpcServerBeforePlaylistUrls()
+    {
+        var command = MpvCommandBuilder.Build(new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
+            new PlaybackOptions(), inputIpcServerPath: "/run/user/1000/silverscreen/mpv.sock");
+
+        Assert.Equal("--input-ipc-server=/run/user/1000/silverscreen/mpv.sock", command.Arguments[^2]);
+    }
+
+    [Fact]
+    public void MpvIpcProtocolAppliesObservedPlaybackProperties()
+    {
+        var state = PlaybackPresenceState.CreateInitial(DateTimeOffset.UtcNow);
+
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"request_id":100,"data":42.5}""", ref state, out var positionProperty));
+        Assert.Equal("time-pos", positionProperty);
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"event":"property-change","name":"pause","data":false}""", ref state, out var pauseProperty));
+        Assert.Equal("pause", pauseProperty);
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"event":"property-change","name":"duration","data":180}""", ref state, out _));
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"event":"property-change","name":"playlist-pos","data":1}""", ref state, out _));
+
+        Assert.Equal(TimeSpan.FromSeconds(42.5), state.Position);
+        Assert.Equal(TimeSpan.FromMinutes(3), state.Duration);
+        Assert.False(state.IsPaused);
+        Assert.Equal(1, state.PlaylistIndex);
     }
 
     [Fact]
@@ -119,6 +153,11 @@ public sealed class PlaybackTests
         Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 
+    private static PlaybackPresenceState PlayingState(DateTimeOffset observedAt)
+    {
+        return new PlaybackPresenceState(0, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(3), false, 1, observedAt);
+    }
+
     private static VideoSummary CreateVideo(string id, string? watchUrl = null)
     {
         return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
@@ -128,11 +167,11 @@ public sealed class PlaybackTests
     private sealed class TrackingPresence : IPlaybackPresenceService
     {
         public int ClearCount { get; private set; }
-        public List<(PlaybackRequest Request, DateTimeOffset StartedAt)> SetCalls { get; } = [];
+        public List<(PlaybackRequest Request, PlaybackPresenceState State)> SetCalls { get; } = [];
 
-        public void SetPlaying(PlaybackRequest request, DateTimeOffset startedAt)
+        public void SetPlaybackState(PlaybackRequest request, PlaybackPresenceState state)
         {
-            SetCalls.Add((request, startedAt));
+            SetCalls.Add((request, state));
         }
 
         public void Clear()
