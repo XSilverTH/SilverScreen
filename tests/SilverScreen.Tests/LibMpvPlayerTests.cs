@@ -80,6 +80,30 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void KeyboardTransportCommandsUseExpectedMpvCommands()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.ToggleMute();
+        player.StepFrame(true);
+        player.StepFrame(false);
+        player.AdjustVolume(5);
+        player.AdjustVolume(-5);
+        player.MovePlaylist(true);
+        player.MovePlaylist(false);
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 7, TimeSpan.FromSeconds(2)));
+        Assert.Contains("cycle|mute", native.Commands);
+        Assert.Contains("frame-step", native.Commands);
+        Assert.Contains("frame-back-step", native.Commands);
+        Assert.Contains("add|volume|5", native.Commands);
+        Assert.Contains("add|volume|-5", native.Commands);
+        Assert.Contains("playlist-next", native.Commands);
+        Assert.Contains("playlist-prev", native.Commands);
+    }
+
+    [Fact]
     public void NativeLoaderCreatesAndDestroysAnMpvHandle()
     {
         using var native = new LibMpvNative();

@@ -11,6 +11,7 @@ public sealed record LibMpvPlaybackState(
     TimeSpan Position,
     TimeSpan Duration,
     bool IsPaused,
+    bool IsMuted,
     double Volume,
     double Speed,
     bool IsSeekable,
@@ -40,7 +41,10 @@ public sealed class LibMpvPlayer : IDisposable
     private nint _renderContext;
     private PlaybackRequest? _request;
     private bool _resumeAfterRenderer;
-    private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, 100, 1, false, false, false);
+
+    private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
+        false);
+
     private GCHandle _updateCallbackHandle;
 
     public LibMpvPlayer(Action<Action> dispatch) : this(new LibMpvNative(), dispatch)
@@ -67,6 +71,7 @@ public sealed class LibMpvPlayer : IDisposable
             Observe("duration", LibMpvFormat.Double);
             Observe("pause", LibMpvFormat.Flag);
             Observe("volume", LibMpvFormat.Double);
+            Observe("mute", LibMpvFormat.Flag);
             Observe("speed", LibMpvFormat.Double);
             Observe("seekable", LibMpvFormat.Flag);
             Observe("playlist-pos", LibMpvFormat.Int64);
@@ -203,6 +208,27 @@ public sealed class LibMpvPlayer : IDisposable
     public void TogglePause()
     {
         Enqueue(() => Check(_native.Command(_handle, "cycle", "pause")));
+    }
+
+    public void ToggleMute()
+    {
+        Enqueue(() => Check(_native.Command(_handle, "cycle", "mute")));
+    }
+
+    public void StepFrame(bool forward)
+    {
+        Enqueue(() => Check(_native.Command(_handle, forward ? "frame-step" : "frame-back-step")));
+    }
+
+    public void AdjustVolume(double amount)
+    {
+        Enqueue(() => Check(_native.Command(_handle, "add", "volume",
+            amount.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    public void MovePlaylist(bool forward)
+    {
+        Enqueue(() => Check(_native.Command(_handle, forward ? "playlist-next" : "playlist-prev")));
     }
 
     public void SeekRelative(double seconds)
@@ -373,6 +399,10 @@ public sealed class LibMpvPlayer : IDisposable
                 "pause" when property.Format == LibMpvFormat.Flag => _state with
                 {
                     IsPaused = Marshal.ReadInt32(property.Data) != 0
+                },
+                "mute" when property.Format == LibMpvFormat.Flag => _state with
+                {
+                    IsMuted = Marshal.ReadInt32(property.Data) != 0
                 },
                 "volume" when property.Format == LibMpvFormat.Double => _state with
                 {

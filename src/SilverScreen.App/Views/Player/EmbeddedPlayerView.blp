@@ -5,6 +5,7 @@ Gtk.Overlay EmbeddedPlayerView {
   hexpand: true;
   vexpand: true;
   styles ["embedded-player"]
+  focusable: true;
 
   child: Gtk.GLArea player_surface {
     auto-render: false;
@@ -58,21 +59,21 @@ Gtk.Overlay EmbeddedPlayerView {
     Gtk.Button player_rewind_button {
       clicked => $OnRewindButtonClicked();
       icon-name: "media-seek-backward-symbolic";
-      tooltip-text: "Rewind 10 seconds";
+      tooltip-text: "Rewind 10 seconds (← or J)";
       styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
     }
 
     Gtk.Button player_play_pause_button {
       clicked => $OnPlayPauseButtonClicked();
       icon-name: "media-playback-start-symbolic";
-      tooltip-text: "Play";
+      tooltip-text: "Play (Space or K)";
       styles ["flat", "circular", "player-primary-control"]
     }
 
     Gtk.Button player_forward_button {
       clicked => $OnForwardButtonClicked();
       icon-name: "media-seek-forward-symbolic";
-      tooltip-text: "Forward 10 seconds";
+      tooltip-text: "Forward 10 seconds (→ or L)";
       styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
     }
   }
@@ -159,7 +160,7 @@ Gtk.Overlay EmbeddedPlayerView {
 
       Gtk.MenuButton player_volume_button {
         icon-name: "audio-volume-high-symbolic";
-        tooltip-text: "Volume";
+        tooltip-text: "Volume (M mutes; ↑/↓ adjust)";
         styles ["flat", "circular", "player-overlay-button"]
 
         popover: Gtk.Popover {
@@ -194,7 +195,7 @@ Gtk.Overlay EmbeddedPlayerView {
 
       Gtk.MenuButton {
         icon-name: "preferences-system-symbolic";
-        tooltip-text: "Player settings";
+        tooltip-text: "Player settings ([/]: speed)";
         styles ["flat", "circular", "player-overlay-button"]
 
         popover: Gtk.Popover {
