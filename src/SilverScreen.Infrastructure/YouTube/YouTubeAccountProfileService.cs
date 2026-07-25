@@ -71,10 +71,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
         };
         var content = JsonSerializer.Serialize(payload, YouTubeRequestJsonContext.Default.BrowseRequestPayload);
         var requestUri = $"https://www.youtube.com/youtubei/v1/account/account_menu?key={Uri.EscapeDataString(configuration.ApiKey)}&prettyPrint=false";
-        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = new StringContent(content, Encoding.UTF8, "application/json")
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+        request.Content = new StringContent(content, Encoding.UTF8, "application/json");
         AddAuthenticatedHeaders(request, credentials, configuration);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -137,7 +135,7 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                        4096, FileOptions.WriteThrough))
             {
-                JsonSerializer.Serialize(stream, profile);
+                JsonSerializer.Serialize(stream, profile, YouTubeRequestJsonContext.Default.AccountProfile);
                 stream.Flush(true);
             }
 
@@ -168,7 +166,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             if (!File.Exists(_profileCachePath))
                 return null;
 
-            return JsonSerializer.Deserialize<AccountProfile>(File.ReadAllText(_profileCachePath));
+            return JsonSerializer.Deserialize(File.ReadAllText(_profileCachePath),
+                YouTubeRequestJsonContext.Default.AccountProfile);
         }
         catch (Exception exception)
         {

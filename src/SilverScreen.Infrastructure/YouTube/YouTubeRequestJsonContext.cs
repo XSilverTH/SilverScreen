@@ -1,3 +1,4 @@
+using SilverScreen.Core.Models;
 using System.Text.Json.Serialization;
 
 namespace SilverScreen.Infrastructure.YouTube;
@@ -6,6 +7,7 @@ namespace SilverScreen.Infrastructure.YouTube;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(BrowseRequestPayload))]
+[JsonSerializable(typeof(AccountProfile))]
 [JsonSerializable(typeof(RatingRequestPayload))]
 internal sealed partial class YouTubeRequestJsonContext : JsonSerializerContext;
 
