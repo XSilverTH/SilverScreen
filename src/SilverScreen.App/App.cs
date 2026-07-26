@@ -127,12 +127,20 @@ public partial class App
                                  border-bottom: 2px solid @accent_bg_color;
                                }
 
+                               .queue-indicator {
+                                 min-height: 0;
+                                 min-width: 0;
+                                 padding: 0;
+                               }
+
                                .queue-count {
                                  background-color: @accent_bg_color;
                                  border-radius: 999px;
                                  color: @accent_fg_color;
-                                 min-width: 1.5em;
-                                 padding: 1px 5px;
+                                 font-size: 11px;
+                                 min-height: 16px;
+                                 min-width: 16px;
+                                 padding: 0;
                                }
 
                                .account-sign-in-actions button {

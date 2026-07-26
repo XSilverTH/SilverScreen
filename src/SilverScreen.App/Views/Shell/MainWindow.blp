@@ -32,6 +32,7 @@ Adw.ApplicationWindow MainWindow {
         Button search_button {
           tooltip-text: "Search";
           clicked => $OnSearchButtonClicked();
+          styles ["flat"]
 
           child: Image search_button_icon {
             icon-name: "system-search-symbolic";
@@ -42,9 +43,23 @@ Adw.ApplicationWindow MainWindow {
         };
 
         [end]
+        MenuButton app_menu_button {
+          icon-name: "open-menu-symbolic";
+          tooltip-text: "Main Menu";
+        }
+
+        [end]
+        ToggleButton queue_button {
+          visible: false;
+          tooltip-text: "Queued videos";
+          styles ["flat", "queue-indicator"]
+        }
+
+        [end]
         Button home_refresh_button {
           tooltip-text: "Refresh Home";
           clicked => $OnHomeRefreshButtonClicked();
+          styles ["flat"]
 
           child: Stack home_refresh_stack {
             StackPage {
@@ -59,18 +74,6 @@ Adw.ApplicationWindow MainWindow {
               child: Spinner home_refresh_spinner {};
             }
           };
-        }
-
-        [end]
-        ToggleButton queue_button {
-          tooltip-text: "Queued videos";
-          styles ["flat"]
-        }
-
-        [end]
-        MenuButton app_menu_button {
-          icon-name: "open-menu-symbolic";
-          tooltip-text: "Main Menu";
         }
       }
 

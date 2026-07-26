@@ -278,7 +278,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateQueueButton(QueuePresentationState state)
     {
-        _queueButton.Child = QueueButtonContent(state.Items.Count);
+        var hasItems = state.Items.Count > 0;
+        _queueButton.Visible = hasItems;
+        _queueButton.Active = hasItems && _queueButton.Active;
+
+        if (hasItems)
+            _queueButton.Child = QueueButtonContent(state.Items.Count);
     }
 
     private void CloseQueue()
@@ -328,19 +333,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     }
 
 
-    private static Box QueueButtonContent(int count)
+    private static Label QueueButtonContent(int count)
     {
-        var content = Box.New(Orientation.Horizontal, 6);
-        content.MarginStart = 8;
-        content.MarginEnd = 8;
-        content.MarginTop = 4;
-        content.MarginBottom = 4;
-        var icon = Image.NewFromIconName("playlist-symbolic");
-        icon.PixelSize = 16;
-        content.Append(icon);
         var label = Label.New(count.ToString());
         label.CssClasses = ["queue-count"];
-        content.Append(label);
-        return content;
+        label.Halign = Align.Center;
+        label.Valign = Align.Center;
+        label.WidthRequest = 24;
+        label.HeightRequest = 24;
+        return label;
     }
 }
