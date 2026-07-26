@@ -13,7 +13,6 @@ namespace SilverScreen.Views.Components;
 public sealed class VideoCardActions
 {
     public required Func<VideoSummary, Task> PlayAsync { get; init; }
-    public required Action<VideoSummary> AddToQueue { get; init; }
     public required Action<VideoSummary> AddNext { get; init; }
     public required Action<string> ReportStatus { get; init; }
 }
@@ -61,7 +60,6 @@ public class VideoCardView : ViewBase<Box>
         _menuActionItems =
         [
             CreateMenuAction("play"),
-            CreateMenuAction("add-to-queue"),
             CreateMenuAction("add-next"),
             CreateMenuAction("open-channel"),
             CreateMenuAction("copy-link")
@@ -234,8 +232,6 @@ public class VideoCardView : ViewBase<Box>
 
         if (sender.GetCurrentButton() == 1)
             StartPlay(video);
-        else if (sender.GetCurrentButton() == 2)
-            _actions.AddToQueue(video);
     }
 
     private void OnMenuActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
@@ -248,18 +244,13 @@ public class VideoCardView : ViewBase<Box>
         else if (ReferenceEquals(sender, _menuActionItems[1]))
         {
             if (_video is { } video)
-                _actions.AddToQueue(video);
+                _actions.AddNext(video);
         }
         else if (ReferenceEquals(sender, _menuActionItems[2]))
         {
-            if (_video is { } video)
-                _actions.AddNext(video);
-        }
-        else if (ReferenceEquals(sender, _menuActionItems[3]))
-        {
             _actions.ReportStatus("Opening channels is not implemented.");
         }
-        else if (ReferenceEquals(sender, _menuActionItems[4]))
+        else if (ReferenceEquals(sender, _menuActionItems[3]))
         {
             CopyLink();
         }
