@@ -260,21 +260,52 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             }
 
             Gtk.Box {
-              orientation: horizontal;
-              spacing: 12;
+              orientation: vertical;
+              spacing: 6;
 
-              Gtk.Label {
-                label: "Playback speed";
-                xalign: 0;
-                hexpand: true;
+              Gtk.Box {
+                orientation: horizontal;
+                spacing: 12;
+
+                Gtk.Label {
+                  label: "Playback speed";
+                  xalign: 0;
+                  hexpand: true;
+                }
+
+                Gtk.Label player_speed_label {
+                  label: "1×";
+                  xalign: 1;
+                }
               }
 
-              Gtk.DropDown player_speed_dropdown {
-                notify => $OnSpeedDropdownNotify();
-                model: Gtk.StringList {
-                  strings: ["0.5×", "0.75×", "Normal", "1.25×", "1.5×", "2×"];
+              Gtk.Scale player_speed_scale {
+                value-changed => $OnSpeedScaleValueChanged();
+                draw-value: false;
+                adjustment: Gtk.Adjustment {
+                  lower: 0.25;
+                  upper: 5;
+                  value: 1;
+                  step-increment: 0.25;
+                  page-increment: 0.25;
                 };
-                selected: 2;
+              }
+
+              Gtk.Box {
+                orientation: horizontal;
+
+                Gtk.Label {
+                  label: "0.25×";
+                  xalign: 0;
+                  hexpand: true;
+                  styles ["caption", "dim-label"]
+                }
+
+                Gtk.Label {
+                  label: "5×";
+                  xalign: 1;
+                  styles ["caption", "dim-label"]
+                }
               }
             }
 

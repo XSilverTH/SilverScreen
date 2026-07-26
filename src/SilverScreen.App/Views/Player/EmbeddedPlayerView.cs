@@ -23,8 +23,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 {
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
+    private const double MinimumPlaybackSpeed = 0.25;
+    private const double MaximumPlaybackSpeed = 5;
+    private const double PlaybackSpeedIncrement = 0.25;
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-    private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     private readonly Action _backRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
@@ -52,8 +54,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly DropDown _qualityDropdown;
     private readonly ISessionService _session;
     private readonly Popover _settingsPopover;
+    private EventControllerKey? _keyboardController;
+    private Widget? _keyboardRoot;
     private readonly Dictionary<uint, Action> _shortcutMap = [];
-    private readonly DropDown _speedDropdown;
+    private readonly Label _speedLabel;
+    private readonly Scale _speedScale;
     private readonly DropDown _subtitleDropdown;
     private readonly Button _subtitleButton;
     private readonly StringList _subtitleModel;
@@ -108,7 +113,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _volumePopover = GetRequiredObject<Popover>("player_volume_popover");
         _settingsPopover = GetRequiredObject<Popover>("player_settings_popover");
         _qualityDropdown = GetRequiredObject<DropDown>("player_quality_dropdown");
-        _speedDropdown = GetRequiredObject<DropDown>("player_speed_dropdown");
+        _speedLabel = GetRequiredObject<Label>("player_speed_label");
+        _speedScale = GetRequiredObject<Scale>("player_speed_scale");
         _subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
         _subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
@@ -154,6 +160,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         CancelEngagementLoad();
         _commentsView.Dispose();
         _disposed = true;
+        if (_keyboardRoot is not null && _keyboardController is not null)
+        {
+            _keyboardRoot.RemoveController(_keyboardController);
+            _keyboardRoot = null;
+        }
         if (_rendererReady)
         {
             _playerSurface.MakeCurrent();
@@ -204,6 +215,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             SetLoading(true);
             _hasMedia = false;
             _presentRequested();
+            AttachKeyboardShortcuts();
             Widget.GrabFocus();
             if (_rendererReady) _player.Load(request, preferences, _cookieFile?.Path);
             return false;
@@ -249,6 +261,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         _player.InitializeRenderer();
         _rendererReady = true;
+        AttachKeyboardShortcuts();
+
         if (_request is not null)
             _player.Load(_request, _preferences.GetPreferences(), _cookieFile?.Path);
     }
@@ -298,7 +312,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var key = EventControllerKey.New();
         key.SetPropagationPhase(PropagationPhase.Capture);
         key.OnKeyPressed += (_, args) => HandleKeyboardShortcut(args.Keyval);
-        Widget.AddController(key);
+        _keyboardController = key;
+        AttachKeyboardShortcuts();
+    }
+
+    private void AttachKeyboardShortcuts()
+    {
+        if (_keyboardController is null || _keyboardRoot is not null) return;
+        if (Widget.GetRoot() is not Widget root) return;
+
+        root.AddController(_keyboardController);
+        _keyboardRoot = root;
     }
 
     private bool HandleKeyboardShortcut(uint keyval)
@@ -314,8 +338,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void AdjustSpeed(int direction)
     {
-        var speedIndex = Array.IndexOf(Speeds, _speed);
-        _player.SetSpeed(Speeds[Math.Clamp((speedIndex < 0 ? 2 : speedIndex) + direction, 0, Speeds.Length - 1)]);
+        _player.SetSpeed(Math.Clamp(SnapPlaybackSpeed(_speed) + direction * PlaybackSpeedIncrement,
+            MinimumPlaybackSpeed, MaximumPlaybackSpeed));
     }
 
     private void ToggleFullscreen()
@@ -347,6 +371,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetControlVisible(_headerBar, visible);
         SetControlVisible(_centerControls, visible);
         SetControlVisible(_playerControls, visible);
+        if (!visible)
+            Widget.GrabFocus();
     }
 
     private static void SetControlVisible(Widget control, bool visible)
@@ -425,9 +451,26 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (!_updatingControls) _player.SetQuality(QualityAt(_qualityDropdown.GetSelected()));
     }
 
-    private void OnSpeedDropdownNotify(object? sender, EventArgs args)
+    private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
     {
-        if (!_updatingControls) _player.SetSpeed(SpeedAt(_speedDropdown.GetSelected()));
+        if (_updatingControls) return;
+
+        var speed = SnapPlaybackSpeed(_speedScale.GetValue());
+        if (Math.Abs(_speedScale.GetValue() - speed) > 0.0001)
+        {
+            _updatingControls = true;
+            try
+            {
+                _speedScale.SetValue(speed);
+            }
+            finally
+            {
+                _updatingControls = false;
+            }
+        }
+
+        SetSpeedLabel(speed);
+        _player.SetSpeed(speed);
     }
 
     private void OnSubtitleDropdownNotify(object? sender, EventArgs args)
@@ -486,8 +529,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 : "Play (Space or K)");
             _volumeScale.SetValue(Math.Clamp(state.Volume, 0, 100));
             _volumeButton.SetIconName(VolumeIcon(state.Volume, state.IsMuted));
-            var speedIndex = Array.IndexOf(Speeds, state.Speed);
-            _speedDropdown.SetSelected((uint)(speedIndex < 0 ? 2 : speedIndex));
+            var speed = SnapPlaybackSpeed(state.Speed);
+            _speedScale.SetValue(speed);
+            SetSpeedLabel(speed);
             if (_request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
                 state.PlaylistIndex >= request.Videos.Length) return;
             var video = request.Videos[state.PlaylistIndex];
@@ -582,7 +626,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             _volumeScale.SetValue(volume);
             _volumeButton.SetIconName(VolumeIcon(volume, false));
-            _speedDropdown.SetSelected((uint)Math.Max(0, Array.IndexOf(Speeds, speed)));
+            var normalizedSpeed = SnapPlaybackSpeed(speed);
+            _speedScale.SetValue(normalizedSpeed);
+            SetSpeedLabel(normalizedSpeed);
             _qualityDropdown.SetSelected(
                 (uint)Array.IndexOf(["Best", "1080p", "720p", "480p", "360p"], quality));
         }
@@ -681,9 +727,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         return new[] { "Best", "1080p", "720p", "480p", "360p" }[(int)Math.Min(selected, 4)];
     }
 
-    private static double SpeedAt(uint selected)
+    private static double SnapPlaybackSpeed(double speed)
     {
-        return Speeds[Math.Min(selected, (uint)(Speeds.Length - 1))];
+        var clampedSpeed = Math.Clamp(speed, MinimumPlaybackSpeed, MaximumPlaybackSpeed);
+        var steps = Math.Round((clampedSpeed - MinimumPlaybackSpeed) / PlaybackSpeedIncrement,
+            MidpointRounding.AwayFromZero);
+        return MinimumPlaybackSpeed + steps * PlaybackSpeedIncrement;
+    }
+
+    private void SetSpeedLabel(double speed)
+    {
+        _speedLabel.SetText($"{speed:0.##}×");
     }
 
     private static string VolumeIcon(double volume, bool muted)
