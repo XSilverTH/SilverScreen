@@ -90,6 +90,12 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Mark watched on YouTube";
         subtitle: "Use your signed-in session to add played videos to watch history";
       }
+
+      Adw.SwitchRow youtube_playback_telemetry_row {
+        notify => $OnRowNotify();
+        title: "Send playback activity to YouTube";
+        subtitle: "Send live watch progress to improve recommendations; cannot be used with Mark watched on YouTube";
+      }
     }
 
     Adw.PreferencesGroup {

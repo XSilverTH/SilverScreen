@@ -516,7 +516,8 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         var urls = MpvCommandBuilder.GetPlaybackUrls(request);
-        var rawOptions = BuildYtdlRawOptions(cookieFilePath, preferences.MarkWatchedVideos);
+        var rawOptions = BuildYtdlRawOptions(cookieFilePath,
+            preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled);
         Check(_native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
         Check(_native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));

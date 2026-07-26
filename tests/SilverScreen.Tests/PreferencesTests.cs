@@ -66,6 +66,23 @@ public sealed class PreferencesTests : IDisposable
         Assert.True(loaded.DiscordRichPresenceEnabled);
     }
 
+
+    [Fact]
+    public void SavePreferences_TelemetryTakesPrecedenceOverMarkWatched()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+
+        service.SavePreferences(new AppPreferences
+        {
+            MarkWatchedVideos = true,
+            YouTubePlaybackTelemetryEnabled = true
+        });
+
+        var loaded = new FilePreferencesService(_tempFilePath).GetPreferences();
+
+        Assert.True(loaded.YouTubePlaybackTelemetryEnabled);
+        Assert.False(loaded.MarkWatchedVideos);
+    }
     [Fact]
     public void SavePreferences_ThrowsAndKeepsCurrentPreferences_WhenAtomicReplacementFails()
     {

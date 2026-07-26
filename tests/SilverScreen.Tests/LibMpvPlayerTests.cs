@@ -42,6 +42,23 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void LiveTelemetrySuppressesYtDlpMarkWatched()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]),
+            new AppPreferences { MarkWatchedVideos = true, YouTubePlaybackTelemetryEnabled = true },
+            "/tmp/cookies.txt");
+
+        Assert.True(SpinWait.SpinUntil(() => native.StringProperties.Any(property =>
+            property.Name == "ytdl-raw-options"), TimeSpan.FromSeconds(2)));
+        Assert.Contains(("ytdl-raw-options",
+            "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt"),
+            native.StringProperties);
+    }
+
+    [Fact]
     public void LoadPublishesLoadingState()
     {
         using var native = new RecordingNative();

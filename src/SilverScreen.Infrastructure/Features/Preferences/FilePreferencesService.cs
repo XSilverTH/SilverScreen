@@ -118,7 +118,8 @@ public sealed class FilePreferencesService : IPreferencesService
             PreferredSubtitleLanguage = source.PreferredSubtitleLanguage,
             YtDlpExecutablePath = source.YtDlpExecutablePath,
             MaxResults = source.MaxResults,
-            MarkWatchedVideos = source.MarkWatchedVideos,
+            MarkWatchedVideos = source.MarkWatchedVideos && !source.YouTubePlaybackTelemetryEnabled,
+            YouTubePlaybackTelemetryEnabled = source.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled
         };
     }

@@ -42,6 +42,25 @@ public sealed class PlaybackTests
 
 
     [Fact]
+    public void ExternalMpvForwardsPlaybackStateToYouTubeTelemetry()
+    {
+        var telemetry = new TrackingTelemetry();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, null,
+            telemetry);
+        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+        var playbackId = service.RegisterActivePlayback(request);
+        var state = PlayingState(DateTimeOffset.UtcNow);
+
+        service.UpdateActivePlayback(playbackId, state);
+        service.CompleteActivePlayback(playbackId);
+
+        var session = Assert.Single(telemetry.Sessions);
+        Assert.Equal(request, telemetry.Requests[0]);
+        Assert.Equal([state], session.States);
+        Assert.True(session.Disposed);
+    }
+
+    [Fact]
     public void MpvCommandBuilderPassesOrderedPlaylistUrlsAsSeparateArguments()
     {
         var command = MpvCommandBuilder.Build(
@@ -162,6 +181,40 @@ public sealed class PlaybackTests
     {
         return new VideoSummary(id, $"Video {id}", "Test Channel", TimeSpan.FromMinutes(3), "placeholder://test", false,
             watchUrl);
+    }
+
+    private sealed class TrackingTelemetry : IYouTubePlaybackTelemetryService
+    {
+        public List<PlaybackRequest> Requests { get; } = [];
+        public List<TrackingTelemetrySession> Sessions { get; } = [];
+
+        public IYouTubePlaybackTelemetrySession Start(PlaybackRequest request)
+        {
+            Requests.Add(request);
+            var session = new TrackingTelemetrySession();
+            Sessions.Add(session);
+            return session;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class TrackingTelemetrySession : IYouTubePlaybackTelemetrySession
+    {
+        public bool Disposed { get; private set; }
+        public List<PlaybackPresenceState> States { get; } = [];
+
+        public void UpdateState(PlaybackPresenceState state)
+        {
+            States.Add(state);
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
+        }
     }
 
     private sealed class TrackingPresence : IPlaybackPresenceService

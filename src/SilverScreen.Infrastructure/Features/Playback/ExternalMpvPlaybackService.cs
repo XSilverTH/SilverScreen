@@ -15,6 +15,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     private readonly MpvCommandBuilder _commandBuilder;
     private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPlaybackPresenceService? _playbackPresenceService;
+    private readonly IYouTubePlaybackTelemetryService? _playbackTelemetryService;
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
     private bool _disposed;
@@ -29,26 +30,30 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         PlaybackOptions options,
         MpvCommandBuilder commandBuilder,
         ICookieFileProvider? cookieFileProvider = null,
-        IPlaybackPresenceService? playbackPresenceService = null)
+        IPlaybackPresenceService? playbackPresenceService = null,
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
     {
         _staticOptions = options;
         _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = null;
         _playbackPresenceService = playbackPresenceService;
+        _playbackTelemetryService = playbackTelemetryService;
     }
 
     public ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
         MpvCommandBuilder commandBuilder,
         ICookieFileProvider? cookieFileProvider = null,
-        IPlaybackPresenceService? playbackPresenceService = null)
+        IPlaybackPresenceService? playbackPresenceService = null,
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
     {
         _staticOptions = new PlaybackOptions();
         _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
         _playbackPresenceService = playbackPresenceService;
+        _playbackTelemetryService = playbackTelemetryService;
     }
 
     public void Dispose()
@@ -57,8 +62,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var playback in _activePlaybacks.Values) playback.Observer?.Dispose();
-            _activePlaybacks.Clear();
+            foreach (var playback in _activePlaybacks.Values)
+            {
+                playback.Observer?.Dispose();
+                playback.Telemetry?.Dispose();
+            }
         }
     }
 
@@ -129,7 +137,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         {
             MpvExecutablePath = prefs.MpvExecutablePath,
             VideoQuality = prefs.VideoQuality,
-            MarkWatchedVideos = prefs.MarkWatchedVideos,
+            MarkWatchedVideos = prefs.MarkWatchedVideos && !prefs.YouTubePlaybackTelemetryEnabled,
             Fullscreen = prefs.OpenInFullscreen,
             ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
         };
@@ -139,7 +147,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     {
         lock (_activePlaybackLock)
         {
-            var playback = new ActivePlayback(++_nextPlaybackId, request);
+            var playback = new ActivePlayback(++_nextPlaybackId, request, StartTelemetryQuietly(request));
             _activePlaybacks.Add(playback.Id, playback);
             return playback.Id;
         }
@@ -152,6 +160,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
             if (!_activePlaybacks.TryGetValue(playbackId, out var playback)) return;
 
             playback.State = state;
+            SetTelemetryQuietly(playback.Telemetry, state);
             if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
         }
     }
@@ -176,6 +185,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
             var wasMostRecent = _activePlaybacks.Keys.Max() == completedPlayback.Id;
             _activePlaybacks.Remove(playbackId);
             completedPlayback.Observer?.Dispose();
+            completedPlayback.Telemetry?.Dispose();
             if (!wasMostRecent) return;
 
             var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id);
@@ -304,6 +314,34 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         }
     }
 
+    private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
+    {
+        if (_playbackTelemetryService is null) return null;
+        try
+        {
+            return _playbackTelemetryService.Start(request);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "YouTube playback telemetry start failed safely");
+            return null;
+        }
+    }
+
+    private static void SetTelemetryQuietly(IYouTubePlaybackTelemetrySession? telemetry,
+        PlaybackPresenceState state)
+    {
+        if (telemetry is null) return;
+        try
+        {
+            telemetry.UpdateState(state);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "YouTube playback telemetry update failed safely");
+        }
+    }
+
     private void ClearPresenceQuietly()
     {
         if (_playbackPresenceService is null) return;
@@ -333,10 +371,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         }
     }
 
-    private sealed class ActivePlayback(long id, PlaybackRequest request)
+    private sealed class ActivePlayback(long id, PlaybackRequest request, IYouTubePlaybackTelemetrySession? telemetry)
     {
         public long Id { get; } = id;
         public PlaybackRequest Request { get; } = request;
+        public IYouTubePlaybackTelemetrySession? Telemetry { get; } = telemetry;
         public IDisposable? Observer { get; set; }
         public PlaybackPresenceState? State { get; set; }
     }

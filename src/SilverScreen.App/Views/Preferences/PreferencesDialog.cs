@@ -11,6 +11,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly SwitchRow _fullscreenRow;
     private readonly SwitchRow _markWatchedRow;
+    private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly StringList _playbackBackendModel;
@@ -38,6 +39,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         _playbackBackendRow = GetRequiredObject<ComboRow>("playback_backend_row");
         _fullscreenRow = GetRequiredObject<SwitchRow>("fullscreen_row");
         _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
+        _youTubePlaybackTelemetryRow = GetRequiredObject<SwitchRow>("youtube_playback_telemetry_row");
         _discordRichPresenceRow = GetRequiredObject<SwitchRow>("discord_rich_presence_row");
         _themeModel = GetRequiredObject<StringList>("theme_model");
         _qualityModel = GetRequiredObject<StringList>("quality_model");
@@ -60,7 +62,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
             ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
-            _markWatchedRow.Active = prefs.MarkWatchedVideos;
+            _markWatchedRow.Active = prefs.MarkWatchedVideos && !prefs.YouTubePlaybackTelemetryEnabled;
+            _youTubePlaybackTelemetryRow.Active = prefs.YouTubePlaybackTelemetryEnabled;
             _discordRichPresenceRow.Active = prefs.DiscordRichPresenceEnabled;
         }
         finally
@@ -90,6 +93,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private void OnRowNotify(object? sender, EventArgs e)
     {
         if (_loading) return;
+        if (ReferenceEquals(sender, _markWatchedRow) && _markWatchedRow.Active)
+            _youTubePlaybackTelemetryRow.Active = false;
+        else if (ReferenceEquals(sender, _youTubePlaybackTelemetryRow) && _youTubePlaybackTelemetryRow.Active)
+            _markWatchedRow.Active = false;
         Save();
     }
 
@@ -116,7 +123,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
                 PlaybackBackends.ExternalMpv),
             OpenInFullscreen = _fullscreenRow.Active,
             MaxResults = maxResults,
-            MarkWatchedVideos = _markWatchedRow.Active,
+            MarkWatchedVideos = _markWatchedRow.Active && !_youTubePlaybackTelemetryRow.Active,
+            YouTubePlaybackTelemetryEnabled = _youTubePlaybackTelemetryRow.Active,
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
             PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage,
         };

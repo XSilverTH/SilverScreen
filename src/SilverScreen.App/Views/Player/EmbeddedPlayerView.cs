@@ -41,6 +41,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Label _likesLabel;
     private readonly Box _loadingIndicator;
     private readonly IPlaybackPresenceService _playbackPresence;
+    private readonly IYouTubePlaybackTelemetryService _playbackTelemetry;
     private readonly LibMpvPlayer _player;
     private readonly Widget _playerControls;
     private readonly GLArea _playerSurface;
@@ -78,13 +79,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private YouTubeRatingState _ratingState;
     private bool _rendererReady;
     private PlaybackRequest? _request;
+    private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
     private IReadOnlyList<LibMpvSubtitleTrack> _subtitleTracks = [];
     private double _speed = 1;
     private bool _updatingControls;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
         ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
-        IVideoEngagementService videoEngagement,
+        IYouTubePlaybackTelemetryService playbackTelemetry, IVideoEngagementService videoEngagement,
         IYouTubeRatingService youtubeRating, ISessionService session, IYouTubeCommentService comments)
     {
         _presentRequested = presentRequested;
@@ -92,6 +94,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _preferences = preferences;
         _cookieFiles = cookieFiles;
         _playbackPresence = playbackPresence;
+        _playbackTelemetry = playbackTelemetry;
         _videoEngagement = videoEngagement;
         _youtubeRating = youtubeRating;
         _session = session;
@@ -186,6 +189,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (_disposed) return false;
             EndSession(true);
             _request = request;
+            _playbackTelemetrySession = _playbackTelemetry.Start(request);
             _cookieFile = _cookieFiles.CreateCookieFile();
             var preferences = _preferences.GetPreferences();
             var firstVideo = request.Videos[0];
@@ -458,9 +462,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _hasMedia = state.HasMedia;
         _speed = state.Speed;
         if (_request is { } playbackRequest && state.HasMedia)
-            _playbackPresence.SetPlaybackState(playbackRequest, new PlaybackPresenceState(state.PlaylistIndex,
-                state.Position,
-                state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow));
+        {
+            var playbackState = new PlaybackPresenceState(state.PlaylistIndex, state.Position,
+                state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow);
+            _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
+            _playbackTelemetrySession?.UpdateState(playbackState);
+        }
         SetLoading(state.IsLoading);
         _updatingControls = true;
         UpdateSubtitleTracks(state.SubtitleTracks);
@@ -539,6 +546,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void ReleaseSession()
     {
         _playbackPresence.Clear();
+        _playbackTelemetrySession?.Dispose();
+        _playbackTelemetrySession = null;
         _cookieFile?.Dispose();
         _cookieFile = null;
     }
