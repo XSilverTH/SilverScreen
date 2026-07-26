@@ -33,35 +33,8 @@ Adw.ApplicationWindow MainWindow {
           tooltip-text: "Search";
           clicked => $OnSearchButtonClicked();
 
-          child: Box {
-            Image {
-              icon-name: "system-search-symbolic";
-            }
-
-            Popover search_popover {
-              visible: false;
-              child: Box {
-                orientation: vertical;
-                spacing: 10;
-                margin-top: 12;
-                margin-bottom: 12;
-                margin-start: 12;
-                margin-end: 12;
-
-                Entry search_entry {
-                  placeholder-text: "Search or paste a YouTube URL";
-                  width-chars: 36;
-                  activate => $OnSearchEntryActivated();
-                }
-
-                Label {
-                  label: "Enter searches YouTube with yt-dlp or opens a supported YouTube URL.";
-                  xalign: 0;
-                  wrap: true;
-                  styles ["dim-label"]
-                }
-              };
-            }
+          child: Image search_button_icon {
+            icon-name: "system-search-symbolic";
           };
         }
         title-widget: Adw.ViewSwitcher view_switcher {

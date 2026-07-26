@@ -36,6 +36,16 @@ public sealed class SearchViewModel(
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
+    public void Reset()
+    {
+        ThrowIfDisposed();
+        ++_requestGeneration;
+        _requestCancellation?.Cancel();
+        _requestCancellation?.Dispose();
+        _requestCancellation = null;
+        State = new SearchViewState([], "Search results will appear here.", false);
+    }
+
 
     public void Dispose()
     {
@@ -109,7 +119,6 @@ public sealed class SearchViewModel(
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
 
-        shell.SelectedPage = "search";
         var searching = $"Searching YouTube for “{query}”…";
         State = new SearchViewState([], searching, true);
         shell.Status = searching;

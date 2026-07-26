@@ -6,6 +6,21 @@ Gtk.Box HomeView {
   hexpand: true;
   vexpand: true;
   
+  Gtk.Box home_search_bar {
+    visible: false;
+    spacing: 12;
+    margin-top: 12;
+    margin-bottom: 12;
+    margin-start: 24;
+    margin-end: 24;
+
+    Gtk.SearchEntry home_search_entry {
+      placeholder-text: "Search or paste a YouTube URL";
+      hexpand: true;
+      activate => $OnHomeSearchEntryActivated();
+    }
+  }
+
 
   Gtk.Box home_status_host {
     visible: false;

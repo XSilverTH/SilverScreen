@@ -24,16 +24,27 @@ public partial class HomeView : ViewBase<Box>
     private readonly GridView _videoGrid;
     private readonly StringList _videoIds;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
+    private readonly Box _searchBar;
+    private readonly SearchEntry _searchEntry;
+    private readonly SearchViewModel _searchViewModel;
     private readonly NoSelection _videoSelection;
     private readonly HomeViewModel _viewModel;
     private VideoSummary[] _displayedVideos = [];
+    private bool _isSearchActive;
     private bool _disposed;
 
-    public HomeView(HomeViewModel viewModel, IThumbnailService thumbnails, VideoCardActions videoActions)
+    public HomeView(
+        HomeViewModel viewModel,
+        SearchViewModel searchViewModel,
+        IThumbnailService thumbnails,
+        VideoCardActions videoActions)
     {
         _viewModel = viewModel;
+        _searchViewModel = searchViewModel;
         _thumbnails = thumbnails;
         _videoActions = videoActions;
+        _searchBar = GetRequiredObject<Box>("home_search_bar");
+        _searchEntry = GetRequiredObject<SearchEntry>("home_search_entry");
         _statusHost = GetRequiredObject<Box>("home_status_host");
         _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
         _statusPage = GetRequiredObject<StatusPage>("home_status_page");
@@ -52,10 +63,15 @@ public partial class HomeView : ViewBase<Box>
         _videoGrid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
+        _searchViewModel.StateChanged += OnSearchStateChanged;
         Render(_viewModel.State);
     }
 
     public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
+
+    public bool IsSearchActive => _isSearchActive;
+
+    public event EventHandler<bool>? SearchModeChanged;
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
@@ -65,6 +81,37 @@ public partial class HomeView : ViewBase<Box>
             { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
             : Task.CompletedTask;
+    }
+
+    public void ActivateSearch()
+    {
+        if (_disposed || _isSearchActive)
+            return;
+
+        _isSearchActive = true;
+        _searchBar.Visible = true;
+        _searchViewModel.Reset();
+        RenderSearch(_searchViewModel.State);
+        SearchModeChanged?.Invoke(this, true);
+        _searchEntry.GrabFocus();
+    }
+
+    public void ReturnToHome()
+    {
+        if (_disposed || !_isSearchActive)
+            return;
+
+        _isSearchActive = false;
+        _searchViewModel.Reset();
+        _searchEntry.SetText(string.Empty);
+        _searchBar.Visible = false;
+        Render(_viewModel.State);
+        SearchModeChanged?.Invoke(this, false);
+    }
+
+    private async void OnHomeSearchEntryActivated(object? sender, EventArgs args)
+    {
+        await _searchViewModel.SubmitAsync(_searchEntry.GetText());
     }
 
     private void OnHomeLoadMoreButtonClicked(object? sender, EventArgs args)
@@ -77,7 +124,22 @@ public partial class HomeView : ViewBase<Box>
         Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
-                Render(state);
+            {
+                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
+                if (!_isSearchActive)
+                    Render(state);
+            }
+
+            return false;
+        });
+    }
+
+    private void OnSearchStateChanged(object? sender, SearchViewState state)
+    {
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_disposed && _isSearchActive)
+                RenderSearch(state);
 
             return false;
         });
@@ -85,15 +147,13 @@ public partial class HomeView : ViewBase<Box>
 
     private void Render(HomeFeedState state)
     {
-        if (state is { IsLoading: false, IsLoadingMore: false })
-            ApplyVideos(NormalizeVideos(state.Videos));
+        ApplyVideos(NormalizeVideos(state.Videos));
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
         var isLoading = state.IsLoading || state.IsLoadingMore;
         _statusHost.Visible = false;
         _scrolledWindow.Visible = false;
         _loadMoreButton.Visible = false;
-        RefreshLoadingChanged?.Invoke(this, isLoading);
 
         if (!hasDisplayedVideos)
         {
@@ -107,6 +167,31 @@ public partial class HomeView : ViewBase<Box>
         _loadMoreButton.Label = isLoading && state.IsLoadingMore ? "Loading more…" : "Load more";
         _loadMoreButton.Sensitive = !isLoading;
         _loadMoreButton.Visible = true;
+    }
+
+    private void RenderSearch(SearchViewState state)
+    {
+        ApplyVideos(NormalizeVideos(state.Videos));
+        _statusHost.Visible = false;
+        _scrolledWindow.Visible = false;
+        _loadMoreButton.Visible = false;
+
+        if (_displayedVideos.Length > 0)
+        {
+            _scrolledWindow.Visible = true;
+            return;
+        }
+
+        _statusLoadingPage.Visible = state.IsLoading;
+        _statusPage.Visible = !state.IsLoading;
+        if (!state.IsLoading)
+        {
+            _statusPage.Title = "Search";
+            _statusPage.Description = state.Summary;
+            _statusPage.IconName = "system-search-symbolic";
+        }
+
+        _statusHost.Visible = true;
     }
 
     private void ShowStatus(HomeFeedState state)
@@ -139,7 +224,7 @@ public partial class HomeView : ViewBase<Box>
         _statusHost.Visible = true;
     }
 
-    private static VideoSummary[] NormalizeVideos(VideoSummary[] videos)
+    private static VideoSummary[] NormalizeVideos(IEnumerable<VideoSummary> videos)
     {
         return videos.Where(video => !video.IsShort).GroupBy(video => video.Id).Select(group => group.First())
             .ToArray();
@@ -230,6 +315,8 @@ public partial class HomeView : ViewBase<Box>
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
+        _searchViewModel.StateChanged -= OnSearchStateChanged;
+        _searchViewModel.Dispose();
 
         // Dropping the factory tears down its live/recycled list items while the
         // lifecycle handlers are still connected.  Any defensive leftovers are

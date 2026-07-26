@@ -14,7 +14,6 @@ using SilverScreen.Views.Home;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
-using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
@@ -45,9 +44,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ToggleButton _queueButton;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
-    private readonly SearchView _search;
-    private readonly Entry _searchEntry;
-    private readonly Popover _searchPopover;
+    private readonly Button _searchButton;
+    private readonly Image _searchButtonIcon;
     private readonly ApplicationServices _services;
     private readonly ShellViewModel _shell = new();
     private readonly ViewStack _stack;
@@ -62,9 +60,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack = GetRequiredObject<ViewStack>("view_stack");
         _mainStack = GetRequiredObject<Stack>("main_stack");
         var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
-        GetRequiredObject<Button>("search_button");
-        _searchPopover = GetRequiredObject<Popover>("search_popover");
-        _searchEntry = GetRequiredObject<Entry>("search_entry");
+        _searchButton = GetRequiredObject<Button>("search_button");
+        _searchButtonIcon = GetRequiredObject<Image>("search_button_icon");
         _homeRefreshButton = GetRequiredObject<Button>("home_refresh_button");
         _homeRefreshSpinner = GetRequiredObject<Spinner>("home_refresh_spinner");
         _homeRefreshStack = GetRequiredObject<Stack>("home_refresh_stack");
@@ -83,11 +80,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
-        _home = new HomeView(new HomeViewModel(services.HomeFeed), services.Thumbnails, actions);
-        _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
-        UpdateHomeRefreshButton(_home.IsLoading);
-        _search = new SearchView(new SearchViewModel(services.Search, _playback, _shell), services.Thumbnails,
+        _home = new HomeView(
+            new HomeViewModel(services.HomeFeed),
+            new SearchViewModel(services.Search, _playback, _shell),
+            services.Thumbnails,
             actions);
+        _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
+        _home.SearchModeChanged += OnHomeSearchModeChanged;
+        UpdateHomeRefreshButton(_home.IsLoading);
+        UpdateSearchButton(_home.IsSearchActive);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
         queueSidebarHost.Append(_queueView.Widget);
@@ -101,7 +102,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         switcher.Stack = _stack;
         _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
-        _stack.AddTitled(_search.Widget, "search", "Search").IconName = "system-search-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
         _accountButton.Popover = CreateAccountPopover();
@@ -177,21 +177,22 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnSearchButtonClicked(object? sender, EventArgs args)
     {
-        _searchPopover.Popup();
-        _searchEntry.GrabFocus();
+        if (_home.IsSearchActive)
+            _home.ReturnToHome();
+        else
+            _home.ActivateSearch();
     }
 
-    private async void OnSearchEntryActivated(object? sender, EventArgs args)
+    private void OnHomeSearchModeChanged(object? sender, bool isSearchActive)
     {
-        try
-        {
-            await _search.SubmitAsync(_searchEntry.GetText());
-            _searchPopover.Popdown();
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e, "Failed to submit search: {Message}", e.Message);
-        }
+        if (!_closed)
+            UpdateSearchButton(isSearchActive);
+    }
+
+    private void UpdateSearchButton(bool isSearchActive)
+    {
+        _searchButton.TooltipText = isSearchActive ? "Back to Home" : "Search";
+        _searchButtonIcon.IconName = isSearchActive ? "go-previous-symbolic" : "system-search-symbolic";
     }
 
     private Popover CreateAccountPopover()
@@ -311,10 +312,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_closed) return false;
         _closed = true;
         _shell.PropertyChanged -= OnShellPropertyChanged;
+        _home.SearchModeChanged -= OnHomeSearchModeChanged;
         _queueViewModel.StateChanged -= OnQueueStateChanged;
         _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged;
         _home.Dispose();
-        _search.Dispose();
         _queueView.Dispose();
         _webLogin?.Dispose();
         _webLogin = null;

@@ -8,7 +8,7 @@ namespace SilverScreen.Tests;
 public sealed class ViewModelTests
 {
     [Fact]
-    public async Task SearchSupersedesPriorRequest_AndNavigatesToSearch()
+    public async Task SearchSupersedesPriorRequest_WithoutChangingHomePage()
     {
         var service = new ControlledSearchService();
         var shell = new ShellViewModel();
@@ -25,12 +25,31 @@ public sealed class ViewModelTests
         service.Requests[1].Completion.SetResult(new SearchResultPage([video]));
         await second;
 
-        Assert.Equal("search", shell.SelectedPage);
+        Assert.Equal("home", shell.SelectedPage);
         Assert.Equal("Search complete.", shell.Status);
         Assert.False(viewModel.State.IsLoading);
         Assert.Equal(new[] { video }, viewModel.State.Videos);
         firstRequest.Completion.TrySetCanceled();
         await first;
+    }
+
+    [Fact]
+    public async Task ResetCancelsPendingSearchAndClearsResults()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new ShellViewModel());
+
+        var search = viewModel.SubmitAsync("query");
+        var request = Assert.Single(service.Requests);
+
+        viewModel.Reset();
+
+        Assert.True(request.Token.IsCancellationRequested);
+        Assert.False(viewModel.State.IsLoading);
+        Assert.Empty(viewModel.State.Videos);
+        Assert.Equal("Search results will appear here.", viewModel.Summary);
+        request.Completion.TrySetCanceled();
+        await search;
     }
 
     [Fact]
