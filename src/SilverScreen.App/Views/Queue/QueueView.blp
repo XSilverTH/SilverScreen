@@ -53,6 +53,10 @@ Gtk.Box QueueView {
     visible: false;
     hexpand: true;
     vexpand: true;
+
+    child: Gtk.ListView queue_list {
+      single-click-activate: false;
+    };
   }
 
   Gtk.Box queue_footer {

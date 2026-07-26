@@ -78,6 +78,10 @@ Gtk.Box CommentsView {
       child: Gtk.ScrolledWindow comments_scrolled_window {
         hexpand: true;
         vexpand: true;
+
+        child: Gtk.ListView comments_list {
+          single-click-activate: false;
+        };
       };
     }
 

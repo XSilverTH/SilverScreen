@@ -1,10 +1,37 @@
 using Gtk 4.0;
 
+menu video_actions {
+  item {
+    label: "Play";
+    action: "video.play";
+  }
+  item {
+    label: "Add to queue";
+    action: "video.add-to-queue";
+  }
+  item {
+    label: "Add next";
+    action: "video.add-next";
+  }
+  item {
+    label: "Open channel";
+    action: "video.open-channel";
+  }
+  item {
+    label: "Copy link";
+    action: "video.copy-link";
+  }
+}
+
 Gtk.Box VideoCardView {
   width-request: 336;
   halign: center;
   valign: start;
   hexpand: false;
+  margin-start: 10;
+  margin-end: 10;
+  margin-top: 12;
+  margin-bottom: 12;
 
   Gtk.Box card {
     orientation: vertical;
@@ -87,6 +114,7 @@ Gtk.Box VideoCardView {
         halign: end;
         valign: start;
         styles ["flat"]
+        menu-model: video_actions;
       }
     }
   }

@@ -1,6 +1,21 @@
 using Gtk 4.0;
 using Adw 1;
 
+menu app_menu {
+  item {
+    label: "Preferences";
+    action: "win.preferences";
+  }
+  item {
+    label: "About SilverScreen";
+    action: "win.about";
+  }
+  item {
+    label: "Quit";
+    action: "win.quit";
+  }
+}
+
 Adw.ApplicationWindow MainWindow {
   default-width: 1180;
   default-height: 760;
@@ -26,6 +41,8 @@ Adw.ApplicationWindow MainWindow {
             text: "YouTube";
             show-initials: true;
           };
+
+          popover: Popover account_popover {};
         }
 
         [start]
@@ -46,6 +63,7 @@ Adw.ApplicationWindow MainWindow {
         MenuButton app_menu_button {
           icon-name: "open-menu-symbolic";
           tooltip-text: "Main Menu";
+          menu-model: app_menu;
         }
 
         [end]
@@ -53,6 +71,14 @@ Adw.ApplicationWindow MainWindow {
           visible: false;
           tooltip-text: "Queued videos";
           styles ["flat", "queue-indicator"]
+
+          child: Label queue_button_label {
+            styles ["queue-count"]
+            halign: center;
+            valign: center;
+            width-request: 24;
+            height-request: 24;
+          };
         }
 
         [end]

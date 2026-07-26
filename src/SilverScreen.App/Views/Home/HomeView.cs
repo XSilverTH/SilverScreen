@@ -12,7 +12,7 @@ namespace SilverScreen.Views.Home;
 
 public partial class HomeView : ViewBase<Box>
 {
-    private readonly ConditionalWeakTable<ListItem, VideoCardCell> _cardsByListItem = new();
+    private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly Button _loadMoreButton;
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
@@ -264,48 +264,40 @@ public partial class HomeView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var cell = Box.New(Orientation.Vertical, 0);
-        cell.MarginStart = 10;
-        cell.MarginEnd = 10;
-        cell.MarginTop = 12;
-        cell.MarginBottom = 12;
         var card = new VideoCardView(_thumbnails, _videoActions);
-        cell.Append(card.Widget);
-        listItem.Child = cell;
-        _cardsByListItem.Add(listItem, new VideoCardCell(cell, card));
+        listItem.Child = card.Widget;
+        _cardsByListItem.Add(listItem, card);
     }
 
     private void OnVideoCardBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
         if (args.Object is not ListItem { Item: StringObject { String: { } id } } listItem ||
-            !_cardsByListItem.TryGetValue(listItem, out var cell) ||
+            !_cardsByListItem.TryGetValue(listItem, out var card) ||
             !_videosById.TryGetValue(id, out var video))
             return;
 
-        cell.Card.Bind(video);
+        card.Bind(video);
     }
 
     private void OnVideoCardUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
     {
-        if (args.Object is ListItem listItem && _cardsByListItem.TryGetValue(listItem, out var cell))
-            cell.Card.Unbind();
+        if (args.Object is ListItem listItem && _cardsByListItem.TryGetValue(listItem, out var card))
+            card.Unbind();
     }
 
     private void OnVideoCardTeardown(object? sender, SignalListItemFactory.TeardownSignalArgs args)
     {
-        if (args.Object is not ListItem listItem || !_cardsByListItem.TryGetValue(listItem, out var cell))
+        if (args.Object is not ListItem listItem || !_cardsByListItem.TryGetValue(listItem, out var card))
             return;
 
         _cardsByListItem.Remove(listItem);
-        DisposeVideoCardCell(listItem, cell);
+        DisposeVideoCardCell(listItem, card);
     }
 
-    private static void DisposeVideoCardCell(ListItem listItem, VideoCardCell cell)
+    private static void DisposeVideoCardCell(ListItem listItem, VideoCardView card)
     {
         listItem.Child = null;
-        cell.Cell.Remove(cell.Card.Widget);
-        cell.Card.Dispose();
-        cell.Cell.Dispose();
+        card.Dispose();
     }
 
     public new void Dispose()
@@ -339,9 +331,4 @@ public partial class HomeView : ViewBase<Box>
         base.Dispose();
     }
 
-    private sealed class VideoCardCell(Box cell, VideoCardView card)
-    {
-        public Box Cell { get; } = cell;
-        public VideoCardView Card { get; } = card;
-    }
 }

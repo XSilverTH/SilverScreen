@@ -42,6 +42,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly Stack _mainStack;
     private readonly IPlaybackService _playback;
     private readonly ToggleButton _queueButton;
+    private readonly Label _queueButtonLabel;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly Button _searchButton;
@@ -67,12 +68,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _homeRefreshStack = GetRequiredObject<Stack>("home_refresh_stack");
         _accountButton = GetRequiredObject<MenuButton>("account_button");
         _accountAvatar = GetRequiredObject<Avatar>("account_avatar");
-        var appMenuButton = GetRequiredObject<MenuButton>("app_menu_button");
+        GetRequiredObject<MenuButton>("app_menu_button");
         _queueButton = GetRequiredObject<ToggleButton>("queue_button");
+        _queueButtonLabel = GetRequiredObject<Label>("queue_button_label");
         var queueSplitView = GetRequiredObject<OverlaySplitView>("queue_split_view");
         var queueSidebarHost = GetRequiredObject<Box>("queue_sidebar_host");
         var playerHost = GetRequiredObject<Box>("player_host");
         _statusLabel = GetRequiredObject<Label>("status_label");
+        var accountPopover = GetRequiredObject<Popover>("account_popover");
 
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
             services.CookieFiles, services.PlaybackPresence, services.PlaybackTelemetry, services.VideoEngagement,
@@ -104,10 +107,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
-        _accountButton.Popover = CreateAccountPopover();
+        accountPopover.Child = _accountPopover.Widget;
         _queueButton.BindProperty("active", queueSplitView, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
-        appMenuButton.MenuModel = CreateApplicationMenuModel();
+        RegisterApplicationActions();
         _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
         UpdateQueueButton(_queueViewModel.State);
@@ -195,14 +198,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchButtonIcon.IconName = isSearchActive ? "go-previous-symbolic" : "system-search-symbolic";
     }
 
-    private Popover CreateAccountPopover()
-    {
-        var popover = Popover.New();
-        popover.Child = _accountPopover.Widget;
-        return popover;
-    }
 
-    private Menu CreateApplicationMenuModel()
+    private void RegisterApplicationActions()
     {
         var preferencesAction = SimpleAction.New("preferences", null);
         preferencesAction.OnActivate += (_, _) =>
@@ -220,12 +217,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var quitAction = SimpleAction.New("quit", null);
         quitAction.OnActivate += (_, _) => Widget.Close();
         Widget.AddAction(quitAction);
-
-        var menu = Menu.New();
-        menu.Append("Preferences", "win.preferences");
-        menu.Append("About SilverScreen", "win.about");
-        menu.Append("Quit", "win.quit");
-        return menu;
     }
 
     private void PresentAboutDialog()
@@ -283,7 +274,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueButton.Active = hasItems && _queueButton.Active;
 
         if (hasItems)
-            _queueButton.Child = QueueButtonContent(state.Items.Count);
+            _queueButtonLabel.SetText(state.Items.Count.ToString());
     }
 
     private void CloseQueue()
@@ -333,14 +324,4 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     }
 
 
-    private static Label QueueButtonContent(int count)
-    {
-        var label = Label.New(count.ToString());
-        label.CssClasses = ["queue-count"];
-        label.Halign = Align.Center;
-        label.Valign = Align.Center;
-        label.WidthRequest = 24;
-        label.HeightRequest = 24;
-        return label;
-    }
 }

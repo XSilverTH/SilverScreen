@@ -30,7 +30,6 @@ public class VideoCardView : ViewBase<Box>
     private readonly MenuButton _menu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
-    private readonly Menu _menuModel;
     private readonly Widget _placeholder;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
@@ -74,13 +73,6 @@ public class VideoCardView : ViewBase<Box>
         }
 
         _menu.InsertActionGroup("video", _menuActions);
-        _menuModel = Menu.New();
-        _menuModel.Append("Play", "video.play");
-        _menuModel.Append("Add to queue", "video.add-to-queue");
-        _menuModel.Append("Add next", "video.add-next");
-        _menuModel.Append("Open channel", "video.open-channel");
-        _menuModel.Append("Copy link", "video.copy-link");
-        _menu.MenuModel = _menuModel;
 
         _click = GestureClick.New();
         _click.Button = 0;
@@ -390,8 +382,6 @@ public class VideoCardView : ViewBase<Box>
             action.Dispose();
         }
 
-        _menuModel.RemoveAll();
-        _menuModel.Dispose();
         _menuActions.Dispose();
         base.Dispose();
         Builder.Dispose();

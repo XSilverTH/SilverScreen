@@ -45,9 +45,9 @@ public partial class CommentsView : ViewBase<Box>
         _factory.OnBind += OnRowBind;
         _factory.OnUnbind += OnRowUnbind;
         _factory.OnTeardown += OnRowTeardown;
-        _list = ListView.New(_selection, _factory);
-        _list.SingleClickActivate = false;
-        _scrolledWindow.Child = _list;
+        _list = GetRequiredObject<ListView>("comments_list");
+        _list.Model = _selection;
+        _list.Factory = _factory;
         _stack.VisibleChildName = "unavailable";
     }
 
@@ -236,7 +236,6 @@ public partial class CommentsView : ViewBase<Box>
         _factory.OnBind -= OnRowBind;
         _factory.OnUnbind -= OnRowUnbind;
         _factory.OnTeardown -= OnRowTeardown;
-        _scrolledWindow.Child = null;
         foreach (var row in _rowsByCell.Values)
             row.Dispose();
 
