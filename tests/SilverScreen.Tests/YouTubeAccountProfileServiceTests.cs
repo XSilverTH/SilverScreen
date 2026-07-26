@@ -112,7 +112,7 @@ public sealed class YouTubeAccountProfileServiceTests
     public void SessionChange_ClearsCachedProfile()
     {
         var cachePath = CreateTemporaryCachePath();
-        File.WriteAllText(cachePath, """{"DisplayName":"Silver","AvatarUrl":"https://example.com/avatar.png"}""");
+        File.WriteAllText(cachePath, """{"displayName":"Silver","avatarUrl":"https://example.com/avatar.png"}""");
         var session = new InMemorySessionService();
         session.SetManualSession(CreateNetscapeCookieFile(("SAPISID", "fake-sapisid")),
             SessionCookieFormat.NetscapeCookiesText);

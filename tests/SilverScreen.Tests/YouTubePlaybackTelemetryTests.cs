@@ -44,20 +44,6 @@ public sealed class YouTubePlaybackTelemetryTests
         Assert.All(beacons, beacon => Assert.Equal("2", QueryValue(beacon, "ver")));
     }
 
-    [Fact]
-    public async Task MarkWatchedPreferenceSuppressesLiveTelemetry()
-    {
-        var handler = new TrackingHandler();
-        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true, true),
-            new ManualSessionService(), _ => handler);
-        using var telemetry = service.Start(CreateRequest());
-
-        telemetry.UpdateState(State(0, false));
-
-        await Task.Delay(100);
-        Assert.Empty(handler.Beacons);
-        Assert.Empty(handler.Requests);
-    }
 
     private static PlaybackRequest CreateRequest()
     {

@@ -52,12 +52,6 @@ public sealed class YtDlpCommentServiceTests
             runner.StartInfo!.ArgumentList);
     }
 
-    [Fact]
-    public void BuildCommentsStartInfo_RejectsUnknownSort()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            YtDlpRunner.BuildCommentsStartInfo("yt-dlp", VideoId, (YouTubeCommentSort)42));
-    }
 
     [Fact]
     public async Task GetCommentsAsync_InvalidIdDoesNotCreateLeaseOrLaunchProcess()

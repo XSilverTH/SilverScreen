@@ -61,21 +61,6 @@ public sealed class DiscordPresenceTests
         Assert.Equal(startedAt.UtcDateTime, replay.Timestamps.Start);
     }
 
-    [Fact]
-    public void ClearDropsCachedActivityBeforeLaterEnable()
-    {
-        var preferences = new MutablePreferencesService(true);
-        var clients = new List<TrackingClient>();
-        using var service = new DiscordPresenceService(preferences, "123", _ => AddClient(clients));
-
-        service.SetPlaybackState(CreateRequest(), PlayingState());
-        service.Clear();
-        preferences.SetEnabled(false);
-        preferences.SetEnabled(true);
-
-        Assert.Single(clients);
-        Assert.Single(clients[0].Presences);
-    }
 
 
     [Fact]

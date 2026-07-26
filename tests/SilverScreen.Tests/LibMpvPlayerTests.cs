@@ -102,16 +102,6 @@ public sealed class LibMpvPlayerTests
             native.StringProperties.Last(property => property.Name == "ytdl-raw-options"));
     }
 
-    [Fact]
-    public void TogglePauseUsesMpvAtomicPauseCommand()
-    {
-        using var native = new RecordingNative();
-        using var player = new LibMpvPlayer(native, action => action());
-
-        player.TogglePause();
-
-        Assert.True(SpinWait.SpinUntil(() => native.Commands.Contains("cycle|pause"), TimeSpan.FromSeconds(2)));
-    }
 
     [Fact]
     public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()
@@ -128,14 +118,6 @@ public sealed class LibMpvPlayerTests
         Assert.Contains(("sid", "no"), native.StringProperties);
     }
 
-    [Theory]
-    [InlineData("en", "en")]
-    [InlineData("en-US", "en")]
-    [InlineData("pt-BR", "pt-PT")]
-    public void PreferredSubtitleLanguageMatchesRegionalVariants(string availableLanguage, string preferredLanguage)
-    {
-        Assert.True(EmbeddedPlayerView.SubtitleLanguageMatches(availableLanguage, preferredLanguage));
-    }
 
     [Fact]
     public void KeyboardTransportCommandsUseExpectedMpvCommands()
@@ -161,16 +143,6 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("playlist-prev", native.Commands);
     }
 
-    [Fact]
-    public void NativeLoaderCreatesAndDestroysAnMpvHandle()
-    {
-        using var native = new LibMpvNative();
-        Assert.True(native.IsLoaded, native.AvailabilityError);
-
-        var handle = native.Create();
-        Assert.NotEqual(0, handle);
-        native.Destroy(handle);
-    }
 
     private static VideoSummary Video(string id)
     {

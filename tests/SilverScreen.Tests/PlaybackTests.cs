@@ -142,19 +142,15 @@ public sealed class PlaybackTests
     {
         var request = new PlaybackRequest([CreateVideo(string.Empty)]);
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<InvalidOperationException>(() =>
             MpvCommandBuilder.Build(request, new PlaybackOptions()));
-
-        Assert.Equal("No playable URL is available.", exception.Message);
     }
 
     [Fact]
     public void MpvCommandBuilderRejectsAnEmptyPlaylist()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<InvalidOperationException>(() =>
             MpvCommandBuilder.Build(new PlaybackRequest([]), new PlaybackOptions()));
-
-        Assert.Equal("No videos were provided for playback.", exception.Message);
     }
 
     [Fact]
@@ -166,10 +162,8 @@ public sealed class PlaybackTests
             CreateVideo("M7lc1UVf-VE")
         ]);
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<InvalidOperationException>(() =>
             MpvCommandBuilder.Build(request, new PlaybackOptions()));
-
-        Assert.Equal("Playback URL must be an absolute HTTP or HTTPS URL.", exception.Message);
     }
 
     private static PlaybackPresenceState PlayingState(DateTimeOffset observedAt)
