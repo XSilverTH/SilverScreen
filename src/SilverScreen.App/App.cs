@@ -258,6 +258,30 @@ public partial class App
                                  padding: 4px;
                                }
 
+                               .player-queue-controls {
+                                 background-color: alpha(#ffffff, 0.14);
+                                 border-radius: 14px;
+                               }
+
+                               button.player-queue-button {
+                                 border-radius: 0;
+                                 color: #ffffff;
+                                 min-height: 28px;
+                                 min-width: 28px;
+                                 padding: 4px;
+                               }
+
+                               button.player-queue-button:hover {
+                                 background-color: alpha(#ffffff, 0.16);
+                               }
+
+                               .player-queue-separator {
+                                 background-color: alpha(#ffffff, 0.2);
+                                 margin-bottom: 6px;
+                                 margin-top: 6px;
+                                 min-width: 1px;
+                               }
+
                                .player-center-controls {
                                  margin-bottom: 28px;
                                }

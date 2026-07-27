@@ -52,6 +52,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly IPreferencesService _preferences;
     private readonly Action _presentRequested;
     private readonly DropDown _qualityDropdown;
+    private readonly Box _queueControls;
     private readonly ISessionService _session;
     private readonly Popover _settingsPopover;
     private EventControllerKey? _keyboardController;
@@ -113,6 +114,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _volumePopover = GetRequiredObject<Popover>("player_volume_popover");
         _settingsPopover = GetRequiredObject<Popover>("player_settings_popover");
         _qualityDropdown = GetRequiredObject<DropDown>("player_quality_dropdown");
+        _queueControls = GetRequiredObject<Box>("player_queue_controls");
         _speedLabel = GetRequiredObject<Label>("player_speed_label");
         _speedScale = GetRequiredObject<Scale>("player_speed_scale");
         _subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
@@ -213,6 +215,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             RegisterActivity();
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
+            _queueControls.SetVisible(request.Videos.Length > 1);
             _hasMedia = false;
             _presentRequested();
             AttachKeyboardShortcuts();
@@ -400,6 +403,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _backRequested();
     }
 
+    private void OnPreviousQueueButtonClicked(object? sender, EventArgs args)
+    {
+        _player.MovePlaylist(false);
+    }
+
+    private void OnNextQueueButtonClicked(object? sender, EventArgs args)
+    {
+        _player.MovePlaylist(true);
+    }
+
+
     private void OnRewindButtonClicked(object? sender, EventArgs args)
     {
         _player.SeekRelative(-10);
@@ -569,6 +583,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
         _request = null;
+        _queueControls.SetVisible(false);
         _hasMedia = false;
         _player.Stop();
         ReleaseSession();
@@ -580,6 +595,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         ReleaseSession();
         _request = null;
         _hasMedia = false;
+        _queueControls.SetVisible(false);
         CancelEngagementLoad();
         _commentsView.SetVideo(null);
         _commentsVideoId = null;

@@ -2,7 +2,7 @@ using Gtk 4.0;
 using Adw 1;
 
 Adw.OverlaySplitView EmbeddedPlayerView {
-  sidebar-position: end;
+  sidebar-position: start;
   collapsed: true;
   focusable: true;
 
@@ -68,6 +68,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
     valign: center;
     styles ["player-center-controls"]
 
+
     Gtk.Button player_rewind_button {
       clicked => $OnRewindButtonClicked();
       icon-name: "media-seek-backward-symbolic";
@@ -106,7 +107,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       Gtk.Box player_metadata {
         orientation: vertical;
         spacing: 2;
-        hexpand: true;
+        width-request: 320;
 
         Gtk.Label player_title_label {
           label: "Nothing playing";
@@ -121,6 +122,47 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           ellipsize: end;
           styles ["player-subtitle"]
         }
+      }
+
+      Gtk.Box player_queue_controls {
+        spacing: 0;
+        valign: center;
+        visible: false;
+        styles ["player-queue-controls"]
+
+        Gtk.Button player_previous_queue_button {
+          clicked => $OnPreviousQueueButtonClicked();
+          icon-name: "media-skip-backward-symbolic";
+          tooltip-text: "Previous video (P)";
+          styles ["flat", "player-queue-button"]
+        }
+
+        Gtk.Separator {
+          orientation: vertical;
+          styles ["player-queue-separator"]
+        }
+
+        Gtk.Button player_queue_button {
+          icon-name: "view-list-symbolic";
+          tooltip-text: "Manage play queue";
+          styles ["flat", "player-queue-button"]
+        }
+
+        Gtk.Separator {
+          orientation: vertical;
+          styles ["player-queue-separator"]
+        }
+
+        Gtk.Button player_next_queue_button {
+          clicked => $OnNextQueueButtonClicked();
+          icon-name: "media-skip-forward-symbolic";
+          tooltip-text: "Next video (N)";
+          styles ["flat", "player-queue-button"]
+        }
+      }
+
+      Gtk.Box {
+        hexpand: true;
       }
 
       Gtk.Box player_reactions {
