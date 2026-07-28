@@ -21,6 +21,31 @@ public sealed class EmbeddedPlayerViewTests
     }
 
     [Theory]
+    [InlineData(0, 24)]
+    [InlineData(300, 786)]
+    [InlineData(600, 1548)]
+    public void GetTimelineTrackPosition_UsesTheScalesActualTrackBounds(double positionSeconds,
+        double expectedCoordinate)
+    {
+        var coordinate = EmbeddedPlayerView.GetTimelineTrackPosition(TimeSpan.FromSeconds(positionSeconds),
+            TimeSpan.FromMinutes(10), 24, 1524);
+
+        Assert.Equal(expectedCoordinate, coordinate);
+    }
+
+    [Fact]
+    public void GetTimelineTrackBounds_AnchorsTheActivePlaybackPositionToTheRenderedThumb()
+    {
+        var (trackStart, trackWidth) = EmbeddedPlayerView.GetTimelineTrackBounds(22, 370, 159, 205,
+            TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(600));
+
+        Assert.Equal(20, trackStart);
+        Assert.Equal(324, trackWidth);
+        Assert.Equal(182, EmbeddedPlayerView.GetTimelineTrackPosition(TimeSpan.FromSeconds(300),
+            TimeSpan.FromSeconds(600), trackStart, trackWidth));
+    }
+
+    [Theory]
     [InlineData(true, false, true)]
     [InlineData(true, true, false)]
     [InlineData(false, false, false)]

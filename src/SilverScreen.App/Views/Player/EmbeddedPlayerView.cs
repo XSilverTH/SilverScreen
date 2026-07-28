@@ -36,7 +36,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly CommentsView _commentsView;
     private readonly List<Button> _chapterMarkers = [];
     private TimeSpan _chapterDuration;
-    private int _chapterMarkerHostWidth = -1;
+    private int _chapterMarkerTrackStart = -1;
+    private int _chapterMarkerTrackWidth = -1;
     private IReadOnlyList<LibMpvChapter> _chapters = [];
     private readonly DrawingArea _sponsorBlockTimeline;
     private TimeSpan _sponsorBlockDuration;
@@ -112,6 +113,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private LibMpvPlaybackState? _lastSponsorBlockPlaybackState;
     private string? _lastSponsorBlockPlaybackVideoId;
     private string _sponsorBlockConfigurationKey = string.Empty;
+    private TimeSpan _timelinePlaybackPosition;
     private bool _updatingControls;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
@@ -597,12 +599,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         UpdateSubtitleTracks(state.SubtitleTracks);
         try
         {
+            _timelinePlaybackPosition = state.Position;
             _positionLabel.SetText(FormatTime(state.Position));
             _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : FormatTime(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
+            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
             UpdateChapters(state.Chapters, state.Duration);
             UpdateSponsorBlockSegmentDisplay(state.Duration);
-            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
             _playPauseButton.SetIconName(state is { HasMedia: true, IsPaused: false }
                 ? "media-playback-pause-symbolic"
@@ -697,6 +700,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _timeline.SetSensitive(false);
             _playPauseButton.SetIconName("media-playback-start-symbolic");
             _positionLabel.SetText("0:00");
+            _timelinePlaybackPosition = TimeSpan.Zero;
         }
         finally
         {
@@ -818,11 +822,41 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         UpdateSponsorBlockSegmentDisplay(_sponsorBlockDuration);
     }
+    private (int Start, int Width) GetTimelineTrack(TimeSpan duration, Widget coordinateTarget)
+    {
+        _timeline.GetRangeRect(out var trough);
+        _timeline.GetSliderRange(out var sliderStart, out var sliderEnd);
+        var (start, width) = GetTimelineTrackBounds(trough.X, trough.Width, sliderStart, sliderEnd,
+            _timelinePlaybackPosition, duration);
+        var startPoint = new Graphene.Point { X = start, Y = 0 };
+        var endPoint = new Graphene.Point { X = start + width, Y = 0 };
+        if (!_timeline.ComputePoint(coordinateTarget, startPoint, out var transformedStart) ||
+            !_timeline.ComputePoint(coordinateTarget, endPoint, out var transformedEnd))
+            return (start, width);
+
+        return ((int)Math.Round(transformedStart.X), (int)Math.Round(transformedEnd.X - transformedStart.X));
+    }
+
+    internal static (int Start, int Width) GetTimelineTrackBounds(int troughStart, int troughWidth,
+        int sliderStart, int sliderEnd, TimeSpan playbackPosition, TimeSpan duration)
+    {
+        var sliderWidth = Math.Max(0, sliderEnd - sliderStart);
+        var trackWidth = Math.Max(0, troughWidth - sliderWidth);
+        if (duration <= TimeSpan.Zero || trackWidth == 0)
+            return (troughStart + sliderWidth / 2, trackWidth);
+
+        var sliderCenter = (sliderStart + sliderEnd) / 2d;
+        var currentFraction = Math.Clamp(playbackPosition.TotalSeconds / duration.TotalSeconds, 0, 1);
+        return ((int)Math.Round(sliderCenter - currentFraction * trackWidth), trackWidth);
+    }
+
     private void DrawSponsorBlockTimeline(DrawingArea drawingArea, Cairo.Context context, int width, int height)
     {
         if (!_preferences.GetPreferences().SponsorBlockSegmentDisplayEnabled ||
             _sponsorBlockDuration <= TimeSpan.Zero || width <= 0 || height <= 0)
             return;
+        var (trackStart, trackWidth) = GetTimelineTrack(_sponsorBlockDuration, drawingArea);
+        if (trackWidth <= 0) return;
 
         const double rangeHeight = 10;
         var rangeY = Math.Max(0, (height - rangeHeight) / 2);
@@ -830,10 +864,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             if (segment.Start >= _sponsorBlockDuration) continue;
 
-            var start = Math.Clamp(segment.Start.TotalSeconds / _sponsorBlockDuration.TotalSeconds, 0, 1);
-            var end = Math.Clamp(segment.End.TotalSeconds / _sponsorBlockDuration.TotalSeconds, 0, 1);
-            var x = start * width;
-            var rangeWidth = Math.Max(2, (end - start) * width);
+            var start = GetTimelineTrackPosition(segment.Start, _sponsorBlockDuration, trackStart, trackWidth);
+            var end = GetTimelineTrackPosition(segment.End, _sponsorBlockDuration, trackStart, trackWidth);
+            var x = start;
+            var rangeWidth = Math.Max(2, end - start);
 
             context.SetSourceRgba(1, 0.745, 0.043, 1);
             context.Rectangle(x, rangeY, rangeWidth, rangeHeight);
@@ -868,6 +902,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _sponsorBlockDuration = ResolveSponsorBlockDuration(duration);
         _sponsorBlockTimeline.QueueDraw();
     }
+
+    internal static double GetTimelineTrackPosition(TimeSpan position, TimeSpan duration, int trackStart,
+        int trackWidth)
+    {
+        if (duration <= TimeSpan.Zero || trackWidth <= 0) return trackStart;
+
+        var fraction = Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0, 1);
+        return trackStart + fraction * trackWidth;
+    }
+
 
     internal static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(
         IReadOnlyList<SponsorBlockSegment> segments, TimeSpan position)
@@ -1001,7 +1045,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
             _chapterMarkers.Clear();
             _chapters = chapters;
-            _chapterMarkerHostWidth = -1;
+            _chapterMarkerTrackStart = -1;
+            _chapterMarkerTrackWidth = -1;
             foreach (var chapter in chapters)
             {
                 var marker = Button.New();
@@ -1034,12 +1079,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void LayoutChapterMarkers(TimeSpan duration)
     {
-        var width = _chapterMarkerHost.GetAllocatedWidth();
-        if (_chapterDuration == duration && _chapterMarkerHostWidth == width) return;
+        var (trackStart, trackWidth) = GetTimelineTrack(duration, _chapterMarkerHost);
+        if (_chapterDuration == duration && _chapterMarkerTrackStart == trackStart &&
+            _chapterMarkerTrackWidth == trackWidth)
+            return;
 
         _chapterDuration = duration;
-        _chapterMarkerHostWidth = width;
-        var hasDuration = duration > TimeSpan.Zero;
+        _chapterMarkerTrackStart = trackStart;
+        _chapterMarkerTrackWidth = trackWidth;
+        var hostWidth = _chapterMarkerHost.GetAllocatedWidth();
+        var hasDuration = duration > TimeSpan.Zero && trackWidth > 0;
         for (var index = 0; index < _chapterMarkers.Count; index++)
         {
             var marker = _chapterMarkers[index];
@@ -1047,9 +1096,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             marker.SetVisible(hasDuration && chapter.Start <= duration);
             if (!hasDuration) continue;
 
-            var position = Math.Clamp(chapter.Start.TotalSeconds / duration.TotalSeconds, 0, 1);
-            var markerX = Math.Clamp(Math.Round(position * (width - 1) - ChapterMarkerHitTargetWidth / 2d),
-                0, Math.Max(0, width - ChapterMarkerHitTargetWidth));
+            var markerX = Math.Clamp(Math.Round(
+                    GetTimelineTrackPosition(chapter.Start, duration, trackStart, trackWidth) -
+                    ChapterMarkerHitTargetWidth / 2d),
+                0, Math.Max(0, hostWidth - ChapterMarkerHitTargetWidth));
             marker.MarginStart = (int)markerX;
         }
     }
