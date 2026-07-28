@@ -85,6 +85,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private YouTubeRatingState _ratingState;
     private bool _rendererReady;
     private PlaybackRequest? _request;
+    private readonly DesktopMediaIntegration _desktopMedia;
     private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
     private IReadOnlyList<LibMpvSubtitleTrack> _subtitleTracks = [];
     private double _speed = 1;
@@ -144,6 +145,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (!_disposed) action();
             return false;
         }));
+        _desktopMedia = new DesktopMediaIntegration(_player, _presentRequested);
         _player.RenderRequested += OnRenderRequested;
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
@@ -179,6 +181,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.PlaybackFailed -= OnPlaybackFailed;
         _player.PlaybackEnded -= OnPlaybackEnded;
         _player.Dispose();
+        _desktopMedia.Dispose();
         ReleaseSession();
         GC.SuppressFinalize(this);
     }
@@ -525,6 +528,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
             _playbackTelemetrySession?.UpdateState(playbackState);
         }
+        _desktopMedia.UpdatePlayback(_request, state);
         SetLoading(state.IsLoading);
         _updatingControls = true;
         UpdateSubtitleTracks(state.SubtitleTracks);
@@ -610,6 +614,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _playbackTelemetrySession = null;
         _cookieFile?.Dispose();
         _cookieFile = null;
+        _desktopMedia.ClearPlayback();
     }
 
     private void ResetTransport()

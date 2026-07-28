@@ -34,11 +34,17 @@
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0"/>
+        <PackageReference Include="Tmds.DBus.Generator" Version="0.94.2"/>
+        <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+        <InternalsVisibleTo Include="SilverScreen.Tests"/>
     </ItemGroup>
 
     <ItemGroup>
         <AdditionalFiles Include="**\*.blp"/>
+        <AdditionalFiles Include="Dbus\org.mpris.MediaPlayer2.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Handler"/>
+        <AdditionalFiles Include="Dbus\org.mpris.MediaPlayer2.Player.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Handler"/>
+        <AdditionalFiles Include="Dbus\org.freedesktop.portal.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Proxy"/>
     </ItemGroup>
 
     <ItemGroup>
