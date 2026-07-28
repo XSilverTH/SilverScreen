@@ -8,6 +8,7 @@ namespace SilverScreen.Views.Preferences;
 
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
+    private readonly SwitchRow _autoAdvanceNextVideoRow;
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly SwitchRow _fullscreenRow;
     private readonly SwitchRow _markWatchedRow;
@@ -37,6 +38,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         _mpvPathRow = GetRequiredObject<EntryRow>("mpv_path_row");
         _qualityRow = GetRequiredObject<ComboRow>("quality_row");
         _playbackBackendRow = GetRequiredObject<ComboRow>("playback_backend_row");
+        _autoAdvanceNextVideoRow = GetRequiredObject<SwitchRow>("auto_advance_next_video_row");
         _fullscreenRow = GetRequiredObject<SwitchRow>("fullscreen_row");
         _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
         _youTubePlaybackTelemetryRow = GetRequiredObject<SwitchRow>("youtube_playback_telemetry_row");
@@ -59,6 +61,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             _playbackBackendRow.Selected =
                 (uint)GetSelectionIndex(_playbackBackendModel, prefs.PlaybackBackend);
             _fullscreenRow.Active = prefs.OpenInFullscreen;
+            _autoAdvanceNextVideoRow.Active = prefs.AutoAdvanceNextVideo;
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
             ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
@@ -122,6 +125,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             PlaybackBackend = GetSelectedValue(_playbackBackendModel, _playbackBackendRow.Selected,
                 PlaybackBackends.ExternalMpv),
             OpenInFullscreen = _fullscreenRow.Active,
+            AutoAdvanceNextVideo = _autoAdvanceNextVideoRow.Active,
             MaxResults = maxResults,
             MarkWatchedVideos = _markWatchedRow.Active && !_youTubePlaybackTelemetryRow.Active,
             YouTubePlaybackTelemetryEnabled = _youTubePlaybackTelemetryRow.Active,

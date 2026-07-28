@@ -135,6 +135,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
             VideoQuality = prefs.VideoQuality,
             MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,
+            AutoAdvanceNextVideo = prefs.AutoAdvanceNextVideo,
             ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
         };
     }

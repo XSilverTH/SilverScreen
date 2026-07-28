@@ -42,6 +42,7 @@ public sealed class PreferencesTests : IDisposable
             PreferredSubtitleLanguage = "en",
             PlaybackBackend = PlaybackBackends.EmbeddedPlayer,
             OpenInFullscreen = false,
+            AutoAdvanceNextVideo = false,
             MaxResults = 50,
             MarkWatchedVideos = true,
             DiscordRichPresenceEnabled = true
@@ -61,6 +62,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("en", loaded.PreferredSubtitleLanguage);
         Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
         Assert.False(loaded.OpenInFullscreen);
+        Assert.False(loaded.AutoAdvanceNextVideo);
         Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);

@@ -37,6 +37,7 @@ public sealed class MpvCommandBuilder
         var ytdlFormat = BuildYtdlFormat(options.VideoQuality);
         if (ytdlFormat is not null)
             arguments.Add($"--ytdl-format={ytdlFormat}");
+        arguments.Add(options.AutoAdvanceNextVideo ? "--keep-open=yes" : "--keep-open=always");
         if (!string.IsNullOrWhiteSpace(inputIpcServerPath))
             arguments.Add($"--input-ipc-server={inputIpcServerPath}");
 

@@ -77,11 +77,21 @@ public sealed class PlaybackTests
                 "--fs",
                 "--ytdl-raw-options=cookies=/tmp/silverscreen-cookies/cookies.txt",
                 "--ytdl-format=bestvideo[height<=720]+bestaudio/best[height<=720]",
+                "--keep-open=yes",
                 "https://www.youtube.com/watch?v=abc123_X-yZ",
                 "https://youtu.be/dQw4w9WgXcQ",
                 "https://www.youtube.com/watch?v=M7lc1UVf-VE"
             ],
             command.Arguments);
+    }
+
+    [Fact]
+    public void MpvCommandBuilderKeepsCurrentVideoOpenWhenAutoAdvanceIsDisabled()
+    {
+        var command = MpvCommandBuilder.Build(new PlaybackRequest([CreateVideo("abc123_X-yZ")]),
+            new PlaybackOptions { AutoAdvanceNextVideo = false });
+
+        Assert.Contains("--keep-open=always", command.Arguments);
     }
 
     [Fact]

@@ -153,7 +153,6 @@ public sealed class LibMpvPlayer : IDisposable
     public event EventHandler? RenderRequested;
     public event EventHandler<LibMpvPlaybackState>? StateChanged;
     public event EventHandler<string>? PlaybackFailed;
-    public event EventHandler? PlaybackEnded;
 
     public unsafe void InitializeRenderer()
     {
@@ -476,27 +475,7 @@ public sealed class LibMpvPlayer : IDisposable
     private void HandleEndFile(LibMpvEventEndFile endFile)
     {
         if (endFile.Reason == LibMpvEndFileReason.Error)
-        {
             PublishFailure(_native.ErrorString(endFile.Error));
-            return;
-        }
-
-        if (endFile.Reason != LibMpvEndFileReason.Eof) return;
-        bool ended;
-        lock (_gate)
-        {
-            var itemCount = _request?.Videos.Length ?? 0;
-            ended = _state.PlaylistIndex >= itemCount - 1;
-            if (ended)
-                _state = _state with
-                {
-                    HasMedia = false, IsPaused = true, Position = TimeSpan.Zero, IsLoading = false, SubtitleTracks = []
-                };
-        }
-
-        if (!ended) return;
-        PublishState();
-        Dispatch(() => PlaybackEnded?.Invoke(this, EventArgs.Empty));
     }
 
     private void LoadCurrentRequest()
@@ -520,6 +499,8 @@ public sealed class LibMpvPlayer : IDisposable
         var rawOptions = BuildYtdlRawOptions(cookieFilePath,
             preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled);
         Check(_native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
+        Check(_native.SetPropertyString(_handle, "keep-open",
+            preferences.AutoAdvanceNextVideo ? "yes" : "always"));
         Check(_native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));
         Check(_native.Command(_handle, "loadfile", urls[0], "replace"));

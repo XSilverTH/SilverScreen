@@ -114,6 +114,7 @@ public sealed class FilePreferencesService : IPreferencesService
             MpvExecutablePath = source.MpvExecutablePath,
             PlaybackBackend = source.PlaybackBackend,
             OpenInFullscreen = source.OpenInFullscreen,
+            AutoAdvanceNextVideo = source.AutoAdvanceNextVideo,
             VideoQuality = source.VideoQuality,
             PreferredSubtitleLanguage = source.PreferredSubtitleLanguage,
             YtDlpExecutablePath = source.YtDlpExecutablePath,

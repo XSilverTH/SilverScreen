@@ -10,4 +10,5 @@ public sealed class PlaybackOptions
 
     public bool MarkWatchedVideos { get; init; }
     public bool Fullscreen { get; init; } = true;
+    public bool AutoAdvanceNextVideo { get; init; } = true;
 }

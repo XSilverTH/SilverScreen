@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Concurrent;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Playback;
@@ -39,6 +40,7 @@ public sealed class LibMpvPlayerTests
             "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt,mark-watched="),
             native.StringProperties);
         Assert.Contains(("ytdl-format", "bestvideo[height<=720]+bestaudio/best[height<=720]"), native.StringProperties);
+        Assert.Contains(("keep-open", "yes"), native.StringProperties);
     }
 
     [Fact]
@@ -102,6 +104,39 @@ public sealed class LibMpvPlayerTests
             native.StringProperties.Last(property => property.Name == "ytdl-raw-options"));
     }
 
+    [Fact]
+    public void EndOfFinalVideoKeepsLoadedMediaAvailableForReplay()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var stateField = typeof(LibMpvPlayer).GetField("_state", BindingFlags.Instance | BindingFlags.NonPublic);
+        var handleEndFile = typeof(LibMpvPlayer).GetMethod("HandleEndFile",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(stateField);
+        Assert.NotNull(handleEndFile);
+        stateField.SetValue(player, new LibMpvPlaybackState(0, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3),
+            true, false, 100, 1, true, true, false, []));
+
+        handleEndFile.Invoke(player, [new LibMpvEventEndFile(LibMpvEndFileReason.Eof, 0, 0, 0, 0)]);
+
+        var state = Assert.IsType<LibMpvPlaybackState>(stateField.GetValue(player));
+        Assert.True(state.HasMedia);
+        Assert.Equal(TimeSpan.FromMinutes(3), state.Position);
+    }
+
+    [Fact]
+    public void LoadPreventsAutomaticAdvanceWhenConfigured()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]),
+            new AppPreferences { AutoAdvanceNextVideo = false }, null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Contains(("keep-open", "always")), TimeSpan.FromSeconds(2)));
+    }
+
 
     [Fact]
     public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()
@@ -153,7 +188,7 @@ public sealed class LibMpvPlayerTests
     {
         public ConcurrentBag<string> Commands { get; } = [];
         public ConcurrentBag<(string Name, double Value)> DoubleProperties { get; } = [];
-        public ConcurrentBag<(string Name, string Value)> StringProperties { get; } = [];
+        public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
         public bool IsAvailable => true;
         public string? AvailabilityError => null;
 
@@ -179,7 +214,7 @@ public sealed class LibMpvPlayerTests
 
         public int SetPropertyString(nint handle, string name, string value)
         {
-            StringProperties.Add((name, value));
+            StringProperties.Enqueue((name, value));
             return 0;
         }
 

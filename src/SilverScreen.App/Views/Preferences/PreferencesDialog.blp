@@ -58,6 +58,12 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Open videos in fullscreen";
         subtitle: "Automatically start video playback in full screen";
       }
+
+      Adw.SwitchRow auto_advance_next_video_row {
+        notify => $OnRowNotify();
+        title: "Automatically play next video";
+        subtitle: "Advance to the next video in the playlist when the current video ends";
+      }
     }
 
     Adw.PreferencesGroup {

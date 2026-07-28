@@ -149,7 +149,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.RenderRequested += OnRenderRequested;
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
-        _player.PlaybackEnded += OnPlaybackEnded;
         SetControls(100, 1, "Best");
         SetupControlsAutohide();
         SetupKeyboardShortcuts();
@@ -180,7 +179,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.RenderRequested -= OnRenderRequested;
         _player.StateChanged -= OnStateChanged;
         _player.PlaybackFailed -= OnPlaybackFailed;
-        _player.PlaybackEnded -= OnPlaybackEnded;
         _player.Dispose();
         _desktopMedia.Dispose();
         ReleaseSession();
@@ -576,11 +574,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
     }
 
-    private void OnPlaybackEnded(object? sender, EventArgs args)
-    {
-        _hasMedia = false;
-        ReleaseSession();
-    }
 
     private void OnPlaybackFailed(object? sender, string detail)
     {
