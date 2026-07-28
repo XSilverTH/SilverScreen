@@ -404,7 +404,19 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       }
     }
   }
+
+    [overlay]
+    Gtk.Button player_sponsorblock_skip_button {
+      clicked => $OnSponsorBlockSkipButtonClicked();
+      halign: end;
+      valign: end;
+      margin-end: 32;
+      margin-bottom: 150;
+      visible: false;
+      styles ["player-sponsorblock-skip-button"]
+    }
   };
+
 
   sidebar: Gtk.Box comments_sidebar_host {
     hexpand: false;

@@ -353,6 +353,19 @@ public partial class App
                                  opacity: 1;
                                  padding: 0;
                                }
+
+                               button.player-sponsorblock-skip-button {
+                                 background-color: #ffbe0b;
+                                 border-radius: 999px;
+                                 color: #1a1a1a;
+                                 font-weight: 700;
+                                 min-height: 32px;
+                                 padding: 4px 12px;
+                               }
+
+                               button.player-sponsorblock-skip-button:hover {
+                                 background-color: #ffd166;
+                               }
                                """);
 
         StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);

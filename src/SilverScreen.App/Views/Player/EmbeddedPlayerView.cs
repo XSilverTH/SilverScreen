@@ -24,6 +24,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const int ChapterMarkerHitTargetWidth = 20;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
+    private const uint SponsorBlockSkipPromptDurationMilliseconds = 3_000;
     private const double MinimumPlaybackSpeed = 0.25;
     private const double MaximumPlaybackSpeed = 5;
     private const double PlaybackSpeedIncrement = 0.25;
@@ -55,6 +56,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Label _likesLabel;
     private readonly Box _loadingIndicator;
     private readonly Button _playPauseButton;
+    private readonly Button _sponsorBlockSkipButton;
     private readonly IPlaybackPresenceService _playbackPresence;
     private readonly IYouTubePlaybackTelemetryService _playbackTelemetry;
     private readonly LibMpvPlayer _player;
@@ -82,11 +84,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Scale _volumeScale;
     private readonly IYouTubeRatingService _youtubeRating;
     private readonly HashSet<string> _autoSkippedSponsorBlockSegmentIds = new(StringComparer.Ordinal);
+    private SponsorBlockSegment? _activeManualSponsorBlockSegment;
     private string? _commentsVideoId;
     private uint _controlsAutohideSource;
     private bool _controlsVisible = true;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
+    private bool _manualSponsorBlockPromptAfterSeek;
+    private uint _manualSponsorBlockSkipPromptHideSource;
+    private bool _manualSponsorBlockWasPaused;
     private CancellationTokenSource? _engagementCancellation;
     private long _engagementLoadVersion;
     private string? _engagementVideoId;
@@ -105,6 +111,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private CancellationTokenSource? _sponsorBlockCancellation;
     private long _sponsorBlockLoadVersion;
     private string? _sponsorBlockVideoId;
+    private LibMpvPlaybackState? _lastSponsorBlockPlaybackState;
+    private string? _lastSponsorBlockPlaybackVideoId;
     private string _sponsorBlockConfigurationKey = string.Empty;
     private bool _updatingControls;
 
@@ -141,6 +149,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
         _chapterMarkerHost = GetRequiredObject<Overlay>("player_timeline_overlay");
+        _sponsorBlockSkipButton = GetRequiredObject<Button>("player_sponsorblock_skip_button");
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
         _channelLabel = GetRequiredObject<Label>("player_channel_label");
@@ -258,14 +267,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void DeclareBindings()
     {
         Bind(_player.TogglePause, KEY_space, KEY_K, KEY_k);
-        Bind(() => _player.SeekRelative(-10), KEY_Left, KEY_J, KEY_j);
-        Bind(() => _player.SeekRelative(10), KEY_Right, KEY_L, KEY_l);
+        Bind(() => SeekRelative(-10), KEY_Left, KEY_J, KEY_j);
+        Bind(() => SeekRelative(10), KEY_Right, KEY_L, KEY_l);
         Bind(() => _player.StepFrame(false), KEY_comma, KEY_less);
         Bind(() => _player.StepFrame(true), KEY_period, KEY_greater);
         Bind(_player.ToggleMute, KEY_M, KEY_m);
         Bind(() => _player.AdjustVolume(5), KEY_Up);
         Bind(() => _player.AdjustVolume(-5), KEY_Down);
-        Bind(() => _player.SeekAbsolute(0), KEY_0, KEY_Home);
+        Bind(() => SeekAbsolute(0), KEY_0, KEY_Home);
         Bind(ReturnToShell, KEY_Escape);
         Bind(() => AdjustSpeed(-1), KEY_bracketleft, KEY_braceleft);
         Bind(() => AdjustSpeed(1), KEY_bracketright, KEY_braceright);
@@ -359,13 +368,30 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private bool HandleKeyboardShortcut(uint keyval)
     {
-        if (!_hasMedia || !_shortcutMap.TryGetValue(keyval, out var action))
-            return false;
+        if (!_hasMedia) return false;
+        if (keyval is KEY_Return or KEY_KP_Enter && TrySkipManualSponsorBlockSegment())
+        {
+            RegisterActivity();
+            return true;
+        }
+
+        if (!_shortcutMap.TryGetValue(keyval, out var action)) return false;
 
         action();
-
         RegisterActivity();
         return true;
+    }
+
+    private void SeekAbsolute(double position)
+    {
+        _manualSponsorBlockPromptAfterSeek = true;
+        _player.SeekAbsolute(position);
+    }
+
+    private void SeekRelative(double offset)
+    {
+        _manualSponsorBlockPromptAfterSeek = true;
+        _player.SeekRelative(offset);
     }
 
     private void AdjustSpeed(int direction)
@@ -449,12 +475,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnRewindButtonClicked(object? sender, EventArgs args)
     {
-        _player.SeekRelative(-10);
+        SeekRelative(-10);
     }
 
     private void OnForwardButtonClicked(object? sender, EventArgs args)
     {
-        _player.SeekRelative(10);
+        SeekRelative(10);
     }
 
     private void OnPlayPauseButtonClicked(object? sender, EventArgs args)
@@ -538,7 +564,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnTimelineValueChanged(object? sender, EventArgs args)
     {
-        if (!_updatingControls && _timeline.GetSensitive()) _player.SeekAbsolute(_timeline.GetValue());
+        if (!_updatingControls && _timeline.GetSensitive()) SeekAbsolute(_timeline.GetValue());
     }
 
     private void OnRenderRequested(object? sender, EventArgs args)
@@ -596,6 +622,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (!string.Equals(_sponsorBlockVideoId, video.Id, StringComparison.Ordinal))
                 LoadSponsorBlock(video);
             TryAutoSkipSponsorBlockSegment(state, video.Id);
+            _lastSponsorBlockPlaybackState = state;
+            _lastSponsorBlockPlaybackVideoId = video.Id;
+            UpdateManualSponsorBlockSkipPrompt(state, video.Id);
 
             if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
             _commentsVideoId = video.Id;
@@ -767,12 +796,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void ClearSponsorBlockSegments()
     {
         ClearSponsorBlockSegmentDisplays();
+        ResetManualSponsorBlockSkipPrompt();
+        _lastSponsorBlockPlaybackState = null;
+        _lastSponsorBlockPlaybackVideoId = null;
         _sponsorBlockSegments = [];
         _sponsorBlockDuration = TimeSpan.Zero;
         _sponsorBlockHostWidth = -1;
         _autoSkippedSponsorBlockSegmentIds.Clear();
     }
-
     private void ClearSponsorBlockSegmentDisplays()
     {
         foreach (var segmentDisplay in _sponsorBlockSegmentDisplays)
@@ -792,9 +823,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         _sponsorBlockSegments = segments;
         _sponsorBlockHostWidth = -1;
+        if (_lastSponsorBlockPlaybackState is { } state &&
+            string.Equals(_lastSponsorBlockPlaybackVideoId, _sponsorBlockVideoId, StringComparison.Ordinal))
+            UpdateManualSponsorBlockSkipPrompt(state, _sponsorBlockVideoId!);
+
         UpdateSponsorBlockSegmentDisplay(_sponsorBlockDuration);
     }
-
     private void EnsureSponsorBlockSegmentMarkers()
     {
         if (_sponsorBlockSegmentMarkers.Count == _sponsorBlockSegments.Count * 2) return;
@@ -820,7 +854,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         marker.SetTooltipText($"SponsorBlock {segment.Category}: {FormatTime(segment.Start)}–{FormatTime(segment.End)}");
         marker.OnClicked += (_, _) =>
         {
-            _player.SeekAbsolute((isEnd ? segment.End : segment.Start).TotalSeconds);
+            SeekAbsolute((isEnd ? segment.End : segment.Start).TotalSeconds);
             RegisterActivity();
         };
         marker.Halign = Align.Start;
@@ -908,16 +942,127 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
     }
 
+    internal static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(
+        IReadOnlyList<SponsorBlockSegment> segments, TimeSpan position)
+    {
+        return segments.FirstOrDefault(segment => position >= segment.Start && position < segment.End);
+    }
+
+    internal static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
+    {
+        return preferences.SponsorBlockSegmentDisplayEnabled && !preferences.SponsorBlockAutoSkipEnabled;
+    }
+
+    private void UpdateManualSponsorBlockSkipPrompt(LibMpvPlaybackState state, string videoId)
+    {
+        if (!ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()) ||
+            !string.Equals(_sponsorBlockVideoId, videoId, StringComparison.Ordinal))
+        {
+            ResetManualSponsorBlockSkipPrompt();
+            return;
+        }
+
+        var segment = FindSponsorBlockSegmentAtPosition(_sponsorBlockSegments, state.Position);
+        if (segment is null)
+        {
+            _activeManualSponsorBlockSegment = null;
+            _manualSponsorBlockPromptAfterSeek = false;
+            _manualSponsorBlockWasPaused = state.IsPaused;
+            HideManualSponsorBlockSkipPrompt();
+            return;
+        }
+
+        var shouldShow = _manualSponsorBlockPromptAfterSeek ||
+                         !string.Equals(_activeManualSponsorBlockSegment?.Id, segment.Id,
+                             StringComparison.Ordinal) ||
+                         state.IsPaused && !_manualSponsorBlockWasPaused;
+        _activeManualSponsorBlockSegment = segment;
+        _manualSponsorBlockPromptAfterSeek = false;
+        _manualSponsorBlockWasPaused = state.IsPaused;
+        if (shouldShow) ShowManualSponsorBlockSkipPrompt(segment);
+    }
+
+    private bool TrySkipManualSponsorBlockSegment()
+    {
+        if (_lastSponsorBlockPlaybackState is not { } state ||
+            !ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
+            return false;
+
+        var segment = FindSponsorBlockSegmentAtPosition(_sponsorBlockSegments, state.Position);
+        if (segment is null) return false;
+
+        _player.SeekAbsolute(segment.End.TotalSeconds);
+        HideManualSponsorBlockSkipPrompt();
+        return true;
+    }
+
+    private void ShowManualSponsorBlockSkipPrompt(SponsorBlockSegment segment)
+    {
+        var category = SponsorBlockCategoryLabel(segment.Category);
+        _sponsorBlockSkipButton.SetLabel($"Skip {category}");
+        _sponsorBlockSkipButton.SetTooltipText($"Skip {category} (Enter)");
+        _sponsorBlockSkipButton.SetVisible(true);
+        if (_manualSponsorBlockSkipPromptHideSource != 0)
+            Functions.SourceRemove(_manualSponsorBlockSkipPromptHideSource);
+
+        _manualSponsorBlockSkipPromptHideSource = Functions.TimeoutAdd(0, SponsorBlockSkipPromptDurationMilliseconds,
+            () =>
+            {
+                _manualSponsorBlockSkipPromptHideSource = 0;
+                _sponsorBlockSkipButton.SetVisible(false);
+                return false;
+            });
+    }
+
+    private void HideManualSponsorBlockSkipPrompt()
+    {
+        if (_manualSponsorBlockSkipPromptHideSource != 0)
+        {
+            Functions.SourceRemove(_manualSponsorBlockSkipPromptHideSource);
+            _manualSponsorBlockSkipPromptHideSource = 0;
+        }
+
+        _sponsorBlockSkipButton.SetVisible(false);
+    }
+
+    private void ResetManualSponsorBlockSkipPrompt()
+    {
+        _activeManualSponsorBlockSegment = null;
+        _manualSponsorBlockPromptAfterSeek = false;
+        _manualSponsorBlockWasPaused = false;
+        HideManualSponsorBlockSkipPrompt();
+    }
+
+    private static string SponsorBlockCategoryLabel(string category)
+    {
+        return category switch
+        {
+            SponsorBlockCategories.Sponsor => "Sponsor",
+            SponsorBlockCategories.SelfPromotion => "Self-promotion",
+            SponsorBlockCategories.InteractionReminder => "Interaction reminder",
+            SponsorBlockCategories.Intro => "Intro",
+            SponsorBlockCategories.Outro => "Outro",
+            SponsorBlockCategories.Preview => "Preview",
+            SponsorBlockCategories.Hook => "Hook",
+            SponsorBlockCategories.Filler => "Filler",
+            _ => category
+        };
+    }
+
+    private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
+    {
+        if (TrySkipManualSponsorBlockSegment()) RegisterActivity();
+    }
+
     private void TryAutoSkipSponsorBlockSegment(LibMpvPlaybackState state, string videoId)
     {
         if (state.IsPaused || !_preferences.GetPreferences().SponsorBlockAutoSkipEnabled ||
             !string.Equals(_sponsorBlockVideoId, videoId, StringComparison.Ordinal))
             return;
 
-        var segment = _sponsorBlockSegments.FirstOrDefault(segment =>
-            state.Position >= segment.Start && state.Position < segment.End &&
-            _autoSkippedSponsorBlockSegmentIds.Add(segment.Id));
-        if (segment is not null) _player.SeekAbsolute(segment.End.TotalSeconds);
+        var segment = FindSponsorBlockSegmentAtPosition(_sponsorBlockSegments, state.Position);
+        if (segment is not null && _autoSkippedSponsorBlockSegmentIds.Add(segment.Id))
+            _player.SeekAbsolute(segment.End.TotalSeconds);
     }
 
     private void UpdateChapters(IReadOnlyList<LibMpvChapter> chapters, TimeSpan duration)
@@ -938,7 +1083,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 marker.SetTooltipText(chapter.Title);
                 marker.OnClicked += (_, _) =>
                 {
-                    _player.SeekAbsolute(chapter.Start.TotalSeconds);
+                    SeekAbsolute(chapter.Start.TotalSeconds);
                     RegisterActivity();
                 };
                 marker.Halign = Align.Start;
