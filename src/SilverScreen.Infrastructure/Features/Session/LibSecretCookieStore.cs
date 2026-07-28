@@ -1,10 +1,11 @@
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using SilverScreen.Core.Services;
 
 namespace SilverScreen.Infrastructure.Features.Session;
 
-internal sealed class LibSecretCookieStore : ICookieSecretStore
+internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 {
     private const string LibSecret = "libsecret-1.so.0";
     private const string LibGlib = "libglib-2.0.so.0";
@@ -234,48 +235,57 @@ internal sealed class LibSecretCookieStore : ICookieSecretStore
         if (error != IntPtr.Zero) throw new InvalidOperationException();
     }
 
-    [DllImport(LibSecret, EntryPoint = "secret_password_lookupv_binary_sync",
-        CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr SecretPasswordLookupvBinarySync(IntPtr schema, IntPtr attributes, IntPtr cancellable,
+    [LibraryImport(LibSecret, EntryPoint = "secret_password_lookupv_binary_sync")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial IntPtr SecretPasswordLookupvBinarySync(IntPtr schema, IntPtr attributes,
+        IntPtr cancellable, out IntPtr error);
+
+    [LibraryImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial int SecretPasswordStorevBinarySync(IntPtr schema, IntPtr attributes, IntPtr collection,
+        string label, IntPtr value, IntPtr cancellable, out IntPtr error);
+
+    [LibraryImport(LibSecret, EntryPoint = "secret_password_clearv_sync")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial int SecretPasswordClearvSync(IntPtr schema, IntPtr attributes, IntPtr cancellable,
         out IntPtr error);
 
-    [DllImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync",
-        CallingConvention = CallingConvention.Cdecl)]
-    private static extern int SecretPasswordStorevBinarySync(IntPtr schema, IntPtr attributes, IntPtr collection,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string label, IntPtr value, IntPtr cancellable, out IntPtr error);
+    [LibraryImport(LibSecret, EntryPoint = "secret_value_new", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial IntPtr SecretValueNew(IntPtr text, IntPtr length, string contentType);
 
-    [DllImport(LibSecret, EntryPoint = "secret_password_clearv_sync", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int SecretPasswordClearvSync(IntPtr schema, IntPtr attributes, IntPtr cancellable,
-        out IntPtr error);
+    [LibraryImport(LibSecret, EntryPoint = "secret_value_get")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial IntPtr SecretValueGet(IntPtr value, out UIntPtr length);
 
-    [DllImport(LibSecret, EntryPoint = "secret_value_new", CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr SecretValueNew(IntPtr text, IntPtr length,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string contentType);
+    [LibraryImport(LibSecret, EntryPoint = "secret_value_unref")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial void SecretValueUnref(IntPtr value);
 
-    [DllImport(LibSecret, EntryPoint = "secret_value_get", CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr SecretValueGet(IntPtr value, out UIntPtr length);
-
-    [DllImport(LibSecret, EntryPoint = "secret_value_unref", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void SecretValueUnref(IntPtr value);
-
-    [DllImport(LibGlib, EntryPoint = "g_hash_table_new_full", CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr GHashTableNewFull(IntPtr hashFunc, IntPtr keyEqualFunc, IntPtr keyDestroyFunc,
+    [LibraryImport(LibGlib, EntryPoint = "g_hash_table_new_full")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial IntPtr GHashTableNewFull(IntPtr hashFunc, IntPtr keyEqualFunc, IntPtr keyDestroyFunc,
         IntPtr valueDestroyFunc);
 
-    [DllImport(LibGlib, EntryPoint = "g_hash_table_insert", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int GHashTableInsert(IntPtr hashTable, IntPtr key, IntPtr value);
+    [LibraryImport(LibGlib, EntryPoint = "g_hash_table_insert")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial int GHashTableInsert(IntPtr hashTable, IntPtr key, IntPtr value);
 
-    [DllImport(LibGlib, EntryPoint = "g_hash_table_destroy", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void GHashTableDestroy(IntPtr hashTable);
+    [LibraryImport(LibGlib, EntryPoint = "g_hash_table_destroy")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial void GHashTableDestroy(IntPtr hashTable);
 
-    [DllImport(LibGlib, EntryPoint = "g_strdup", CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr GStrdup([MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+    [LibraryImport(LibGlib, EntryPoint = "g_strdup", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial IntPtr GStrdup(string value);
 
-    [DllImport(LibGlib, EntryPoint = "g_free", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void GFree(IntPtr memory);
+    [LibraryImport(LibGlib, EntryPoint = "g_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial void GFree(IntPtr memory);
 
-    [DllImport(LibGlib, EntryPoint = "g_error_free", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void GErrorFree(IntPtr error);
+    [LibraryImport(LibGlib, EntryPoint = "g_error_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial void GErrorFree(IntPtr error);
 
     private readonly record struct GlibFunctions(IntPtr StringHash, IntPtr StringEqual, IntPtr Free);
 }

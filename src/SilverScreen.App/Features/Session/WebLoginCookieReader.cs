@@ -21,12 +21,12 @@ internal sealed record WebCookieSnapshot(
     long ExpiresUnix);
 
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
-internal static class WebLoginCookieReader
+internal static partial class WebLoginCookieReader
 {
     private const string NetscapeHeader = "# Netscape HTTP Cookie File\n";
 
-    [DllImport("libglib-2.0.so.0", EntryPoint = "g_list_free")]
-    private static extern void FreeList(IntPtr list);
+    [LibraryImport("libglib-2.0.so.0", EntryPoint = "g_list_free")]
+    private static partial void FreeList(IntPtr list);
 
     internal static Task<IReadOnlyList<WebCookieSnapshot>> GetCookiesAsync(CookieManager manager, string uri)
     {

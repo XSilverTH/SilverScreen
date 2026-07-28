@@ -112,7 +112,7 @@ internal interface ILibMpvNativeApi : IDisposable
     void Destroy(nint handle);
 }
 
-internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
+internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 {
     private static readonly string[] MpvLibraryNames = ["libmpv.so.2", "libmpv.so.1", "libmpv.so"];
     private static readonly string[] EpoxyLibraryNames = ["libepoxy.so.0", "libepoxy.so"];
@@ -433,8 +433,9 @@ internal sealed unsafe class LibMpvNative : ILibMpvNativeApi
             throw new InvalidOperationException("libmpv requires the process LC_NUMERIC locale to be C.");
     }
 
-    [DllImport("libc", EntryPoint = "setlocale", CallingConvention = CallingConvention.Cdecl)]
-    private static extern nint SetLocale(int category, [MarshalAs(UnmanagedType.LPUTF8Str)] string locale);
+    [LibraryImport("libc", EntryPoint = "setlocale", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial nint SetLocale(int category, string locale);
 
     private static bool TryLoad(IEnumerable<string> names, out nint library)
     {
