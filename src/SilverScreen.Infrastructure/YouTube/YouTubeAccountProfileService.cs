@@ -70,7 +70,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             }
         };
         var content = JsonSerializer.Serialize(payload, YouTubeRequestJsonContext.Default.BrowseRequestPayload);
-        var requestUri = $"https://www.youtube.com/youtubei/v1/account/account_menu?key={Uri.EscapeDataString(configuration.ApiKey)}&prettyPrint=false";
+        var requestUri =
+            $"https://www.youtube.com/youtubei/v1/account/account_menu?key={Uri.EscapeDataString(configuration.ApiKey)}&prettyPrint=false";
         using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
         request.Content = new StringContent(content, Encoding.UTF8, "application/json");
         AddAuthenticatedHeaders(request, credentials, configuration);
@@ -80,7 +81,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             return null;
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var profile = FindAccountProfile(document.RootElement);
         if (profile is not null && IsCurrentSession(sessionCookies))
             CacheProfile(profile);
@@ -179,13 +181,12 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
     private static string GetDefaultProfileCachePath()
     {
         var cacheHome = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
-        if (string.IsNullOrWhiteSpace(cacheHome))
-        {
-            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            cacheHome = string.IsNullOrWhiteSpace(userHome)
-                ? Path.GetTempPath()
-                : Path.Combine(userHome, ".cache");
-        }
+        if (!string.IsNullOrWhiteSpace(cacheHome))
+            return Path.Combine(cacheHome, "SilverScreen", "account-profile.json");
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        cacheHome = string.IsNullOrWhiteSpace(userHome)
+            ? Path.GetTempPath()
+            : Path.Combine(userHome, ".cache");
 
         return Path.Combine(cacheHome, "SilverScreen", "account-profile.json");
     }
@@ -232,40 +233,26 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             if (directProfile is not null)
                 return directProfile;
 
-            if (element.TryGetProperty("accountItem", out var accountItem))
-            {
-                var profile = ParseAccountItem(accountItem);
-                if (profile is not null)
-                    return profile;
-            }
-
-            foreach (var property in element.EnumerateObject())
-            {
-                var profile = FindAccountProfile(property.Value);
-                if (profile is not null)
-                    return profile;
-            }
+            if (!element.TryGetProperty("accountItem", out var accountItem))
+                return element.EnumerateObject().Select(property => FindAccountProfile(property.Value))
+                    .OfType<AccountProfile>().FirstOrDefault();
+            var profile = ParseAccountItem(accountItem);
+            return profile ?? element.EnumerateObject().Select(property => FindAccountProfile(property.Value))
+                .OfType<AccountProfile>().FirstOrDefault();
         }
-        else if (element.ValueKind == JsonValueKind.Array)
+
+        if (element.ValueKind != JsonValueKind.Array) return null;
         {
-            foreach (var item in element.EnumerateArray())
-            {
-                var profile = FindAccountProfile(item);
-                if (profile is not null)
-                    return profile;
-            }
+            return element.EnumerateArray().Select(FindAccountProfile).OfType<AccountProfile>().FirstOrDefault();
         }
-
-        return null;
     }
 
     private static AccountProfile? ParseAccountItem(JsonElement accountItem)
     {
         var displayName = ExtractText(accountItem, "accountName");
-        if (string.IsNullOrWhiteSpace(displayName))
-            return null;
-
-        return new AccountProfile(displayName, ExtractAvatarUrl(accountItem));
+        return string.IsNullOrWhiteSpace(displayName)
+            ? null
+            : new AccountProfile(displayName, ExtractAvatarUrl(accountItem));
     }
 
     private static string? ExtractText(JsonElement element, string propertyName)
@@ -284,10 +271,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
 
         var text = new StringBuilder();
         foreach (var run in runs.EnumerateArray())
-        {
             if (run.TryGetProperty("text", out var runText) && runText.ValueKind == JsonValueKind.String)
                 text.Append(runText.GetString());
-        }
 
         return text.Length == 0 ? null : text.ToString();
     }
@@ -305,10 +290,8 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
 
         string? url = null;
         foreach (var thumbnail in thumbnails.EnumerateArray())
-        {
             if (thumbnail.TryGetProperty("url", out var candidate) && candidate.ValueKind == JsonValueKind.String)
                 url = candidate.GetString();
-        }
 
         return url;
     }

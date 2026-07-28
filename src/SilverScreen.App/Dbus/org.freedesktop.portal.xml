@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <node>
-  <interface name="org.freedesktop.portal.Inhibit">
-    <method name="Inhibit">
-      <arg name="window" type="s" direction="in" />
-      <arg name="flags" type="u" direction="in" />
-      <arg name="options" type="a{sv}" direction="in" />
-      <arg name="handle" type="o" direction="out" />
-    </method>
-  </interface>
-  <interface name="org.freedesktop.portal.Request">
-    <method name="Close" />
-  </interface>
+    <interface name="org.freedesktop.portal.Inhibit">
+        <method name="Inhibit">
+            <arg name="window" type="s" direction="in"/>
+            <arg name="flags" type="u" direction="in"/>
+            <arg name="options" type="a{sv}" direction="in"/>
+            <arg name="handle" type="o" direction="out"/>
+        </method>
+    </interface>
+    <interface name="org.freedesktop.portal.Request">
+        <method name="Close"/>
+    </interface>
 </node>

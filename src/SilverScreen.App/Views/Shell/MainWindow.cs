@@ -29,8 +29,8 @@ namespace SilverScreen.Views.Shell;
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
-    private readonly MenuButton _accountButton;
     private readonly Avatar _accountAvatar;
+    private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly Action _disposeApplicationServices;
@@ -317,6 +317,4 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         return false;
     }
-
-
 }

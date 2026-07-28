@@ -144,7 +144,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             lock (_lock)
             {
                 _continuationToken = clientResult.ContinuationToken;
-                _cachedFeedPage = new FeedPage(_loadedVideos.ToArray(), _continuationToken);
+                _cachedFeedPage = new FeedPage([.. _loadedVideos], _continuationToken);
             }
 
             return new AuthenticatedHomeFeedResult(
@@ -163,7 +163,8 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
                     _loadedVideos.Add(video);
 
             _continuationToken = clientResult.ContinuationToken;
-            _cachedFeedPage = new FeedPage(_loadedVideos.ToArray(), _continuationToken);
+            _cachedFeedPage = new FeedPage([.. _loadedVideos],
+                _continuationToken);
         }
 
         var successMessage = clientResult.StatusMessage == "Public recommendations are displayed."

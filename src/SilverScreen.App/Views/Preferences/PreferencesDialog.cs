@@ -11,7 +11,6 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly SwitchRow _fullscreenRow;
     private readonly SwitchRow _markWatchedRow;
-    private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly EntryRow _maxResultsRow;
     private readonly EntryRow _mpvPathRow;
     private readonly StringList _playbackBackendModel;
@@ -22,6 +21,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly Action<string> _reportStatus;
     private readonly StringList _themeModel;
     private readonly ComboRow _themeRow;
+    private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
@@ -62,7 +62,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
             ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
             ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
-            _markWatchedRow.Active = prefs.MarkWatchedVideos && !prefs.YouTubePlaybackTelemetryEnabled;
+            _markWatchedRow.Active = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false };
             _youTubePlaybackTelemetryRow.Active = prefs.YouTubePlaybackTelemetryEnabled;
             _discordRichPresenceRow.Active = prefs.DiscordRichPresenceEnabled;
         }
@@ -126,7 +126,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             MarkWatchedVideos = _markWatchedRow.Active && !_youTubePlaybackTelemetryRow.Active,
             YouTubePlaybackTelemetryEnabled = _youTubePlaybackTelemetryRow.Active,
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
-            PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage,
+            PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage
         };
 
         try

@@ -12,7 +12,6 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
     private readonly Lock _activePlaybackLock = new();
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
-    private readonly MpvCommandBuilder _commandBuilder;
     private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPlaybackPresenceService? _playbackPresenceService;
     private readonly IYouTubePlaybackTelemetryService? _playbackTelemetryService;
@@ -34,7 +33,6 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
     {
         _staticOptions = options;
-        _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = null;
         _playbackPresenceService = playbackPresenceService;
@@ -43,13 +41,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
     public ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
-        MpvCommandBuilder commandBuilder,
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
         IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
     {
         _staticOptions = new PlaybackOptions();
-        _commandBuilder = commandBuilder;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
         _playbackPresenceService = playbackPresenceService;
@@ -137,7 +133,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         {
             MpvExecutablePath = prefs.MpvExecutablePath,
             VideoQuality = prefs.VideoQuality,
-            MarkWatchedVideos = prefs.MarkWatchedVideos && !prefs.YouTubePlaybackTelemetryEnabled,
+            MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,
             ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
         };
@@ -165,7 +161,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         }
     }
 
-    private void AttachObserver(long playbackId, IDisposable observer)
+    private void AttachObserver(long playbackId, MpvIpcPlaybackObserver observer)
     {
         lock (_activePlaybackLock)
         {

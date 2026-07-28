@@ -36,15 +36,6 @@ public sealed class SearchViewModel(
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
-    public void Reset()
-    {
-        ThrowIfDisposed();
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-        State = new SearchViewState([], "Search results will appear here.", false);
-    }
 
 
     public void Dispose()
@@ -60,6 +51,17 @@ public sealed class SearchViewModel(
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void Reset()
+    {
+        ThrowIfDisposed();
+        ++_requestGeneration;
+        _requestCancellation?.Cancel();
+        _requestCancellation?.Dispose();
+        _requestCancellation = null;
+        State = new SearchViewState([], "Search results will appear here.", false);
+    }
+
     public event EventHandler<SearchViewState>? StateChanged;
 
     public async Task SubmitAsync(string text)

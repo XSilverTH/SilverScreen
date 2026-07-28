@@ -15,6 +15,9 @@ public partial class HomeView : ViewBase<Box>
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly Button _loadMoreButton;
     private readonly ScrolledWindow _scrolledWindow;
+    private readonly Box _searchBar;
+    private readonly SearchEntry _searchEntry;
+    private readonly SearchViewModel _searchViewModel;
     private readonly Box _statusHost;
     private readonly Box _statusLoadingPage;
     private readonly StatusPage _statusPage;
@@ -23,14 +26,10 @@ public partial class HomeView : ViewBase<Box>
     private readonly SignalListItemFactory _videoFactory;
     private readonly GridView _videoGrid;
     private readonly StringList _videoIds;
-    private readonly Dictionary<string, VideoSummary> _videosById = [];
-    private readonly Box _searchBar;
-    private readonly SearchEntry _searchEntry;
-    private readonly SearchViewModel _searchViewModel;
     private readonly NoSelection _videoSelection;
+    private readonly Dictionary<string, VideoSummary> _videosById = [];
     private readonly HomeViewModel _viewModel;
     private VideoSummary[] _displayedVideos = [];
-    private bool _isSearchActive;
     private bool _disposed;
 
     public HomeView(
@@ -69,7 +68,7 @@ public partial class HomeView : ViewBase<Box>
 
     public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
 
-    public bool IsSearchActive => _isSearchActive;
+    public bool IsSearchActive { get; private set; }
 
     public event EventHandler<bool>? SearchModeChanged;
 
@@ -85,10 +84,10 @@ public partial class HomeView : ViewBase<Box>
 
     public void ActivateSearch()
     {
-        if (_disposed || _isSearchActive)
+        if (_disposed || IsSearchActive)
             return;
 
-        _isSearchActive = true;
+        IsSearchActive = true;
         _searchBar.Visible = true;
         _searchViewModel.Reset();
         RenderSearch(_searchViewModel.State);
@@ -98,10 +97,10 @@ public partial class HomeView : ViewBase<Box>
 
     public void ReturnToHome()
     {
-        if (_disposed || !_isSearchActive)
+        if (_disposed || !IsSearchActive)
             return;
 
-        _isSearchActive = false;
+        IsSearchActive = false;
         _searchViewModel.Reset();
         _searchEntry.SetText(string.Empty);
         _searchBar.Visible = false;
@@ -126,7 +125,7 @@ public partial class HomeView : ViewBase<Box>
             if (!_disposed)
             {
                 RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
-                if (!_isSearchActive)
+                if (!IsSearchActive)
                     Render(state);
             }
 
@@ -138,7 +137,7 @@ public partial class HomeView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed && _isSearchActive)
+            if (!_disposed && IsSearchActive)
                 RenderSearch(state);
 
             return false;
@@ -330,5 +329,4 @@ public partial class HomeView : ViewBase<Box>
         _viewModel.Dispose();
         base.Dispose();
     }
-
 }

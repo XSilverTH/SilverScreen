@@ -1,6 +1,6 @@
+using Adw;
 using Gdk;
 using GdkPixbuf;
-using Adw;
 using Gtk;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -11,7 +11,6 @@ namespace SilverScreen.Views.Popovers;
 
 public partial class AccountPopoverView : ViewBase<Box>
 {
-    private readonly IThumbnailService _thumbnails;
     private readonly Stack _accountStack;
     private readonly TextView _manualEditor;
     private readonly Label _manualHeading;
@@ -19,6 +18,7 @@ public partial class AccountPopoverView : ViewBase<Box>
     private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
     private readonly Avatar _signedInAvatar;
     private readonly Label _signedInDisplayName;
+    private readonly IThumbnailService _thumbnails;
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
@@ -106,7 +106,7 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private async Task LoadAvatarAsync(string avatarUrl, CancellationToken cancellationToken)
     {
-        Pixbuf? pixbuf = null;
+        Pixbuf? pixbuf;
         try
         {
             var thumbnail = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);

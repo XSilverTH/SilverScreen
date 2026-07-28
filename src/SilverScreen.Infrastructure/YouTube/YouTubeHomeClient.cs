@@ -260,6 +260,7 @@ public sealed class YouTubeHomeClient(
 
     private static void WalkJson(JsonElement element, List<VideoSummary> videos, ref string? continuationToken)
     {
+        // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
@@ -379,6 +380,7 @@ public sealed class YouTubeHomeClient(
 
     private static bool HasReelEndpoint(JsonElement element)
     {
+        // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:

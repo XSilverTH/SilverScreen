@@ -9,23 +9,16 @@ using SilverScreen.Core.Services;
 namespace SilverScreen.Infrastructure.Features.Playback;
 
 /// <summary>Sends YouTube's normal playback and incremental watchtime beacons while media is playing.</summary>
-public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryService
+public sealed class YouTubePlaybackTelemetryService(
+    IPreferencesService preferences,
+    ISessionService sessionService,
+    Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
+    : IYouTubePlaybackTelemetryService
 {
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
-    private readonly Lock _sessionsLock = new();
-    private readonly IPreferencesService _preferences;
-    private readonly ISessionService _sessionService;
-    private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
     private readonly HashSet<TelemetrySession> _sessions = [];
+    private readonly Lock _sessionsLock = new();
     private bool _disposed;
-
-    public YouTubePlaybackTelemetryService(IPreferencesService preferences, ISessionService sessionService,
-        Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
-    {
-        _preferences = preferences;
-        _sessionService = sessionService;
-        _handlerFactory = handlerFactory;
-    }
 
     public IYouTubePlaybackTelemetrySession Start(PlaybackRequest request)
     {
@@ -52,7 +45,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         {
             if (_disposed) return;
             _disposed = true;
-            sessions = _sessions.ToArray();
+            sessions = [.. _sessions];
             _sessions.Clear();
         }
 
@@ -61,24 +54,27 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
     private bool IsEnabled()
     {
-        var preferences = _preferences.GetPreferences();
-        return preferences.YouTubePlaybackTelemetryEnabled && !preferences.MarkWatchedVideos;
+        var preferences1 = preferences.GetPreferences();
+        return preferences1 is { YouTubePlaybackTelemetryEnabled: true, MarkWatchedVideos: false };
     }
 
     private void Remove(TelemetrySession session)
     {
-        lock (_sessionsLock) _sessions.Remove(session);
+        lock (_sessionsLock)
+        {
+            _sessions.Remove(session);
+        }
     }
 
     private HttpClient? CreateAuthenticatedClient()
     {
-        var manualSession = _sessionService.GetManualSessionCookies();
+        var manualSession = sessionService.GetManualSessionCookies();
         if (manualSession is null) return null;
 
         try
         {
             var cookies = ParseCookies(manualSession);
-            var handler = _handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
+            var handler = handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
             {
                 CookieContainer = cookies,
                 AllowAutoRedirect = true,
@@ -137,30 +133,23 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         return cookies;
     }
 
-    private sealed class TelemetrySession : IYouTubePlaybackTelemetrySession
+    private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
+        : IYouTubePlaybackTelemetrySession
     {
-        private readonly YouTubePlaybackTelemetryService _owner;
-        private readonly PlaybackRequest _request;
         private readonly Lock _lock = new();
         private readonly Dictionary<int, VideoTelemetrySession> _videos = [];
         private bool _disposed;
 
-        public TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
-        {
-            _owner = owner;
-            _request = request;
-        }
-
         public void UpdateState(PlaybackPresenceState state)
         {
-            if (!_owner.IsEnabled() || state.PlaylistIndex < 0 || state.PlaylistIndex >= _request.Videos.Length) return;
+            if (!owner.IsEnabled() || state.PlaylistIndex < 0 || state.PlaylistIndex >= request.Videos.Length) return;
 
             lock (_lock)
             {
                 if (_disposed) return;
                 if (!_videos.TryGetValue(state.PlaylistIndex, out var video))
                 {
-                    video = new VideoTelemetrySession(_owner, _request.Videos[state.PlaylistIndex].Id);
+                    video = new VideoTelemetrySession(owner, request.Videos[state.PlaylistIndex].Id);
                     _videos.Add(state.PlaylistIndex, video);
                 }
 
@@ -175,34 +164,26 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             {
                 if (_disposed) return;
                 _disposed = true;
-                videos = _videos.Values.ToArray();
+                videos = [.. _videos.Values];
                 _videos.Clear();
             }
 
             foreach (var video in videos) video.Dispose();
-            _owner.Remove(this);
+            owner.Remove(this);
         }
     }
 
-    private sealed class VideoTelemetrySession
+    private sealed class VideoTelemetrySession(YouTubePlaybackTelemetryService owner, string videoId)
     {
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
-        private readonly YouTubePlaybackTelemetryService _owner;
-        private readonly string _videoId;
         private readonly string _cpn = CreateCpn();
         private HttpClient? _client;
+        private bool _disposed;
         private Task<TrackingEndpoints?>? _endpointsTask;
-        private Task _sendTail = Task.CompletedTask;
-        private TimeSpan _segmentStart;
         private TimeSpan _lastPosition;
         private bool _playing;
-        private bool _disposed;
-
-        public VideoTelemetrySession(YouTubePlaybackTelemetryService owner, string videoId)
-        {
-            _owner = owner;
-            _videoId = videoId;
-        }
+        private TimeSpan _segmentStart;
+        private Task _sendTail = Task.CompletedTask;
 
         public void UpdateState(PlaybackPresenceState state)
         {
@@ -264,14 +245,12 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             try
             {
                 await previous.ConfigureAwait(false);
-                if (_disposed || !_owner.IsEnabled()) return;
+                if (_disposed || !owner.IsEnabled()) return;
                 var endpoints = await GetEndpointsAsync().ConfigureAwait(false);
                 if (endpoints is null || _client is null) return;
                 var uri = telemetryEvent.BuildUri(endpoints, _cpn);
-                using var request = new HttpRequestMessage(HttpMethod.Get, uri)
-                {
-                    Headers = { Referrer = new Uri($"https://www.youtube.com/watch?v={_videoId}") }
-                };
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                request.Headers.Referrer = new Uri($"https://www.youtube.com/watch?v={videoId}");
                 using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
                     .ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
@@ -291,13 +270,16 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
         private async Task<TrackingEndpoints?> InitializeEndpointsAsync()
         {
-            _client = _owner.CreateAuthenticatedClient();
+            _client = owner.CreateAuthenticatedClient();
             if (_client is null) return null;
 
             try
             {
-                var pageUri = new Uri($"https://www.youtube.com/watch?v={Uri.EscapeDataString(_videoId)}&bpctr=9999999999&has_verified=1");
-                using var response = await _client.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                var pageUri =
+                    new Uri(
+                        $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}&bpctr=9999999999&has_verified=1");
+                using var response = await _client.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead)
+                    .ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode) return null;
                 var page = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 return TrackingEndpoints.TryParse(page);
@@ -371,23 +353,37 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 if (quoted)
                 {
                     if (escaped) escaped = false;
-                    else if (character == '\\') escaped = true;
-                    else if (character == '"') quoted = false;
+                    else
+                        switch (character)
+                        {
+                            case '\\':
+                                escaped = true;
+                                break;
+                            case '"':
+                                quoted = false;
+                                break;
+                        }
+
                     continue;
                 }
 
-                if (character == '"') quoted = true;
-                else if (character == '{') depth++;
-                else if (character == '}' && --depth == 0)
+                switch (character)
                 {
-                    try
-                    {
-                        return JsonDocument.Parse(page.AsMemory(objectStart, index - objectStart + 1));
-                    }
-                    catch (JsonException)
-                    {
-                        return null;
-                    }
+                    case '"':
+                        quoted = true;
+                        break;
+                    case '{':
+                        depth++;
+                        break;
+                    case '}' when --depth == 0:
+                        try
+                        {
+                            return JsonDocument.Parse(page.AsMemory(objectStart, index - objectStart + 1));
+                        }
+                        catch (JsonException)
+                        {
+                            return null;
+                        }
                 }
             }
 
@@ -412,8 +408,15 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
     private readonly record struct TelemetryEvent(bool IsWatchtime, TimeSpan Start, TimeSpan End)
     {
-        public static TelemetryEvent Playback(TimeSpan position) => new(false, position, position);
-        public static TelemetryEvent Watchtime(TimeSpan start, TimeSpan end) => new(true, start, end);
+        public static TelemetryEvent Playback(TimeSpan position)
+        {
+            return new TelemetryEvent(false, position, position);
+        }
+
+        public static TelemetryEvent Watchtime(TimeSpan start, TimeSpan end)
+        {
+            return new TelemetryEvent(true, start, end);
+        }
 
         public Uri BuildUri(TrackingEndpoints endpoints, string cpn)
         {
@@ -425,11 +428,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 new("cmt", FormatSeconds(End)),
                 new("el", "detailpage")
             };
-            if (IsWatchtime)
-            {
-                parameters.Add(new KeyValuePair<string, string>("st", FormatSeconds(Start)));
-                parameters.Add(new KeyValuePair<string, string>("et", FormatSeconds(End)));
-            }
+            if (!IsWatchtime) return AppendParameters(endpoint, parameters);
+            parameters.Add(new KeyValuePair<string, string>("st", FormatSeconds(Start)));
+            parameters.Add(new KeyValuePair<string, string>("et", FormatSeconds(End)));
 
             return AppendParameters(endpoint, parameters);
         }
@@ -455,7 +456,13 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     private sealed class NoopTelemetrySession : IYouTubePlaybackTelemetrySession
     {
         public static NoopTelemetrySession Instance { get; } = new();
-        public void UpdateState(PlaybackPresenceState state) { }
-        public void Dispose() { }
+
+        public void UpdateState(PlaybackPresenceState state)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

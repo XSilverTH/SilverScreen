@@ -1,5 +1,5 @@
-using SilverScreen.Core.Models;
 using System.Text.Json.Serialization;
+using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.YouTube;
 

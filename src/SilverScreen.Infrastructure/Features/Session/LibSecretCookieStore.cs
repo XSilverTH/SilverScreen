@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using SilverScreen.Core.Services;
 
@@ -240,7 +240,8 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
     private static partial IntPtr SecretPasswordLookupvBinarySync(IntPtr schema, IntPtr attributes,
         IntPtr cancellable, out IntPtr error);
 
-    [LibraryImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LibSecret, EntryPoint = "secret_password_storev_binary_sync",
+        StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial int SecretPasswordStorevBinarySync(IntPtr schema, IntPtr attributes, IntPtr collection,
         string label, IntPtr value, IntPtr cancellable, out IntPtr error);
@@ -269,7 +270,7 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 
     [LibraryImport(LibGlib, EntryPoint = "g_hash_table_insert")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-    private static partial int GHashTableInsert(IntPtr hashTable, IntPtr key, IntPtr value);
+    private static partial void GHashTableInsert(IntPtr hashTable, IntPtr key, IntPtr value);
 
     [LibraryImport(LibGlib, EntryPoint = "g_hash_table_destroy")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]

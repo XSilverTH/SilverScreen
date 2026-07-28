@@ -12,9 +12,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private readonly ISessionService _sessionService;
     private readonly ShellViewModel _shell;
     private readonly SessionValidationCoordinator _validation;
-    private CancellationTokenSource? _profileCancellation;
-    private AccountProfile? _profile;
     private bool _disposed;
+    private AccountProfile? _profile;
+    private CancellationTokenSource? _profileCancellation;
     private AccountSession _session;
 
     public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService,

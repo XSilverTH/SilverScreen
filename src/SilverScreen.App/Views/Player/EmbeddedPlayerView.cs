@@ -33,6 +33,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly ToggleButton _commentsButton;
     private readonly CommentsView _commentsView;
     private readonly ICookieFileProvider _cookieFiles;
+    private readonly DesktopMediaIntegration _desktopMedia;
     private readonly Button _dislikeButton;
     private readonly Image _dislikeImage;
     private readonly Label _dislikesLabel;
@@ -42,12 +43,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Image _likeImage;
     private readonly Label _likesLabel;
     private readonly Box _loadingIndicator;
+    private readonly Button _playPauseButton;
     private readonly IPlaybackPresenceService _playbackPresence;
     private readonly IYouTubePlaybackTelemetryService _playbackTelemetry;
     private readonly LibMpvPlayer _player;
     private readonly Widget _playerControls;
     private readonly GLArea _playerSurface;
-    private readonly Button _playPauseButton;
     private readonly Label _positionLabel;
     private readonly IPreferencesService _preferences;
     private readonly Action _presentRequested;
@@ -55,13 +56,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Box _queueControls;
     private readonly ISessionService _session;
     private readonly Popover _settingsPopover;
-    private EventControllerKey? _keyboardController;
-    private Widget? _keyboardRoot;
     private readonly Dictionary<uint, Action> _shortcutMap = [];
     private readonly Label _speedLabel;
     private readonly Scale _speedScale;
-    private readonly DropDown _subtitleDropdown;
     private readonly Button _subtitleButton;
+    private readonly DropDown _subtitleDropdown;
     private readonly StringList _subtitleModel;
     private readonly Scale _timeline;
     private readonly Label _titleLabel;
@@ -79,16 +78,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private long _engagementLoadVersion;
     private string? _engagementVideoId;
     private bool _hasMedia;
+    private EventControllerKey? _keyboardController;
+    private Widget? _keyboardRoot;
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
+    private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
     private YouTubeRatingState _ratingState;
     private bool _rendererReady;
     private PlaybackRequest? _request;
-    private readonly DesktopMediaIntegration _desktopMedia;
-    private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
-    private IReadOnlyList<LibMpvSubtitleTrack> _subtitleTracks = [];
     private double _speed = 1;
+    private IReadOnlyList<LibMpvSubtitleTrack> _subtitleTracks = [];
     private bool _updatingControls;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
@@ -169,6 +169,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _keyboardRoot.RemoveController(_keyboardController);
             _keyboardRoot = null;
         }
+
         if (_rendererReady)
         {
             _playerSurface.MakeCurrent();
@@ -248,6 +249,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Bind(() => _player.MovePlaylist(false), KEY_P, KEY_p);
         Bind(ToggleFullscreen, KEY_F, KEY_f);
         Bind(ShowPreferredSubtitle, KEY_C, KEY_c);
+        return;
 
         void Bind(Action action, params uint[] keys)
         {
@@ -367,7 +369,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         RegisterActivity();
     }
 
-    private bool HasOpenControlPopover() => _volumePopover.GetVisible() || _settingsPopover.GetVisible();
+    private bool HasOpenControlPopover()
+    {
+        return _volumePopover.GetVisible() || _settingsPopover.GetVisible();
+    }
 
 
     private void SetControlsVisible(bool visible)
@@ -528,6 +533,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
             _playbackTelemetrySession?.UpdateState(playbackState);
         }
+
         _desktopMedia.UpdatePlayback(_request, state);
         SetLoading(state.IsLoading);
         _updatingControls = true;
@@ -725,7 +731,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 : $"Use preferred subtitles: {preferredLanguage} (C)");
     }
 
-    internal static bool SubtitleLanguageMatches(string language, string preferredLanguage)
+    private static bool SubtitleLanguageMatches(string language, string preferredLanguage)
     {
         if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(preferredLanguage)) return false;
         if (string.Equals(language, preferredLanguage, StringComparison.OrdinalIgnoreCase)) return true;
@@ -734,7 +740,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var preferredLanguageSeparator = preferredLanguage.IndexOf('-');
         return language.AsSpan(0, languageSeparator < 0 ? language.Length : languageSeparator)
             .Equals(preferredLanguage.AsSpan(0,
-                preferredLanguageSeparator < 0 ? preferredLanguage.Length : preferredLanguageSeparator),
+                    preferredLanguageSeparator < 0 ? preferredLanguage.Length : preferredLanguageSeparator),
                 StringComparison.OrdinalIgnoreCase);
     }
 

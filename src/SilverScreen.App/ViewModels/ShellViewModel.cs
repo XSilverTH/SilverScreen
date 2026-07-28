@@ -14,7 +14,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     public string SelectedPage
     {
         get;
-        set => SetField(ref field, value);
+        init => SetField(ref field, value);
     } = "home";
 
     public event PropertyChangedEventHandler? PropertyChanged;

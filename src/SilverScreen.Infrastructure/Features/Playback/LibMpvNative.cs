@@ -123,11 +123,11 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private readonly delegate* unmanaged[Cdecl]<nint, void> _destroy;
     private readonly delegate* unmanaged[Cdecl]<byte*, nint> _eglGetProcAddress;
     private readonly delegate* unmanaged[Cdecl]<int, byte*> _errorString;
-    private readonly delegate* unmanaged[Cdecl]<nint, void> _freeRenderContext;
     private readonly delegate* unmanaged[Cdecl]<nint, void> _free;
+    private readonly delegate* unmanaged[Cdecl]<nint, void> _freeRenderContext;
+    private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*> _getPropertyString;
     private readonly delegate* unmanaged[Cdecl]<byte*, nint> _glxGetProcAddress;
     private readonly delegate* unmanaged[Cdecl]<nint, int> _initialize;
-    private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*> _getPropertyString;
     private readonly delegate* unmanaged[Cdecl]<nint, ulong, byte*, LibMpvFormat, int> _observeProperty;
     private readonly delegate* unmanaged[Cdecl]<nint, LibMpvRenderParam*, int> _render;
     private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*, int> _setOptionString;
@@ -192,7 +192,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
         }
     }
 
-    public bool IsLoaded { get; }
+    private bool IsLoaded { get; }
 
     bool ILibMpvNativeApi.IsAvailable => IsLoaded;
     public string? AvailabilityError { get; }

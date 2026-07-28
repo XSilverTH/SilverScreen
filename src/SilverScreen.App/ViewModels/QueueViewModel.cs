@@ -103,7 +103,7 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 
     private QueuePresentationState Snapshot()
     {
-        return new QueuePresentationState(_queue.Items.ToArray(), _queue.TotalDuration, _isLaunching);
+        return new QueuePresentationState([.. _queue.Items], _queue.TotalDuration, _isLaunching);
     }
 
     private void OnQueueChanged(object? sender, EventArgs eventArgs)

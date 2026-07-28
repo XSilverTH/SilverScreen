@@ -379,6 +379,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void HandleEvent(LibMpvEvent mpvEvent)
     {
+        // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch ((LibMpvEventId)mpvEvent.EventId)
         {
             case LibMpvEventId.PropertyChange:
@@ -526,7 +527,7 @@ public sealed class LibMpvPlayer : IDisposable
         if (reload is not null) Check(_native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));
     }
 
-    private IReadOnlyList<LibMpvSubtitleTrack> ReadSubtitleTracks()
+    private List<LibMpvSubtitleTrack> ReadSubtitleTracks()
     {
         if (!int.TryParse(_native.GetPropertyString(_handle, "track-list/count"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackCount) ||
@@ -534,7 +535,9 @@ public sealed class LibMpvPlayer : IDisposable
             return [];
 
         var selectedTrackId = long.TryParse(_native.GetPropertyString(_handle, "sid"),
-            NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0;
         var subtitleTracks = new List<LibMpvSubtitleTrack>();
         for (var index = 0; index < trackCount; index++)
         {
@@ -547,10 +550,12 @@ public sealed class LibMpvPlayer : IDisposable
 
             var title = _native.GetPropertyString(_handle, $"{propertyPrefix}/title");
             var language = _native.GetPropertyString(_handle, $"{propertyPrefix}/lang");
-            var label = string.IsNullOrWhiteSpace(title) ? language : string.IsNullOrWhiteSpace(language) ||
-                string.Equals(title, language, StringComparison.OrdinalIgnoreCase)
-                ? title
-                : $"{title} ({language})";
+            var label = string.IsNullOrWhiteSpace(title)
+                ? language
+                : string.IsNullOrWhiteSpace(language) ||
+                  string.Equals(title, language, StringComparison.OrdinalIgnoreCase)
+                    ? title
+                    : $"{title} ({language})";
             subtitleTracks.Add(new LibMpvSubtitleTrack(trackId, language ?? label ?? $"Subtitle {trackId}",
                 label ?? $"Subtitle {trackId}", trackId == selectedTrackId));
         }
@@ -558,10 +563,10 @@ public sealed class LibMpvPlayer : IDisposable
         return subtitleTracks;
     }
 
-    private static IReadOnlyList<LibMpvSubtitleTrack> SelectSubtitleTrack(
+    private static LibMpvSubtitleTrack[] SelectSubtitleTrack(
         IReadOnlyList<LibMpvSubtitleTrack> tracks, long selectedTrackId)
     {
-        return tracks.Select(track => track with { IsSelected = track.Id == selectedTrackId }).ToArray();
+        return [.. tracks.Select(track => track with { IsSelected = track.Id == selectedTrackId })];
     }
 
     private static string BuildYtdlRawOptions(string? cookieFilePath, bool markWatchedVideos)

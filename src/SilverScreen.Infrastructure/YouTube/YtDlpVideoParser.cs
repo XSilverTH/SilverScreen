@@ -39,7 +39,7 @@ internal static class YtDlpVideoParser
         if (root.ValueKind == JsonValueKind.Object
             && root.TryGetProperty("entries", out var entries)
             && entries.ValueKind == JsonValueKind.Array)
-            return entries.EnumerateArray().Select(ParseVideo).OfType<VideoSummary>().ToArray();
+            return [.. entries.EnumerateArray().Select(ParseVideo).OfType<VideoSummary>()];
 
         var video = ParseVideo(root);
         return video is null ? [] : [video];

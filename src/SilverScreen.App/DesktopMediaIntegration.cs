@@ -1,9 +1,11 @@
 using System.Text;
+using GLib;
 using Serilog;
-using SilverScreen.Core.Models;
 using SilverScreen.DBus;
+using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Playback;
 using Tmds.DBus.Protocol;
+using TimeSpan = System.TimeSpan;
 
 namespace SilverScreen;
 
@@ -22,42 +24,17 @@ internal sealed class DesktopMediaIntegration : IDisposable
     private readonly LibMpvPlayer _player;
     private readonly Action _raiseRequested;
     private DBusConnection? _connection;
+    private bool _disposed;
     private MprisHandler? _mprisHandler;
+    private bool _portalAvailable = true;
     private ObjectPath? _portalInhibitRequest;
     private DesktopPlaybackSnapshot _snapshot = DesktopPlaybackSnapshot.Stopped;
-    private bool _disposed;
-    private bool _portalAvailable = true;
 
     public DesktopMediaIntegration(LibMpvPlayer player, Action raiseRequested)
     {
         _player = player;
         _raiseRequested = raiseRequested;
         _ = ConnectAsync();
-    }
-
-    public void UpdatePlayback(PlaybackRequest? request, LibMpvPlaybackState state)
-    {
-        DesktopPlaybackSnapshot previous;
-        DesktopPlaybackSnapshot current;
-        MprisHandler? handler;
-        lock (_gate)
-        {
-            if (_disposed) return;
-
-            previous = _snapshot;
-            current = DesktopPlaybackSnapshot.Create(request, state);
-            _snapshot = current;
-            handler = _mprisHandler;
-        }
-
-        handler?.PublishChanges(previous, current);
-        UpdateInhibition();
-    }
-
-    public void ClearPlayback()
-    {
-        UpdatePlayback(null, new LibMpvPlaybackState(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1,
-            false, false, false, []));
     }
 
     public void Dispose()
@@ -84,6 +61,31 @@ internal sealed class DesktopMediaIntegration : IDisposable
         }
 
         GC.SuppressFinalize(this);
+    }
+
+    public void UpdatePlayback(PlaybackRequest? request, LibMpvPlaybackState state)
+    {
+        DesktopPlaybackSnapshot previous;
+        DesktopPlaybackSnapshot current;
+        MprisHandler? handler;
+        lock (_gate)
+        {
+            if (_disposed) return;
+
+            previous = _snapshot;
+            current = DesktopPlaybackSnapshot.Create(request, state);
+            _snapshot = current;
+            handler = _mprisHandler;
+        }
+
+        handler?.PublishChanges(previous, current);
+        UpdateInhibition();
+    }
+
+    public void ClearPlayback()
+    {
+        UpdatePlayback(null, new LibMpvPlaybackState(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1,
+            false, false, false, []));
     }
 
     private async Task ConnectAsync()
@@ -141,12 +143,15 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
     private DesktopPlaybackSnapshot GetSnapshot()
     {
-        lock (_gate) return _snapshot;
+        lock (_gate)
+        {
+            return _snapshot;
+        }
     }
 
     private void Raise()
     {
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             lock (_gate)
             {
@@ -188,7 +193,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 shouldInhibit = _snapshot.IsPlaying;
             }
 
-            if (connection is null || shouldInhibit == (request is not null)) return;
+            if (connection is null || shouldInhibit == request is not null) return;
 
             if (shouldInhibit)
             {
@@ -211,13 +216,21 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 }
                 catch (Exception exception)
                 {
-                    lock (_gate) _portalAvailable = false;
+                    lock (_gate)
+                    {
+                        _portalAvailable = false;
+                    }
+
                     Logger.Warning(exception, "Could not inhibit desktop idle lock through the portal.");
                 }
             }
             else if (request is { } handle)
             {
-                lock (_gate) _portalInhibitRequest = null;
+                lock (_gate)
+                {
+                    _portalInhibitRequest = null;
+                }
+
                 await ClosePortalRequestAsync(connection, handle).ConfigureAwait(false);
             }
         }
@@ -240,11 +253,48 @@ internal sealed class DesktopMediaIntegration : IDisposable
         }
     }
 
-    private sealed class MprisHandler(DesktopMediaIntegration owner, DBusConnection connection) : DBusHandler(connection,
-        MprisObjectPath, handlesChildPaths: false),
+    private sealed class MprisHandler(DesktopMediaIntegration owner, DBusConnection connection) : DBusHandler(
+            connection,
+            MprisObjectPath, handlesChildPaths: false),
         IMediaPlayer2Handler, IMediaPlayer2Properties,
         IPlayerHandler, IPlayerProperties, IDisposable
     {
+        bool IMediaPlayer2Properties.CanQuit => false;
+        bool IMediaPlayer2Properties.CanRaise => true;
+        bool IMediaPlayer2Properties.HasTrackList => false;
+        string IMediaPlayer2Properties.Identity => ApplicationMetadata.ApplicationName;
+        string IMediaPlayer2Properties.DesktopEntry => ApplicationMetadata.ApplicationId;
+        string[] IMediaPlayer2Properties.SupportedUriSchemes => ["http", "https"];
+        string[] IMediaPlayer2Properties.SupportedMimeTypes => ["video/mp4", "video/webm"];
+
+        string IPlayerProperties.PlaybackStatus => owner.GetSnapshot().PlaybackStatus;
+        string IPlayerProperties.LoopStatus => "None";
+
+        double IPlayerProperties.Rate
+        {
+            get => owner.GetSnapshot().Rate;
+            set => owner._player.SetSpeed(Math.Clamp(value, 0.25, 4));
+        }
+
+        bool IPlayerProperties.Shuffle => false;
+        Dictionary<string, VariantValue> IPlayerProperties.Metadata => owner.GetSnapshot().Metadata;
+
+        double IPlayerProperties.Volume
+        {
+            get => owner.GetSnapshot().Volume;
+            set => owner._player.SetVolume(Math.Clamp(value, 0, 1) * 100);
+        }
+
+        long IPlayerProperties.Position => owner.GetSnapshot().PositionMicroseconds;
+        double IPlayerProperties.MinimumRate => 0.25;
+        double IPlayerProperties.MaximumRate => 4;
+        bool IPlayerProperties.CanGoNext => owner.GetSnapshot().CanGoNext;
+        bool IPlayerProperties.CanGoPrevious => owner.GetSnapshot().CanGoPrevious;
+        bool IPlayerProperties.CanPlay => owner.GetSnapshot().CanPlay;
+        bool IPlayerProperties.CanPause => owner.GetSnapshot().CanPause;
+        bool IPlayerProperties.CanSeek => owner.GetSnapshot().CanSeek;
+        bool IPlayerProperties.CanControl => true;
+
         public void Dispose()
         {
         }
@@ -284,45 +334,16 @@ internal sealed class DesktopMediaIntegration : IDisposable
             }
         }
 
-        bool IMediaPlayer2Properties.CanQuit => false;
-        bool IMediaPlayer2Properties.CanRaise => true;
-        bool IMediaPlayer2Properties.HasTrackList => false;
-        string IMediaPlayer2Properties.Identity => ApplicationMetadata.ApplicationName;
-        string IMediaPlayer2Properties.DesktopEntry => ApplicationMetadata.ApplicationId;
-        string[] IMediaPlayer2Properties.SupportedUriSchemes => ["http", "https"];
-        string[] IMediaPlayer2Properties.SupportedMimeTypes => ["video/mp4", "video/webm"];
-
-        string IPlayerProperties.PlaybackStatus => owner.GetSnapshot().PlaybackStatus;
-        string IPlayerProperties.LoopStatus => "None";
-        double IPlayerProperties.Rate
-        {
-            get => owner.GetSnapshot().Rate;
-            set => owner._player.SetSpeed(Math.Clamp(value, 0.25, 4));
-        }
-        bool IPlayerProperties.Shuffle => false;
-        Dictionary<string, VariantValue> IPlayerProperties.Metadata => owner.GetSnapshot().Metadata;
-        double IPlayerProperties.Volume
-        {
-            get => owner.GetSnapshot().Volume;
-            set => owner._player.SetVolume(Math.Clamp(value, 0, 1) * 100);
-        }
-        long IPlayerProperties.Position => owner.GetSnapshot().PositionMicroseconds;
-        double IPlayerProperties.MinimumRate => 0.25;
-        double IPlayerProperties.MaximumRate => 4;
-        bool IPlayerProperties.CanGoNext => owner.GetSnapshot().CanGoNext;
-        bool IPlayerProperties.CanGoPrevious => owner.GetSnapshot().CanGoPrevious;
-        bool IPlayerProperties.CanPlay => owner.GetSnapshot().CanPlay;
-        bool IPlayerProperties.CanPause => owner.GetSnapshot().CanPause;
-        bool IPlayerProperties.CanSeek => owner.GetSnapshot().CanSeek;
-        bool IPlayerProperties.CanControl => true;
-
         ValueTask IMediaPlayer2Handler.RaiseAsync()
         {
             owner.Raise();
             return default;
         }
 
-        ValueTask IMediaPlayer2Handler.QuitAsync() => default;
+        ValueTask IMediaPlayer2Handler.QuitAsync()
+        {
+            return default;
+        }
 
         ValueTask IPlayerHandler.NextAsync()
         {
@@ -374,19 +395,31 @@ internal sealed class DesktopMediaIntegration : IDisposable
             return default;
         }
 
-        ValueTask IMediaPlayer2Handler.HandleGetPropertyAsync(IMediaPlayer2Handler.GetPropertyContext context) =>
-            context.Handle(this);
+        ValueTask IMediaPlayer2Handler.HandleGetPropertyAsync(IMediaPlayer2Handler.GetPropertyContext context)
+        {
+            return context.Handle(this);
+        }
 
-        ValueTask IMediaPlayer2Handler.HandleGetAllPropertiesAsync(IMediaPlayer2Handler.GetAllPropertiesContext context) =>
-            context.Handle(this);
+        ValueTask IMediaPlayer2Handler.HandleGetAllPropertiesAsync(IMediaPlayer2Handler.GetAllPropertiesContext context)
+        {
+            return context.Handle(this);
+        }
 
 
-        ValueTask IPlayerHandler.HandleGetPropertyAsync(IPlayerHandler.GetPropertyContext context) => context.Handle(this);
+        ValueTask IPlayerHandler.HandleGetPropertyAsync(IPlayerHandler.GetPropertyContext context)
+        {
+            return context.Handle(this);
+        }
 
-        ValueTask IPlayerHandler.HandleGetAllPropertiesAsync(IPlayerHandler.GetAllPropertiesContext context) =>
-            context.Handle(this);
+        ValueTask IPlayerHandler.HandleGetAllPropertiesAsync(IPlayerHandler.GetAllPropertiesContext context)
+        {
+            return context.Handle(this);
+        }
 
-        ValueTask IPlayerHandler.HandleSetPropertyAsync(IPlayerHandler.SetPropertyContext context) => context.Handle(this);
+        ValueTask IPlayerHandler.HandleSetPropertyAsync(IPlayerHandler.SetPropertyContext context)
+        {
+            return context.Handle(this);
+        }
     }
 
     internal sealed record DesktopPlaybackSnapshot(
@@ -409,11 +442,14 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
         public static DesktopPlaybackSnapshot Create(PlaybackRequest? request, LibMpvPlaybackState state)
         {
-            if (!state.HasMedia || request is null || state.PlaylistIndex < 0 || state.PlaylistIndex >= request.Videos.Length)
+            if (!state.HasMedia || request is null || state.PlaylistIndex < 0 ||
+                state.PlaylistIndex >= request.Videos.Length)
                 return Stopped with { Volume = Math.Clamp(state.Volume / 100, 0, 1), Rate = state.Speed };
 
             var video = request.Videos[state.PlaylistIndex];
-            var trackId = new ObjectPath($"/org/mpris/MediaPlayer2/Track/{Convert.ToHexString(Encoding.UTF8.GetBytes(video.Id))}");
+            var trackId =
+                new ObjectPath(
+                    $"/org/mpris/MediaPlayer2/Track/{Convert.ToHexString(Encoding.UTF8.GetBytes(video.Id))}");
             var duration = state.Duration == TimeSpan.Zero ? video.Duration : state.Duration;
             var metadata = new Dictionary<string, VariantValue>
             {
@@ -428,7 +464,8 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
             return new DesktopPlaybackSnapshot(true, !state.IsPaused, state.IsPaused ? "Paused" : "Playing",
                 state.Position.Ticks / 10, Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,
-                state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId, metadata);
+                state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId,
+                metadata);
         }
     }
 }
