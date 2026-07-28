@@ -28,7 +28,7 @@ public sealed class YtDlpCommentServiceTests
         Assert.Equal(
             [
                 "--dump-single-json", "--skip-download", "--no-playlist", "--write-comments", "--extractor-args",
-                "youtube:comment_sort=top;max_comments=100,100,0,0,1", "--cookies", cookiePath, WatchUrl
+                "youtube:comment_sort=top;max_comments=200,100,100,25,2", "--cookies", cookiePath, WatchUrl
             ],
             runner.StartInfo!.ArgumentList);
         Assert.False(File.Exists(cookiePath));
@@ -47,7 +47,7 @@ public sealed class YtDlpCommentServiceTests
         Assert.Equal(
             [
                 "--dump-single-json", "--skip-download", "--no-playlist", "--write-comments", "--extractor-args",
-                "youtube:comment_sort=new;max_comments=100,100,0,0,1", WatchUrl
+                "youtube:comment_sort=new;max_comments=200,100,100,25,2", WatchUrl
             ],
             runner.StartInfo!.ArgumentList);
     }
@@ -70,16 +70,16 @@ public sealed class YtDlpCommentServiceTests
     }
 
     [Fact]
-    public async Task GetCommentsAsync_ParsesFiltersAndNormalizesCommentsInOrder()
+    public async Task GetCommentsAsync_ParsesFiltersRelationshipsAndNormalizesCommentsInOrder()
     {
         var service = CreateService(new CapturingRunner(_ => Task.FromResult(Success("""
             {
               "comments": [
-                { "id": "first", "author": "", "text": "First text", "_time_text": "2 hours ago", "time_text": "ignored", "like_count": 7 },
+                { "id": "first", "parent": "root", "author": "", "text": "First text", "_time_text": "2 hours ago", "time_text": "ignored", "like_count": 7 },
                 { "id": "first", "author": "Duplicate", "text": "Duplicate text", "like_count": 99 },
                 { "id": " ", "author": "Skipped", "text": "No id" },
                 { "id": "no-text", "author": "Skipped", "text": " " },
-                { "id": "second", "author": "Author", "text": "Second text", "time_text": "yesterday", "like_count": -1 },
+                { "id": "second", "parent": "first", "author": "Author", "text": "Second text", "time_text": "yesterday", "like_count": -1 },
                 { "id": "third", "author": "Third", "text": "Third text", "like_count": "not a number" },
                 { "id": "fourth", "author": "Fourth", "text": "Fourth text" }
               ]
@@ -94,7 +94,7 @@ public sealed class YtDlpCommentServiceTests
             ["first", "second", "third", "fourth"],
             result.Comments.Select(comment => comment.Id));
         Assert.Equal(new YouTubeComment("first", "YouTube user", "First text", "2 hours ago", 7), result.Comments[0]);
-        Assert.Equal(new YouTubeComment("second", "Author", "Second text", "yesterday", 0), result.Comments[1]);
+        Assert.Equal(new YouTubeComment("second", "Author", "Second text", "yesterday", 0, "first"), result.Comments[1]);
         Assert.Equal(new YouTubeComment("third", "Third", "Third text", "", 0), result.Comments[2]);
         Assert.Equal(new YouTubeComment("fourth", "Fourth", "Fourth text", "", 0), result.Comments[3]);
     }

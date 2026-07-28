@@ -61,6 +61,12 @@ Gtk.Box CommentRowView {
           styles ["caption", "dim-label"]
         }
       }
+      Gtk.Button comment_replies_button {
+        halign: start;
+        visible: false;
+        clicked => $OnRepliesButtonClicked();
+        styles ["flat"]
+      }
     }
   }
 }

@@ -80,8 +80,8 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         startInfo.ArgumentList.Add("--extractor-args");
         startInfo.ArgumentList.Add(sort switch
         {
-            YouTubeCommentSort.Top => "youtube:comment_sort=top;max_comments=100,100,0,0,1",
-            YouTubeCommentSort.Newest => "youtube:comment_sort=new;max_comments=100,100,0,0,1",
+            YouTubeCommentSort.Top => "youtube:comment_sort=top;max_comments=200,100,100,25,2",
+            YouTubeCommentSort.Newest => "youtube:comment_sort=new;max_comments=200,100,100,25,2",
             _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, null)
         });
 

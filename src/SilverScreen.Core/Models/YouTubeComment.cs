@@ -5,4 +5,5 @@ public sealed record YouTubeComment(
     string AuthorName,
     string Text,
     string PublishedTimeText,
-    long LikeCount);
+    long LikeCount,
+    string? ParentId = null);

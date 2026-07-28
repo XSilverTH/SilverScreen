@@ -12,16 +12,19 @@ public partial class CommentsView : ViewBase<Box>
     private readonly Action _closeRequested;
     private readonly IYouTubeCommentService _comments;
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];
+    private readonly HashSet<string> _expandedCommentIds = [];
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly ListView _list;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
+    private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
     private readonly ScrolledWindow _scrolledWindow;
     private readonly NoSelection _selection;
     private readonly DropDown _sortDropdown;
     private readonly Stack _stack;
+    private readonly List<string> _topLevelCommentIds = [];
     private bool _disposed;
     private bool _hasLoadedCurrentVideo;
     private CancellationTokenSource? _loadCancellation;
@@ -160,21 +163,78 @@ public partial class CommentsView : ViewBase<Box>
     private void ApplyComments(IReadOnlyList<YouTubeComment> comments)
     {
         _commentsById.Clear();
-        var ids = new string[comments.Count];
-        for (var index = 0; index < comments.Count; index++)
-        {
-            var comment = comments[index];
+        _repliesByParentId.Clear();
+        _topLevelCommentIds.Clear();
+        _expandedCommentIds.Clear();
+
+        foreach (var comment in comments)
             _commentsById[comment.Id] = comment;
-            ids[index] = comment.Id;
+
+        foreach (var comment in comments)
+        {
+            if (string.IsNullOrWhiteSpace(comment.ParentId) ||
+                !_commentsById.ContainsKey(comment.ParentId))
+            {
+                _topLevelCommentIds.Add(comment.Id);
+                continue;
+            }
+
+            if (!_repliesByParentId.TryGetValue(comment.ParentId, out var replies))
+            {
+                replies = [];
+                _repliesByParentId.Add(comment.ParentId, replies);
+            }
+
+            replies.Add(comment);
         }
 
-        _itemIds.Splice(0, _itemIds.GetNItems(), ids);
+        RebuildVisibleComments();
     }
 
     private void ClearComments()
     {
         _commentsById.Clear();
+        _repliesByParentId.Clear();
+        _topLevelCommentIds.Clear();
+        _expandedCommentIds.Clear();
         _itemIds.Splice(0, _itemIds.GetNItems(), []);
+    }
+
+    private void ToggleReplies(string commentId)
+    {
+        if (!_repliesByParentId.ContainsKey(commentId))
+            return;
+
+        if (!_expandedCommentIds.Add(commentId))
+            _expandedCommentIds.Remove(commentId);
+
+        RebuildVisibleComments();
+    }
+
+    private void RebuildVisibleComments()
+    {
+        var visibleIds = new List<string>(_commentsById.Count);
+        var ancestors = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var commentId in _topLevelCommentIds)
+            AddVisibleComment(commentId, visibleIds, ancestors);
+
+        _itemIds.Splice(0, _itemIds.GetNItems(), visibleIds.ToArray());
+    }
+
+    private void AddVisibleComment(string commentId, List<string> visibleIds, HashSet<string> ancestors)
+    {
+        if (!ancestors.Add(commentId))
+            return;
+
+        visibleIds.Add(commentId);
+        if (_expandedCommentIds.Contains(commentId) &&
+            _repliesByParentId.TryGetValue(commentId, out var replies))
+        {
+            foreach (var reply in replies)
+                AddVisibleComment(reply.Id, visibleIds, ancestors);
+        }
+
+        ancestors.Remove(commentId);
     }
 
     private void OnRowSetup(object? sender, SignalListItemFactory.SetupSignalArgs args)
@@ -182,7 +242,7 @@ public partial class CommentsView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new CommentRowView();
+        var row = new CommentRowView(ToggleReplies);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
@@ -194,7 +254,10 @@ public partial class CommentsView : ViewBase<Box>
             !_commentsById.TryGetValue(id, out var comment))
             return;
 
-        row.Bind(comment);
+        row.Bind(
+            comment,
+            _repliesByParentId.TryGetValue(comment.Id, out var replies) ? replies.Count : 0,
+            _expandedCommentIds.Contains(comment.Id));
     }
 
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)

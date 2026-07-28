@@ -103,7 +103,8 @@ public sealed class YtDlpCommentService(
                 authorName,
                 text,
                 GetString(commentElement, "_time_text") ?? GetString(commentElement, "time_text") ?? string.Empty,
-                GetLikeCount(commentElement)));
+                GetLikeCount(commentElement),
+                GetParentId(commentElement)));
         }
 
         return comments;
@@ -114,6 +115,14 @@ public sealed class YtDlpCommentService(
         return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+    }
+
+    private static string? GetParentId(JsonElement element)
+    {
+        var parentId = GetString(element, "parent");
+        return string.IsNullOrWhiteSpace(parentId) || string.Equals(parentId, "root", StringComparison.Ordinal)
+            ? null
+            : parentId;
     }
 
     private static long GetLikeCount(JsonElement element)
