@@ -16,7 +16,7 @@ public sealed class DesktopMediaIntegrationTests
                 "https://example.test/current.jpg", false, "https://example.test/watch")
         ]);
         var state = new LibMpvPlaybackState(1, TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(2), false, false,
-            50, 1.5, true, true, false, []);
+            50, 1.5, true, true, false, [], []);
 
         var snapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state);
 
@@ -38,7 +38,7 @@ public sealed class DesktopMediaIntegrationTests
     public void MprisSnapshotStopsWhenNoMediaIsLoaded()
     {
         var state = new LibMpvPlaybackState(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 80, 1, false, false,
-            false, []);
+            false, [], []);
 
         var snapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(null, state);
 

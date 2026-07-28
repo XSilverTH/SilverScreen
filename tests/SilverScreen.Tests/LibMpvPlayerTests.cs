@@ -115,7 +115,7 @@ public sealed class LibMpvPlayerTests
         Assert.NotNull(stateField);
         Assert.NotNull(handleEndFile);
         stateField.SetValue(player, new LibMpvPlaybackState(0, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3),
-            true, false, 100, 1, true, true, false, []));
+            true, false, 100, 1, true, true, false, [], []));
 
         handleEndFile.Invoke(player, [new LibMpvEventEndFile(LibMpvEndFileReason.Eof, 0, 0, 0, 0)]);
 
@@ -153,6 +153,46 @@ public sealed class LibMpvPlayerTests
         Assert.Contains(("sid", "no"), native.StringProperties);
     }
 
+    [Fact]
+    public void FileLoadedPublishesNamedChaptersFromMpv()
+    {
+        using var native = new RecordingNative();
+        native.ReadProperties["chapter-list/count"] = "3";
+        native.ReadProperties["chapter-list/0/time"] = "0";
+        native.ReadProperties["chapter-list/0/title"] = "Introduction";
+        native.ReadProperties["chapter-list/1/time"] = "42.5";
+        native.ReadProperties["chapter-list/1/title"] = "The important part";
+        native.ReadProperties["chapter-list/2/time"] = "90";
+        var states = new ConcurrentQueue<LibMpvPlaybackState>();
+        using var player = new LibMpvPlayer(native, action => action());
+        player.StateChanged += (_, state) => states.Enqueue(state);
+        var handleFileLoaded = typeof(LibMpvPlayer).GetMethod("HandleFileLoaded",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handleFileLoaded);
+
+        handleFileLoaded.Invoke(player, null);
+
+        var chapters = Assert.Single(states).Chapters;
+        Assert.Collection(chapters,
+            chapter =>
+            {
+                Assert.Equal(TimeSpan.Zero, chapter.Start);
+                Assert.Equal("Introduction", chapter.Title);
+            },
+            chapter =>
+            {
+                Assert.Equal(TimeSpan.FromSeconds(42.5), chapter.Start);
+                Assert.Equal("The important part", chapter.Title);
+            },
+            chapter =>
+            {
+                Assert.Equal(TimeSpan.FromSeconds(90), chapter.Start);
+                Assert.Equal("Chapter 3", chapter.Title);
+            });
+    }
+
+
+
 
     [Fact]
     public void KeyboardTransportCommandsUseExpectedMpvCommands()
@@ -189,6 +229,7 @@ public sealed class LibMpvPlayerTests
         public ConcurrentBag<string> Commands { get; } = [];
         public ConcurrentBag<(string Name, double Value)> DoubleProperties { get; } = [];
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
+        public Dictionary<string, string> ReadProperties { get; } = [];
         public bool IsAvailable => true;
         public string? AvailabilityError => null;
 
@@ -236,7 +277,7 @@ public sealed class LibMpvPlayerTests
 
         public string? GetPropertyString(nint handle, string name)
         {
-            return null;
+            return ReadProperties.GetValueOrDefault(name);
         }
 
         public int Command(nint handle, params string[] arguments)

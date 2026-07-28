@@ -22,6 +22,7 @@ internal interface IEmbeddedPlayerPresenter
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
     private const long ControlsIdleDelayMilliseconds = 1_500;
+    private const int ChapterMarkerHitTargetWidth = 20;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
     private const double MinimumPlaybackSpeed = 0.25;
     private const double MaximumPlaybackSpeed = 5;
@@ -32,6 +33,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Label _channelLabel;
     private readonly ToggleButton _commentsButton;
     private readonly CommentsView _commentsView;
+    private readonly List<Button> _chapterMarkers = [];
+    private TimeSpan _chapterDuration;
+    private int _chapterMarkerHostWidth = -1;
+    private IReadOnlyList<LibMpvChapter> _chapters = [];
+    private readonly Overlay _chapterMarkerHost;
     private readonly ICookieFileProvider _cookieFiles;
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly Button _dislikeButton;
@@ -121,6 +127,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
         _subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
+        _chapterMarkerHost = GetRequiredObject<Overlay>("player_timeline_overlay");
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
         _channelLabel = GetRequiredObject<Label>("player_channel_label");
@@ -215,6 +222,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _commentsVideoId = firstVideo.Id;
             _commentsView.SetVideo(firstVideo.Id);
             RegisterActivity();
+            UpdateChapters([], TimeSpan.Zero);
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
             _queueControls.SetVisible(request.Videos.Length > 1);
@@ -356,6 +364,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void RegisterActivity()
     {
         _lastActivityMilliseconds = Environment.TickCount64;
+        LayoutChapterMarkers(_chapterDuration);
         SetControlsVisible(true);
     }
 
@@ -541,6 +550,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _positionLabel.SetText(FormatTime(state.Position));
             _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : FormatTime(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
+            UpdateChapters(state.Chapters, state.Duration);
             _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
             _playPauseButton.SetIconName(state is { HasMedia: true, IsPaused: false }
@@ -630,6 +640,68 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         finally
         {
             _updatingControls = false;
+        }
+    }
+
+    private void UpdateChapters(IReadOnlyList<LibMpvChapter> chapters, TimeSpan duration)
+    {
+        if (!_chapters.SequenceEqual(chapters))
+        {
+            foreach (var marker in _chapterMarkers)
+                _chapterMarkerHost.RemoveOverlay(marker);
+
+            _chapterMarkers.Clear();
+            _chapters = chapters;
+            _chapterMarkerHostWidth = -1;
+            foreach (var chapter in chapters)
+            {
+                var marker = Button.New();
+                marker.AddCssClass("player-chapter-marker");
+                marker.SetChild(CreateChapterMarkerLine());
+                marker.SetTooltipText(chapter.Title);
+                marker.OnClicked += (_, _) =>
+                {
+                    _player.SeekAbsolute(chapter.Start.TotalSeconds);
+                    RegisterActivity();
+                };
+                marker.Halign = Align.Start;
+                marker.Valign = Align.Center;
+                _chapterMarkerHost.AddOverlay(marker);
+                _chapterMarkers.Add(marker);
+            }
+        }
+
+        LayoutChapterMarkers(duration);
+    }
+
+    private static Box CreateChapterMarkerLine()
+    {
+        var line = Box.New(Orientation.Vertical, 0);
+        line.AddCssClass("player-chapter-marker-line");
+        line.Halign = Align.Center;
+        line.Valign = Align.Center;
+        return line;
+    }
+
+    private void LayoutChapterMarkers(TimeSpan duration)
+    {
+        var width = _chapterMarkerHost.GetAllocatedWidth();
+        if (_chapterDuration == duration && _chapterMarkerHostWidth == width) return;
+
+        _chapterDuration = duration;
+        _chapterMarkerHostWidth = width;
+        var hasDuration = duration > TimeSpan.Zero;
+        for (var index = 0; index < _chapterMarkers.Count; index++)
+        {
+            var marker = _chapterMarkers[index];
+            var chapter = _chapters[index];
+            marker.SetVisible(hasDuration && chapter.Start <= duration);
+            if (!hasDuration) continue;
+
+            var position = Math.Clamp(chapter.Start.TotalSeconds / duration.TotalSeconds, 0, 1);
+            var markerX = Math.Clamp(Math.Round(position * (width - 1) - ChapterMarkerHitTargetWidth / 2d),
+                0, Math.Max(0, width - ChapterMarkerHitTargetWidth));
+            marker.MarginStart = (int)markerX;
         }
     }
 

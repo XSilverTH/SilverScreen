@@ -374,16 +374,18 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       }
     }
 
-    Gtk.Scale player_timeline {
-      value-changed => $OnTimelineValueChanged();
-      draw-value: false;
-      hexpand: true;
-      sensitive: false;
-      adjustment: Gtk.Adjustment {
-        lower: 0;
-        upper: 100;
-        value: 0;
-        step-increment: 1;
+    Gtk.Overlay player_timeline_overlay {
+      child: Gtk.Scale player_timeline {
+        value-changed => $OnTimelineValueChanged();
+        draw-value: false;
+        hexpand: true;
+        sensitive: false;
+        adjustment: Gtk.Adjustment {
+          lower: 0;
+          upper: 100;
+          value: 0;
+          step-increment: 1;
+        };
       };
     }
 

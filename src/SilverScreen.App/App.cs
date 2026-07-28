@@ -311,6 +311,26 @@ public partial class App
                                  min-height: 18px;
                                  min-width: 18px;
                                }
+
+                               button.player-chapter-marker,
+                               button.player-chapter-marker:hover,
+                               button.player-chapter-marker:active {
+                                 background-color: transparent;
+                                 background-image: none;
+                                 border: 0;
+                                 border-radius: 0;
+                                 box-shadow: none;
+                                 min-height: 28px;
+                                 min-width: 20px;
+                                 padding: 0;
+                                 transition: none;
+                               }
+
+                               .player-chapter-marker-line {
+                                 background-color: #ffffff;
+                                 min-height: 10px;
+                                 min-width: 1px;
+                               }
                                """);
 
         StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);

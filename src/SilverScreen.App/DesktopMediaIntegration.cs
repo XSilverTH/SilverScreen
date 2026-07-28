@@ -85,7 +85,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
     public void ClearPlayback()
     {
         UpdatePlayback(null, new LibMpvPlaybackState(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1,
-            false, false, false, []));
+            false, false, false, [], []));
     }
 
     private async Task ConnectAsync()

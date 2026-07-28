@@ -8,6 +8,8 @@ namespace SilverScreen.Infrastructure.Features.Playback;
 
 public sealed record LibMpvSubtitleTrack(long Id, string Language, string Label, bool IsSelected);
 
+public sealed record LibMpvChapter(TimeSpan Start, string Title);
+
 public sealed record LibMpvPlaybackState(
     int PlaylistIndex,
     TimeSpan Position,
@@ -19,7 +21,8 @@ public sealed record LibMpvPlaybackState(
     bool IsSeekable,
     bool HasMedia,
     bool IsLoading,
-    IReadOnlyList<LibMpvSubtitleTrack> SubtitleTracks);
+    IReadOnlyList<LibMpvSubtitleTrack> SubtitleTracks,
+    IReadOnlyList<LibMpvChapter> Chapters);
 
 public sealed class LibMpvPlayer : IDisposable
 {
@@ -45,7 +48,7 @@ public sealed class LibMpvPlayer : IDisposable
     private bool _resumeAfterRenderer;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
-        false, []);
+        false, [], []);
 
     private GCHandle _updateCallbackHandle;
 
@@ -194,7 +197,7 @@ public sealed class LibMpvPlayer : IDisposable
                 ? "Best"
                 : preferences.VideoQuality;
             _reload = null;
-            _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [] };
+            _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [], Chapters = [] };
         }
 
         PublishState();
@@ -326,7 +329,7 @@ public sealed class LibMpvPlayer : IDisposable
             _state = _state with
             {
                 PlaylistIndex = -1, Position = TimeSpan.Zero, Duration = TimeSpan.Zero, IsPaused = true,
-                IsSeekable = false, HasMedia = false, IsLoading = false, SubtitleTracks = []
+                IsSeekable = false, HasMedia = false, IsLoading = false, SubtitleTracks = [], Chapters = []
             };
         }
 
@@ -449,10 +452,14 @@ public sealed class LibMpvPlayer : IDisposable
     private void HandleFileLoaded()
     {
         var subtitleTracks = ReadSubtitleTracks();
+        var chapters = ReadChapters();
         ReloadSnapshot? reload;
         lock (_gate)
         {
-            _state = _state with { HasMedia = true, IsLoading = false, SubtitleTracks = subtitleTracks };
+            _state = _state with
+            {
+                HasMedia = true, IsLoading = false, SubtitleTracks = subtitleTracks, Chapters = chapters
+            };
             reload = _reload;
         }
 
@@ -542,6 +549,30 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         return subtitleTracks;
+    }
+
+    private List<LibMpvChapter> ReadChapters()
+    {
+        if (!int.TryParse(_native.GetPropertyString(_handle, "chapter-list/count"),
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapterCount) ||
+            chapterCount <= 0)
+            return [];
+
+        var chapters = new List<LibMpvChapter>(chapterCount);
+        for (var index = 0; index < chapterCount; index++)
+        {
+            var propertyPrefix = $"chapter-list/{index}";
+            if (!double.TryParse(_native.GetPropertyString(_handle, $"{propertyPrefix}/time"),
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) ||
+                seconds < 0 || double.IsNaN(seconds) || double.IsInfinity(seconds))
+                continue;
+
+            var title = _native.GetPropertyString(_handle, $"{propertyPrefix}/title");
+            chapters.Add(new LibMpvChapter(TimeSpan.FromSeconds(seconds),
+                string.IsNullOrWhiteSpace(title) ? $"Chapter {index + 1}" : title));
+        }
+
+        return chapters;
     }
 
     private static LibMpvSubtitleTrack[] SelectSubtitleTrack(
