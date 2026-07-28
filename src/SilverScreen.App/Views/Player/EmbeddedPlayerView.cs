@@ -38,10 +38,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private TimeSpan _chapterDuration;
     private int _chapterMarkerHostWidth = -1;
     private IReadOnlyList<LibMpvChapter> _chapters = [];
-    private readonly List<Button> _sponsorBlockSegmentDisplays = [];
-    private readonly List<(SponsorBlockSegment Segment, bool IsEnd, Button Widget)> _sponsorBlockSegmentMarkers = [];
+    private readonly DrawingArea _sponsorBlockTimeline;
     private TimeSpan _sponsorBlockDuration;
-    private int _sponsorBlockHostWidth = -1;
     private IReadOnlyList<SponsorBlockSegment> _sponsorBlockSegments = [];
     private readonly Overlay _chapterMarkerHost;
     private readonly ICookieFileProvider _cookieFiles;
@@ -149,6 +147,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
         _chapterMarkerHost = GetRequiredObject<Overlay>("player_timeline_overlay");
+        _sponsorBlockTimeline = DrawingArea.New();
+        _sponsorBlockTimeline.SetCanTarget(false);
+        _sponsorBlockTimeline.Halign = Align.Fill;
+        _sponsorBlockTimeline.Valign = Align.Fill;
+        _sponsorBlockTimeline.SetDrawFunc(DrawSponsorBlockTimeline);
+        _chapterMarkerHost.AddOverlay(_sponsorBlockTimeline);
         _sponsorBlockSkipButton = GetRequiredObject<Button>("player_sponsorblock_skip_button");
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
@@ -572,7 +576,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (_disposed) return;
 
         _playerSurface.QueueRender();
-        UpdateSponsorBlockSegmentDisplay(_sponsorBlockDuration);
     }
 
     private void OnStateChanged(object? sender, LibMpvPlaybackState state)
@@ -795,26 +798,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void ClearSponsorBlockSegments()
     {
-        ClearSponsorBlockSegmentDisplays();
         ResetManualSponsorBlockSkipPrompt();
         _lastSponsorBlockPlaybackState = null;
         _lastSponsorBlockPlaybackVideoId = null;
         _sponsorBlockSegments = [];
+        _sponsorBlockTimeline.QueueDraw();
         _sponsorBlockDuration = TimeSpan.Zero;
-        _sponsorBlockHostWidth = -1;
         _autoSkippedSponsorBlockSegmentIds.Clear();
-    }
-    private void ClearSponsorBlockSegmentDisplays()
-    {
-        foreach (var segmentDisplay in _sponsorBlockSegmentDisplays)
-            _chapterMarkerHost.RemoveOverlay(segmentDisplay);
-
-        _sponsorBlockSegmentDisplays.Clear();
-
-        foreach (var (_, _, marker) in _sponsorBlockSegmentMarkers)
-            _chapterMarkerHost.RemoveOverlay(marker);
-
-        _sponsorBlockSegmentMarkers.Clear();
     }
 
     private void SetSponsorBlockSegments(IReadOnlyList<SponsorBlockSegment> segments)
@@ -822,55 +812,45 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (_sponsorBlockSegments.SequenceEqual(segments)) return;
 
         _sponsorBlockSegments = segments;
-        _sponsorBlockHostWidth = -1;
         if (_lastSponsorBlockPlaybackState is { } state &&
             string.Equals(_lastSponsorBlockPlaybackVideoId, _sponsorBlockVideoId, StringComparison.Ordinal))
             UpdateManualSponsorBlockSkipPrompt(state, _sponsorBlockVideoId!);
 
         UpdateSponsorBlockSegmentDisplay(_sponsorBlockDuration);
     }
-    private void EnsureSponsorBlockSegmentMarkers()
+    private void DrawSponsorBlockTimeline(DrawingArea drawingArea, Cairo.Context context, int width, int height)
     {
-        if (_sponsorBlockSegmentMarkers.Count == _sponsorBlockSegments.Count * 2) return;
+        if (!_preferences.GetPreferences().SponsorBlockSegmentDisplayEnabled ||
+            _sponsorBlockDuration <= TimeSpan.Zero || width <= 0 || height <= 0)
+            return;
 
-        foreach (var (_, _, marker) in _sponsorBlockSegmentMarkers)
-            _chapterMarkerHost.RemoveOverlay(marker);
-
-        _sponsorBlockSegmentMarkers.Clear();
+        const double rangeHeight = 10;
+        var rangeY = Math.Max(0, (height - rangeHeight) / 2);
         foreach (var segment in _sponsorBlockSegments)
         {
-            AddSponsorBlockSegmentMarker(segment, false);
-            AddSponsorBlockSegmentMarker(segment, true);
+            if (segment.Start >= _sponsorBlockDuration) continue;
+
+            var start = Math.Clamp(segment.Start.TotalSeconds / _sponsorBlockDuration.TotalSeconds, 0, 1);
+            var end = Math.Clamp(segment.End.TotalSeconds / _sponsorBlockDuration.TotalSeconds, 0, 1);
+            var x = start * width;
+            var rangeWidth = Math.Max(2, (end - start) * width);
+
+            context.SetSourceRgba(1, 0.745, 0.043, 1);
+            context.Rectangle(x, rangeY, rangeWidth, rangeHeight);
+            context.Fill();
+
+            context.SetSourceRgba(0.898, 0.647, 0.039, 1);
+            context.Rectangle(x + 1, rangeY + 1, Math.Max(0, rangeWidth - 2), rangeHeight - 2);
+            context.Fill();
+
+            context.SetSourceRgba(1, 0.82, 0.2, 1);
+            context.Rectangle(x - 1, Math.Max(0, rangeY - 4), 3, rangeHeight + 8);
+            context.Rectangle(end * width - 1, Math.Max(0, rangeY - 4), 3, rangeHeight + 8);
+            context.Fill();
         }
-
-        _sponsorBlockHostWidth = -1;
     }
 
-    private void AddSponsorBlockSegmentMarker(SponsorBlockSegment segment, bool isEnd)
-    {
-        var marker = Button.New();
-        marker.AddCssClass("player-sponsorblock-marker");
-        marker.SetChild(CreateSponsorBlockMarkerLine());
-        marker.SetTooltipText($"SponsorBlock {segment.Category}: {FormatTime(segment.Start)}–{FormatTime(segment.End)}");
-        marker.OnClicked += (_, _) =>
-        {
-            SeekAbsolute((isEnd ? segment.End : segment.Start).TotalSeconds);
-            RegisterActivity();
-        };
-        marker.Halign = Align.Start;
-        marker.Valign = Align.Center;
-        _chapterMarkerHost.AddOverlay(marker);
-        _sponsorBlockSegmentMarkers.Add((segment, isEnd, marker));
-    }
 
-    private static Box CreateSponsorBlockMarkerLine()
-    {
-        var line = Box.New(Orientation.Vertical, 0);
-        line.AddCssClass("player-sponsorblock-marker-line");
-        line.Halign = Align.Center;
-        line.Valign = Align.Center;
-        return line;
-    }
 
     private TimeSpan ResolveSponsorBlockDuration(TimeSpan playerDuration)
     {
@@ -885,61 +865,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void UpdateSponsorBlockSegmentDisplay(TimeSpan duration)
     {
-        duration = ResolveSponsorBlockDuration(duration);
-        _sponsorBlockDuration = duration;
-        if (!_preferences.GetPreferences().SponsorBlockSegmentDisplayEnabled)
-        {
-            ClearSponsorBlockSegmentDisplays();
-            return;
-        }
-
-        if (_sponsorBlockSegmentDisplays.Count != _sponsorBlockSegments.Count)
-        {
-            ClearSponsorBlockSegmentDisplays();
-            foreach (var _ in _sponsorBlockSegments)
-            {
-                var segmentDisplay = Button.New();
-                segmentDisplay.AddCssClass("player-sponsorblock-segment");
-                segmentDisplay.SetSensitive(false);
-                segmentDisplay.Halign = Align.Start;
-                segmentDisplay.Valign = Align.Center;
-                _chapterMarkerHost.AddOverlay(segmentDisplay);
-                _sponsorBlockSegmentDisplays.Add(segmentDisplay);
-            }
-
-            _sponsorBlockHostWidth = -1;
-        }
-        EnsureSponsorBlockSegmentMarkers();
-
-        var width = _chapterMarkerHost.GetAllocatedWidth();
-        if (_sponsorBlockHostWidth == width) return;
-
-        _sponsorBlockHostWidth = width;
-        var hasDuration = duration > TimeSpan.Zero;
-        for (var index = 0; index < _sponsorBlockSegmentDisplays.Count; index++)
-        {
-            var segmentDisplay = _sponsorBlockSegmentDisplays[index];
-            var segment = _sponsorBlockSegments[index];
-            segmentDisplay.SetVisible(hasDuration && segment.Start < duration);
-            if (!hasDuration) continue;
-
-            var start = Math.Clamp(segment.Start.TotalSeconds / duration.TotalSeconds, 0, 1);
-            var end = Math.Clamp(segment.End.TotalSeconds / duration.TotalSeconds, 0, 1);
-            segmentDisplay.MarginStart = (int)Math.Round(start * width);
-            segmentDisplay.SetSizeRequest(Math.Max(1, (int)Math.Round((end - start) * width)), -1);
-        }
-
-        for (var index = 0; index < _sponsorBlockSegmentMarkers.Count; index++)
-        {
-            var (segment, isEnd, marker) = _sponsorBlockSegmentMarkers[index];
-            marker.SetVisible(hasDuration && segment.Start < duration);
-            if (!hasDuration) continue;
-
-            var position = (isEnd ? segment.End : segment.Start).TotalSeconds / duration.TotalSeconds;
-            var markerX = Math.Clamp(Math.Round(Math.Clamp(position, 0, 1) * (width - 1) - 10),
-                0, Math.Max(0, width - 20));
-            marker.MarginStart = (int)markerX;
-        }
+        _sponsorBlockDuration = ResolveSponsorBlockDuration(duration);
+        _sponsorBlockTimeline.QueueDraw();
     }
 
     internal static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(
