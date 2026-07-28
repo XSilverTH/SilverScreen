@@ -14,4 +14,7 @@ public sealed class AppPreferences
     public bool MarkWatchedVideos { get; set; }
     public bool YouTubePlaybackTelemetryEnabled { get; set; }
     public bool DiscordRichPresenceEnabled { get; set; }
+    public bool SponsorBlockAutoSkipEnabled { get; set; }
+    public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
+    public string[] SponsorBlockCategories { get; set; } = [..global::SilverScreen.Core.Models.SponsorBlockCategories.All];
 }

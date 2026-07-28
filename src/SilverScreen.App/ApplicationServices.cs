@@ -29,6 +29,7 @@ public sealed class ApplicationServices(
     IPlaybackPresenceService playbackPresence,
     IYouTubePlaybackTelemetryService playbackTelemetry,
     IVideoEngagementService videoEngagement,
+    ISponsorBlockService sponsorBlock,
     IYouTubeRatingService youtubeRating,
     IYouTubeCommentService comments)
 {
@@ -46,6 +47,7 @@ public sealed class ApplicationServices(
     public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
     public IYouTubePlaybackTelemetryService PlaybackTelemetry { get; } = playbackTelemetry;
     public IVideoEngagementService VideoEngagement { get; } = videoEngagement;
+    public ISponsorBlockService SponsorBlock { get; } = sponsorBlock;
     public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
     public IYouTubeCommentService Comments { get; } = comments;
 }
@@ -86,6 +88,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<ISearchService, YtDlpSearchService>();
         services.AddSingleton<IVideoEngagementService, ReturnYouTubeDislikeService>();
         services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
+        services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
         services.AddSingleton<IYouTubeHomeClient>(provider =>
             new YtDlpHomeClient(

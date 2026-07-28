@@ -314,7 +314,10 @@ public partial class App
 
                                button.player-chapter-marker,
                                button.player-chapter-marker:hover,
-                               button.player-chapter-marker:active {
+                               button.player-chapter-marker:active,
+                               button.player-sponsorblock-marker,
+                               button.player-sponsorblock-marker:hover,
+                               button.player-sponsorblock-marker:active {
                                  background-color: transparent;
                                  background-image: none;
                                  border: 0;
@@ -330,6 +333,25 @@ public partial class App
                                  background-color: #ffffff;
                                  min-height: 10px;
                                  min-width: 1px;
+                               }
+
+                               .player-sponsorblock-marker-line {
+                                 background-color: #ffbe0b;
+                                 min-height: 18px;
+                                 min-width: 3px;
+                               }
+
+                               button.player-sponsorblock-segment,
+                               button.player-sponsorblock-segment:disabled {
+                                 background-color: #e5a50a;
+                                 background-image: none;
+                                 border: 1px solid #ffbe0b;
+                                 border-radius: 2px;
+                                 box-shadow: none;
+                                 min-height: 10px;
+                                 min-width: 2px;
+                                 opacity: 1;
+                                 padding: 0;
                                }
                                """);
 

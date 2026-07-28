@@ -45,7 +45,10 @@ public sealed class PreferencesTests : IDisposable
             AutoAdvanceNextVideo = false,
             MaxResults = 50,
             MarkWatchedVideos = true,
-            DiscordRichPresenceEnabled = true
+            DiscordRichPresenceEnabled = true,
+            SponsorBlockAutoSkipEnabled = true,
+            SponsorBlockSegmentDisplayEnabled = false,
+            SponsorBlockCategories = [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro]
         };
 
         service.SavePreferences(newPrefs);
@@ -66,6 +69,19 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);
+        Assert.True(loaded.SponsorBlockAutoSkipEnabled);
+        Assert.False(loaded.SponsorBlockSegmentDisplayEnabled);
+        Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
+    }
+
+    [Fact]
+    public void AppPreferences_SponsorBlockDefaults_ShowAllSegmentCategoriesWithoutAutoSkip()
+    {
+        var preferences = new AppPreferences();
+
+        Assert.False(preferences.SponsorBlockAutoSkipEnabled);
+        Assert.True(preferences.SponsorBlockSegmentDisplayEnabled);
+        Assert.Equal(SponsorBlockCategories.All, preferences.SponsorBlockCategories);
     }
 
 

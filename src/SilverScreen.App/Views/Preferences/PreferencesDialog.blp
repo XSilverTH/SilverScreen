@@ -67,6 +67,63 @@ Adw.PreferencesDialog PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
+      title: "SponsorBlock";
+      description: "Uses SponsorBlock data from https://sponsor.ajay.app/";
+
+      Adw.SwitchRow sponsorblock_auto_skip_row {
+        notify => $OnRowNotify();
+        title: "Automatically skip segments";
+        subtitle: "Seek past matching SponsorBlock segments during playback";
+      }
+
+      Adw.SwitchRow sponsorblock_display_row {
+        notify => $OnRowNotify();
+        title: "Show segments on the timeline";
+        subtitle: "Display matching SponsorBlock segments in the embedded player's timeline";
+      }
+
+      Adw.SwitchRow sponsorblock_sponsor_row {
+        notify => $OnRowNotify();
+        title: "Sponsors";
+      }
+
+      Adw.SwitchRow sponsorblock_selfpromo_row {
+        notify => $OnRowNotify();
+        title: "Self-promotion";
+      }
+
+      Adw.SwitchRow sponsorblock_interaction_row {
+        notify => $OnRowNotify();
+        title: "Interaction reminders";
+      }
+
+      Adw.SwitchRow sponsorblock_intro_row {
+        notify => $OnRowNotify();
+        title: "Intros and intermissions";
+      }
+
+      Adw.SwitchRow sponsorblock_outro_row {
+        notify => $OnRowNotify();
+        title: "Outros and credits";
+      }
+
+      Adw.SwitchRow sponsorblock_preview_row {
+        notify => $OnRowNotify();
+        title: "Previews and recaps";
+      }
+
+      Adw.SwitchRow sponsorblock_hook_row {
+        notify => $OnRowNotify();
+        title: "Hooks";
+      }
+
+      Adw.SwitchRow sponsorblock_filler_row {
+        notify => $OnRowNotify();
+        title: "Filler";
+      }
+    }
+
+    Adw.PreferencesGroup {
       title: "MPV Configuration";
 
       Adw.EntryRow mpv_path_row {

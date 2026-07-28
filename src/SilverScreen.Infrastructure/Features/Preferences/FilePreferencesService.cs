@@ -121,7 +121,10 @@ public sealed class FilePreferencesService : IPreferencesService
             MaxResults = source.MaxResults,
             MarkWatchedVideos = source is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             YouTubePlaybackTelemetryEnabled = source.YouTubePlaybackTelemetryEnabled,
-            DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled
+            DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled,
+            SponsorBlockAutoSkipEnabled = source.SponsorBlockAutoSkipEnabled,
+            SponsorBlockSegmentDisplayEnabled = source.SponsorBlockSegmentDisplayEnabled,
+            SponsorBlockCategories = source.SponsorBlockCategories?.ToArray() ?? [..SponsorBlockCategories.All],
         };
     }
 

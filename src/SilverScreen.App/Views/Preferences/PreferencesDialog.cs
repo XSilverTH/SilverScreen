@@ -23,6 +23,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly StringList _themeModel;
     private readonly ComboRow _themeRow;
     private readonly SwitchRow _youTubePlaybackTelemetryRow;
+    private readonly SwitchRow _sponsorBlockAutoSkipRow;
+    private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
+    private readonly SwitchRow _sponsorBlockDisplayRow;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
@@ -46,6 +49,20 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         _themeModel = GetRequiredObject<StringList>("theme_model");
         _qualityModel = GetRequiredObject<StringList>("quality_model");
         _playbackBackendModel = GetRequiredObject<StringList>("playback_backend_model");
+        _sponsorBlockAutoSkipRow = GetRequiredObject<SwitchRow>("sponsorblock_auto_skip_row");
+        _sponsorBlockDisplayRow = GetRequiredObject<SwitchRow>("sponsorblock_display_row");
+        _sponsorBlockCategoryRows = new Dictionary<string, SwitchRow>
+        {
+            [SponsorBlockCategories.Sponsor] = GetRequiredObject<SwitchRow>("sponsorblock_sponsor_row"),
+            [SponsorBlockCategories.SelfPromotion] = GetRequiredObject<SwitchRow>("sponsorblock_selfpromo_row"),
+            [SponsorBlockCategories.InteractionReminder] =
+                GetRequiredObject<SwitchRow>("sponsorblock_interaction_row"),
+            [SponsorBlockCategories.Intro] = GetRequiredObject<SwitchRow>("sponsorblock_intro_row"),
+            [SponsorBlockCategories.Outro] = GetRequiredObject<SwitchRow>("sponsorblock_outro_row"),
+            [SponsorBlockCategories.Preview] = GetRequiredObject<SwitchRow>("sponsorblock_preview_row"),
+            [SponsorBlockCategories.Hook] = GetRequiredObject<SwitchRow>("sponsorblock_hook_row"),
+            [SponsorBlockCategories.Filler] = GetRequiredObject<SwitchRow>("sponsorblock_filler_row")
+        };
 
         InitializeFields();
     }
@@ -68,6 +85,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             _markWatchedRow.Active = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false };
             _youTubePlaybackTelemetryRow.Active = prefs.YouTubePlaybackTelemetryEnabled;
             _discordRichPresenceRow.Active = prefs.DiscordRichPresenceEnabled;
+            _sponsorBlockAutoSkipRow.Active = prefs.SponsorBlockAutoSkipEnabled;
+            _sponsorBlockDisplayRow.Active = prefs.SponsorBlockSegmentDisplayEnabled;
+            foreach (var (category, row) in _sponsorBlockCategoryRows)
+                row.Active = prefs.SponsorBlockCategories?.Contains(category, StringComparer.Ordinal) ?? false;
         }
         finally
         {
@@ -130,6 +151,12 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             MarkWatchedVideos = _markWatchedRow.Active && !_youTubePlaybackTelemetryRow.Active,
             YouTubePlaybackTelemetryEnabled = _youTubePlaybackTelemetryRow.Active,
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
+            SponsorBlockAutoSkipEnabled = _sponsorBlockAutoSkipRow.Active,
+            SponsorBlockSegmentDisplayEnabled = _sponsorBlockDisplayRow.Active,
+            SponsorBlockCategories = _sponsorBlockCategoryRows
+                .Where(pair => pair.Value.Active)
+                .Select(pair => pair.Key)
+                .ToArray(),
             PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage
         };
 
