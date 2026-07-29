@@ -1,0 +1,28 @@
+/* Video Card and Thumbnail styles */
+
+.video-card {
+    background-color: @card_bg_color;
+    border: 1px solid alpha(@borders, 0.72);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px 1px alpha(@shade_color, 0.16);
+}
+
+.video-thumbnail {
+    background-color: #1b1c20;
+    border-radius: 15px 15px 0 0;
+}
+
+.video-thumbnail image {
+    border-radius: 15px 15px 0 0;
+}
+
+.video-title {
+    font-weight: 700;
+}
+
+.duration-pill {
+    background-color: alpha(#000000, 0.78);
+    border-radius: 7px;
+    color: #ffffff;
+    padding: 2px 6px;
+}
