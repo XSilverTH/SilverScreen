@@ -10,7 +10,7 @@ namespace SilverScreen.Infrastructure.Features.Engagement;
 
 public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisposable
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
     private readonly bool _disposeHttpClient;
     private readonly ConcurrentDictionary<string, VideoEngagement> _engagementByVideoId = new(StringComparer.Ordinal);

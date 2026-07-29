@@ -57,9 +57,9 @@ internal sealed class PlayerEngagementController(
         if (_videoId is not { } videoId || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return;
         var removeVote =
             _ratingState == (vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
-        SetReactionSensitive(false);
         var version = _loadVersion;
         var token = _cancellation?.Token ?? CancellationToken.None;
+        SetReactionSensitive(false);
         _ = SubmitVoteAsync(videoId, vote, removeVote, version, token);
     }
 
