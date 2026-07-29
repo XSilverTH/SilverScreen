@@ -1,0 +1,13 @@
+root = true
+
+[*org.mpris.MediaPlayer2.xml]
+build_metadata.AdditionalFiles.Namespace = SilverScreen.DBus
+build_metadata.AdditionalFiles.DBusGeneratorMode = Handler
+
+[*org.mpris.MediaPlayer2.Player.xml]
+build_metadata.AdditionalFiles.Namespace = SilverScreen.DBus
+build_metadata.AdditionalFiles.DBusGeneratorMode = Handler
+
+[*org.freedesktop.portal.xml]
+build_metadata.AdditionalFiles.Namespace = SilverScreen.DBus
+build_metadata.AdditionalFiles.DBusGeneratorMode = Proxy
