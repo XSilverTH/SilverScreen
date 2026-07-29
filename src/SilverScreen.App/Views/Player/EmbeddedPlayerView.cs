@@ -56,6 +56,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Box _loadingIndicator;
     private readonly Button _playPauseButton;
     private readonly Button _sponsorBlockSkipButton;
+    private string? _sponsorBlockSkipButtonColorClass;
     private readonly IPlaybackPresenceService _playbackPresence;
     private readonly IYouTubePlaybackTelemetryService _playbackTelemetry;
     private readonly LibMpvPlayer _player;
@@ -869,17 +870,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             var x = start;
             var rangeWidth = Math.Max(2, end - start);
 
-            context.SetSourceRgba(1, 0.745, 0.043, 1);
+            var color = SponsorBlockCategories.GetColor(segment.Category);
+            context.SetSourceRgba(color.Red / (double)byte.MaxValue, color.Green / (double)byte.MaxValue,
+                color.Blue / (double)byte.MaxValue, color.Opacity);
             context.Rectangle(x, rangeY, rangeWidth, rangeHeight);
-            context.Fill();
-
-            context.SetSourceRgba(0.898, 0.647, 0.039, 1);
-            context.Rectangle(x + 1, rangeY + 1, Math.Max(0, rangeWidth - 2), rangeHeight - 2);
-            context.Fill();
-
-            context.SetSourceRgba(1, 0.82, 0.2, 1);
-            context.Rectangle(x - 1, Math.Max(0, rangeY - 4), 3, rangeHeight + 8);
-            context.Rectangle(end * width - 1, Math.Max(0, rangeY - 4), 3, rangeHeight + 8);
             context.Fill();
         }
     }
@@ -967,11 +961,27 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         return true;
     }
 
+    private void SetSponsorBlockSkipButtonColor(string category)
+    {
+        var resolvedCategory = SponsorBlockCategories.All.Contains(category)
+            ? category
+            : SponsorBlockCategories.Sponsor;
+        var colorClass = $"player-sponsorblock-skip-button-{resolvedCategory}";
+        if (string.Equals(_sponsorBlockSkipButtonColorClass, colorClass, StringComparison.Ordinal)) return;
+
+        if (_sponsorBlockSkipButtonColorClass is not null)
+            _sponsorBlockSkipButton.RemoveCssClass(_sponsorBlockSkipButtonColorClass);
+
+        _sponsorBlockSkipButton.AddCssClass(colorClass);
+        _sponsorBlockSkipButtonColorClass = colorClass;
+    }
+
     private void ShowManualSponsorBlockSkipPrompt(SponsorBlockSegment segment)
     {
         var category = SponsorBlockCategoryLabel(segment.Category);
         _sponsorBlockSkipButton.SetLabel($"Skip {category}");
         _sponsorBlockSkipButton.SetTooltipText($"Skip {category} (Enter)");
+        SetSponsorBlockSkipButtonColor(segment.Category);
         _sponsorBlockSkipButton.SetVisible(true);
         if (_manualSponsorBlockSkipPromptHideSource != 0)
             Functions.SourceRemove(_manualSponsorBlockSkipPromptHideSource);

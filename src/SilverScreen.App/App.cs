@@ -334,16 +334,50 @@ public partial class App
 
 
                                button.player-sponsorblock-skip-button {
-                                 background-color: #ffbe0b;
                                  border-radius: 999px;
-                                 color: #1a1a1a;
                                  font-weight: 700;
                                  min-height: 32px;
                                  padding: 4px 12px;
                                }
 
-                               button.player-sponsorblock-skip-button:hover {
-                                 background-color: #ffd166;
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-sponsor {
+                                 background-color: #00d400;
+                                 color: #1a1a1a;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-selfpromo {
+                                 background-color: #ffff00;
+                                 color: #1a1a1a;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-interaction {
+                                 background-color: #cc00ff;
+                                 color: #ffffff;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-intro {
+                                 background-color: #00ffff;
+                                 color: #1a1a1a;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-outro {
+                                 background-color: #0202ed;
+                                 color: #ffffff;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-preview {
+                                 background-color: #008fd6;
+                                 color: #ffffff;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-hook {
+                                 background-color: #395699;
+                                 color: #ffffff;
+                               }
+
+                               button.player-sponsorblock-skip-button.player-sponsorblock-skip-button-filler {
+                                 background-color: #7300FF;
+                                 color: #ffffff;
                                }
                                """);
 
