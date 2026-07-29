@@ -1,4 +1,3 @@
-using SilverScreen;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Playback;
 

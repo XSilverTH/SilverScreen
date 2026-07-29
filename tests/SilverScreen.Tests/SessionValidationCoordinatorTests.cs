@@ -1,6 +1,7 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Features.Feed;
+using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Tests;

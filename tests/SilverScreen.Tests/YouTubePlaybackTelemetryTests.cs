@@ -78,7 +78,10 @@ public sealed class YouTubePlaybackTelemetryTests
 
         public event EventHandler<AppPreferences>? PreferencesChanged;
 
-        public AppPreferences GetPreferences() => _preferences;
+        public AppPreferences GetPreferences()
+        {
+            return _preferences;
+        }
 
         public void SavePreferences(AppPreferences preferences)
         {
@@ -91,7 +94,10 @@ public sealed class YouTubePlaybackTelemetryTests
     {
         public event EventHandler? SessionChanged;
 
-        public AccountSession GetCurrentSession() => new(true, HasManualSession: true);
+        public AccountSession GetCurrentSession()
+        {
+            return new AccountSession(true, HasManualSession: true);
+        }
 
         public ManualSessionCookies? GetManualSessionCookies()
         {
@@ -99,25 +105,37 @@ public sealed class YouTubePlaybackTelemetryTests
                 ".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
         }
 
-        public void SetManualSession(string cookieContent, SessionCookieFormat format) => SessionChanged?.Invoke(this, EventArgs.Empty);
-        public void ClearSession() => SessionChanged?.Invoke(this, EventArgs.Empty);
+        public void SetManualSession(string cookieContent, SessionCookieFormat format)
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ClearSession()
+        {
+            SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private sealed class TrackingHandler : HttpMessageHandler
     {
         private const string PlayerResponse = """
-            <script>var ytInitialPlayerResponse = {"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback?docid=abc123_X-yZ&len=60&ns=yt"},"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime?docid=abc123_X-yZ&len=60&ns=yt"}}};</script>
-            """;
+                                              <script>var ytInitialPlayerResponse = {"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback?docid=abc123_X-yZ&len=60&ns=yt"},"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime?docid=abc123_X-yZ&len=60&ns=yt"}}};</script>
+                                              """;
+
+        private readonly List<Uri> _beacons = [];
+
         private readonly TaskCompletionSource<IReadOnlyList<Uri>> _beaconsReceived = new();
         private readonly Lock _lock = new();
         private readonly List<Uri> _requests = [];
-        private readonly List<Uri> _beacons = [];
 
         public IReadOnlyList<Uri> Requests
         {
             get
             {
-                lock (_lock) return _requests.ToArray();
+                lock (_lock)
+                {
+                    return _requests.ToArray();
+                }
             }
         }
 
@@ -125,7 +143,10 @@ public sealed class YouTubePlaybackTelemetryTests
         {
             get
             {
-                lock (_lock) return _beacons.ToArray();
+                lock (_lock)
+                {
+                    return _beacons.ToArray();
+                }
             }
         }
 
@@ -134,7 +155,8 @@ public sealed class YouTubePlaybackTelemetryTests
             return _beaconsReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
         }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             var uri = request.RequestUri!;
             lock (_lock)

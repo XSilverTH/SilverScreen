@@ -47,8 +47,9 @@ public sealed class YouTubeAccountProfileServiceTests
         try
         {
             using var httpClient = new HttpClient(handler);
-            using var service = new YouTubeAccountProfileService(httpClient, session, cachePath)
+            using var authentication = new YouTubeAuthenticationService(session)
                 { TimeSource = () => 1700000000L };
+            using var service = new YouTubeAccountProfileService(httpClient, session, authentication, cachePath);
 
             var profile = await service.GetCurrentProfileAsync();
 
@@ -61,13 +62,14 @@ public sealed class YouTubeAccountProfileServiceTests
         }
     }
 
-
     [Fact]
     public async Task GetCurrentProfileAsync_WithoutSessionDoesNotMakeHttpRequests()
     {
+        var session = new InMemorySessionService();
         var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         using var httpClient = new HttpClient(handler);
-        using var service = new YouTubeAccountProfileService(httpClient, new InMemorySessionService(),
+        using var authentication = new YouTubeAuthenticationService(session);
+        using var service = new YouTubeAccountProfileService(httpClient, session, authentication,
             CreateTemporaryCachePath());
 
         var profile = await service.GetCurrentProfileAsync();
@@ -88,15 +90,19 @@ public sealed class YouTubeAccountProfileServiceTests
         {
             var successfulHandler = new FakeHttpMessageHandler(CreateProfileResponse);
             using (var httpClient = new HttpClient(successfulHandler))
-            using (var service = new YouTubeAccountProfileService(httpClient, session, cachePath))
+            using (var authentication = new YouTubeAuthenticationService(session))
+            using (var service = new YouTubeAccountProfileService(httpClient, session, authentication, cachePath))
             {
                 Assert.Equal(expected, await service.GetCurrentProfileAsync());
                 Assert.Equal(expected, service.GetCachedProfile());
             }
 
-            var failingHandler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            var failingHandler =
+                new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
             using var failingHttpClient = new HttpClient(failingHandler);
-            using var refreshedService = new YouTubeAccountProfileService(failingHttpClient, session, cachePath);
+            using var refreshedAuthentication = new YouTubeAuthenticationService(session);
+            using var refreshedService = new YouTubeAccountProfileService(failingHttpClient, session,
+                refreshedAuthentication, cachePath);
 
             Assert.Equal(expected, refreshedService.GetCachedProfile());
             Assert.Null(await refreshedService.GetCurrentProfileAsync());
@@ -120,7 +126,8 @@ public sealed class YouTubeAccountProfileServiceTests
         try
         {
             using var httpClient = new HttpClient(handler);
-            using var service = new YouTubeAccountProfileService(httpClient, session, cachePath);
+            using var authentication = new YouTubeAuthenticationService(session);
+            using var service = new YouTubeAccountProfileService(httpClient, session, authentication, cachePath);
 
             Assert.Equal(new AccountProfile("Silver", "https://example.com/avatar.png"), service.GetCachedProfile());
 
@@ -135,8 +142,10 @@ public sealed class YouTubeAccountProfileServiceTests
         }
     }
 
-    private static string CreateTemporaryCachePath() =>
-        Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.account-profile.json");
+    private static string CreateTemporaryCachePath()
+    {
+        return Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.account-profile.json");
+    }
 
     private static HttpResponseMessage CreateProfileResponse(HttpRequestMessage request)
     {

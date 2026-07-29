@@ -1,10 +1,8 @@
 using System.Diagnostics;
-using SilverScreen.Core.Models;
-using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.Features.Search;
 
-public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) : IYtDlpRunner, IYtDlpProcessRunner
+public sealed class YtDlpRunner : IYtDlpRunner
 {
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
@@ -41,87 +39,6 @@ public sealed class YtDlpRunner(ICookieFileProvider? cookieFileProvider = null) 
         return new ProcessResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }
 
-    public async Task<ProcessResult> RunSearchAsync(
-        SearchRequest request,
-        YtDlpOptions options,
-        CancellationToken cancellationToken)
-    {
-        using var cookieFile = cookieFileProvider?.CreateCookieFile();
-        return await RunAsync(BuildSearchStartInfo(request, options, cookieFile?.Path), options.Timeout,
-                cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private static ProcessStartInfo BuildSearchStartInfo(SearchRequest request, YtDlpOptions options,
-        string? cookieFilePath = null)
-    {
-        var startInfo = CreateStartInfo(options.ExecutablePath);
-        AddCommonArguments(startInfo, cookieFilePath);
-        startInfo.ArgumentList.Add($"ytsearch{options.MaxResults}:{request.Query}");
-        return startInfo;
-    }
-
-    public static ProcessStartInfo BuildHomeStartInfo(string executablePath, string? cookieFilePath = null)
-    {
-        var startInfo = CreateStartInfo(executablePath);
-        AddCommonArguments(startInfo, cookieFilePath);
-        startInfo.ArgumentList.Add(":ytrec");
-        return startInfo;
-    }
-
-    public static ProcessStartInfo BuildCommentsStartInfo(string executablePath, string videoId,
-        YouTubeCommentSort sort, string? cookieFilePath = null)
-    {
-        var startInfo = CreateStartInfo(executablePath);
-        startInfo.ArgumentList.Add("--dump-single-json");
-        startInfo.ArgumentList.Add("--skip-download");
-        startInfo.ArgumentList.Add("--no-playlist");
-        startInfo.ArgumentList.Add("--write-comments");
-        startInfo.ArgumentList.Add("--extractor-args");
-        startInfo.ArgumentList.Add(sort switch
-        {
-            YouTubeCommentSort.Top => "youtube:comment_sort=top;max_comments=200,100,100,25,2",
-            YouTubeCommentSort.Newest => "youtube:comment_sort=new;max_comments=200,100,100,25,2",
-            _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, null)
-        });
-
-        if (!string.IsNullOrWhiteSpace(cookieFilePath))
-        {
-            startInfo.ArgumentList.Add("--cookies");
-            startInfo.ArgumentList.Add(cookieFilePath);
-        }
-
-        startInfo.ArgumentList.Add(PlaybackRequest.BuildWatchUrl(videoId)
-                                   ?? throw new ArgumentException("A valid YouTube video ID is required.",
-                                       nameof(videoId)));
-        return startInfo;
-    }
-
-    private static ProcessStartInfo CreateStartInfo(string executablePath)
-    {
-        return new ProcessStartInfo
-        {
-            FileName = executablePath,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-    }
-
-    private static void AddCommonArguments(ProcessStartInfo startInfo, string? cookieFilePath)
-    {
-        startInfo.ArgumentList.Add("--dump-single-json");
-        startInfo.ArgumentList.Add("--flat-playlist");
-        startInfo.ArgumentList.Add("--skip-download");
-        startInfo.ArgumentList.Add("--extractor-args");
-        startInfo.ArgumentList.Add("youtubetab:approximate_date");
-
-        if (string.IsNullOrWhiteSpace(cookieFilePath)) return;
-
-        startInfo.ArgumentList.Add("--cookies");
-        startInfo.ArgumentList.Add(cookieFilePath);
-    }
 
     private static async Task DrainAndWaitForExitAsync(Process process, Task<string> outputTask, Task<string> errorTask)
     {

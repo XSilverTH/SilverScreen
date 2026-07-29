@@ -14,10 +14,13 @@ public sealed class EmbeddedPlayerViewTests
             SponsorBlockCategories.Outro);
         IReadOnlyList<SponsorBlockSegment> segments = [sponsor, outro];
 
-        Assert.Same(sponsor, EmbeddedPlayerView.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(10)));
-        Assert.Same(sponsor, EmbeddedPlayerView.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(19.999)));
-        Assert.Null(EmbeddedPlayerView.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(20)));
-        Assert.Same(outro, EmbeddedPlayerView.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(30)));
+        Assert.Same(sponsor,
+            PlayerSponsorBlockController.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(10)));
+        Assert.Same(sponsor,
+            PlayerSponsorBlockController.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(19.999)));
+        Assert.Null(PlayerSponsorBlockController.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(20)));
+        Assert.Same(outro,
+            PlayerSponsorBlockController.FindSponsorBlockSegmentAtPosition(segments, TimeSpan.FromSeconds(30)));
     }
 
     [Theory]
@@ -27,7 +30,7 @@ public sealed class EmbeddedPlayerViewTests
     public void GetTimelineTrackPosition_UsesTheScalesActualTrackBounds(double positionSeconds,
         double expectedCoordinate)
     {
-        var coordinate = EmbeddedPlayerView.GetTimelineTrackPosition(TimeSpan.FromSeconds(positionSeconds),
+        var coordinate = PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(positionSeconds),
             TimeSpan.FromMinutes(10), 24, 1524);
 
         Assert.Equal(expectedCoordinate, coordinate);
@@ -36,12 +39,12 @@ public sealed class EmbeddedPlayerViewTests
     [Fact]
     public void GetTimelineTrackBounds_AnchorsTheActivePlaybackPositionToTheRenderedThumb()
     {
-        var (trackStart, trackWidth) = EmbeddedPlayerView.GetTimelineTrackBounds(22, 370, 159, 205,
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrackBounds(22, 370, 159, 205,
             TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(600));
 
         Assert.Equal(20, trackStart);
         Assert.Equal(324, trackWidth);
-        Assert.Equal(182, EmbeddedPlayerView.GetTimelineTrackPosition(TimeSpan.FromSeconds(300),
+        Assert.Equal(182, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(300),
             TimeSpan.FromSeconds(600), trackStart, trackWidth));
     }
 
@@ -58,6 +61,6 @@ public sealed class EmbeddedPlayerViewTests
             SponsorBlockAutoSkipEnabled = autoSkipEnabled
         };
 
-        Assert.Equal(expected, EmbeddedPlayerView.ManualSponsorBlockSkipEnabled(preferences));
+        Assert.Equal(expected, PlayerSponsorBlockController.ManualSponsorBlockSkipEnabled(preferences));
     }
 }

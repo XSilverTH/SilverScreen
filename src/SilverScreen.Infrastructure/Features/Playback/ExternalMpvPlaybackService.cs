@@ -3,7 +3,6 @@ using System.Diagnostics;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 

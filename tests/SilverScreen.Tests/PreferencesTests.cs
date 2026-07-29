@@ -101,6 +101,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.True(loaded.YouTubePlaybackTelemetryEnabled);
         Assert.False(loaded.MarkWatchedVideos);
     }
+
     [Fact]
     public void SavePreferences_ThrowsAndKeepsCurrentPreferences_WhenAtomicReplacementFails()
     {
@@ -119,5 +120,31 @@ public sealed class PreferencesTests : IDisposable
         Assert.False(eventRaised);
         Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(_tempFilePath)!,
             $".{Path.GetFileName(_tempFilePath)}.*.tmp"));
+    }
+
+    [Fact]
+    public void SavePreferences_UnchangedClone_DoesNotRaiseEventOrWriteFile()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        var events = 0;
+        service.PreferencesChanged += (_, _) => events++;
+
+        service.SavePreferences(service.GetPreferences());
+
+        Assert.Equal(0, events);
+        Assert.False(File.Exists(_tempFilePath));
+    }
+
+    [Fact]
+    public void SavePreferences_ChangedProperty_RaisesOneEvent()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        var events = 0;
+        service.PreferencesChanged += (_, _) => events++;
+
+        service.SavePreferences(new AppPreferences { Theme = "Dark" });
+
+        Assert.Equal(1, events);
+        Assert.True(File.Exists(_tempFilePath));
     }
 }

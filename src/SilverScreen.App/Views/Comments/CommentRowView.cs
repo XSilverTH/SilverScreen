@@ -16,7 +16,8 @@ public partial class CommentRowView : ViewBase<Box>
 
     public CommentRowView(Action<string> repliesToggleRequested)
     {
-        _repliesToggleRequested = repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+        _repliesToggleRequested =
+            repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
         _author = GetRequiredObject<Label>("comment_author_label");
         _publishedTime = GetRequiredObject<Label>("comment_published_time_label");
         _text = GetRequiredObject<Label>("comment_text_label");

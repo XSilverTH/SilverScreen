@@ -62,7 +62,6 @@ public sealed class DiscordPresenceTests
     }
 
 
-
     [Fact]
     public void RpcExceptionsAreFailureIsolated()
     {

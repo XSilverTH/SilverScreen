@@ -40,6 +40,8 @@ public sealed class FilePreferencesService : IPreferencesService
         var cloned = Clone(preferences);
         lock (_lock)
         {
+            if (AreEquivalent(cloned, _current))
+                return;
             try
             {
                 WriteAtomically(cloned);
@@ -124,8 +126,28 @@ public sealed class FilePreferencesService : IPreferencesService
             DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = source.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = source.SponsorBlockSegmentDisplayEnabled,
-            SponsorBlockCategories = source.SponsorBlockCategories?.ToArray() ?? [..SponsorBlockCategories.All],
+            SponsorBlockCategories = [.. source.SponsorBlockCategories]
         };
+    }
+
+    private static bool AreEquivalent(AppPreferences left, AppPreferences right)
+    {
+        return left.Theme == right.Theme &&
+               left.MpvExecutablePath == right.MpvExecutablePath &&
+               left.PlaybackBackend == right.PlaybackBackend &&
+               left.OpenInFullscreen == right.OpenInFullscreen &&
+               left.AutoAdvanceNextVideo == right.AutoAdvanceNextVideo &&
+               left.VideoQuality == right.VideoQuality &&
+               left.PreferredSubtitleLanguage == right.PreferredSubtitleLanguage &&
+               left.YtDlpExecutablePath == right.YtDlpExecutablePath &&
+               left.MaxResults == right.MaxResults &&
+               left.MarkWatchedVideos == right.MarkWatchedVideos &&
+               left.YouTubePlaybackTelemetryEnabled == right.YouTubePlaybackTelemetryEnabled &&
+               left.DiscordRichPresenceEnabled == right.DiscordRichPresenceEnabled &&
+               left.SponsorBlockAutoSkipEnabled == right.SponsorBlockAutoSkipEnabled &&
+               left.SponsorBlockSegmentDisplayEnabled == right.SponsorBlockSegmentDisplayEnabled &&
+               left.SponsorBlockCategories.SequenceEqual(right.SponsorBlockCategories,
+                   StringComparer.Ordinal);
     }
 
     private static string GetDefaultPreferencesFilePath()

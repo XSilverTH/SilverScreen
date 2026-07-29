@@ -4,9 +4,7 @@ using Gdk;
 using Gio;
 using GObject;
 using Gtk;
-using Serilog;
 using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
@@ -28,7 +26,6 @@ namespace SilverScreen.Views.Shell;
 
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
-    private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly Avatar _accountAvatar;
     private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
@@ -40,7 +37,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly Spinner _homeRefreshSpinner;
     private readonly Stack _homeRefreshStack;
     private readonly Stack _mainStack;
-    private readonly IPlaybackService _playback;
+    private readonly PlaybackModeRoutingService _playback;
     private readonly ToggleButton _queueButton;
     private readonly Label _queueButtonLabel;
     private readonly QueueView _queueView;

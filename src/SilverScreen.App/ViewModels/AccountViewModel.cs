@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Session;
+using SilverScreen.Features.Session;
 
 namespace SilverScreen.ViewModels;
 
@@ -10,7 +10,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IAccountProfileService _accountProfileService;
     private readonly ISessionService _sessionService;
-    private readonly ShellViewModel _shell;
+    private readonly IStatusReporter _shell;
     private readonly SessionValidationCoordinator _validation;
     private bool _disposed;
     private AccountProfile? _profile;
@@ -18,7 +18,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private AccountSession _session;
 
     public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService,
-        SessionValidationCoordinator validation, ShellViewModel shell)
+        SessionValidationCoordinator validation, IStatusReporter shell)
     {
         _accountProfileService = accountProfileService;
         _sessionService = sessionService;
@@ -57,19 +57,19 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     public string? AvatarUrl => _profile?.AvatarUrl ?? Session.AvatarUrl;
 
 
-    public bool IsValidating
-    {
-        get;
-        private set
-        {
-            if (field == value)
-                return;
-
-            field = value;
-            OnPropertyChanged();
-            StateChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
+    // public bool IsValidating
+    // {
+    //     get;
+    //     private set
+    //     {
+    //         if (field == value)
+    //             return;
+    //
+    //         field = value;
+    //         OnPropertyChanged();
+    //         StateChanged?.Invoke(this, EventArgs.Empty);
+    //     }
+    // }
 
     public void Dispose()
     {
@@ -92,7 +92,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return PersistSession(
                 cookieContent.Trim(),
                 "Manual YouTube session saved securely.");
-        _shell.Status = "Manual YouTube session was not saved because no cookie content was entered.";
+        _shell.ReportStatus("Manual YouTube session was not saved because no cookie content was entered.");
         return false;
     }
 
@@ -102,7 +102,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return PersistSession(
                 cookieContent.Trim(),
                 "YouTube web session saved securely.");
-        _shell.Status = "YouTube web session was not saved because no cookie content was captured.";
+        _shell.ReportStatus("YouTube web session was not saved because no cookie content was captured.");
         return false;
     }
 
@@ -114,11 +114,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (SessionPersistenceException exception)
         {
-            _shell.Status = exception.Message;
+            _shell.ReportStatus(exception.Message);
             return false;
         }
 
-        _shell.Status = successMessage;
+        _shell.ReportStatus(successMessage);
         return true;
     }
 
@@ -130,11 +130,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (SessionPersistenceException exception)
         {
-            _shell.Status = exception.Message;
+            _shell.ReportStatus(exception.Message);
             return;
         }
 
-        _shell.Status = "YouTube session cleared.";
+        _shell.ReportStatus("YouTube session cleared.");
     }
 
     public async Task ValidateAsync()
@@ -142,21 +142,21 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         if (!_validation.IsAvailable || _disposed)
             return;
 
-        IsValidating = true;
-        _shell.Status = SessionValidationFormatter.ValidatingMessage;
+        // IsValidating = true;
+        _shell.ReportStatus(SessionValidationFormatter.ValidatingMessage);
         try
         {
-            _shell.Status = await _validation.ValidateAsync().ConfigureAwait(false);
+            _shell.ReportStatus(await _validation.ValidateAsync().ConfigureAwait(false));
         }
         catch (Exception)
         {
-            _shell.Status = SessionValidationFormatter.FormatUnexpectedError();
+            _shell.ReportStatus(SessionValidationFormatter.FormatUnexpectedError());
         }
-        finally
-        {
-            if (!_disposed)
-                IsValidating = false;
-        }
+        // finally
+        // {
+        //     if (!_disposed)
+        //         IsValidating = false;
+        // }
     }
 
     private void OnSessionChanged(object? sender, EventArgs eventArgs)

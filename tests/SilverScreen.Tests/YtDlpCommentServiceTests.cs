@@ -2,7 +2,6 @@ using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Search;
-using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests;
@@ -94,7 +93,8 @@ public sealed class YtDlpCommentServiceTests
             ["first", "second", "third", "fourth"],
             result.Comments.Select(comment => comment.Id));
         Assert.Equal(new YouTubeComment("first", "YouTube user", "First text", "2 hours ago", 7), result.Comments[0]);
-        Assert.Equal(new YouTubeComment("second", "Author", "Second text", "yesterday", 0, "first"), result.Comments[1]);
+        Assert.Equal(new YouTubeComment("second", "Author", "Second text", "yesterday", 0, "first"),
+            result.Comments[1]);
         Assert.Equal(new YouTubeComment("third", "Third", "Third text", "", 0), result.Comments[2]);
         Assert.Equal(new YouTubeComment("fourth", "Fourth", "Fourth text", "", 0), result.Comments[3]);
     }
@@ -185,8 +185,8 @@ public sealed class YtDlpCommentServiceTests
 
     private static YtDlpCommentService CreateService(CapturingRunner runner, ICookieFileProvider? cookies = null)
     {
-        return new YtDlpCommentService(cookies ?? new FakeCookieFileProvider(() => null), "comment-yt-dlp",
-            processRunner: runner);
+        return new YtDlpCommentService(cookies ?? new FakeCookieFileProvider(() => null),
+            new TestPreferences("comment-yt-dlp"), runner);
     }
 
     private static ProcessResult Success(string output)
@@ -194,7 +194,7 @@ public sealed class YtDlpCommentServiceTests
         return new ProcessResult(0, output, "");
     }
 
-    private sealed class CapturingRunner(Func<ProcessStartInfo, Task<ProcessResult>> run) : IYtDlpProcessRunner
+    private sealed class CapturingRunner(Func<ProcessStartInfo, Task<ProcessResult>> run) : IYtDlpRunner
     {
         public ProcessStartInfo? StartInfo { get; private set; }
         public int RunCalls { get; private set; }
@@ -208,6 +208,23 @@ public sealed class YtDlpCommentServiceTests
             StartInfo = startInfo;
             Timeout = timeout;
             return run(startInfo);
+        }
+    }
+
+    private sealed class TestPreferences(string executablePath) : IPreferencesService
+    {
+        private readonly AppPreferences _preferences = new() { YtDlpExecutablePath = executablePath };
+
+        public event EventHandler<AppPreferences>? PreferencesChanged;
+
+        public AppPreferences GetPreferences()
+        {
+            return _preferences;
+        }
+
+        public void SavePreferences(AppPreferences preferences)
+        {
+            PreferencesChanged?.Invoke(this, preferences);
         }
     }
 

@@ -2,26 +2,30 @@ using System.Text.Json;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Search;
-using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed class YtDlpCommentService(
     ICookieFileProvider cookieFileProvider,
-    string executablePath = "yt-dlp",
-    TimeSpan? timeout = null,
-    IYtDlpProcessRunner? processRunner = null)
+    IPreferencesService preferencesService,
+    IYtDlpRunner runner,
+    TimeSpan? timeout = null)
     : IYouTubeCommentService
 {
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
 
-    private readonly IYtDlpProcessRunner _processRunner = processRunner ?? new YtDlpRunner();
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
+    private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
     public async Task<YouTubeCommentsResult> GetCommentsAsync(string videoId, YouTubeCommentSort sort,
         CancellationToken cancellationToken = default)
     {
+        var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
         if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
             return Failure("Comments are unavailable for this video.");
 
@@ -31,8 +35,8 @@ public sealed class YtDlpCommentService(
         ProcessResult processResult;
         try
         {
-            processResult = await _processRunner.RunAsync(
-                    YtDlpRunner.BuildCommentsStartInfo(executablePath, videoId, sort, cookieFilePath),
+            processResult = await _runner.RunAsync(
+                    YtDlpCommandBuilder.BuildComments(executablePath, videoId, sort, cookieFilePath),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);

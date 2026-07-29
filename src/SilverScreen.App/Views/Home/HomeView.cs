@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -14,6 +15,7 @@ public partial class HomeView : ViewBase<Box>
 {
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly Button _loadMoreButton;
+    private readonly ILogger _logger = Log.ForContext<HomeView>();
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _searchBar;
     private readonly SearchEntry _searchEntry;
@@ -110,7 +112,14 @@ public partial class HomeView : ViewBase<Box>
 
     private async void OnHomeSearchEntryActivated(object? sender, EventArgs args)
     {
-        await _searchViewModel.SubmitAsync(_searchEntry.GetText());
+        try
+        {
+            await _searchViewModel.SubmitAsync(_searchEntry.GetText());
+        }
+        catch (Exception e)
+        {
+            _logger.Error(e, "Failed to submit search query {GetText}", _searchEntry.GetText());
+        }
     }
 
     private void OnHomeLoadMoreButtonClicked(object? sender, EventArgs args)
@@ -122,12 +131,10 @@ public partial class HomeView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed)
-            {
-                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
-                if (!IsSearchActive)
-                    Render(state);
-            }
+            if (_disposed) return false;
+            RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
+            if (!IsSearchActive)
+                Render(state);
 
             return false;
         });
@@ -146,7 +153,7 @@ public partial class HomeView : ViewBase<Box>
 
     private void Render(HomeFeedState state)
     {
-        ApplyVideos(NormalizeVideos(state.Videos));
+        ApplyVideos(state.Videos);
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
         var isLoading = state.IsLoading || state.IsLoadingMore;
@@ -170,7 +177,7 @@ public partial class HomeView : ViewBase<Box>
 
     private void RenderSearch(SearchViewState state)
     {
-        ApplyVideos(NormalizeVideos(state.Videos));
+        ApplyVideos(state.Videos);
         _statusHost.Visible = false;
         _scrolledWindow.Visible = false;
         _loadMoreButton.Visible = false;
@@ -223,11 +230,6 @@ public partial class HomeView : ViewBase<Box>
         _statusHost.Visible = true;
     }
 
-    private static VideoSummary[] NormalizeVideos(IEnumerable<VideoSummary> videos)
-    {
-        return videos.Where(video => !video.IsShort).GroupBy(video => video.Id).Select(group => group.First())
-            .ToArray();
-    }
 
     private void ApplyVideos(IReadOnlyList<VideoSummary> videos)
     {

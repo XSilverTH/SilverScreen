@@ -2,16 +2,15 @@ using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Search;
-using SilverScreen.Infrastructure.Features.Session;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed class YtDlpHomeClient(
     ISessionService sessionService,
     ICookieFileProvider cookieFileProvider,
-    string executablePath = "yt-dlp",
-    TimeSpan? timeout = null,
-    IYtDlpProcessRunner? processRunner = null)
+    IPreferencesService preferencesService,
+    IYtDlpRunner runner,
+    TimeSpan? timeout = null)
     : IYouTubeHomeClient
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpHomeClient>();
@@ -19,8 +18,10 @@ public sealed class YtDlpHomeClient(
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
 
-    private readonly IYtDlpProcessRunner _processRunner =
-        processRunner ?? new YtDlpRunner();
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
+    private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -30,6 +31,7 @@ public sealed class YtDlpHomeClient(
     public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
         CancellationToken cancellationToken = default)
     {
+        var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
         if (!string.IsNullOrEmpty(continuationToken))
             return new HomeFeedResult(
                 [],
@@ -57,12 +59,13 @@ public sealed class YtDlpHomeClient(
                 true);
 
         var (firstResult, firstVideos) =
-            await ExecuteYtDlpAsync(cookieFile.Path, cancellationToken).ConfigureAwait(false);
+            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, cancellationToken).ConfigureAwait(false);
 
         if (!firstResult.IsSuccess || firstVideos.Count > 0)
             return firstResult;
 
-        var (retryResult, retryVideos) = await ExecuteYtDlpAsync(null, cancellationToken).ConfigureAwait(false);
+        var (retryResult, retryVideos) =
+            await ExecuteYtDlpAsync(executablePath, null, cancellationToken).ConfigureAwait(false);
         if (!retryResult.IsSuccess)
             return retryResult;
 
@@ -75,14 +78,13 @@ public sealed class YtDlpHomeClient(
     }
 
     private async Task<(HomeFeedResult Result, IReadOnlyList<VideoSummary> Videos)> ExecuteYtDlpAsync(
-        string? cookieFilePath,
-        CancellationToken cancellationToken)
+        string executablePath, string? cookieFilePath, CancellationToken cancellationToken)
     {
         ProcessResult processResult;
         try
         {
-            processResult = await _processRunner.RunAsync(
-                    YtDlpRunner.BuildHomeStartInfo(executablePath, cookieFilePath),
+            processResult = await _runner.RunAsync(
+                    YtDlpCommandBuilder.BuildHome(executablePath, cookieFilePath),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);

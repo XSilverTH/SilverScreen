@@ -59,8 +59,6 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             Logger.Warning(exception, "Failed to close the desktop D-Bus connection.");
         }
-
-        GC.SuppressFinalize(this);
     }
 
     public void UpdatePlayback(PlaybackRequest? request, LibMpvPlaybackState state)
@@ -119,7 +117,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
             }
 
             handler.PublishInitialState();
-            UpdateInhibition();
+            await UpdateInhibitionAsync();
 
             var disconnectReason = await connection.DisconnectedAsync().ConfigureAwait(false);
             if (disconnectReason is not null)
@@ -183,7 +181,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             DBusConnection? connection;
             ObjectPath? request;
-            var shouldInhibit = false;
+            bool shouldInhibit;
             lock (_gate)
             {
                 if (_disposed || !_portalAvailable) return;
@@ -313,9 +311,9 @@ internal sealed class DesktopMediaIntegration : IDisposable
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Metadata);
                 if (previous.PlaybackStatus != current.PlaybackStatus)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.PlaybackStatus);
-                if (previous.Volume != current.Volume)
+                if (Math.Abs(previous.Volume - current.Volume) > 0.1)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Volume);
-                if (previous.Rate != current.Rate)
+                if (Math.Abs(previous.Rate - current.Rate) > 0.1)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Rate);
                 if (previous.CanSeek != current.CanSeek)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanSeek);
@@ -460,7 +458,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 ["xesam:url"] = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id) ?? string.Empty
             };
             if (duration > TimeSpan.Zero)
-                metadata["mpris:length"] = checked(duration.Ticks / 10);
+                metadata["mpris:length"] = duration.Ticks / 10;
 
             return new DesktopPlaybackSnapshot(true, !state.IsPaused, state.IsPaused ? "Paused" : "Playing",
                 state.Position.Ticks / 10, Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,

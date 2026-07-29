@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Search;
 
 namespace SilverScreen.ViewModels;
 
@@ -14,7 +13,7 @@ public sealed record SearchViewState(
 public sealed class SearchViewModel(
     ISearchService searchService,
     IPlaybackService playbackService,
-    ShellViewModel shell)
+    IStatusReporter shell)
     : INotifyPropertyChanged, IDisposable
 {
     private bool _disposed;
@@ -69,7 +68,7 @@ public sealed class SearchViewModel(
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            shell.Status = "Empty search ignored.";
+            shell.ReportStatus("Empty search ignored.");
             return;
         }
 
@@ -82,31 +81,31 @@ public sealed class SearchViewModel(
                     await PlayYouTubeUrlAsync(parsedUrl);
                     return;
                 case YouTubeUrlKind.Shorts:
-                    shell.Status = "Shorts are not supported in SilverScreen.";
+                    shell.ReportStatus("Shorts are not supported in SilverScreen.");
                     return;
                 case YouTubeUrlKind.Channel:
-                    shell.Status = "Channel pages are not implemented yet.";
+                    shell.ReportStatus("Channel pages are not implemented yet.");
                     return;
                 case YouTubeUrlKind.Playlist:
-                    shell.Status = "Playlists are not implemented yet.";
+                    shell.ReportStatus("Playlists are not implemented yet.");
                     return;
                 case YouTubeUrlKind.UnknownYouTube:
-                    shell.Status = "Unsupported YouTube URL.";
+                    shell.ReportStatus("Unsupported YouTube URL.");
                     return;
                 case YouTubeUrlKind.Invalid:
-                    shell.Status = "Invalid YouTube URL.";
+                    shell.ReportStatus("Invalid YouTube URL.");
                     return;
                 case YouTubeUrlKind.NotYouTube:
                     await SearchPlainTextAsync(query);
                     return;
                 default:
-                    shell.Status = "Unsupported YouTube URL.";
+                    shell.ReportStatus("Unsupported YouTube URL.");
                     return;
             }
         }
         catch (Exception)
         {
-            shell.Status = "The requested action could not be completed.";
+            shell.ReportStatus("The requested action could not be completed.");
         }
     }
 
@@ -123,7 +122,7 @@ public sealed class SearchViewModel(
 
         var searching = $"Searching YouTube for “{query}”…";
         State = new SearchViewState([], searching, true);
-        shell.Status = searching;
+        shell.ReportStatus(searching);
 
         try
         {
@@ -132,8 +131,8 @@ public sealed class SearchViewModel(
                 return;
 
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
-            State = new SearchViewState(result.Videos, summary, false);
-            shell.Status = summary;
+            State = new SearchViewState(NormalizeVideos(result.Videos), summary, false);
+            shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -145,21 +144,26 @@ public sealed class SearchViewModel(
 
             const string message = "Search could not be completed.";
             State = new SearchViewState([], message, false);
-            shell.Status = message;
+            shell.ReportStatus(message);
         }
+    }
+
+    private static VideoSummary[] NormalizeVideos(IReadOnlyList<VideoSummary> videos)
+    {
+        return [.. videos.Where(video => !video.IsShort).DistinctBy(video => video.Id)];
     }
 
     private async Task PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
     {
         if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
         {
-            shell.Status = "Invalid YouTube URL.";
+            shell.ReportStatus("Invalid YouTube URL.");
             return;
         }
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
-        shell.Status = await playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+        shell.ReportStatus(await playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -1,6 +1,6 @@
 namespace SilverScreen.Infrastructure.YouTube;
 
-public sealed class YouTubeHomeClientOptions
+public sealed class YouTubeWebOptions
 {
     public static string Origin => "https://www.youtube.com";
     public static string Referer => "https://www.youtube.com/";

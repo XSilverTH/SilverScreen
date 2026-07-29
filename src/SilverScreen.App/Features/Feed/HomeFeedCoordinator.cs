@@ -1,7 +1,7 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Infrastructure.Features.Feed;
+namespace SilverScreen.Features.Feed;
 
 public sealed class HomeFeedCoordinator : IDisposable
 {
@@ -77,7 +77,7 @@ public sealed class HomeFeedCoordinator : IDisposable
             if (_videos.Count > 0)
                 pendingState = new HomeFeedState(
                     HomeFeedStateKind.Ready,
-                    _videos.ToArray(),
+                    [.. _videos],
                     IsLoading: true,
                     HasContinuation: !string.IsNullOrEmpty(_continuationToken));
             else
@@ -115,7 +115,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                 {
                     errorState = new HomeFeedState(
                         HomeFeedStateKind.SafeError,
-                        _videos.ToArray(),
+                        [.. _videos],
                         "Could not load YouTube recommendations.",
                         false,
                         false,
@@ -177,7 +177,7 @@ public sealed class HomeFeedCoordinator : IDisposable
 
             pendingState = new HomeFeedState(
                 HomeFeedStateKind.Ready,
-                _videos.ToArray(),
+                [.. _videos],
                 IsLoadingMore: true,
                 HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
@@ -210,7 +210,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                 {
                     errorState = new HomeFeedState(
                         HomeFeedStateKind.SafeError,
-                        _videos.ToArray(),
+                        [.. _videos],
                         "Could not load YouTube recommendations.",
                         false,
                         false,
@@ -262,7 +262,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                 case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
                     nextState = new HomeFeedState(
                         HomeFeedStateKind.SafeError,
-                        _videos.ToArray(),
+                        [.. _videos],
                         "Could not load YouTube recommendations.",
                         false,
                         false,
@@ -280,7 +280,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                     _continuationToken = null;
                     nextState = new HomeFeedState(
                         HomeFeedStateKind.Ready,
-                        _videos.ToArray(),
+                        [.. _videos],
                         IsLoading: false,
                         IsLoadingMore: false,
                         HasContinuation: false);
@@ -308,7 +308,7 @@ public sealed class HomeFeedCoordinator : IDisposable
                     else
                         nextState = new HomeFeedState(
                             HomeFeedStateKind.Ready,
-                            _videos.ToArray(),
+                            [.. _videos],
                             IsLoading: false,
                             IsLoadingMore: false,
                             HasContinuation: !string.IsNullOrEmpty(_continuationToken));

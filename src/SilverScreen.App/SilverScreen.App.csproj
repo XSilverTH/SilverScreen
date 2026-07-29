@@ -45,9 +45,9 @@
         <AdditionalFiles Include="Dbus/org.mpris.MediaPlayer2.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Handler"/>
         <AdditionalFiles Include="Dbus/org.mpris.MediaPlayer2.Player.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Handler"/>
         <AdditionalFiles Include="Dbus/org.freedesktop.portal.xml" Namespace="SilverScreen.DBus" DBusGeneratorMode="Proxy"/>
-        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
-        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="GenerateDBusTypes" />
-        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="DBusGeneratorMode" />
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace"/>
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="GenerateDBusTypes"/>
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="DBusGeneratorMode"/>
     </ItemGroup>
 
     <ItemGroup>

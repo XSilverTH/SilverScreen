@@ -2,6 +2,7 @@ using System.Net;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Engagement;
+using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests;
 
@@ -18,6 +19,7 @@ public sealed class YouTubeRatingServiceTests
             if (request.Method == HttpMethod.Get)
             {
                 Assert.Equal("https://www.youtube.com/", request.RequestUri!.AbsoluteUri);
+                Assert.DoesNotContain("X-Goog-AuthUser", request.Headers.SelectMany(pair => pair.Value));
                 return HtmlResponse(
                     """ { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00", "VISITOR_DATA": "visitor" } """);
             }
@@ -27,14 +29,18 @@ public sealed class YouTubeRatingServiceTests
                 request.RequestUri!.AbsoluteUri);
             Assert.StartsWith("SAPISIDHASH ", request.Headers.Authorization!.ToString());
             Assert.Contains("SAPISID=sapisid", request.Headers.GetValues("Cookie").Single());
+            Assert.Contains("true", request.Headers.GetValues("X-Youtube-Bootstrap-Logged-In"));
             var body = await request.Content!.ReadAsStringAsync();
             Assert.Contains("\"target\":{\"videoId\":\"dQw4w9WgXcQ\"}", body);
             Assert.Contains("\"clientName\":\"WEB\"", body);
             Assert.Contains("\"params\":\"like-token\"", body);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
+        using var session = new SignedInSessionService();
+        using var authentication = new YouTubeAuthenticationService(session)
+            { TimeSource = () => 1700000000L };
         using var client = new HttpClient(handler);
-        using var service = new YouTubeRatingService(client, new SignedInSessionService());
+        using var service = new YouTubeRatingService(client, authentication);
 
         var submitted = await service.SubmitVoteAsync("dQw4w9WgXcQ", VideoVote.Like);
 
@@ -50,14 +56,34 @@ public sealed class YouTubeRatingServiceTests
             Assert.Equal(HttpMethod.Get, request.Method);
             Assert.Equal("https://www.youtube.com/watch?v=dQw4w9WgXcQ", request.RequestUri!.AbsoluteUri);
             Assert.Contains("SAPISID=sapisid", request.Headers.GetValues("Cookie").Single());
+            Assert.Contains("0", request.Headers.GetValues("X-Goog-AuthUser"));
             return Task.FromResult(HtmlResponse("{ \\\"likeStatus\\\": \\\"DISLIKE\\\" }"));
         });
+        using var session = new SignedInSessionService();
+        using var authentication = new YouTubeAuthenticationService(session);
         using var client = new HttpClient(handler);
-        using var service = new YouTubeRatingService(client, new SignedInSessionService());
+        using var service = new YouTubeRatingService(client, authentication);
 
         var state = await service.GetRatingStateAsync("dQw4w9WgXcQ");
 
         Assert.Equal(YouTubeRatingState.Dislike, state);
+    }
+
+    [Fact]
+    public async Task SessionChange_ClearsCachedRatingMetadata()
+    {
+        var handler = new FakeHttpMessageHandler((request, _) =>
+            Task.FromResult(HtmlResponse(""" { "likeStatus": "LIKE" } """)));
+        using var session = new SignedInSessionService();
+        using var authentication = new YouTubeAuthenticationService(session);
+        using var client = new HttpClient(handler);
+        using var service = new YouTubeRatingService(client, authentication);
+
+        await service.GetRatingStateAsync("dQw4w9WgXcQ");
+        session.SetManualSession("changed", SessionCookieFormat.NetscapeCookiesText);
+        await service.GetRatingStateAsync("dQw4w9WgXcQ");
+
+        Assert.Equal(2, handler.CallCount);
     }
 
     [Fact]
@@ -78,8 +104,10 @@ public sealed class YouTubeRatingServiceTests
             Assert.Contains("\"params\":\"remove-token\"", request.Content!.ReadAsStringAsync().Result);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
         });
+        using var session = new SignedInSessionService();
+        using var authentication = new YouTubeAuthenticationService(session);
         using var client = new HttpClient(handler);
-        using var service = new YouTubeRatingService(client, new SignedInSessionService());
+        using var service = new YouTubeRatingService(client, authentication);
 
         var removed = await service.RemoveVoteAsync("dQw4w9WgXcQ", VideoVote.Like);
 
@@ -90,8 +118,10 @@ public sealed class YouTubeRatingServiceTests
     public async Task SubmitVoteAsync_WithoutAuthenticatedSession_DoesNotSendARequest()
     {
         var handler = new FakeHttpMessageHandler((_, _) => throw new InvalidOperationException());
+        using var session = new SignedOutSessionService();
+        using var authentication = new YouTubeAuthenticationService(session);
         using var client = new HttpClient(handler);
-        using var service = new YouTubeRatingService(client, new SignedOutSessionService());
+        using var service = new YouTubeRatingService(client, authentication);
 
         var submitted = await service.SubmitVoteAsync("dQw4w9WgXcQ", VideoVote.Dislike);
 
@@ -104,9 +134,13 @@ public sealed class YouTubeRatingServiceTests
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(html) };
     }
 
-    private sealed class SignedInSessionService : ISessionService
+    private sealed class SignedInSessionService : ISessionService, IDisposable
     {
         private const string Cookies = ".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\tsapisid";
+
+        public void Dispose()
+        {
+        }
 
         public event EventHandler? SessionChanged;
 
@@ -131,8 +165,12 @@ public sealed class YouTubeRatingServiceTests
         }
     }
 
-    private sealed class SignedOutSessionService : ISessionService
+    private sealed class SignedOutSessionService : ISessionService, IDisposable
     {
+        public void Dispose()
+        {
+        }
+
         public event EventHandler? SessionChanged;
 
         public AccountSession GetCurrentSession()

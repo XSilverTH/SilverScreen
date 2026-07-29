@@ -16,5 +16,7 @@ public sealed class AppPreferences
     public bool DiscordRichPresenceEnabled { get; set; }
     public bool SponsorBlockAutoSkipEnabled { get; set; }
     public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
-    public string[] SponsorBlockCategories { get; set; } = [..global::SilverScreen.Core.Models.SponsorBlockCategories.All];
+
+    public string[] SponsorBlockCategories { get; set; } =
+        [.. Models.SponsorBlockCategories.All];
 }

@@ -1,7 +1,6 @@
 using Adw;
 using Gtk;
-using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
+using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -10,34 +9,28 @@ namespace SilverScreen.Views.Comments;
 public partial class CommentsView : ViewBase<Box>
 {
     private readonly Action _closeRequested;
-    private readonly IYouTubeCommentService _comments;
-    private readonly Dictionary<string, YouTubeComment> _commentsById = [];
-    private readonly HashSet<string> _expandedCommentIds = [];
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly ListView _list;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
-    private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
-    private readonly ScrolledWindow _scrolledWindow;
     private readonly NoSelection _selection;
     private readonly DropDown _sortDropdown;
     private readonly Stack _stack;
-    private readonly List<string> _topLevelCommentIds = [];
+    private readonly CommentsViewModel _viewModel;
     private bool _disposed;
-    private bool _hasLoadedCurrentVideo;
-    private CancellationTokenSource? _loadCancellation;
-    private long _loadGeneration;
-    private string? _videoId;
+    private CommentsViewState _state;
 
-    public CommentsView(IYouTubeCommentService comments, Action closeRequested)
+    public CommentsView(CommentsViewModel viewModel, Action closeRequested)
     {
-        _comments = comments ?? throw new ArgumentNullException(nameof(comments));
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
+        _state = _viewModel.State;
+        _viewModel.StateChanged += OnViewModelStateChanged;
         _sortDropdown = GetRequiredObject<DropDown>("comments_sort_dropdown");
         _stack = GetRequiredObject<Stack>("comments_stack");
-        _scrolledWindow = GetRequiredObject<ScrolledWindow>("comments_scrolled_window");
+        GetRequiredObject<ScrolledWindow>("comments_scrolled_window");
         _emptyPage = GetRequiredObject<StatusPage>("comments_empty_page");
         _errorPage = GetRequiredObject<StatusPage>("comments_error_page");
 
@@ -56,23 +49,12 @@ public partial class CommentsView : ViewBase<Box>
 
     public void SetVideo(string? videoId)
     {
-        var validVideoId = videoId is not null && PlaybackRequest.LooksLikeYouTubeVideoId(videoId) ? videoId : null;
-        if (string.Equals(_videoId, validVideoId, StringComparison.Ordinal))
-            return;
-
-        CancelLoad();
-        _videoId = validVideoId;
-        _hasLoadedCurrentVideo = false;
-        ClearComments();
-        _stack.VisibleChildName = "unavailable";
+        _viewModel.SetVideo(videoId);
     }
 
     public void EnsureLoaded()
     {
-        if (_disposed || _videoId is null || _hasLoadedCurrentVideo || _loadCancellation is not null)
-            return;
-
-        StartLoad();
+        _viewModel.EnsureLoaded();
     }
 
     private void OnCloseButtonClicked(object? sender, EventArgs args)
@@ -80,161 +62,50 @@ public partial class CommentsView : ViewBase<Box>
         _closeRequested();
     }
 
-    private void OnRetryButtonClicked(object? sender, EventArgs args)
-    {
-        StartLoad();
-    }
-
     private void OnSortDropdownNotify(object? sender, EventArgs args)
     {
-        if (_videoId is not null)
-            StartLoad();
+        _viewModel.SetSortSelection(_sortDropdown.GetSelected());
     }
 
-    private void StartLoad()
+    private void OnViewModelStateChanged(object? sender, CommentsViewState state)
     {
-        if (_disposed || _videoId is null)
-            return;
-
-        CancelLoad();
-        _hasLoadedCurrentVideo = false;
-        ClearComments();
-        _stack.VisibleChildName = "loading";
-        var cancellation = new CancellationTokenSource();
-        _loadCancellation = cancellation;
-        var generation = ++_loadGeneration;
-        _ = LoadCommentsAsync(_videoId, SortAt(_sortDropdown.GetSelected()), generation, cancellation.Token);
-    }
-
-    private async Task LoadCommentsAsync(string videoId, YouTubeCommentSort sort, long generation,
-        CancellationToken cancellationToken)
-    {
-        YouTubeCommentsResult result;
-        try
-        {
-            result = await _comments.GetCommentsAsync(videoId, sort, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception)
-        {
-            result = new YouTubeCommentsResult([], false, "Comments could not be loaded. Try again shortly.");
-        }
-
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || cancellationToken.IsCancellationRequested || generation != _loadGeneration ||
-                !string.Equals(_videoId, videoId, StringComparison.Ordinal))
+            if (_disposed)
                 return false;
 
-            _loadCancellation?.Dispose();
-            _loadCancellation = null;
-            _hasLoadedCurrentVideo = true;
-            Render(result);
+            Render(state);
             return false;
         });
     }
 
-    private void Render(YouTubeCommentsResult result)
+    private void Render(CommentsViewState state)
     {
-        if (!result.IsSuccess)
+        _state = state;
+        var visibleIds = state.VisibleComments.Select(row => row.Comment.Id).ToArray();
+        _itemIds.Splice(0, _itemIds.GetNItems(), visibleIds);
+
+        // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
+        switch (state.Status)
         {
-            ClearComments();
-            _errorPage.Description = string.IsNullOrWhiteSpace(result.StatusMessage)
-                ? "Comments could not be loaded. Try again shortly."
-                : result.StatusMessage;
-            _stack.VisibleChildName = "error";
-            return;
+            case CommentsViewStatus.Unavailable:
+                _stack.VisibleChildName = "unavailable";
+                break;
+            case CommentsViewStatus.Loading:
+                _stack.VisibleChildName = "loading";
+                break;
+            case CommentsViewStatus.Error:
+                _errorPage.Description = state.StatusMessage;
+                _stack.VisibleChildName = "error";
+                break;
+            case CommentsViewStatus.Empty:
+                _emptyPage.Description = state.StatusMessage;
+                _stack.VisibleChildName = "empty";
+                break;
+            case CommentsViewStatus.List:
+                _stack.VisibleChildName = "list";
+                break;
         }
-
-        ApplyComments(result.Comments);
-        if (result.Comments.Count == 0)
-        {
-            _emptyPage.Description = result.StatusMessage;
-            _stack.VisibleChildName = "empty";
-            return;
-        }
-
-        _stack.VisibleChildName = "list";
-    }
-
-    private void ApplyComments(IReadOnlyList<YouTubeComment> comments)
-    {
-        _commentsById.Clear();
-        _repliesByParentId.Clear();
-        _topLevelCommentIds.Clear();
-        _expandedCommentIds.Clear();
-
-        foreach (var comment in comments)
-            _commentsById[comment.Id] = comment;
-
-        foreach (var comment in comments)
-        {
-            if (string.IsNullOrWhiteSpace(comment.ParentId) ||
-                !_commentsById.ContainsKey(comment.ParentId))
-            {
-                _topLevelCommentIds.Add(comment.Id);
-                continue;
-            }
-
-            if (!_repliesByParentId.TryGetValue(comment.ParentId, out var replies))
-            {
-                replies = [];
-                _repliesByParentId.Add(comment.ParentId, replies);
-            }
-
-            replies.Add(comment);
-        }
-
-        RebuildVisibleComments();
-    }
-
-    private void ClearComments()
-    {
-        _commentsById.Clear();
-        _repliesByParentId.Clear();
-        _topLevelCommentIds.Clear();
-        _expandedCommentIds.Clear();
-        _itemIds.Splice(0, _itemIds.GetNItems(), []);
-    }
-
-    private void ToggleReplies(string commentId)
-    {
-        if (!_repliesByParentId.ContainsKey(commentId))
-            return;
-
-        if (!_expandedCommentIds.Add(commentId))
-            _expandedCommentIds.Remove(commentId);
-
-        RebuildVisibleComments();
-    }
-
-    private void RebuildVisibleComments()
-    {
-        var visibleIds = new List<string>(_commentsById.Count);
-        var ancestors = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var commentId in _topLevelCommentIds)
-            AddVisibleComment(commentId, visibleIds, ancestors);
-
-        _itemIds.Splice(0, _itemIds.GetNItems(), visibleIds.ToArray());
-    }
-
-    private void AddVisibleComment(string commentId, List<string> visibleIds, HashSet<string> ancestors)
-    {
-        if (!ancestors.Add(commentId))
-            return;
-
-        visibleIds.Add(commentId);
-        if (_expandedCommentIds.Contains(commentId) &&
-            _repliesByParentId.TryGetValue(commentId, out var replies))
-        {
-            foreach (var reply in replies)
-                AddVisibleComment(reply.Id, visibleIds, ancestors);
-        }
-
-        ancestors.Remove(commentId);
     }
 
     private void OnRowSetup(object? sender, SignalListItemFactory.SetupSignalArgs args)
@@ -242,7 +113,7 @@ public partial class CommentsView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new CommentRowView(ToggleReplies);
+        var row = new CommentRowView(_viewModel.ToggleReplies);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
@@ -250,14 +121,15 @@ public partial class CommentsView : ViewBase<Box>
     private void OnRowBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
         if (args.Object is not ListItem { Child: { } child, Item: StringObject { String: { } id } } ||
-            !_rowsByCell.TryGetValue(child, out var row) ||
-            !_commentsById.TryGetValue(id, out var comment))
+            !_rowsByCell.TryGetValue(child, out var row))
             return;
 
-        row.Bind(
-            comment,
-            _repliesByParentId.TryGetValue(comment.Id, out var replies) ? replies.Count : 0,
-            _expandedCommentIds.Contains(comment.Id));
+        var comment = _state.VisibleComments.FirstOrDefault(item =>
+            string.Equals(item.Comment.Id, id, StringComparison.Ordinal));
+        if (comment is null)
+            return;
+
+        row.Bind(comment.Comment, comment.ReplyCount, comment.RepliesExpanded);
     }
 
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
@@ -275,26 +147,14 @@ public partial class CommentsView : ViewBase<Box>
         row.Dispose();
     }
 
-    private static YouTubeCommentSort SortAt(uint selected)
-    {
-        return selected == 1 ? YouTubeCommentSort.Newest : YouTubeCommentSort.Top;
-    }
-
-    private void CancelLoad()
-    {
-        _loadGeneration++;
-        _loadCancellation?.Cancel();
-        _loadCancellation?.Dispose();
-        _loadCancellation = null;
-    }
-
     public new void Dispose()
     {
         if (_disposed)
             return;
 
         _disposed = true;
-        CancelLoad();
+        _viewModel.StateChanged -= OnViewModelStateChanged;
+        _viewModel.Dispose();
         _factory.OnSetup -= OnRowSetup;
         _factory.OnBind -= OnRowBind;
         _factory.OnUnbind -= OnRowUnbind;
@@ -303,7 +163,6 @@ public partial class CommentsView : ViewBase<Box>
             row.Dispose();
 
         _rowsByCell.Clear();
-        _commentsById.Clear();
         _list.Dispose();
         _selection.Dispose();
         _factory.Dispose();

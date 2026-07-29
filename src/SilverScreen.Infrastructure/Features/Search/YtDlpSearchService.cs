@@ -10,6 +10,7 @@ namespace SilverScreen.Infrastructure.Features.Search;
 public sealed class YtDlpSearchService : ISearchService
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpSearchService>();
+    private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPreferencesService? _preferencesService;
     private readonly IYtDlpRunner _runner;
     private readonly YtDlpOptions _staticOptions;
@@ -19,17 +20,21 @@ public sealed class YtDlpSearchService : ISearchService
     {
     }
 
-    public YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner)
+    public YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner,
+        ICookieFileProvider? cookieFileProvider = null)
     {
         _staticOptions = options;
         _runner = runner;
+        _cookieFileProvider = cookieFileProvider;
         _preferencesService = null;
     }
 
-    public YtDlpSearchService(IPreferencesService preferencesService, IYtDlpRunner runner)
+    public YtDlpSearchService(IPreferencesService preferencesService, IYtDlpRunner runner,
+        ICookieFileProvider cookieFileProvider)
     {
         _staticOptions = new YtDlpOptions();
         _runner = runner;
+        _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
     }
 
@@ -41,7 +46,10 @@ public sealed class YtDlpSearchService : ISearchService
         try
         {
             activeOptions = GetActiveOptions();
-            var result = await _runner.RunSearchAsync(request, activeOptions, cancellationToken).ConfigureAwait(false);
+            using var cookieFile = _cookieFileProvider?.CreateCookieFile();
+            var result = await _runner.RunAsync(
+                YtDlpCommandBuilder.BuildSearch(request, activeOptions, cookieFile?.Path),
+                activeOptions.Timeout, cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
                 var error = string.IsNullOrWhiteSpace(result.StandardError)

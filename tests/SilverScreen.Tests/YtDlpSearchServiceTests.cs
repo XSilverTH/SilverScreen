@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Search;
 
@@ -57,7 +58,7 @@ public sealed class YtDlpSearchServiceTests
 
     private sealed class FakeRunner(ProcessResult result) : IYtDlpRunner
     {
-        public Task<ProcessResult> RunSearchAsync(SearchRequest request, YtDlpOptions options,
+        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
             CancellationToken cancellationToken)
         {
             return Task.FromResult(result);

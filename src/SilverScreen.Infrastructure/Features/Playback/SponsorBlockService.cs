@@ -12,9 +12,9 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SkipSegmentsEndpoint = new("https://sponsor.ajay.app/api/skipSegments");
-    private readonly ConcurrentDictionary<string, IReadOnlyList<SponsorBlockSegment>> _segmentsByRequest = new();
     private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
+    private readonly ConcurrentDictionary<string, IReadOnlyList<SponsorBlockSegment>> _segmentsByRequest = new();
 
     public SponsorBlockService() : this(CreateDefaultHttpClient(), true)
     {
@@ -48,7 +48,8 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
         if (_segmentsByRequest.TryGetValue(cacheKey, out var cached)) return cached;
 
         var query = $"videoID={Uri.EscapeDataString(videoId)}&actionType=skip&" +
-                    string.Join('&', selectedCategories.Select(category => $"category={Uri.EscapeDataString(category)}"));
+                    string.Join('&',
+                        selectedCategories.Select(category => $"category={Uri.EscapeDataString(category)}"));
         var requestUri = new UriBuilder(SkipSegmentsEndpoint) { Query = query }.Uri;
 
         try
@@ -67,13 +68,13 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
             var segments = payload
                 .Where(segment => segment is
-                {
-                    Id: { Length: > 0 },
-                    Category: not null,
-                    ActionType: "skip",
-                    Segment: [var start, var end]
-                } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
-                     IsValidTimeRange(start, end))
+                                  {
+                                      Id.Length: > 0,
+                                      Category: not null,
+                                      ActionType: "skip",
+                                      Segment: [var start, var end]
+                                  } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
+                                  IsValidTimeRange(start, end))
                 .Select(segment => new SponsorBlockSegment(segment.Id!, TimeSpan.FromSeconds(segment.Segment![0]),
                     TimeSpan.FromSeconds(segment.Segment[1]), segment.Category!))
                 .OrderBy(segment => segment.Start)

@@ -1,8 +1,8 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Features.Feed;
 
-namespace SilverScreen.Infrastructure.Features.Session;
+namespace SilverScreen.Features.Session;
 
 public sealed class SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
     : IDisposable

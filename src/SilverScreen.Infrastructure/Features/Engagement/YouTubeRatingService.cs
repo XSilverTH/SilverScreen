@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -13,8 +11,6 @@ namespace SilverScreen.Infrastructure.Features.Engagement;
 
 public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
-
     private static readonly Regex LikeStatusRegex = new(
         """\\?"likeStatus\\?"\s*:\s*\\?"(LIKE|DISLIKE|INDIFFERENT)\\?""",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
@@ -23,37 +19,22 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
     private static readonly Regex LikeParamsRegex = CreateParameterRegex("likeParams");
     private static readonly Regex DislikeParamsRegex = CreateParameterRegex("dislikeParams");
     private static readonly Regex RemoveLikeParamsRegex = CreateParameterRegex("removeLikeParams");
-    private readonly SemaphoreSlim _bootstrapLock = new(1, 1);
-    private readonly bool _disposeHttpClient;
+    private readonly YouTubeAuthenticationService _authentication;
     private readonly HttpClient _httpClient;
-    private readonly YouTubeHomeClientOptions _options;
 
     private readonly ConcurrentDictionary<string, RatingMetadata>
         _ratingMetadataByVideoId = new(StringComparer.Ordinal);
 
-    private readonly ISessionService _sessionService;
-    private YouTubeBootstrapConfig? _bootstrapConfig;
-
-    public YouTubeRatingService(ISessionService sessionService)
-        : this(CreateDefaultHttpClient(), sessionService, disposeHttpClient: true)
+    public YouTubeRatingService(HttpClient httpClient, YouTubeAuthenticationService authentication)
     {
-    }
-
-    public YouTubeRatingService(HttpClient httpClient, ISessionService sessionService,
-        YouTubeHomeClientOptions? options = null, bool disposeHttpClient = false)
-    {
-        ArgumentNullException.ThrowIfNull(httpClient);
-        ArgumentNullException.ThrowIfNull(sessionService);
-        _httpClient = httpClient;
-        _sessionService = sessionService;
-        _options = options ?? new YouTubeHomeClientOptions();
-        _disposeHttpClient = disposeHttpClient;
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _authentication = authentication ?? throw new ArgumentNullException(nameof(authentication));
+        _authentication.CredentialsChanged += OnCredentialsChanged;
     }
 
     public void Dispose()
     {
-        _bootstrapLock.Dispose();
-        if (_disposeHttpClient) _httpClient.Dispose();
+        _authentication.CredentialsChanged -= OnCredentialsChanged;
     }
 
     public async Task<YouTubeRatingState> GetRatingStateAsync(string videoId,
@@ -86,9 +67,14 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
             : await LoadRatingMetadataAsync(videoId, cancellationToken).ConfigureAwait(false);
         if (metadata is null) return false;
 
+        var currentCredentials = _authentication.GetCurrentCredentials();
+        if (currentCredentials is null || currentCredentials.SessionVersion != metadata.SessionVersion)
+            return false;
+
         try
         {
             var authenticatedRequest = await CreateAuthenticatedRequestAsync($"like/{action}", videoId,
+                metadata,
                 context => new RatingRequestPayload
                 {
                     Context = context,
@@ -96,8 +82,12 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
                     Params = ActionParams(action, metadata)
                 },
                 YouTubeRequestJsonContext.Default.RatingRequestPayload, cancellationToken).ConfigureAwait(false);
-            if (authenticatedRequest is null) return false;
+            if (authenticatedRequest is null ||
+                authenticatedRequest.Session.CredentialSnapshot.SessionVersion != metadata.SessionVersion)
+                return false;
 
+            if (!_authentication.IsCurrent(authenticatedRequest.Session.CredentialSnapshot.SessionVersion))
+                return false;
             using var request = authenticatedRequest.Request;
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode) _ratingMetadataByVideoId.TryRemove(videoId, out _);
@@ -116,17 +106,13 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
 
     private async Task<RatingMetadata?> LoadRatingMetadataAsync(string videoId, CancellationToken cancellationToken)
     {
-        var credentials = GetCredentials();
+        var credentials = _authentication.GetCurrentCredentials();
         if (credentials is null) return null;
 
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, PlaybackRequest.BuildWatchUrl(videoId));
-            request.Headers.UserAgent.ParseAdd(YouTubeHomeClientOptions.UserAgent);
-            request.Headers.Add("Origin", YouTubeHomeClientOptions.Origin);
-            request.Headers.Add("Referer", YouTubeHomeClientOptions.Referer);
-            request.Headers.Add("Cookie", credentials.CookieHeader);
-            request.Headers.Add("X-Goog-AuthUser", (_options.AuthUser ?? 0).ToString(CultureInfo.InvariantCulture));
+            _authentication.ApplyWatchPageHeaders(request, credentials, true);
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
 
@@ -140,7 +126,11 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
                 },
                 LikeParamsRegex.Match(html).Groups[1].Value,
                 DislikeParamsRegex.Match(html).Groups[1].Value,
-                RemoveLikeParamsRegex.Match(html).Groups[1].Value);
+                RemoveLikeParamsRegex.Match(html).Groups[1].Value,
+                credentials.SessionVersion);
+            if (!_authentication.IsCurrent(credentials.SessionVersion))
+                return null;
+
             _ratingMetadataByVideoId[videoId] = metadata;
             return metadata;
         }
@@ -166,35 +156,26 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
     }
 
     private async Task<AuthenticatedRequest?> CreateAuthenticatedRequestAsync<T>(string endpoint, string videoId,
-        Func<BrowseRequestContext, T> createPayload,
+        RatingMetadata metadata, Func<BrowseRequestContext, T> createPayload,
         JsonTypeInfo<T> payloadTypeInfo,
         CancellationToken cancellationToken) where T : class
     {
-        var credentials = GetCredentials();
-        if (credentials is null) return null;
+        var session = await _authentication
+            .GetCurrentAsync(_httpClient, true, cancellationToken)
+            .ConfigureAwait(false);
+        if (session is null || session.CredentialSnapshot.SessionVersion != metadata.SessionVersion)
+            return null;
 
-        var config = await EnsureBootstrappedAsync(credentials, cancellationToken).ConfigureAwait(false);
-        if (config is null) return null;
-
-        var payload = createPayload(CreateContext(videoId, config));
-
+        var payload = createPayload(CreateContext(videoId, session.Configuration));
         var requestUrl =
-            $"https://www.youtube.com/youtubei/v1/{endpoint}?key={Uri.EscapeDataString(config.ApiKey)}&prettyPrint=false";
+            $"https://www.youtube.com/youtubei/v1/{endpoint}?key={Uri.EscapeDataString(session.Configuration.ApiKey)}&prettyPrint=false";
         var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
         {
             Content = new StringContent(JsonSerializer.Serialize(payload, payloadTypeInfo), Encoding.UTF8,
                 "application/json")
         };
-        AddAuthenticatedHeaders(request, credentials, config);
-        return new AuthenticatedRequest(request);
-    }
-
-    private YouTubeCredentials? GetCredentials()
-    {
-        var cookies = _sessionService.GetManualSessionCookies();
-        return cookies?.Format == SessionCookieFormat.NetscapeCookiesText
-            ? YouTubeCredentials.ParseNetscape(cookies.Content)
-            : null;
+        _authentication.ApplyAuthenticatedHeaders(request, session, true);
+        return new AuthenticatedRequest(request, session);
     }
 
     private BrowseRequestContext CreateContext(string videoId, YouTubeBootstrapConfig config)
@@ -213,56 +194,14 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
             User = new BrowseRequestUserContext
             {
                 LockedSafetyMode = false,
-                Authuser = _options.AuthUser
+                Authuser = _authentication.AuthUser
             }
         };
     }
 
-    private async Task<YouTubeBootstrapConfig?> EnsureBootstrappedAsync(YouTubeCredentials credentials,
-        CancellationToken cancellationToken)
+    private void OnCredentialsChanged(object? sender, EventArgs args)
     {
-        if (_bootstrapConfig is not null) return _bootstrapConfig;
-
-        await _bootstrapLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            if (_bootstrapConfig is not null) return _bootstrapConfig;
-
-            using var request = new HttpRequestMessage(HttpMethod.Get, YouTubeHomeClientOptions.Referer);
-            request.Headers.UserAgent.ParseAdd(YouTubeHomeClientOptions.UserAgent);
-            request.Headers.Add("Origin", YouTubeHomeClientOptions.Origin);
-            request.Headers.Add("Referer", YouTubeHomeClientOptions.Referer);
-            request.Headers.Add("Cookie", credentials.CookieHeader);
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var html = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            _bootstrapConfig = YouTubeConfigBootstrap.Extract(html);
-            return _bootstrapConfig;
-        }
-        finally
-        {
-            _bootstrapLock.Release();
-        }
-    }
-
-    private void AddAuthenticatedHeaders(HttpRequestMessage request, YouTubeCredentials credentials,
-        YouTubeBootstrapConfig config)
-    {
-        request.Headers.UserAgent.ParseAdd(YouTubeHomeClientOptions.UserAgent);
-        request.Headers.Add("Origin", YouTubeHomeClientOptions.Origin);
-        request.Headers.Add("Referer", YouTubeHomeClientOptions.Referer);
-        request.Headers.Add("X-Origin", YouTubeHomeClientOptions.Origin);
-        request.Headers.Add("Cookie", credentials.CookieHeader);
-        request.Headers.Add("X-Youtube-Client-Name", "1");
-        request.Headers.Add("X-Youtube-Client-Version", config.ClientVersion);
-        if (!string.IsNullOrEmpty(config.VisitorData)) request.Headers.Add("X-Goog-Visitor-Id", config.VisitorData);
-        request.Headers.Add("X-Goog-AuthUser", (_options.AuthUser ?? 0).ToString(CultureInfo.InvariantCulture));
-        request.Headers.Add("X-Youtube-Bootstrap-Logged-In", "true");
-
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        request.Headers.Authorization = new AuthenticationHeaderValue("SAPISIDHASH",
-            $"{timestamp}_{credentials.GenerateSapisidHash(timestamp)}");
+        _ratingMetadataByVideoId.Clear();
     }
 
     private static Regex CreateParameterRegex(string propertyName)
@@ -271,17 +210,14 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
             RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     }
 
-
-    private static HttpClient CreateDefaultHttpClient()
-    {
-        return new HttpClient { Timeout = DefaultTimeout };
-    }
-
     private sealed record RatingMetadata(
         YouTubeRatingState State,
         string LikeParams,
         string DislikeParams,
-        string RemoveLikeParams);
+        string RemoveLikeParams,
+        long SessionVersion);
 
-    private sealed record AuthenticatedRequest(HttpRequestMessage Request);
+    private sealed record AuthenticatedRequest(
+        HttpRequestMessage Request,
+        YouTubeAuthenticationService.YouTubeAuthenticatedSession Session);
 }

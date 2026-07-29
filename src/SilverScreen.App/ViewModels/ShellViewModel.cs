@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace SilverScreen.ViewModels;
 
-public sealed class ShellViewModel : INotifyPropertyChanged
+public sealed class ShellViewModel : INotifyPropertyChanged, IStatusReporter
 {
     public string Status
     {
@@ -18,6 +18,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged
     } = "home";
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void ReportStatus(string message)
+    {
+        Status = message;
+    }
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {

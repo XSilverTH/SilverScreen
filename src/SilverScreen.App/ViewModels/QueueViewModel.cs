@@ -16,12 +16,12 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
-    private readonly ShellViewModel _shell;
+    private readonly IStatusReporter _shell;
     private bool _disposed;
     private bool _isLaunching;
     private QueuePresentationState _state;
 
-    public QueueViewModel(IQueueService queue, IPlaybackService playback, ShellViewModel shell)
+    public QueueViewModel(IQueueService queue, IPlaybackService playback, IStatusReporter shell)
     {
         _queue = queue;
         _playback = playback;
@@ -80,11 +80,11 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            _shell.Status = await _playback.PlayAsync(new PlaybackRequest(videos));
+            _shell.ReportStatus(await _playback.PlayAsync(new PlaybackRequest(videos)));
         }
         catch (Exception)
         {
-            _shell.Status = "Playback could not be started.";
+            _shell.ReportStatus("Playback could not be started.");
         }
         finally
         {

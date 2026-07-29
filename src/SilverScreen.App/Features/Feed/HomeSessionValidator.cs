@@ -1,7 +1,7 @@
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
-namespace SilverScreen.Infrastructure.Features.Feed;
+namespace SilverScreen.Features.Feed;
 
 public sealed class HomeSessionValidator(IAuthenticatedHomeFeedService feedService)
 {

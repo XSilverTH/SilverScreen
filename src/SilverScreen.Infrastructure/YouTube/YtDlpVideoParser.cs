@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using SilverScreen.Core.Models;
-using SilverScreen.Infrastructure.Features.Search;
 
 namespace SilverScreen.Infrastructure.YouTube;
 

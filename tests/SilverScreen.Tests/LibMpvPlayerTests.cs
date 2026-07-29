@@ -1,8 +1,7 @@
-using System.Reflection;
 using System.Collections.Concurrent;
+using System.Reflection;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Playback;
-using SilverScreen.Views.Player;
 
 namespace SilverScreen.Tests;
 
@@ -37,7 +36,7 @@ public sealed class LibMpvPlayerTests
         Assert.Contains(("volume", 100d), native.DoubleProperties);
         Assert.Contains(("speed", 1.5d), native.DoubleProperties);
         Assert.Contains(("ytdl-raw-options",
-            "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt,mark-watched="),
+                "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt,mark-watched="),
             native.StringProperties);
         Assert.Contains(("ytdl-format", "bestvideo[height<=720]+bestaudio/best[height<=720]"), native.StringProperties);
         Assert.Contains(("keep-open", "yes"), native.StringProperties);
@@ -56,7 +55,7 @@ public sealed class LibMpvPlayerTests
         Assert.True(SpinWait.SpinUntil(() => native.StringProperties.Any(property =>
             property.Name == "ytdl-raw-options"), TimeSpan.FromSeconds(2)));
         Assert.Contains(("ytdl-raw-options",
-            "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt"),
+                "cookies=/tmp/cookies.txt,write-subs=,write-auto-subs=,sub-langs=all,sub-format=vtt"),
             native.StringProperties);
     }
 
@@ -190,8 +189,6 @@ public sealed class LibMpvPlayerTests
                 Assert.Equal("Chapter 3", chapter.Title);
             });
     }
-
-
 
 
     [Fact]

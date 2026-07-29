@@ -2,6 +2,7 @@ using Adw;
 using Gtk;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Preferences;
@@ -16,23 +17,23 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly EntryRow _mpvPathRow;
     private readonly StringList _playbackBackendModel;
     private readonly ComboRow _playbackBackendRow;
-    private readonly IPreferencesService _preferencesService;
     private readonly StringList _qualityModel;
     private readonly ComboRow _qualityRow;
     private readonly Action<string> _reportStatus;
-    private readonly StringList _themeModel;
-    private readonly ComboRow _themeRow;
-    private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly SwitchRow _sponsorBlockAutoSkipRow;
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly SwitchRow _sponsorBlockDisplayRow;
+    private readonly StringList _themeModel;
+    private readonly ComboRow _themeRow;
+    private readonly PreferencesViewModel _viewModel;
+    private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
 
     public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)
     {
-        _preferencesService = preferencesService;
+        _viewModel = new PreferencesViewModel(preferencesService);
         _reportStatus = reportStatus;
 
         _themeRow = GetRequiredObject<ComboRow>("theme_row");
@@ -69,26 +70,30 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     private void InitializeFields()
     {
+        ApplyEditorState(_viewModel.EditorState);
+    }
+
+    private void ApplyEditorState(PreferencesEditorState state)
+    {
         _loading = true;
         try
         {
-            var prefs = _preferencesService.GetPreferences();
-            _themeRow.Selected = (uint)GetSelectionIndex(_themeModel, prefs.Theme);
-            _qualityRow.Selected = (uint)GetSelectionIndex(_qualityModel, prefs.VideoQuality);
+            _themeRow.Selected = (uint)GetSelectionIndex(_themeModel, state.Theme);
+            _qualityRow.Selected = (uint)GetSelectionIndex(_qualityModel, state.VideoQuality);
             _playbackBackendRow.Selected =
-                (uint)GetSelectionIndex(_playbackBackendModel, prefs.PlaybackBackend);
-            _fullscreenRow.Active = prefs.OpenInFullscreen;
-            _autoAdvanceNextVideoRow.Active = prefs.AutoAdvanceNextVideo;
-            ((Editable)_ytdlpPathRow).SetText(prefs.YtDlpExecutablePath);
-            ((Editable)_maxResultsRow).SetText(prefs.MaxResults.ToString());
-            ((Editable)_mpvPathRow).SetText(prefs.MpvExecutablePath);
-            _markWatchedRow.Active = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false };
-            _youTubePlaybackTelemetryRow.Active = prefs.YouTubePlaybackTelemetryEnabled;
-            _discordRichPresenceRow.Active = prefs.DiscordRichPresenceEnabled;
-            _sponsorBlockAutoSkipRow.Active = prefs.SponsorBlockAutoSkipEnabled;
-            _sponsorBlockDisplayRow.Active = prefs.SponsorBlockSegmentDisplayEnabled;
+                (uint)GetSelectionIndex(_playbackBackendModel, state.PlaybackBackend);
+            _fullscreenRow.Active = state.OpenInFullscreen;
+            _autoAdvanceNextVideoRow.Active = state.AutoAdvanceNextVideo;
+            ((Editable)_ytdlpPathRow).SetText(state.YtDlpExecutablePath);
+            ((Editable)_maxResultsRow).SetText(state.MaxResultsText);
+            ((Editable)_mpvPathRow).SetText(state.MpvExecutablePath);
+            _markWatchedRow.Active = state.MarkWatchedVideos;
+            _youTubePlaybackTelemetryRow.Active = state.YouTubePlaybackTelemetryEnabled;
+            _discordRichPresenceRow.Active = state.DiscordRichPresenceEnabled;
+            _sponsorBlockAutoSkipRow.Active = state.SponsorBlockAutoSkipEnabled;
+            _sponsorBlockDisplayRow.Active = state.SponsorBlockSegmentDisplayEnabled;
             foreach (var (category, row) in _sponsorBlockCategoryRows)
-                row.Active = prefs.SponsorBlockCategories?.Contains(category, StringComparer.Ordinal) ?? false;
+                row.Active = state.SponsorBlockCategories.Contains(category, StringComparer.Ordinal);
         }
         finally
         {
@@ -117,11 +122,13 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private void OnRowNotify(object? sender, EventArgs e)
     {
         if (_loading) return;
-        if (ReferenceEquals(sender, _markWatchedRow) && _markWatchedRow.Active)
-            _youTubePlaybackTelemetryRow.Active = false;
-        else if (ReferenceEquals(sender, _youTubePlaybackTelemetryRow) && _youTubePlaybackTelemetryRow.Active)
-            _markWatchedRow.Active = false;
-        Save();
+
+        var changedOption = ReferenceEquals(sender, _markWatchedRow)
+            ? PreferencesMutuallyExclusiveOption.MarkWatchedVideos
+            : ReferenceEquals(sender, _youTubePlaybackTelemetryRow)
+                ? PreferencesMutuallyExclusiveOption.YouTubePlaybackTelemetry
+                : (PreferencesMutuallyExclusiveOption?)null;
+        Save(changedOption);
     }
 
     private void OnRowChanged(object? sender, EventArgs e)
@@ -130,44 +137,38 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         Save();
     }
 
-    private void Save()
+    private void Save(PreferencesMutuallyExclusiveOption? changedOption = null)
     {
-        var theme = GetSelectedValue(_themeModel, _themeRow.Selected, "System");
-        var quality = GetSelectedValue(_qualityModel, _qualityRow.Selected, "Best");
-        var maxResultsText = ((Editable)_maxResultsRow).GetText();
-        if (!int.TryParse(maxResultsText, out var maxResults)) maxResults = 20;
+        var result = _viewModel.Save(CreateEditorState(), changedOption);
+        ApplyEditorState(result.State);
+        if (!result.Succeeded)
+            _reportStatus(result.ErrorMessage ?? PreferencesViewModel.PersistenceErrorMessage);
+    }
 
-        var prefs = new AppPreferences
+    private PreferencesEditorState CreateEditorState()
+    {
+        return _viewModel.EditorState with
         {
-            Theme = theme,
-            VideoQuality = quality,
+            Theme = GetSelectedValue(_themeModel, _themeRow.Selected, "System"),
+            VideoQuality = GetSelectedValue(_qualityModel, _qualityRow.Selected, "Best"),
             YtDlpExecutablePath = ((Editable)_ytdlpPathRow).GetText(),
             MpvExecutablePath = ((Editable)_mpvPathRow).GetText(),
             PlaybackBackend = GetSelectedValue(_playbackBackendModel, _playbackBackendRow.Selected,
                 PlaybackBackends.ExternalMpv),
             OpenInFullscreen = _fullscreenRow.Active,
             AutoAdvanceNextVideo = _autoAdvanceNextVideoRow.Active,
-            MaxResults = maxResults,
-            MarkWatchedVideos = _markWatchedRow.Active && !_youTubePlaybackTelemetryRow.Active,
+            MaxResultsText = ((Editable)_maxResultsRow).GetText(),
+            MarkWatchedVideos = _markWatchedRow.Active,
             YouTubePlaybackTelemetryEnabled = _youTubePlaybackTelemetryRow.Active,
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
             SponsorBlockAutoSkipEnabled = _sponsorBlockAutoSkipRow.Active,
             SponsorBlockSegmentDisplayEnabled = _sponsorBlockDisplayRow.Active,
-            SponsorBlockCategories = _sponsorBlockCategoryRows
-                .Where(pair => pair.Value.Active)
-                .Select(pair => pair.Key)
-                .ToArray(),
-            PreferredSubtitleLanguage = _preferencesService.GetPreferences().PreferredSubtitleLanguage
+            SponsorBlockCategories =
+            [
+                .. _sponsorBlockCategoryRows
+                    .Where(pair => pair.Value.Active)
+                    .Select(pair => pair.Key)
+            ]
         };
-
-        try
-        {
-            _preferencesService.SavePreferences(prefs);
-        }
-        catch (PreferencesPersistenceException)
-        {
-            InitializeFields();
-            _reportStatus("Unable to save preferences. Your changes were not applied.");
-        }
     }
 }

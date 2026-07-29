@@ -28,7 +28,8 @@ public sealed class SponsorBlockServiceTests
         var handler = new FakeHttpMessageHandler((request, _) =>
         {
             Assert.Equal(HttpMethod.Get, request.Method);
-            Assert.Equal("https://sponsor.ajay.app/api/skipSegments?videoID=dQw4w9WgXcQ&actionType=skip&category=sponsor&category=outro",
+            Assert.Equal(
+                "https://sponsor.ajay.app/api/skipSegments?videoID=dQw4w9WgXcQ&actionType=skip&category=sponsor&category=outro",
                 request.RequestUri!.AbsoluteUri);
             return Task.FromResult(JsonResponse("""
                                                 [

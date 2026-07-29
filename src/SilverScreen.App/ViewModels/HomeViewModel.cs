@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using SilverScreen.Core.Models;
-using SilverScreen.Infrastructure.Features.Feed;
+using SilverScreen.Features.Feed;
 
 namespace SilverScreen.ViewModels;
 
