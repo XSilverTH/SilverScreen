@@ -52,6 +52,7 @@
 
     <ItemGroup>
         <GResource Include="Assets\*"/>
+        <GResource Include="Styles\*"/>
     </ItemGroup>
 
 
