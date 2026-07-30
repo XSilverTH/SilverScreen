@@ -15,6 +15,7 @@ public sealed class VideoCardActions
     public required Func<VideoSummary, Task> PlayAsync { get; init; }
     public required Action<VideoSummary> AddToQueue { get; init; }
     public required Action<string> ReportStatus { get; init; }
+    public Func<VideoSummary, Task>? OpenChannelAsync { get; init; }
 }
 
 public class VideoCardView : ViewBase<Box>
@@ -24,6 +25,7 @@ public class VideoCardView : ViewBase<Box>
     private readonly VideoCardActions _actions;
     private readonly Box _card;
     private readonly Label _channel;
+    private readonly GestureClick _channelClick;
     private readonly GestureClick _click;
     private readonly Label _duration;
     private readonly MenuButton _menu;
@@ -76,6 +78,11 @@ public class VideoCardView : ViewBase<Box>
         _click.Button = 0;
         _click.OnReleased += OnCardReleased;
         _card.AddController(_click);
+
+        _channelClick = GestureClick.New();
+        _channelClick.Button = 1;
+        _channelClick.OnReleased += OnChannelReleased;
+        _channel.AddController(_channelClick);
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -250,11 +257,37 @@ public class VideoCardView : ViewBase<Box>
         }
         else if (ReferenceEquals(sender, _menuActionItems[2]))
         {
-            _actions.ReportStatus("Opening channels is not implemented.");
+            if (_video is { } video)
+            {
+                if (_actions.OpenChannelAsync is { } openChannel)
+                {
+                    _ = openChannel(video);
+                }
+                else
+                {
+                    _actions.ReportStatus("Opening channels is not implemented.");
+                }
+            }
         }
         else if (ReferenceEquals(sender, _menuActionItems[3]))
         {
             CopyLink();
+        }
+    }
+
+    private void OnChannelReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
+    {
+        if (_video is not { } video)
+            return;
+
+        sender.SetState(EventSequenceState.Claimed);
+        if (_actions.OpenChannelAsync is { } openChannel)
+        {
+            _ = openChannel(video);
+        }
+        else
+        {
+            _actions.ReportStatus("Channel navigation is not available.");
         }
     }
 
@@ -365,6 +398,10 @@ public class VideoCardView : ViewBase<Box>
         _click.OnReleased -= OnCardReleased;
         _card.RemoveController(_click);
         _click.Dispose();
+        _channelClick.OnReleased -= OnChannelReleased;
+        _channel.RemoveController(_channelClick);
+        _channelClick.Dispose();
+
 
         _menu.MenuModel = null;
         _menu.InsertActionGroup("video", null);

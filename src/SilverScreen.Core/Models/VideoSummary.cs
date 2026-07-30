@@ -9,4 +9,5 @@ public sealed record VideoSummary(
     bool IsShort,
     string? WatchUrl = null,
     DateOnly? ApproximateUploadDate = null,
-    DateTimeOffset? PublishedAt = null);
+    DateTimeOffset? PublishedAt = null,
+    string? ChannelUrl = null);

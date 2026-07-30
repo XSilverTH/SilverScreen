@@ -68,3 +68,12 @@ gridview item:active {
     color: #ffffff;
     padding: 2px 6px;
 }
+
+.video-card .channel-link {
+    cursor: pointer;
+}
+
+.video-card .channel-link:hover {
+    color: @accent_color;
+    text-decoration: underline;
+}

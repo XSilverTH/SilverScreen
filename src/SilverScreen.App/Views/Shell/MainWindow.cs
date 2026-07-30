@@ -8,6 +8,7 @@ using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
+using SilverScreen.Views.Channel;
 using SilverScreen.Views.Home;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
@@ -31,6 +32,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly Action _disposeApplicationServices;
+    private readonly ChannelView _channel;
+    private readonly ChannelViewModel _channelViewModel;
     private readonly EmbeddedPlayerView _embeddedPlayer;
     private readonly HomeView _home;
     private readonly Button _homeRefreshButton;
@@ -80,6 +83,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
+        _channelViewModel = new ChannelViewModel(services.Channels, _shell);
+        _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions, CloseChannel);
         _home = new HomeView(
             new HomeViewModel(services.HomeFeed),
             new SearchViewModel(services.Search, _playback, _shell),
@@ -101,6 +106,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateAccountAppearance);
 
         switcher.Stack = _stack;
+        var channelPage = _stack.AddTitled(_channel.Widget, "channel", "Channel");
+        channelPage.Visible = false;
         _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
@@ -126,8 +133,27 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 _services.Queue.Add(video);
                 _shell.Status = "Video added to queue.";
             },
-            ReportStatus = message => _shell.Status = message
+            ReportStatus = message => _shell.Status = message,
+            OpenChannelAsync = OpenChannelAsync
         };
+    }
+
+    private async System.Threading.Tasks.Task OpenChannelAsync(VideoSummary video)
+    {
+        if (string.IsNullOrWhiteSpace(video.ChannelUrl))
+        {
+            _shell.Status = $"A channel link is not available for {video.ChannelName}.";
+            return;
+        }
+
+        _stack.VisibleChildName = "channel";
+        await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName).ConfigureAwait(false);
+    }
+
+    private void CloseChannel()
+    {
+        _channelViewModel.Clear();
+        _stack.VisibleChildName = "home";
     }
 
     private void OpenEmbeddedPlayer()
@@ -299,6 +325,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_closed) return false;
         _closed = true;
+        _channel.Dispose();
+        _channelViewModel.Dispose();
         _shell.PropertyChanged -= OnShellPropertyChanged;
         _home.SearchModeChanged -= OnHomeSearchModeChanged;
         _queueViewModel.StateChanged -= OnQueueStateChanged;

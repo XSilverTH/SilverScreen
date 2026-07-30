@@ -21,6 +21,31 @@ public static class YtDlpCommandBuilder
         startInfo.ArgumentList.Add(":ytrec");
         return startInfo;
     }
+    public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
+        string? cookieFilePath = null)
+    {
+        if (!Uri.TryCreate(channelUrl, UriKind.Absolute, out var uri)
+            || !string.Equals(uri.Host, "www.youtube.com", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(uri.Host, "youtube.com", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(uri.Host, "m.youtube.com", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("A valid YouTube channel URL is required.", nameof(channelUrl));
+
+        var startInfo = CreateStartInfo(options.ExecutablePath);
+        AddCommonArguments(startInfo, cookieFilePath);
+        startInfo.ArgumentList.Add("--playlist-end");
+        startInfo.ArgumentList.Add(Math.Max(options.MaxResults, 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var videosUrl = GetVideosUrl(channelUrl);
+        startInfo.ArgumentList.Add(sort switch
+        {
+            ChannelVideoSort.Newest => videosUrl,
+            ChannelVideoSort.Oldest => AppendQuery(videosUrl, "sort=da"),
+            ChannelVideoSort.Popular => AppendQuery(videosUrl, "sort=p"),
+            _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, null)
+        });
+        return startInfo;
+    }
+
 
     public static ProcessStartInfo BuildComments(string executablePath, string videoId, YouTubeCommentSort sort,
         string? cookieFilePath = null)
@@ -48,6 +73,20 @@ public static class YtDlpCommandBuilder
                                    ?? throw new ArgumentException("A valid YouTube video ID is required.",
                                        nameof(videoId)));
         return startInfo;
+    }
+
+    private static string GetVideosUrl(string channelUrl)
+    {
+        var builder = new UriBuilder(channelUrl);
+        var path = builder.Path.TrimEnd('/');
+        if (!path.EndsWith("/videos", StringComparison.OrdinalIgnoreCase))
+            builder.Path = $"{path}/videos";
+        return builder.Uri.AbsoluteUri;
+    }
+
+    private static string AppendQuery(string url, string query)
+    {
+        return $"{url}{(url.Contains('?', StringComparison.Ordinal) ? '&' : '?')}{query}";
     }
 
     private static ProcessStartInfo CreateStartInfo(string executablePath)

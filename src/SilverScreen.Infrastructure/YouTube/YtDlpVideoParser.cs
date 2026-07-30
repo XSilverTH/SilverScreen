@@ -73,7 +73,20 @@ internal static class YtDlpVideoParser
             IsShort(element, rawUrl),
             canonicalWatchUrl,
             GetApproximateUploadDate(element),
-            GetPublishedAt(element));
+            GetPublishedAt(element),
+            GetChannelUrl(element));
+    }
+
+    private static string? GetChannelUrl(JsonElement element)
+    {
+        var channelUrl = FirstString(element, "channel_url", "uploader_url");
+        if (!string.IsNullOrWhiteSpace(channelUrl))
+            return channelUrl;
+
+        var channelId = FirstString(element, "channel_id", "uploader_id");
+        return channelId?.StartsWith("UC", StringComparison.Ordinal) == true
+            ? $"https://www.youtube.com/channel/{Uri.EscapeDataString(channelId)}"
+            : null;
     }
 
     private static string? GetMixVideoId(string? playlistId)

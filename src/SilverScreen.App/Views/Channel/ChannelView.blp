@@ -1,0 +1,239 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box ChannelView {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+  styles ["channel-view"]
+
+  Gtk.Box channel_header_bar {
+    orientation: horizontal;
+    spacing: 12;
+    margin-start: 16;
+    margin-end: 16;
+    margin-top: 12;
+    margin-bottom: 12;
+
+    Gtk.Button channel_back_button {
+      icon-name: "go-previous-symbolic";
+      tooltip-text: "Back";
+      clicked => $OnBackButtonClicked();
+      styles ["flat", "circular"]
+    }
+
+    Gtk.Label channel_bar_title {
+      label: "Channel";
+      xalign: 0;
+      hexpand: true;
+      styles ["title-3"]
+    }
+  }
+
+  Gtk.Separator {
+    styles ["spacer"]
+  }
+
+  Gtk.Revealer channel_header_revealer {
+    reveal-child: true;
+    transition-type: slide_down;
+    transition-duration: 250;
+
+    child: Gtk.Box channel_header {
+      orientation: vertical;
+      spacing: 16;
+      margin-start: 24;
+      margin-end: 24;
+      margin-top: 16;
+      margin-bottom: 8;
+      styles ["channel-header-card"]
+
+      Gtk.Box channel_profile_box {
+        orientation: horizontal;
+        spacing: 20;
+        valign: center;
+
+        Gtk.Overlay channel_avatar_overlay {
+          width-request: 80;
+          height-request: 80;
+          halign: start;
+          valign: center;
+          styles ["channel-avatar"]
+
+          child: Gtk.Image channel_avatar_placeholder {
+            icon-name: "avatar-default-symbolic";
+            pixel-size: 48;
+            halign: center;
+            valign: center;
+          };
+        }
+
+        Gtk.Box channel_meta_details {
+          orientation: vertical;
+          spacing: 4;
+          hexpand: true;
+          valign: center;
+
+          Gtk.Label channel_name {
+            xalign: 0;
+            wrap: true;
+            selectable: true;
+            styles ["channel-title"]
+          }
+
+          Gtk.Box channel_sub_meta {
+            orientation: horizontal;
+            spacing: 8;
+
+            Gtk.Label channel_handle {
+              xalign: 0;
+              visible: false;
+              styles ["dim-label", "caption"]
+            }
+
+            Gtk.Label channel_meta_dot1 {
+              label: "•";
+              visible: false;
+              styles ["dim-label", "caption"]
+            }
+
+            Gtk.Label channel_subscribers {
+              xalign: 0;
+              visible: false;
+              styles ["dim-label", "caption"]
+            }
+          }
+
+          Gtk.Label channel_description {
+            xalign: 0;
+            wrap: true;
+            lines: 3;
+            ellipsize: end;
+            visible: false;
+            margin-top: 4;
+            styles ["channel-description"]
+          }
+        }
+      }
+
+      Gtk.Box channel_controls_bar {
+        orientation: horizontal;
+        spacing: 12;
+        margin-top: 8;
+
+        Gtk.Label sort_label {
+          label: "Sort by:";
+          styles ["dim-label"]
+        }
+
+        Gtk.DropDown channel_sort_dropdown {
+          notify => $OnSortDropdownNotify();
+          model: Gtk.StringList {
+            strings: ["Newest", "Oldest", "Popular"];
+          };
+          selected: 0;
+        }
+      }
+    };
+  }
+
+  Gtk.Revealer channel_clue_revealer {
+    reveal-child: false;
+    transition-type: slide_down;
+    transition-duration: 200;
+
+    child: Gtk.Box channel_reveal_clue {
+      orientation: horizontal;
+      halign: center;
+      valign: center;
+      margin-top: 6;
+      margin-bottom: 6;
+      spacing: 8;
+      tooltip-text: "Hover or click to reveal channel details";
+      styles ["channel-reveal-clue"]
+
+      Gtk.Image {
+        icon-name: "pan-down-symbolic";
+        pixel-size: 16;
+        styles ["dim-label"]
+      }
+
+      Gtk.Label {
+        label: "Show channel details";
+        styles ["caption", "dim-label"]
+      }
+    };
+  }
+
+  Gtk.Stack channel_stack {
+    hexpand: true;
+    vexpand: true;
+
+    Gtk.StackPage {
+      name: "loading";
+      child: Gtk.Box channel_loading_page {
+        orientation: vertical;
+        spacing: 12;
+        halign: center;
+        valign: center;
+        margin-top: 48;
+        margin-bottom: 48;
+
+        Gtk.Spinner channel_loading_spinner {
+          spinning: true;
+          halign: center;
+        }
+
+        Gtk.Label {
+          label: "Loading channel…";
+          styles ["dim-label"]
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "content";
+      child: Gtk.ScrolledWindow channel_scrolled_window {
+        hexpand: true;
+        vexpand: true;
+
+        child: Gtk.GridView channel_video_grid {
+          min-columns: 1;
+          max-columns: 4;
+          single-click-activate: false;
+          margin-start: 24;
+          margin-end: 24;
+          margin-top: 12;
+          margin-bottom: 12;
+          hexpand: true;
+          vexpand: true;
+        };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "empty";
+      child: Adw.StatusPage channel_empty_page {
+        icon-name: "applications-internet-symbolic";
+        title: "No videos found";
+        description: "This channel does not have any public videos available right now.";
+      };
+    }
+
+    Gtk.StackPage {
+      name: "error";
+      child: Adw.StatusPage channel_error_page {
+        icon-name: "network-error-symbolic";
+        title: "Could not load channel";
+        description: "Failed to load channel details. Check your network connection and try again.";
+
+        child: Gtk.Button {
+          label: "Retry";
+          halign: center;
+          clicked => $OnRetryButtonClicked();
+          styles ["suggested-action"]
+        };
+      };
+    }
+  }
+}
