@@ -1,10 +1,52 @@
 /* Video Card and Thumbnail styles */
 
+gridview > child,
+gridview child,
+gridview tile,
+gridview item {
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+}
+
+gridview > child:hover,
+gridview child:hover,
+gridview tile:hover,
+gridview item:hover,
+gridview > child:selected,
+gridview child:selected,
+gridview tile:selected,
+gridview item:selected,
+gridview > child:focus,
+gridview child:focus,
+gridview tile:focus,
+gridview item:focus,
+gridview > child:active,
+gridview child:active,
+gridview tile:active,
+gridview item:active {
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+}
+
 .video-card {
     background-color: @card_bg_color;
     border: 1px solid alpha(@borders, 0.72);
     border-radius: 16px;
     box-shadow: 0 2px 8px 1px alpha(@shade_color, 0.16);
+    transition: background-color 200ms ease-in-out, border-color 200ms ease-in-out, box-shadow 200ms ease-in-out;
+}
+
+.video-card:hover {
+    background-color: mix(@card_bg_color, @window_fg_color, 0.05);
+    border-color: alpha(@borders, 0.9);
+    box-shadow: 0 4px 12px 2px alpha(@shade_color, 0.24);
+}
+
+.video-card:active {
+    background-color: mix(@card_bg_color, @window_fg_color, 0.09);
+    box-shadow: 0 1px 4px 0 alpha(@shade_color, 0.2);
 }
 
 .video-thumbnail {

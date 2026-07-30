@@ -1,5 +1,35 @@
 /* Queue Panel and Queue Row styles */
 
+listview > row,
+listview row,
+listview > child,
+listview child {
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+}
+
+listview > row:hover,
+listview row:hover,
+listview > child:hover,
+listview child:hover,
+listview > row:selected,
+listview row:selected,
+listview > child:selected,
+listview child:selected,
+listview > row:focus,
+listview row:focus,
+listview > child:focus,
+listview child:focus,
+listview > row:active,
+listview row:active,
+listview > child:active,
+listview child:active {
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+}
+
 .queue-panel {
     background-color: @window_bg_color;
     border-left: 1px solid @borders;
@@ -11,6 +41,12 @@
     border-radius: 12px;
     margin-top: 3px;
     margin-bottom: 3px;
+    transition: background-color 200ms ease-in-out, border-color 200ms ease-in-out;
+}
+
+.queue-row:hover {
+    background-color: mix(@card_bg_color, @window_fg_color, 0.05);
+    border-color: alpha(@borders, 0.9);
 }
 
 .queue-thumbnail {
