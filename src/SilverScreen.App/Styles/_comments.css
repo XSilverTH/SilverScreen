@@ -1,0 +1,9 @@
+/* Comment Row styles */
+
+.comment-row {
+    background-color: @card_bg_color;
+    border: 1px solid @borders;
+    border-radius: 12px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
