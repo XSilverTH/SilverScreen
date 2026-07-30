@@ -211,7 +211,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
 
         Gtk.Button player_subtitle_button {
           clicked => $OnSubtitleButtonClicked();
-          icon-name: "media-view-subtitles-symbolic";
+          icon-name: "subtitles-symbolic";
           tooltip-text: "Use preferred subtitles (C)";
           sensitive: false;
           styles ["flat", "circular", "player-reaction-button"]
@@ -219,7 +219,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
 
         Gtk.ToggleButton player_comments_button {
           toggled => $OnCommentsButtonToggled();
-          icon-name: "mail-message-new-symbolic";
+          icon-name: "comments-symbolic";
           tooltip-text: "Comments";
           styles ["flat", "circular", "player-reaction-button"]
         }

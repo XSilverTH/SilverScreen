@@ -68,6 +68,11 @@ public partial class App
         if (_styles is not null)
             return;
 
+        if (Display.GetDefault() is { } display)
+        {
+            IconTheme.GetForDisplay(display).AddResourcePath("/SilverScreen/Assets");
+        }
+
         _styles = CssProvider.New();
         _styles.LoadFromResource("/SilverScreen/Styles/main.css");
 
