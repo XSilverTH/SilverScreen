@@ -151,6 +151,20 @@ public sealed class ViewModelTests
         queue.Clear();
         Assert.Equal(2, changes);
     }
+    [Fact]
+    public void QueueAdd_AppendsVideoToBeginningOrEndCorrectly()
+    {
+        var queue = new QueueService();
+        var first = new VideoSummary("video1", "First Video", "Channel 1", TimeSpan.FromMinutes(1), "", false);
+        var second = new VideoSummary("video2", "Second Video", "Channel 2", TimeSpan.FromMinutes(2), "", false);
+
+        queue.Add(first);
+        queue.Add(second);
+
+        Assert.Equal(2, queue.Items.Count);
+        Assert.Equal("video1", queue.Items[0].Video.Id);
+        Assert.Equal("video2", queue.Items[1].Video.Id);
+    }
 
     private sealed class ControlledSearchService : ISearchService
     {

@@ -121,10 +121,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         {
             PlayAsync = async video =>
                 _shell.Status = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
-            AddNext = video =>
+            AddToQueue = video =>
             {
-                _services.Queue.AddNext(video);
-                _shell.Status = "Video added next in queue.";
+                _services.Queue.Add(video);
+                _shell.Status = "Video added to queue.";
             },
             ReportStatus = message => _shell.Status = message
         };
