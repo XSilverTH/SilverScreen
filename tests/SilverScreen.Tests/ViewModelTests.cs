@@ -136,6 +136,28 @@ public sealed class ViewModelTests
     }
 
     [Fact]
+    public async Task SearchLoadMoreAsync_AppendsUniqueNextPageVideos()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+        var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
+        var next = new VideoSummary("def456ghi78", "Next", "Channel", TimeSpan.FromMinutes(2), "", false);
+
+        var search = viewModel.SubmitAsync("query");
+        service.Requests[0].Completion.SetResult(new SearchResultPage([first], ContinuationToken: "21"));
+        await search;
+
+        var loadMore = viewModel.LoadMoreAsync();
+        Assert.Equal(2, service.Requests.Count);
+        Assert.Equal(21, service.Requests[1].StartIndex);
+        service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
+        await loadMore;
+
+        Assert.Equal([first, next], viewModel.State.Videos);
+        Assert.False(viewModel.State.HasMore);
+    }
+
+    [Fact]
     public void QueueItems_ExposeReadOnlyViewWithoutSuppressingChanges()
     {
         var queue = new QueueService();
@@ -168,16 +190,15 @@ public sealed class ViewModelTests
 
     private sealed class ControlledSearchService : ISearchService
     {
-        public List<(string Query, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)> Requests
-        {
-            get;
-        } = [];
+        public List<(string Query, int StartIndex, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)>
+            Requests
+        { get; } = [];
 
         public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
         {
             var completion =
                 new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Requests.Add((request.Query, cancellationToken, completion));
+            Requests.Add((request.Query, request.StartIndex, cancellationToken, completion));
             return completion.Task;
         }
 

@@ -16,7 +16,8 @@ public sealed record ChannelPage(
     IReadOnlyList<VideoSummary> Videos,
     ChannelVideoSort Sort,
     string? StatusMessage = null,
-    bool IsSuccess = true)
+    bool IsSuccess = true,
+    int? NextStartIndex = null)
 {
     public static ChannelPage Failed(string url, string name, ChannelVideoSort sort, string message)
     {

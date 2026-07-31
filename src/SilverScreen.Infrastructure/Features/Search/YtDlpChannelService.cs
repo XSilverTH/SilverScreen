@@ -15,7 +15,7 @@ public sealed class YtDlpChannelService(
     private static readonly ILogger Logger = Log.ForContext<YtDlpChannelService>();
 
     public async Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
-        CancellationToken cancellationToken)
+        int startIndex, CancellationToken cancellationToken)
     {
         var preferences = preferencesService.GetPreferences();
         var options = new YtDlpOptions
@@ -28,7 +28,7 @@ public sealed class YtDlpChannelService(
         {
             using var cookieFile = cookieFileProvider.CreateCookieFile();
             var result = await runner.RunAsync(
-                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, cookieFile?.Path), options.Timeout,
+                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, cookieFile?.Path), options.Timeout,
                 cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
@@ -40,7 +40,8 @@ public sealed class YtDlpChannelService(
                     $"Could not load channel: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
             }
 
-            return ParsePage(result.StandardOutput, channelUrl, fallbackName, sort);
+            return ParsePage(result.StandardOutput, channelUrl, fallbackName, sort,
+                startIndex, Math.Max(options.MaxResults, 1));
         }
         catch (Win32Exception exception)
         {
@@ -62,11 +63,13 @@ public sealed class YtDlpChannelService(
         }
     }
 
-    private static ChannelPage ParsePage(string output, string channelUrl, string fallbackName, ChannelVideoSort sort)
+    private static ChannelPage ParsePage(string output, string channelUrl, string fallbackName, ChannelVideoSort sort,
+        int startIndex, int pageSize)
     {
         using var document = JsonDocument.Parse(output);
         var root = document.RootElement;
-        var videos = YtDlpVideoParser.Parse(output)
+        var pageEntries = YtDlpVideoParser.Parse(output).ToArray();
+        var videos = pageEntries
             .Where(video => !video.IsShort)
             .DistinctBy(video => video.Id)
             .ToArray();
@@ -76,7 +79,9 @@ public sealed class YtDlpChannelService(
         var subscriberCount = GetInt64(root, "channel_follower_count", "uploader_follower_count");
         var status = videos.Length == 0 ? "This channel has no videos to show." : null;
 
-        return new ChannelPage(channelUrl, name, description, avatarUrl, subscriberCount, videos, sort, status);
+        int? nextStartIndex = pageEntries.Length == pageSize ? startIndex + pageSize : null;
+        return new ChannelPage(channelUrl, name, description, avatarUrl, subscriberCount, videos, sort, status,
+            NextStartIndex: nextStartIndex);
     }
 
     private static string? GetThumbnailUrl(JsonElement root)

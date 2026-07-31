@@ -8,22 +8,35 @@ public static class YtDlpCommandBuilder
     public static ProcessStartInfo BuildSearch(SearchRequest request, YtDlpOptions options,
         string? cookieFilePath = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(request.StartIndex, 1);
         var startInfo = CreateStartInfo(options.ExecutablePath);
         AddCommonArguments(startInfo, cookieFilePath);
-        startInfo.ArgumentList.Add($"ytsearch{options.MaxResults}:{request.Query}");
+        var pageSize = Math.Max(options.MaxResults, 1);
+        startInfo.ArgumentList.Add("--playlist-start");
+        startInfo.ArgumentList.Add(request.StartIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--playlist-end");
+        startInfo.ArgumentList.Add((request.StartIndex + pageSize - 1)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add($"ytsearch{request.StartIndex + pageSize - 1}:{request.Query}");
         return startInfo;
     }
 
-    public static ProcessStartInfo BuildHome(string executablePath, string? cookieFilePath = null)
+    public static ProcessStartInfo BuildHome(string executablePath, int startIndex, string? cookieFilePath = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
         var startInfo = CreateStartInfo(executablePath);
         AddCommonArguments(startInfo, cookieFilePath);
+        startInfo.ArgumentList.Add("--playlist-start");
+        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--playlist-end");
+        startInfo.ArgumentList.Add((startIndex + 19).ToString(System.Globalization.CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add(":ytrec");
         return startInfo;
     }
     public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
-        string? cookieFilePath = null)
+        int startIndex, string? cookieFilePath = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
         if (!Uri.TryCreate(channelUrl, UriKind.Absolute, out var uri)
             || !string.Equals(uri.Host, "www.youtube.com", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(uri.Host, "youtube.com", StringComparison.OrdinalIgnoreCase)
@@ -32,8 +45,11 @@ public static class YtDlpCommandBuilder
 
         var startInfo = CreateStartInfo(options.ExecutablePath);
         AddCommonArguments(startInfo, cookieFilePath);
+        var pageSize = Math.Max(options.MaxResults, 1);
+        startInfo.ArgumentList.Add("--playlist-start");
+        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add(Math.Max(options.MaxResults, 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         var videosUrl = GetVideosUrl(channelUrl);
         startInfo.ArgumentList.Add(sort switch

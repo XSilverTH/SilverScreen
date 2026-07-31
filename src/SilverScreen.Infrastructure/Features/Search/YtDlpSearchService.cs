@@ -61,15 +61,21 @@ public sealed class YtDlpSearchService : ISearchService
                 return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
             }
 
-            var videos = ParseVideos(result.StandardOutput)
+            var pageSize = Math.Max(activeOptions.MaxResults, 1);
+            var pageEntries = ParseVideos(result.StandardOutput).ToArray();
+            var videos = pageEntries
                 .Where(video => !video.IsShort)
-                .Take(activeOptions.MaxResults)
+                .Take(pageSize)
                 .ToList();
+            var continuationToken = pageEntries.Length == pageSize
+                ? (request.StartIndex + pageSize).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : null;
 
             return videos.Count == 0
                 ? new SearchResultPage(videos, "No video results found.")
                 : new SearchResultPage(videos,
-                    $"Found {videos.Count} video result{(videos.Count == 1 ? string.Empty : "s")}.");
+                    $"Found {videos.Count} video result{(videos.Count == 1 ? string.Empty : "s")}.",
+                    ContinuationToken: continuationToken);
         }
         catch (Win32Exception exception)
         {

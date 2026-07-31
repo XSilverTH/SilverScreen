@@ -14,9 +14,9 @@ namespace SilverScreen.Views.Home;
 public partial class HomeView : ViewBase<Box>
 {
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly Button _loadMoreButton;
     private readonly ILogger _logger = Log.ForContext<HomeView>();
     private readonly ScrolledWindow _scrolledWindow;
+    private readonly Adjustment? _vadjustment;
     private readonly Box _searchBar;
     private readonly SearchEntry _searchEntry;
     private readonly SearchViewModel _searchViewModel;
@@ -50,7 +50,9 @@ public partial class HomeView : ViewBase<Box>
         _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
         _statusPage = GetRequiredObject<StatusPage>("home_status_page");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("home_scrolled_window");
-        _loadMoreButton = GetRequiredObject<Button>("home_load_more_button");
+        _vadjustment = _scrolledWindow.Vadjustment;
+        if (_vadjustment is not null)
+            _vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _videoIds = StringList.New([]);
         _videoSelection = NoSelection.New(_videoIds);
@@ -79,7 +81,7 @@ public partial class HomeView : ViewBase<Box>
     public Task RefreshAsync()
     {
         return _viewModel.State is
-            { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
+        { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
             : Task.CompletedTask;
     }
@@ -122,10 +124,18 @@ public partial class HomeView : ViewBase<Box>
         }
     }
 
-    private void OnHomeLoadMoreButtonClicked(object? sender, EventArgs args)
+    private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        _ = _viewModel.LoadMoreAsync();
+        if (_disposed || _vadjustment is null ||
+            _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 240)
+            return;
+
+        if (IsSearchActive)
+            _ = _searchViewModel.LoadMoreAsync();
+        else
+            _ = _viewModel.LoadMoreAsync();
     }
+
 
     private void OnStateChanged(object? sender, HomeFeedState state)
     {
@@ -156,10 +166,8 @@ public partial class HomeView : ViewBase<Box>
         ApplyVideos(state.Videos);
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
-        var isLoading = state.IsLoading || state.IsLoadingMore;
         _statusHost.Visible = false;
         _scrolledWindow.Visible = false;
-        _loadMoreButton.Visible = false;
 
         if (!hasDisplayedVideos)
         {
@@ -168,19 +176,14 @@ public partial class HomeView : ViewBase<Box>
         }
 
         _scrolledWindow.Visible = true;
-
-        if (!state.HasContinuation) return;
-        _loadMoreButton.Label = isLoading && state.IsLoadingMore ? "Loading more…" : "Load more";
-        _loadMoreButton.Sensitive = !isLoading;
-        _loadMoreButton.Visible = true;
     }
 
     private void RenderSearch(SearchViewState state)
     {
+
         ApplyVideos(state.Videos);
         _statusHost.Visible = false;
         _scrolledWindow.Visible = false;
-        _loadMoreButton.Visible = false;
 
         if (_displayedVideos.Length > 0)
         {
@@ -309,6 +312,8 @@ public partial class HomeView : ViewBase<Box>
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
         _searchViewModel.StateChanged -= OnSearchStateChanged;
+        if (_vadjustment is not null)
+            _vadjustment.OnValueChanged -= OnScrollValueChanged;
         _searchViewModel.Dispose();
 
         // Dropping the factory tears down its live/recycled list items while the

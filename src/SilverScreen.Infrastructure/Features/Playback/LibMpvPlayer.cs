@@ -328,8 +328,15 @@ public sealed class LibMpvPlayer : IDisposable
             _resumeAfterRenderer = false;
             _state = _state with
             {
-                PlaylistIndex = -1, Position = TimeSpan.Zero, Duration = TimeSpan.Zero, IsPaused = true,
-                IsSeekable = false, HasMedia = false, IsLoading = false, SubtitleTracks = [], Chapters = []
+                PlaylistIndex = -1,
+                Position = TimeSpan.Zero,
+                Duration = TimeSpan.Zero,
+                IsPaused = true,
+                IsSeekable = false,
+                HasMedia = false,
+                IsLoading = false,
+                SubtitleTracks = [],
+                Chapters = []
             };
         }
 
@@ -458,7 +465,10 @@ public sealed class LibMpvPlayer : IDisposable
         {
             _state = _state with
             {
-                HasMedia = true, IsLoading = false, SubtitleTracks = subtitleTracks, Chapters = chapters
+                HasMedia = true,
+                IsLoading = false,
+                SubtitleTracks = subtitleTracks,
+                Chapters = chapters
             };
             reload = _reload;
         }

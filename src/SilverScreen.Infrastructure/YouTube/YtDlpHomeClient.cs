@@ -31,14 +31,13 @@ public sealed class YtDlpHomeClient(
     public async Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
         CancellationToken cancellationToken = default)
     {
+        const int pageSize = 20;
+        var startIndex = 1;
+        if (!string.IsNullOrEmpty(continuationToken) &&
+            (!int.TryParse(continuationToken, out startIndex) || startIndex < 1))
+            return new HomeFeedResult([], null, true, "Invalid recommendation continuation.", false);
+
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
-        if (!string.IsNullOrEmpty(continuationToken))
-            return new HomeFeedResult(
-                [],
-                null,
-                true,
-                "Continuations are not supported.",
-                false);
 
         var cookies = _sessionService.GetManualSessionCookies();
         if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
@@ -59,32 +58,32 @@ public sealed class YtDlpHomeClient(
                 true);
 
         var (firstResult, firstVideos) =
-            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, cancellationToken).ConfigureAwait(false);
+            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken).ConfigureAwait(false);
 
         if (!firstResult.IsSuccess || firstVideos.Count > 0)
             return firstResult;
 
         var (retryResult, retryVideos) =
-            await ExecuteYtDlpAsync(executablePath, null, cancellationToken).ConfigureAwait(false);
+            await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken).ConfigureAwait(false);
         if (!retryResult.IsSuccess)
             return retryResult;
 
         return new HomeFeedResult(
             retryVideos,
-            null,
+            GetNextContinuationToken(startIndex, retryVideos.Count, pageSize),
             true,
             "Public recommendations are displayed.",
             false);
     }
 
     private async Task<(HomeFeedResult Result, IReadOnlyList<VideoSummary> Videos)> ExecuteYtDlpAsync(
-        string executablePath, string? cookieFilePath, CancellationToken cancellationToken)
+        string executablePath, string? cookieFilePath, int startIndex, CancellationToken cancellationToken)
     {
         ProcessResult processResult;
         try
         {
             processResult = await _runner.RunAsync(
-                    YtDlpCommandBuilder.BuildHome(executablePath, cookieFilePath),
+                    YtDlpCommandBuilder.BuildHome(executablePath, startIndex, cookieFilePath),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -121,12 +120,13 @@ public sealed class YtDlpHomeClient(
 
         try
         {
-            var videos = YtDlpVideoParser.Parse(processResult.StandardOutput)
+            var pageEntries = YtDlpVideoParser.Parse(processResult.StandardOutput).ToArray();
+            var videos = pageEntries
                 .Where(video => !video.IsShort)
                 .ToArray();
             return (new HomeFeedResult(
                 videos,
-                null,
+                GetNextContinuationToken(startIndex, pageEntries.Length, pageSize: 20),
                 true,
                 "Recommendations loaded successfully.",
                 false), videos);
@@ -138,6 +138,12 @@ public sealed class YtDlpHomeClient(
         }
     }
 
+    private static string? GetNextContinuationToken(int startIndex, int resultCount, int pageSize)
+    {
+        return resultCount == pageSize
+            ? (startIndex + pageSize).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
     private static (HomeFeedResult Result, IReadOnlyList<VideoSummary> Videos) Failure(string message)
     {
         return (new HomeFeedResult([], null, false, message, false), []);

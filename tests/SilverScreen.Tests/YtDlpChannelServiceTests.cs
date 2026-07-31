@@ -30,7 +30,7 @@ public sealed class YtDlpChannelServiceTests
         var service = CreateService(runner);
 
         var page = await service.GetChannelAsync("https://www.youtube.com/@example", "Fallback",
-            ChannelVideoSort.Popular, CancellationToken.None);
+            ChannelVideoSort.Popular, 1, CancellationToken.None);
 
         Assert.True(page.IsSuccess);
         Assert.Equal("Example Channel", page.Name);
@@ -52,7 +52,7 @@ public sealed class YtDlpChannelServiceTests
         var runner = new CapturingRunner(new ProcessResult(0, "{ \"entries\": [] }", ""));
         var service = CreateService(runner);
 
-        await service.GetChannelAsync("https://www.youtube.com/@example", "Example", sort, CancellationToken.None);
+        await service.GetChannelAsync("https://www.youtube.com/@example", "Example", sort, 1, CancellationToken.None);
 
         Assert.Equal(expectedUrl, runner.StartInfo!.ArgumentList.Last());
     }

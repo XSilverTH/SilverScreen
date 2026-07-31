@@ -8,7 +8,9 @@ namespace SilverScreen.ViewModels;
 public sealed record SearchViewState(
     IReadOnlyList<VideoSummary> Videos,
     string Summary,
-    bool IsLoading);
+    bool IsLoading,
+    bool IsLoadingMore = false,
+    bool HasMore = false);
 
 public sealed class SearchViewModel(
     ISearchService searchService,
@@ -19,6 +21,8 @@ public sealed class SearchViewModel(
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
+    private string? _continuationToken;
+    private string? _query;
 
     public SearchViewState State
     {
@@ -27,14 +31,17 @@ public sealed class SearchViewModel(
         {
             field = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(Summary));
             OnPropertyChanged(nameof(IsLoading));
+            OnPropertyChanged(nameof(IsLoadingMore));
+            OnPropertyChanged(nameof(HasMore));
             StateChanged?.Invoke(this, value);
         }
     } = new([], "Search results will appear here.", false);
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
+    public bool IsLoadingMore => State.IsLoadingMore;
+    public bool HasMore => State.HasMore;
 
 
     public void Dispose()
@@ -58,6 +65,8 @@ public sealed class SearchViewModel(
         _requestCancellation?.Cancel();
         _requestCancellation?.Dispose();
         _requestCancellation = null;
+        _continuationToken = null;
+        _query = null;
         State = new SearchViewState([], "Search results will appear here.", false);
     }
 
@@ -109,29 +118,31 @@ public sealed class SearchViewModel(
         }
     }
 
-    private async Task SearchPlainTextAsync(string query)
+    public async Task LoadMoreAsync()
     {
         ThrowIfDisposed();
-        if (_requestCancellation is not null)
-            await _requestCancellation.CancelAsync();
+        if (State is { IsLoading: true } or { IsLoadingMore: true } || _query is null ||
+            !int.TryParse(_continuationToken, out var startIndex) || startIndex < 1)
+            return;
 
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
-
-        var searching = $"Searching YouTube for “{query}”…";
-        State = new SearchViewState([], searching, true);
-        shell.ReportStatus(searching);
+        var loadingState = State with { IsLoadingMore = true, Summary = "Loading more results…" };
+        State = loadingState;
+        shell.ReportStatus(loadingState.Summary);
 
         try
         {
-            var result = await searchService.SearchAsync(new SearchRequest(query), token).ConfigureAwait(false);
+            var result = await searchService.SearchAsync(new SearchRequest(_query, startIndex), token).ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
 
+            var videos = State.Videos.Concat(NormalizeVideos(result.Videos)).DistinctBy(video => video.Id).ToArray();
+            _continuationToken = result.IsSuccess ? result.ContinuationToken : _continuationToken;
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
-            State = new SearchViewState(NormalizeVideos(result.Videos), summary, false);
+            State = new SearchViewState(videos, summary, false, false, result.IsSuccess && _continuationToken is not null);
             shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -143,6 +154,49 @@ public sealed class SearchViewModel(
                 return;
 
             const string message = "Search could not be completed.";
+            State = State with { Summary = message, IsLoadingMore = false };
+            shell.ReportStatus(message);
+        }
+    }
+
+    private async Task SearchPlainTextAsync(string query)
+    {
+        ThrowIfDisposed();
+        if (_requestCancellation is not null)
+            await _requestCancellation.CancelAsync();
+
+        _requestCancellation?.Dispose();
+        _requestCancellation = new CancellationTokenSource();
+        var token = _requestCancellation.Token;
+        var generation = ++_requestGeneration;
+
+        _query = query;
+        _continuationToken = null;
+        var searching = $"Searching YouTube for “{query}”…";
+        State = new SearchViewState([], searching, true);
+
+        try
+        {
+            var result = await searchService.SearchAsync(new SearchRequest(query), token).ConfigureAwait(false);
+            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
+                return;
+
+            _continuationToken = result.IsSuccess ? result.ContinuationToken : null;
+            var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
+            State = new SearchViewState(NormalizeVideos(result.Videos), summary, false, false,
+                result.IsSuccess && _continuationToken is not null);
+            shell.ReportStatus(summary);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+        catch (Exception)
+        {
+            if (generation != _requestGeneration || _disposed)
+                return;
+
+            const string message = "Search could not be completed.";
+            _continuationToken = null;
             State = new SearchViewState([], message, false);
             shell.ReportStatus(message);
         }

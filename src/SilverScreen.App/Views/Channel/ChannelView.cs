@@ -37,13 +37,18 @@ public partial class ChannelView : ViewBase<Box>
     private readonly Box _revealClue;
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Adjustment? _vadjustment;
+    private readonly EventControllerScroll _scrollController;
     private readonly EventControllerMotion _clueMotionController;
     private readonly GestureClick _clueClickGesture;
 
     private bool _isHeaderCollapsed;
     private double _lastScrollY;
+    private bool _isUserScrollingUp;
+    private long _lastUserScrollTicks;
+    private long _lastHeaderStateChangeTicks;
     private const double CollapseThreshold = 50.0;
-
+    private const double TopRevealThreshold = 1.0;
+    private const long LayoutStabilizationMs = 350;
     private readonly ChannelViewModel _viewModel;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _videoActions;
@@ -83,7 +88,7 @@ public partial class ChannelView : ViewBase<Box>
         _channelName = GetRequiredObject<Label>("channel_name");
         _channelHandle = GetRequiredObject<Label>("channel_handle");
         _subscribersLabel = GetRequiredObject<Label>("channel_subscribers");
-    _metaDot1 = GetRequiredObject<Label>("channel_meta_dot1");
+        _metaDot1 = GetRequiredObject<Label>("channel_meta_dot1");
         _descriptionLabel = GetRequiredObject<Label>("channel_description");
         _sortDropdown = GetRequiredObject<DropDown>("channel_sort_dropdown");
         _stack = GetRequiredObject<Stack>("channel_stack");
@@ -100,6 +105,11 @@ public partial class ChannelView : ViewBase<Box>
         {
             _vadjustment.OnValueChanged += OnScrollValueChanged;
         }
+        _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
+        _scrollController.SetPropagationPhase(PropagationPhase.Capture);
+        _scrollController.OnScroll += OnScrollEvent;
+        _scrolledWindow.AddController(_scrollController);
+
 
         _clueMotionController = EventControllerMotion.New();
         _clueMotionController.OnEnter += OnCluePointerEnter;
@@ -130,15 +140,55 @@ public partial class ChannelView : ViewBase<Box>
         _backCallback?.Invoke();
         BackRequested?.Invoke(this, EventArgs.Empty);
     }
+    private bool OnScrollEvent(EventControllerScroll sender, EventControllerScroll.ScrollSignalArgs args)
+    {
+        if (_disposed) return false;
+
+        if (args.Dy < -0.01)
+        {
+            _isUserScrollingUp = true;
+            _lastUserScrollTicks = Environment.TickCount64;
+        }
+        else if (args.Dy > 0.01)
+        {
+            _isUserScrollingUp = false;
+            _lastUserScrollTicks = Environment.TickCount64;
+        }
+
+        return false;
+    }
+
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
         if (_disposed || _vadjustment is null) return;
 
         double currentY = _vadjustment.Value;
+        if (currentY + _vadjustment.PageSize >= _vadjustment.Upper - 240)
+            _ = _viewModel.LoadMoreAsync();
+        long now = Environment.TickCount64;
 
-        if (!_isHeaderCollapsed && currentY > CollapseThreshold && currentY > _lastScrollY)
+        if ((now - _lastHeaderStateChangeTicks) < LayoutStabilizationMs)
         {
-            SetHeaderCollapsed(true);
+            _lastScrollY = currentY;
+            return;
+        }
+
+        if (!_isHeaderCollapsed)
+        {
+            if (currentY > CollapseThreshold && currentY > _lastScrollY)
+            {
+                SetHeaderCollapsed(true);
+            }
+        }
+        else
+        {
+            bool reachesTop = currentY <= TopRevealThreshold;
+            bool userMovingUp = currentY < _lastScrollY || (_isUserScrollingUp && (now - _lastUserScrollTicks) < 500);
+
+            if (reachesTop && userMovingUp)
+            {
+                SetHeaderCollapsed(false);
+            }
         }
 
         _lastScrollY = currentY;
@@ -164,10 +214,6 @@ public partial class ChannelView : ViewBase<Box>
         if (_disposed || !_isHeaderCollapsed) return;
 
         SetHeaderCollapsed(false);
-        if (_vadjustment is not null)
-        {
-            _lastScrollY = _vadjustment.Value;
-        }
     }
 
     private void SetHeaderCollapsed(bool collapsed)
@@ -175,6 +221,11 @@ public partial class ChannelView : ViewBase<Box>
         _isHeaderCollapsed = collapsed;
         _headerRevealer.RevealChild = !collapsed;
         _clueRevealer.RevealChild = collapsed;
+        _lastHeaderStateChangeTicks = Environment.TickCount64;
+        if (_vadjustment is not null)
+        {
+            _lastScrollY = _vadjustment.Value;
+        }
     }
 
     private void OnStateChanged(object? sender, ChannelViewState state)
@@ -481,6 +532,10 @@ public partial class ChannelView : ViewBase<Box>
         {
             _vadjustment.OnValueChanged -= OnScrollValueChanged;
         }
+        _scrollController.OnScroll -= OnScrollEvent;
+        _scrolledWindow.RemoveController(_scrollController);
+        _scrollController.Dispose();
+
 
         _clueMotionController.OnEnter -= OnCluePointerEnter;
         _clueMotionController.OnMotion -= OnCluePointerMotion;

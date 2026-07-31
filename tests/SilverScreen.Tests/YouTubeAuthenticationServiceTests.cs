@@ -68,7 +68,7 @@ public sealed class YouTubeAuthenticationServiceTests
         var handler = new RecordingHandler(_ => Task.FromResult(BootstrapResponse()));
         using var client = new HttpClient(handler);
         using var authentication = new YouTubeAuthenticationService(session, new YouTubeWebOptions { AuthUser = 2 })
-            { TimeSource = () => 1700000000L };
+        { TimeSource = () => 1700000000L };
         var authenticated = await authentication.GetCurrentAsync(client, true);
         Assert.NotNull(authenticated);
         var credentials = authenticated!.CredentialSnapshot;
