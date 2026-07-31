@@ -25,6 +25,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly SwitchRow _sponsorBlockAutoSkipRow;
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly SwitchRow _sponsorBlockDisplayRow;
+    private readonly SwitchRow _resumePlaybackAutomaticallyRow;
+    private readonly SwitchRow _resumePlaybackOnDemandRow;
+
     private readonly StringList _themeModel;
     private readonly ComboRow _themeRow;
     private readonly PreferencesViewModel _viewModel;
@@ -54,6 +57,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         _playbackBackendModel = GetRequiredObject<StringList>("playback_backend_model");
         _sponsorBlockAutoSkipRow = GetRequiredObject<SwitchRow>("sponsorblock_auto_skip_row");
         _sponsorBlockDisplayRow = GetRequiredObject<SwitchRow>("sponsorblock_display_row");
+        _resumePlaybackAutomaticallyRow = GetRequiredObject<SwitchRow>("resume_playback_automatically_row");
+        _resumePlaybackOnDemandRow = GetRequiredObject<SwitchRow>("resume_playback_on_demand_row");
+
         _sponsorBlockCategoryRows = new Dictionary<string, SwitchRow>
         {
             [SponsorBlockCategories.Sponsor] = GetRequiredObject<SwitchRow>("sponsorblock_sponsor_row"),
@@ -94,6 +100,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             _discordRichPresenceRow.Active = state.DiscordRichPresenceEnabled;
             _sponsorBlockAutoSkipRow.Active = state.SponsorBlockAutoSkipEnabled;
             _sponsorBlockDisplayRow.Active = state.SponsorBlockSegmentDisplayEnabled;
+            _resumePlaybackAutomaticallyRow.Active = state.ResumePlaybackAutomatically;
+            _resumePlaybackOnDemandRow.Active = state.ResumePlaybackOnDemand;
+
             foreach (var (category, row) in _sponsorBlockCategoryRows)
                 row.Active = state.SponsorBlockCategories.Contains(category, StringComparer.Ordinal);
         }
@@ -129,7 +138,12 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ? PreferencesMutuallyExclusiveOption.MarkWatchedVideos
             : ReferenceEquals(sender, _youTubePlaybackTelemetryRow)
                 ? PreferencesMutuallyExclusiveOption.YouTubePlaybackTelemetry
-                : (PreferencesMutuallyExclusiveOption?)null;
+                : ReferenceEquals(sender, _resumePlaybackAutomaticallyRow)
+                    ? PreferencesMutuallyExclusiveOption.ResumePlaybackAutomatically
+                    : ReferenceEquals(sender, _resumePlaybackOnDemandRow)
+                        ? PreferencesMutuallyExclusiveOption.ResumePlaybackOnDemand
+                        : (PreferencesMutuallyExclusiveOption?)null;
+
         Save(changedOption);
     }
 
@@ -165,6 +179,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             DiscordRichPresenceEnabled = _discordRichPresenceRow.Active,
             SponsorBlockAutoSkipEnabled = _sponsorBlockAutoSkipRow.Active,
             SponsorBlockSegmentDisplayEnabled = _sponsorBlockDisplayRow.Active,
+            ResumePlaybackAutomatically = _resumePlaybackAutomaticallyRow.Active,
+            ResumePlaybackOnDemand = _resumePlaybackOnDemandRow.Active,
             SponsorBlockCategories =
             [
                 .. _sponsorBlockCategoryRows

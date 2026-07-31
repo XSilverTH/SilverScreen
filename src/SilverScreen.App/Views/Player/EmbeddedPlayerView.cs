@@ -55,6 +55,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Label _speedLabel;
     private readonly Scale _speedScale;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
+    private readonly PlayerResumeController _resumeController;
+
     private readonly PlayerSubtitleController _subtitleController;
     private readonly Scale _timeline;
     private readonly IWatchProgressService _watchProgress;
@@ -110,6 +112,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timeline = GetRequiredObject<Scale>("player_timeline");
         var timelineOverlay = GetRequiredObject<Overlay>("player_timeline_overlay");
         var sponsorBlockSkipButton = GetRequiredObject<Button>("player_sponsorblock_skip_button");
+        var resumeButton = GetRequiredObject<Button>("player_resume_button");
+        var restartButton = GetRequiredObject<Button>("player_restart_button");
+
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
         _channelLabel = GetRequiredObject<Label>("player_channel_label");
@@ -134,6 +139,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             () => _timelinePlaybackPosition, SeekAbsolute, RegisterActivity);
         _sponsorBlockController = new PlayerSponsorBlockController(sponsorBlock, preferences, _timeline,
             timelineOverlay, sponsorBlockSkipButton, SeekAbsolute);
+        _resumeController = new PlayerResumeController(preferences, watchProgress, resumeButton, restartButton,
+            SeekAbsolute);
+
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
             if (!_disposed) action();
@@ -158,6 +166,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleController.Dispose();
         _engagement.Dispose();
         _sponsorBlockController.Dispose();
+        _resumeController.Dispose();
+
         _chapterOverlay.Dispose();
         _commentsView.Dispose();
         _disposed = true;
@@ -214,6 +224,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             RegisterActivity();
             _chapterOverlay.Update([], TimeSpan.Zero);
             _sponsorBlockController.Load(firstVideo);
+            _resumeController.Load(firstVideo);
+
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
             _queueControls.SetVisible(request.Videos.Length > 1);
@@ -333,11 +345,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool HandleKeyboardShortcut(uint keyval)
     {
         if (!_hasMedia) return false;
-        if (keyval is KEY_Return or KEY_KP_Enter && _sponsorBlockController.TrySkipManualSegment())
+        if (keyval is KEY_Return or KEY_KP_Enter &&
+            (_resumeController.TryResume() || _sponsorBlockController.TrySkipManualSegment()))
         {
             RegisterActivity();
             return true;
         }
+
 
         if (!_shortcutMap.TryGetValue(keyval, out var action)) return false;
 
@@ -465,6 +479,18 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (_sponsorBlockController.TrySkipManualSegment())
             RegisterActivity();
     }
+    private void OnResumeButtonClicked(object? sender, EventArgs args)
+    {
+        if (_resumeController.TryResume())
+            RegisterActivity();
+    }
+
+    private void OnRestartButtonClicked(object? sender, EventArgs args)
+    {
+        if (_resumeController.TryRestart())
+            RegisterActivity();
+    }
+
 
     private void OnSubtitleButtonClicked(object? sender, EventArgs args)
     {
@@ -545,6 +571,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _speed = state.Speed;
         if (_request is { } playbackRequest && state.HasMedia)
         {
+            if (state.PlaylistIndex is >= 0 and < int.MaxValue &&
+                state.PlaylistIndex < playbackRequest.Videos.Length)
+                _resumeController.Load(playbackRequest.Videos[state.PlaylistIndex]);
             var playbackState = new PlaybackPresenceState(state.PlaylistIndex, state.Position,
                 state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow);
             _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
@@ -585,9 +614,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             {
                 _engagement.Load(video);
                 _sponsorBlockController.Load(video);
+                _resumeController.Load(video);
+
             }
 
             _sponsorBlockController.UpdatePlayback(state, video.Id);
+            _resumeController.UpdatePlayback(state, video.Id);
+
 
             if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
             _commentsVideoId = video.Id;
@@ -611,6 +644,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         ResetTransport();
         _engagement.Clear();
         _sponsorBlockController.Clear();
+        _resumeController.Clear();
+
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
@@ -630,6 +665,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _queueControls.SetVisible(false);
         _engagement.Clear();
         _sponsorBlockController.Clear();
+        _resumeController.Clear();
+
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;

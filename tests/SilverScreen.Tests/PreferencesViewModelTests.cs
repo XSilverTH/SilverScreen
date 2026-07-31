@@ -83,6 +83,34 @@ public sealed class PreferencesViewModelTests
     }
 
     [Fact]
+    public void Save_WhenAutomaticResumeIsEnabled_DisablesOnDemandResume()
+    {
+        var service = new FakePreferencesService(new AppPreferences { ResumePlaybackOnDemand = true });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackAutomatically = true },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackAutomatically);
+
+        Assert.True(result.Succeeded);
+        Assert.True(service.Saved!.ResumePlaybackAutomatically);
+        Assert.False(service.Saved.ResumePlaybackOnDemand);
+    }
+
+    [Fact]
+    public void Save_WhenOnDemandResumeIsEnabled_DisablesAutomaticResume()
+    {
+        var service = new FakePreferencesService(new AppPreferences { ResumePlaybackAutomatically = true });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackOnDemand = true },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackOnDemand);
+
+        Assert.True(result.Succeeded);
+        Assert.False(service.Saved!.ResumePlaybackAutomatically);
+        Assert.True(service.Saved.ResumePlaybackOnDemand);
+    }
+
+    [Fact]
     public void Save_WhenPersistenceFails_ReturnsRevertedStateAndExactStatusMessage()
     {
         var original = new AppPreferences { Theme = "Light", MaxResults = 12 };

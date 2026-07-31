@@ -67,6 +67,23 @@ Adw.PreferencesDialog PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
+      title: "Resume Playback";
+      description: "Continue previously watched videos from where you left off";
+
+      Adw.SwitchRow resume_playback_automatically_row {
+        notify => $OnRowNotify();
+        title: "Resume playback automatically";
+        subtitle: "Start videos at their last saved position";
+      }
+
+      Adw.SwitchRow resume_playback_on_demand_row {
+        notify => $OnRowNotify();
+        title: "Offer to resume playback";
+        subtitle: "Show a button to jump to your last saved position";
+      }
+    }
+
+    Adw.PreferencesGroup {
       title: "SponsorBlock";
       description: "Uses SponsorBlock data from https://sponsor.ajay.app/";
 

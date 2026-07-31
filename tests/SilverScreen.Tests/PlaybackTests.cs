@@ -251,6 +251,11 @@ public sealed class PlaybackTests
             return null;
         }
 
+        public double? GetResumeFraction(string videoId)
+        {
+            return null;
+        }
+
         public void Update(PlaybackRequest request, PlaybackPresenceState state)
         {
             Updates.Add((request, state));

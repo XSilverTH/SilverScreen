@@ -19,6 +19,9 @@ public sealed record PreferencesEditorState
     public bool DiscordRichPresenceEnabled { get; init; }
     public bool SponsorBlockAutoSkipEnabled { get; init; }
     public bool SponsorBlockSegmentDisplayEnabled { get; init; } = true;
+    public bool ResumePlaybackAutomatically { get; init; }
+    public bool ResumePlaybackOnDemand { get; init; }
+
 
     public IReadOnlyList<string> SponsorBlockCategories { get; init; } =
         [.. Core.Models.SponsorBlockCategories.All];
@@ -34,7 +37,9 @@ public sealed record PreferencesSaveResult(
 public enum PreferencesMutuallyExclusiveOption
 {
     MarkWatchedVideos,
-    YouTubePlaybackTelemetry
+    YouTubePlaybackTelemetry,
+    ResumePlaybackAutomatically,
+    ResumePlaybackOnDemand
 }
 
 public sealed class PreferencesViewModel
@@ -88,9 +93,14 @@ public sealed class PreferencesViewModel
                 state with { YouTubePlaybackTelemetryEnabled = false },
             PreferencesMutuallyExclusiveOption.YouTubePlaybackTelemetry when state.YouTubePlaybackTelemetryEnabled =>
                 state with { MarkWatchedVideos = false },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackAutomatically when state.ResumePlaybackAutomatically =>
+                state with { ResumePlaybackOnDemand = false },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackOnDemand when state.ResumePlaybackOnDemand =>
+                state with { ResumePlaybackAutomatically = false },
             _ => state with
             {
-                MarkWatchedVideos = state is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false }
+                MarkWatchedVideos = state is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
+                ResumePlaybackOnDemand = state.ResumePlaybackAutomatically ? false : state.ResumePlaybackOnDemand
             }
         };
     }
@@ -112,6 +122,10 @@ public sealed class PreferencesViewModel
             DiscordRichPresenceEnabled = preferences.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = preferences.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = preferences.SponsorBlockSegmentDisplayEnabled,
+            ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
+            ResumePlaybackOnDemand = preferences is
+                { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
             PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage
         };
@@ -136,6 +150,10 @@ public sealed class PreferencesViewModel
             DiscordRichPresenceEnabled = state.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = state.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = state.SponsorBlockSegmentDisplayEnabled,
+            ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,
+            ResumePlaybackOnDemand = state is
+                { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = current.PreferredSubtitleLanguage
         };

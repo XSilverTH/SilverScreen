@@ -48,6 +48,9 @@ public sealed class PreferencesTests : IDisposable
             DiscordRichPresenceEnabled = true,
             SponsorBlockAutoSkipEnabled = true,
             SponsorBlockSegmentDisplayEnabled = false,
+            ResumePlaybackAutomatically = true,
+            ResumePlaybackOnDemand = false,
+
             SponsorBlockCategories = [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro]
         };
 
@@ -71,6 +74,9 @@ public sealed class PreferencesTests : IDisposable
         Assert.True(loaded.DiscordRichPresenceEnabled);
         Assert.True(loaded.SponsorBlockAutoSkipEnabled);
         Assert.False(loaded.SponsorBlockSegmentDisplayEnabled);
+        Assert.True(loaded.ResumePlaybackAutomatically);
+        Assert.False(loaded.ResumePlaybackOnDemand);
+
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
 

@@ -63,4 +63,17 @@ public sealed class EmbeddedPlayerViewTests
 
         Assert.Equal(expected, PlayerSponsorBlockController.ManualSponsorBlockSkipEnabled(preferences));
     }
+
+    [Theory]
+    [InlineData(0.25, 240, 60)]
+    [InlineData(0.5, 7, 0)]
+    public void TryGetResumePosition_RequiresASubstantialSavedPosition(double fraction, double durationSeconds,
+        double expectedPositionSeconds)
+    {
+        var canResume = PlayerResumeController.TryGetResumePosition(fraction, TimeSpan.FromSeconds(durationSeconds),
+            out var position);
+
+        Assert.Equal(expectedPositionSeconds > 0, canResume);
+        Assert.Equal(expectedPositionSeconds, position.TotalSeconds);
+    }
 }

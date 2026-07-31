@@ -126,6 +126,10 @@ public sealed class FilePreferencesService : IPreferencesService
             DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = source.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = source.SponsorBlockSegmentDisplayEnabled,
+            ResumePlaybackAutomatically = source.ResumePlaybackAutomatically,
+            ResumePlaybackOnDemand = source is
+                { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+
             SponsorBlockCategories = [.. source.SponsorBlockCategories]
         };
     }
@@ -146,8 +150,11 @@ public sealed class FilePreferencesService : IPreferencesService
                left.DiscordRichPresenceEnabled == right.DiscordRichPresenceEnabled &&
                left.SponsorBlockAutoSkipEnabled == right.SponsorBlockAutoSkipEnabled &&
                left.SponsorBlockSegmentDisplayEnabled == right.SponsorBlockSegmentDisplayEnabled &&
+               left.ResumePlaybackAutomatically == right.ResumePlaybackAutomatically &&
+               left.ResumePlaybackOnDemand == right.ResumePlaybackOnDemand &&
                left.SponsorBlockCategories.SequenceEqual(right.SponsorBlockCategories,
                    StringComparer.Ordinal);
+
     }
 
     private static string GetDefaultPreferencesFilePath()

@@ -9,5 +9,7 @@ public interface IWatchProgressService
 
     double? GetFraction(string videoId);
 
+    double? GetResumeFraction(string videoId);
+
     void Update(PlaybackRequest request, PlaybackPresenceState state);
 }

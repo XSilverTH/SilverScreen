@@ -406,14 +406,30 @@ Adw.OverlaySplitView EmbeddedPlayerView {
   }
 
     [overlay]
-    Gtk.Button player_sponsorblock_skip_button {
-      clicked => $OnSponsorBlockSkipButtonClicked();
+    Gtk.Box player_prompt_stack {
+      orientation: vertical;
+      spacing: 8;
       halign: end;
       valign: end;
-      margin-end: 32;
-      margin-bottom: 150;
-      visible: false;
-      styles ["player-sponsorblock-skip-button"]
+      styles ["player-prompt-stack"]
+
+      Gtk.Button player_sponsorblock_skip_button {
+        clicked => $OnSponsorBlockSkipButtonClicked();
+        visible: false;
+        styles ["player-sponsorblock-skip-button"]
+      }
+
+      Gtk.Button player_resume_button {
+        clicked => $OnResumeButtonClicked();
+        visible: false;
+        styles ["player-resume-prompt-button"]
+      }
+
+      Gtk.Button player_restart_button {
+        clicked => $OnRestartButtonClicked();
+        visible: false;
+        styles ["player-resume-restart-button"]
+      }
     }
   };
 
