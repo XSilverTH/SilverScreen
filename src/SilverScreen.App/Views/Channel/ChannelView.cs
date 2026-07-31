@@ -135,6 +135,15 @@ public partial class ChannelView : ViewBase<Box>
         Render(_viewModel.State);
     }
 
+    public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
+
+    public event EventHandler<bool>? RefreshLoadingChanged;
+
+    public Task RefreshAsync()
+    {
+        return _viewModel.RefreshAsync();
+    }
+
     private void OnBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
         _backCallback?.Invoke();
@@ -233,7 +242,10 @@ public partial class ChannelView : ViewBase<Box>
         Functions.IdleAdd(0, () =>
         {
             if (!_disposed)
+            {
+                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
                 Render(state);
+            }
             return false;
         });
     }

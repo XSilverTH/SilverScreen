@@ -70,7 +70,9 @@ public partial class HomeView : ViewBase<Box>
         Render(_viewModel.State);
     }
 
-    public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
+    public bool IsLoading => IsSearchActive
+        ? _searchViewModel.State is { IsLoading: true } or { IsLoadingMore: true }
+        : _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
 
     public bool IsSearchActive { get; private set; }
 
@@ -80,6 +82,9 @@ public partial class HomeView : ViewBase<Box>
 
     public Task RefreshAsync()
     {
+        if (IsSearchActive)
+            return _searchViewModel.RefreshAsync();
+
         return _viewModel.State is
         { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
@@ -96,6 +101,7 @@ public partial class HomeView : ViewBase<Box>
         _searchViewModel.Reset();
         RenderSearch(_searchViewModel.State);
         SearchModeChanged?.Invoke(this, true);
+        RefreshLoadingChanged?.Invoke(this, IsLoading);
         _searchEntry.GrabFocus();
     }
 
@@ -110,6 +116,7 @@ public partial class HomeView : ViewBase<Box>
         _searchBar.Visible = false;
         Render(_viewModel.State);
         SearchModeChanged?.Invoke(this, false);
+        RefreshLoadingChanged?.Invoke(this, IsLoading);
     }
 
     private async void OnHomeSearchEntryActivated(object? sender, EventArgs args)
@@ -141,10 +148,11 @@ public partial class HomeView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed) return false;
-            RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
             if (!IsSearchActive)
+            {
+                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
                 Render(state);
+            }
 
             return false;
         });
@@ -154,8 +162,14 @@ public partial class HomeView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed && IsSearchActive)
+            if (_disposed)
+                return false;
+
+            if (IsSearchActive)
+            {
+                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
                 RenderSearch(state);
+            }
 
             return false;
         });

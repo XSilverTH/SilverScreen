@@ -92,6 +92,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
         _home.SearchModeChanged += OnHomeSearchModeChanged;
+        _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         UpdateHomeRefreshButton(_home.IsLoading);
         UpdateSearchButton(_home.IsSearchActive);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
@@ -147,6 +148,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         }
 
         _stack.VisibleChildName = "channel";
+        UpdateHomeRefreshButton(_channel.IsLoading);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName).ConfigureAwait(false);
     }
 
@@ -154,6 +156,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         _channelViewModel.Clear();
         _stack.VisibleChildName = "home";
+        UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OpenEmbeddedPlayer()
@@ -180,13 +183,22 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
-        _ = _home.RefreshAsync();
+        if (_stack.VisibleChildName == "channel")
+            _ = _channel.RefreshAsync();
+        else
+            _ = _home.RefreshAsync();
     }
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed)
-            UpdateHomeRefreshButton(isLoading);
+        if (!_closed && _stack.VisibleChildName != "channel")
+            UpdateHomeRefreshButton(_home.IsLoading);
+    }
+
+    private void OnChannelRefreshLoadingChanged(object? sender, bool isLoading)
+    {
+        if (!_closed && _stack.VisibleChildName == "channel")
+            UpdateHomeRefreshButton(_channel.IsLoading);
     }
 
     private void UpdateHomeRefreshButton(bool isLoading)
@@ -207,7 +219,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnHomeSearchModeChanged(object? sender, bool isSearchActive)
     {
         if (!_closed)
+        {
             UpdateSearchButton(isSearchActive);
+            if (_stack.VisibleChildName != "channel")
+                UpdateHomeRefreshButton(_home.IsLoading);
+        }
     }
 
     private void UpdateSearchButton(bool isSearchActive)
@@ -325,6 +341,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_closed) return false;
         _closed = true;
+        _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
         _channel.Dispose();
         _channelViewModel.Dispose();
         _shell.PropertyChanged -= OnShellPropertyChanged;

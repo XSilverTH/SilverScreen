@@ -118,6 +118,11 @@ public sealed class SearchViewModel(
         }
     }
 
+    public Task RefreshAsync()
+    {
+        return _query is null ? Task.CompletedTask : SearchPlainTextAsync(_query);
+    }
+
     public async Task LoadMoreAsync()
     {
         ThrowIfDisposed();

@@ -70,6 +70,13 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         return LoadAsync(State.Url, State.Name, sort);
     }
 
+    public Task RefreshAsync()
+    {
+        return State.Url is null
+            ? Task.CompletedTask
+            : LoadAsync(State.Url, State.Name, State.Sort);
+    }
+
     public async Task LoadMoreAsync()
     {
         ThrowIfDisposed();
