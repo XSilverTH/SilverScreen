@@ -61,6 +61,21 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void ExternalMpvForwardsPlaybackStateToWatchProgress()
+    {
+        var watchProgress = new TrackingWatchProgress();
+        var service = new ExternalMpvPlaybackService(new PlaybackOptions(), new MpvCommandBuilder(), null, null, null,
+            watchProgress);
+        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+        var playbackId = service.RegisterActivePlayback(request);
+        var state = PlayingState(DateTimeOffset.UtcNow);
+
+        service.UpdateActivePlayback(playbackId, state);
+
+        Assert.Equal([(request, state)], watchProgress.Updates);
+    }
+
+    [Fact]
     public void MpvCommandBuilderPassesOrderedPlaylistUrlsAsSeparateArguments()
     {
         var command = MpvCommandBuilder.Build(
@@ -218,6 +233,27 @@ public sealed class PlaybackTests
         public void Dispose()
         {
             Disposed = true;
+        }
+    }
+
+    private sealed class TrackingWatchProgress : IWatchProgressService
+    {
+        public List<(PlaybackRequest Request, PlaybackPresenceState State)> Updates { get; } = [];
+
+        public event EventHandler<WatchProgress>? ProgressChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public double? GetFraction(string videoId)
+        {
+            return null;
+        }
+
+        public void Update(PlaybackRequest request, PlaybackPresenceState state)
+        {
+            Updates.Add((request, state));
         }
     }
 

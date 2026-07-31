@@ -81,30 +81,31 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var accountPopover = GetRequiredObject<Popover>("account_popover");
 
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
-            services.CookieFiles, services.PlaybackPresence, services.PlaybackTelemetry, services.VideoEngagement,
-            services.YouTubeRating, services.SponsorBlock, services.Session, services.Comments);
+            services.CookieFiles, services.PlaybackPresence, services.PlaybackTelemetry, services.WatchProgress,
+            services.VideoEngagement, services.YouTubeRating, services.SponsorBlock, services.Session, services.Comments);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels, _shell);
-        _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions, CloseChannel);
+        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions, CloseChannel);
         _home = new HomeView(
             new HomeViewModel(services.HomeFeed),
             new SearchViewModel(services.Search, _playback, _shell),
             services.Thumbnails,
+            services.WatchProgress,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
         _home.SearchModeChanged += OnHomeSearchModeChanged;
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _historyViewModel = new HistoryViewModel(services.History, _shell);
-        _history = new HistoryView(_historyViewModel, services.Thumbnails, actions);
+        _history = new HistoryView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         var historyHost = GetRequiredObject<Box>("history_host");
         historyHost.Append(_history.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
         UpdateSearchButton(_home.IsSearchActive);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
-        _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
+        _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
         queueSidebarHost.Append(_queueView.Widget);
         _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation,
             _shell);

@@ -24,6 +24,7 @@ public partial class HistoryView : ViewBase<Box>
     private readonly Revealer _paginationLoadingRevealer;
     private readonly Label _paginationLoadingLabel;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
@@ -36,10 +37,12 @@ public partial class HistoryView : ViewBase<Box>
     public HistoryView(
         HistoryViewModel viewModel,
         IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
+        _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
         _stack = GetRequiredObject<Stack>("history_stack");
@@ -190,7 +193,7 @@ public partial class HistoryView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var card = new VideoCardView(_thumbnails, _videoActions);
+        var card = new VideoCardView(_thumbnails, _watchProgress, _videoActions);
         listItem.Child = card.Widget;
         _cardsByListItem.Add(listItem, card);
     }

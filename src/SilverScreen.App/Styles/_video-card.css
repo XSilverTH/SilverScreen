@@ -77,3 +77,26 @@ gridview item:active {
     color: @accent_color;
     text-decoration: underline;
 }
+
+.watched-progress-bar,
+.watched-progress-bar trough,
+.watched-progress-bar progress {
+    border: none;
+    border-radius: 0;
+    min-height: 4px;
+    padding: 0;
+}
+
+.watched-progress-bar trough {
+    background-color: alpha(#000000, 0.6);
+}
+
+.watched-progress-bar progress {
+    background-color: @accent_bg_color;
+}
+
+.queue-progress-bar,
+.queue-progress-bar trough,
+.queue-progress-bar progress {
+    min-height: 3px;
+}

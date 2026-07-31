@@ -28,12 +28,14 @@ public class VideoCardView : ViewBase<Box>
     private readonly GestureClick _channelClick;
     private readonly GestureClick _click;
     private readonly Label _duration;
+    private readonly ProgressBar _watchedProgress;
     private readonly MenuButton _menu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly Widget _placeholder;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly Label _title;
     private readonly Label _uploadDate;
     private int _bindingGeneration;
@@ -44,15 +46,17 @@ public class VideoCardView : ViewBase<Box>
     private CancellationTokenSource? _thumbnailCancellation;
     private VideoSummary? _video;
 
-    public VideoCardView(IThumbnailService thumbnails, VideoCardActions actions)
+    public VideoCardView(IThumbnailService thumbnails, IWatchProgressService watchProgress, VideoCardActions actions)
     {
         _thumbnails = thumbnails;
+        _watchProgress = watchProgress;
         _actions = actions;
 
         _card = GetRequiredObject<Box>("card");
         _thumbnail = GetRequiredObject<Overlay>("thumbnail");
         _placeholder = GetRequiredObject<Widget>("placeholder");
         _duration = GetRequiredObject<Label>("duration");
+        _watchedProgress = GetRequiredObject<ProgressBar>("watched_progress");
         _title = GetRequiredObject<Label>("title");
         _channel = GetRequiredObject<Label>("channel");
         _uploadDate = GetRequiredObject<Label>("upload_date");
@@ -83,6 +87,7 @@ public class VideoCardView : ViewBase<Box>
         _channelClick.Button = 1;
         _channelClick.OnReleased += OnChannelReleased;
         _channel.AddController(_channelClick);
+        _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -110,6 +115,7 @@ public class VideoCardView : ViewBase<Box>
         }
 
         _duration.SetText(FormatDuration(video.Duration));
+        SetWatchProgress(_watchProgress.GetFraction(video.Id));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         _menu.TooltipText = $"More actions for {video.Title}";
         var generation = ++_bindingGeneration;
@@ -128,12 +134,33 @@ public class VideoCardView : ViewBase<Box>
         _duration.SetText(string.Empty);
         _uploadDate.SetText(string.Empty);
         _uploadDate.Visible = false;
+        SetWatchProgress(null);
         _thumbnailAlternativeText = string.Empty;
         _menu.TooltipText = string.Empty;
         _thumbnailCancellation?.Cancel();
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;
         ClearThumbnail();
+    }
+
+    private void OnWatchProgressChanged(object? sender, WatchProgress progress)
+    {
+        if (_video?.Id != progress.VideoId)
+            return;
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_disposed && _video?.Id == progress.VideoId)
+                SetWatchProgress(progress.Fraction);
+            return false;
+        });
+    }
+
+    private void SetWatchProgress(double? fraction)
+    {
+        var isVisible = fraction is > 0;
+        _watchedProgress.SetVisible(isVisible);
+        _watchedProgress.Fraction = isVisible ? fraction!.Value : 0;
     }
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)
@@ -400,6 +427,7 @@ public class VideoCardView : ViewBase<Box>
         _click.Dispose();
         _channelClick.OnReleased -= OnChannelReleased;
         _channel.RemoveController(_channelClick);
+        _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         _channelClick.Dispose();
 
 

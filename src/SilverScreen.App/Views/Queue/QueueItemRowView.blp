@@ -50,6 +50,15 @@ Gtk.Box QueueItemRowView {
       halign: center;
       valign: center;
     };
+
+    [overlay]
+    Gtk.ProgressBar watched_progress {
+      halign: fill;
+      valign: end;
+      visible: false;
+      show-text: false;
+      styles ["watched-progress-bar", "queue-progress-bar"]
+    }
   }
 
   Box details {

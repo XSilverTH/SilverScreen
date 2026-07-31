@@ -27,6 +27,7 @@ public partial class HomeView : ViewBase<Box>
     private readonly Revealer _paginationLoadingRevealer;
     private readonly Label _paginationLoadingLabel;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly GridView _videoGrid;
@@ -41,11 +42,13 @@ public partial class HomeView : ViewBase<Box>
         HomeViewModel viewModel,
         SearchViewModel searchViewModel,
         IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
     {
         _viewModel = viewModel;
         _searchViewModel = searchViewModel;
         _thumbnails = thumbnails;
+        _watchProgress = watchProgress;
         _videoActions = videoActions;
         _searchBar = GetRequiredObject<Box>("home_search_bar");
         _searchEntry = GetRequiredObject<SearchEntry>("home_search_entry");
@@ -292,7 +295,7 @@ public partial class HomeView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var card = new VideoCardView(_thumbnails, _videoActions);
+        var card = new VideoCardView(_thumbnails, _watchProgress, _videoActions);
         listItem.Child = card.Widget;
         _cardsByListItem.Add(listItem, card);
     }

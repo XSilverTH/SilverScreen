@@ -26,14 +26,17 @@ public partial class QueueView : ViewBase<Box>
     private readonly NoSelection _selection;
     private readonly Label _summary;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly QueueViewModel _viewModel;
     private QueueItem[] _displayedItems = [];
     private bool _disposed;
 
-    public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, Action closeRequested)
+    public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, IWatchProgressService watchProgress,
+        Action closeRequested)
     {
         _viewModel = viewModel;
         _thumbnails = thumbnails;
+        _watchProgress = watchProgress;
         _closeRequested = closeRequested;
         GetRequiredObject<Button>("queue_clear_button");
         _emptyPage = GetRequiredObject<StatusPage>("queue_empty_page");
@@ -132,7 +135,7 @@ public partial class QueueView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new QueueItemRowView(_thumbnails, _viewModel.Move, RequestDrop, _viewModel.Remove);
+        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

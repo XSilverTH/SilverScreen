@@ -52,6 +52,7 @@ public partial class ChannelView : ViewBase<Box>
     private const long LayoutStabilizationMs = 350;
     private readonly ChannelViewModel _viewModel;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly VideoCardActions _videoActions;
 
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
@@ -74,11 +75,13 @@ public partial class ChannelView : ViewBase<Box>
     public ChannelView(
         ChannelViewModel viewModel,
         IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
         VideoCardActions videoActions,
         Action? backCallback = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
+        _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
         _backCallback = backCallback;
 
@@ -502,7 +505,7 @@ public partial class ChannelView : ViewBase<Box>
     {
         if (args.Object is not ListItem listItem) return;
 
-        var card = new VideoCardView(_thumbnails, _videoActions);
+        var card = new VideoCardView(_thumbnails, _watchProgress, _videoActions);
         listItem.Child = card.Widget;
         _cardsByListItem.Add(listItem, card);
     }

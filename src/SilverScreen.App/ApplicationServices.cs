@@ -32,6 +32,7 @@ public sealed class ApplicationServices(
     ICookieFileProvider cookieFiles,
     IPlaybackPresenceService playbackPresence,
     IYouTubePlaybackTelemetryService playbackTelemetry,
+    IWatchProgressService watchProgress,
     IVideoEngagementService videoEngagement,
     ISponsorBlockService sponsorBlock,
     IYouTubeRatingService youtubeRating,
@@ -52,6 +53,7 @@ public sealed class ApplicationServices(
     public ICookieFileProvider CookieFiles { get; } = cookieFiles;
     public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
     public IYouTubePlaybackTelemetryService PlaybackTelemetry { get; } = playbackTelemetry;
+    public IWatchProgressService WatchProgress { get; } = watchProgress;
     public IVideoEngagementService VideoEngagement { get; } = videoEngagement;
     public ISponsorBlockService SponsorBlock { get; } = sponsorBlock;
     public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
@@ -95,6 +97,7 @@ public static class ApplicationServiceCollectionExtensions
                 provider.GetRequiredService<ApplicationConfiguration>().DiscordApplicationId));
         services.AddSingleton<IYouTubePlaybackTelemetryService, YouTubePlaybackTelemetryService>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
+        services.AddSingleton<IWatchProgressService, FileWatchProgressService>();
         services.AddSingleton<YtDlpRunner>();
         services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<ISearchService, YtDlpSearchService>();

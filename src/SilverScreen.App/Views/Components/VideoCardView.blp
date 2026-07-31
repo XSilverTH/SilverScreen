@@ -59,6 +59,15 @@ Gtk.Box VideoCardView {
         margin-bottom: 9;
         styles ["caption", "duration-pill"]
       }
+
+      [overlay]
+      Gtk.ProgressBar watched_progress {
+        halign: fill;
+        valign: end;
+        visible: false;
+        show-text: false;
+        styles ["watched-progress-bar"]
+      }
     }
 
     Gtk.Overlay metadata {

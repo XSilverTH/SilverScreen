@@ -57,6 +57,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerSponsorBlockController _sponsorBlockController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly Scale _timeline;
+    private readonly IWatchProgressService _watchProgress;
     private readonly Label _titleLabel;
     private readonly MenuButton _volumeButton;
     private readonly Popover _volumePopover;
@@ -80,9 +81,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
         ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
-        IYouTubePlaybackTelemetryService playbackTelemetry, IVideoEngagementService videoEngagement,
-        IYouTubeRatingService youtubeRating, ISponsorBlockService sponsorBlock, ISessionService session,
-        IYouTubeCommentService comments)
+        IYouTubePlaybackTelemetryService playbackTelemetry, IWatchProgressService watchProgress,
+        IVideoEngagementService videoEngagement, IYouTubeRatingService youtubeRating, ISponsorBlockService sponsorBlock,
+        ISessionService session, IYouTubeCommentService comments)
     {
         _presentRequested = presentRequested;
         _backRequested = backRequested;
@@ -90,6 +91,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _cookieFiles = cookieFiles;
         _playbackPresence = playbackPresence;
         _playbackTelemetry = playbackTelemetry;
+        _watchProgress = watchProgress;
         _playerSurface = GetRequiredObject<GLArea>("player_surface");
         _headerBar = GetRequiredObject<Widget>("player_header_bar");
         _centerControls = GetRequiredObject<Box>("player_center_controls");
@@ -547,6 +549,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow);
             _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
             _playbackTelemetrySession?.UpdateState(playbackState);
+            _watchProgress.Update(playbackRequest, playbackState);
         }
 
         _desktopMedia.UpdatePlayback(_request, state);

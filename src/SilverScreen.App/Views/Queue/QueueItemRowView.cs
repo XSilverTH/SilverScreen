@@ -35,7 +35,9 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Action<Guid> _removeRequested;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
+    private readonly IWatchProgressService _watchProgress;
     private readonly Label _title;
+    private readonly ProgressBar _watchedProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -46,11 +48,13 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     public QueueItemRowView(
         IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
         Action<Guid, int> moveRequested,
         Action<Guid, int> dropRequested,
         Action<Guid> removeRequested)
     {
         _thumbnails = thumbnails;
+        _watchProgress = watchProgress;
         _moveRequested = moveRequested;
         _dropRequested = dropRequested;
         _removeRequested = removeRequested;
@@ -59,6 +63,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _position = GetRequiredObject<Label>("position");
         _thumbnail = GetRequiredObject<Overlay>("thumbnail");
         _placeholder = GetRequiredObject<Widget>("placeholder");
+        _watchedProgress = GetRequiredObject<ProgressBar>("watched_progress");
         _title = GetRequiredObject<Label>("title");
         _channel = GetRequiredObject<Label>("channel");
         _duration = GetRequiredObject<Label>("duration");
@@ -94,6 +99,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dropTarget = DropTarget.New(Type.String, DragAction.Move);
         _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
         Widget.AddController(_dropTarget);
+        _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
     private void OnRemoveButtonClicked(object? sender, EventArgs args)
@@ -112,6 +118,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _title.SetText(item.Video.Title);
         _channel.SetText(item.Video.ChannelName);
         _duration.SetText(FormatDuration(item.Video.Duration));
+        SetWatchProgress(_watchProgress.GetFraction(item.Video.Id));
         _moveUpAction.Enabled = index > 0;
         _moveDownAction.Enabled = index < itemCount - 1;
         _removeAction.Enabled = true;
@@ -136,6 +143,27 @@ public partial class QueueItemRowView : ViewBase<Box>
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;
         ClearThumbnail();
+        SetWatchProgress(null);
+    }
+
+    private void OnWatchProgressChanged(object? sender, WatchProgress progress)
+    {
+        if (_item?.Video.Id != progress.VideoId)
+            return;
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_disposed && _item?.Video.Id == progress.VideoId)
+                SetWatchProgress(progress.Fraction);
+            return false;
+        });
+    }
+
+    private void SetWatchProgress(double? fraction)
+    {
+        var isVisible = fraction is > 0;
+        _watchedProgress.SetVisible(isVisible);
+        _watchedProgress.Fraction = isVisible ? fraction!.Value : 0;
     }
 
     private bool HandleDrop(string? value, double y)
@@ -270,6 +298,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
         _disposed = true;
         Unbind();
+        _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         _grip.RemoveController(_dragSource);
         Widget.RemoveController(_dropTarget);
         _dragPaintable.Dispose();

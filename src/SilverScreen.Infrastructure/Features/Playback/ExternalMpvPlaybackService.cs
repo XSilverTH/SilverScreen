@@ -14,6 +14,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     private readonly ICookieFileProvider? _cookieFileProvider;
     private readonly IPlaybackPresenceService? _playbackPresenceService;
     private readonly IYouTubePlaybackTelemetryService? _playbackTelemetryService;
+    private readonly IWatchProgressService? _watchProgressService;
     private readonly IPreferencesService? _preferencesService;
     private readonly PlaybackOptions _staticOptions;
     private bool _disposed;
@@ -29,26 +30,30 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         MpvCommandBuilder commandBuilder,
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
+        IWatchProgressService? watchProgressService = null)
     {
         _staticOptions = options;
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = null;
         _playbackPresenceService = playbackPresenceService;
         _playbackTelemetryService = playbackTelemetryService;
+        _watchProgressService = watchProgressService;
     }
 
     public ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
+        IWatchProgressService? watchProgressService = null)
     {
         _staticOptions = new PlaybackOptions();
         _cookieFileProvider = cookieFileProvider;
         _preferencesService = preferencesService;
         _playbackPresenceService = playbackPresenceService;
         _playbackTelemetryService = playbackTelemetryService;
+        _watchProgressService = watchProgressService;
     }
 
     public void Dispose()
@@ -157,6 +162,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
             playback.State = state;
             SetTelemetryQuietly(playback.Telemetry, state);
+            _watchProgressService?.Update(playback.Request, state);
             if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
         }
     }
