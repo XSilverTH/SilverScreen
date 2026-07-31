@@ -115,6 +115,16 @@ Adw.ApplicationWindow MainWindow {
           vhomogeneous: false;
           notify => $OnViewStackNotify();
           Adw.ViewStackPage {
+            name: "home";
+            title: "Home";
+            icon-name: "go-home-symbolic";
+            child: Gtk.Box home_host {
+              hexpand: true;
+              vexpand: true;
+            };
+          }
+
+          Adw.ViewStackPage {
             name: "subscriptions";
             title: "Subscriptions";
             icon-name: "emblem-favorite-symbolic";

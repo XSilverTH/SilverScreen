@@ -102,6 +102,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         var historyHost = GetRequiredObject<Box>("history_host");
         historyHost.Append(_history.Widget);
+        var homeHost = GetRequiredObject<Box>("home_host");
+        homeHost.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
         UpdateSearchButton(_home.IsSearchActive);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
@@ -118,7 +120,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         switcher.Stack = _stack;
         var channelPage = _stack.AddTitled(_channel.Widget, "channel", "Channel");
         channelPage.Visible = false;
-        _stack.AddTitled(_home.Widget, "home", "Home").IconName = "go-home-symbolic";
         _stack.VisibleChildName = _shell.SelectedPage;
 
         accountPopover.Child = _accountPopover.Widget;
