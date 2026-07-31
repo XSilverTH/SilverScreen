@@ -26,6 +26,7 @@ public sealed class ApplicationServices(
     IChannelService channels,
     IThumbnailService thumbnails,
     HomeFeedCoordinator homeFeed,
+    IAuthenticatedHistoryService history,
     SessionValidationCoordinator sessionValidation,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
     ICookieFileProvider cookieFiles,
@@ -45,6 +46,7 @@ public sealed class ApplicationServices(
     public IChannelService Channels { get; } = channels;
     public IThumbnailService Thumbnails { get; } = thumbnails;
     public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
+    public IAuthenticatedHistoryService History { get; } = history;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
     public ICookieFileProvider CookieFiles { get; } = cookieFiles;
@@ -116,6 +118,13 @@ public static class ApplicationServiceCollectionExtensions
                 provider.GetRequiredService<IPreferencesService>(),
                 provider.GetRequiredService<IYtDlpRunner>()));
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
+        services.AddSingleton<IYouTubeHistoryClient>(provider =>
+            new YtDlpHistoryClient(
+                provider.GetRequiredService<ISessionService>(),
+                provider.GetRequiredService<ICookieFileProvider>(),
+                provider.GetRequiredService<IPreferencesService>(),
+                provider.GetRequiredService<IYtDlpRunner>()));
+        services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<HomeSessionValidator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();

@@ -10,6 +10,7 @@ using SilverScreen.Views.Account;
 using SilverScreen.Views.Components;
 using SilverScreen.Views.Channel;
 using SilverScreen.Views.Home;
+using SilverScreen.Views.History;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
@@ -35,6 +36,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ChannelView _channel;
     private readonly ChannelViewModel _channelViewModel;
     private readonly EmbeddedPlayerView _embeddedPlayer;
+    private readonly HistoryView _history;
+    private readonly HistoryViewModel _historyViewModel;
     private readonly HomeView _home;
     private readonly Button _homeRefreshButton;
     private readonly Spinner _homeRefreshSpinner;
@@ -93,6 +96,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
         _home.SearchModeChanged += OnHomeSearchModeChanged;
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
+        _historyViewModel = new HistoryViewModel(services.History, _shell);
+        _history = new HistoryView(_historyViewModel, services.Thumbnails, actions);
+        _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
+        var historyHost = GetRequiredObject<Box>("history_host");
+        historyHost.Append(_history.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
         UpdateSearchButton(_home.IsSearchActive);
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
@@ -185,13 +193,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_stack.VisibleChildName == "channel")
             _ = _channel.RefreshAsync();
+        else if (_stack.VisibleChildName == "history")
+            _ = _history.RefreshAsync();
         else
             _ = _home.RefreshAsync();
     }
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName != "channel")
+        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history")
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
@@ -201,6 +211,30 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateHomeRefreshButton(_channel.IsLoading);
     }
 
+    private void OnHistoryRefreshLoadingChanged(object? sender, bool isLoading)
+    {
+        if (!_closed && _stack.VisibleChildName == "history")
+            UpdateHomeRefreshButton(_history.IsLoading);
+    }
+
+    private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
+    {
+        if (_closed) return;
+
+        if (_stack.VisibleChildName == "channel")
+        {
+            UpdateHomeRefreshButton(_channel.IsLoading);
+        }
+        else if (_stack.VisibleChildName == "history")
+        {
+            UpdateHomeRefreshButton(_history.IsLoading);
+            _ = _historyViewModel.LoadAsync();
+        }
+        else
+        {
+            UpdateHomeRefreshButton(_home.IsLoading);
+        }
+    }
     private void UpdateHomeRefreshButton(bool isLoading)
     {
         _homeRefreshButton.Sensitive = !isLoading;
@@ -342,6 +376,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_closed) return false;
         _closed = true;
         _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
+        _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
+        _history.Dispose();
+        _historyViewModel.Dispose();
         _channel.Dispose();
         _channelViewModel.Dispose();
         _shell.PropertyChanged -= OnShellPropertyChanged;

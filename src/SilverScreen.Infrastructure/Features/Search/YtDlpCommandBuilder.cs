@@ -33,6 +33,19 @@ public static class YtDlpCommandBuilder
         startInfo.ArgumentList.Add(":ytrec");
         return startInfo;
     }
+    public static ProcessStartInfo BuildHistory(string executablePath, int startIndex, string cookieFilePath)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cookieFilePath);
+        var startInfo = CreateStartInfo(executablePath);
+        AddCommonArguments(startInfo, cookieFilePath);
+        startInfo.ArgumentList.Add("--playlist-start");
+        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--playlist-end");
+        startInfo.ArgumentList.Add((startIndex + 19).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("https://www.youtube.com/feed/history");
+        return startInfo;
+    }
     public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
         int startIndex, string? cookieFilePath = null)
     {

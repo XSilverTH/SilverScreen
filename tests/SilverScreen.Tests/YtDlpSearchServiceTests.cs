@@ -61,6 +61,17 @@ public sealed class YtDlpSearchServiceTests
     }
 
     [Fact]
+    public void BuildHistory_RequiresCookiesAndTargetsOnlyTheAuthenticatedHistoryEndpoint()
+    {
+        var command = YtDlpCommandBuilder.BuildHistory("yt-dlp", 21, "/tmp/youtube-cookies.txt");
+
+        Assert.Equal(["--dump-single-json", "--flat-playlist", "--skip-download", "--extractor-args",
+                "youtubetab:approximate_date", "--cookies", "/tmp/youtube-cookies.txt", "--playlist-start", "21",
+                "--playlist-end", "40", "https://www.youtube.com/feed/history"],
+            command.ArgumentList);
+    }
+
+    [Fact]
     public void BuildSearch_UsesRequestedPageRange()
     {
         var command = YtDlpCommandBuilder.BuildSearch(new SearchRequest("query", 21),

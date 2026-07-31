@@ -16,6 +16,7 @@ public partial class HomeView : ViewBase<Box>
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly ILogger _logger = Log.ForContext<HomeView>();
     private readonly ScrolledWindow _scrolledWindow;
+    private readonly Overlay _contentOverlay;
     private readonly Adjustment? _vadjustment;
     private readonly Box _searchBar;
     private readonly SearchEntry _searchEntry;
@@ -23,6 +24,8 @@ public partial class HomeView : ViewBase<Box>
     private readonly Box _statusHost;
     private readonly Box _statusLoadingPage;
     private readonly StatusPage _statusPage;
+    private readonly Revealer _paginationLoadingRevealer;
+    private readonly Label _paginationLoadingLabel;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
@@ -49,7 +52,10 @@ public partial class HomeView : ViewBase<Box>
         _statusHost = GetRequiredObject<Box>("home_status_host");
         _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
         _statusPage = GetRequiredObject<StatusPage>("home_status_page");
+        _contentOverlay = GetRequiredObject<Overlay>("home_content_overlay");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("home_scrolled_window");
+        _paginationLoadingRevealer = GetRequiredObject<Revealer>("home_pagination_loading_revealer");
+        _paginationLoadingLabel = GetRequiredObject<Label>("home_pagination_loading_label");
         _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged += OnScrollValueChanged;
@@ -181,7 +187,7 @@ public partial class HomeView : ViewBase<Box>
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
         _statusHost.Visible = false;
-        _scrolledWindow.Visible = false;
+        _contentOverlay.Visible = false;
 
         if (!hasDisplayedVideos)
         {
@@ -189,7 +195,9 @@ public partial class HomeView : ViewBase<Box>
             return;
         }
 
-        _scrolledWindow.Visible = true;
+        _contentOverlay.Visible = true;
+        _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
+        _paginationLoadingLabel.SetText("Loading more videos…");
     }
 
     private void RenderSearch(SearchViewState state)
@@ -197,11 +205,13 @@ public partial class HomeView : ViewBase<Box>
 
         ApplyVideos(state.Videos);
         _statusHost.Visible = false;
-        _scrolledWindow.Visible = false;
+        _contentOverlay.Visible = false;
 
         if (_displayedVideos.Length > 0)
         {
-            _scrolledWindow.Visible = true;
+            _contentOverlay.Visible = true;
+            _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
+            _paginationLoadingLabel.SetText("Loading more results…");
             return;
         }
 

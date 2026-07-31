@@ -193,21 +193,54 @@ Gtk.Box ChannelView {
 
     Gtk.StackPage {
       name: "content";
-      child: Gtk.ScrolledWindow channel_scrolled_window {
+      child: Gtk.Overlay channel_content_overlay {
         hexpand: true;
         vexpand: true;
 
-        child: Gtk.GridView channel_video_grid {
-          min-columns: 1;
-          max-columns: 4;
-          single-click-activate: false;
-          margin-start: 24;
-          margin-end: 24;
-          margin-top: 12;
-          margin-bottom: 12;
+        child: Gtk.ScrolledWindow channel_scrolled_window {
           hexpand: true;
           vexpand: true;
+
+          child: Gtk.GridView channel_video_grid {
+            min-columns: 1;
+            max-columns: 4;
+            single-click-activate: false;
+            margin-start: 24;
+            margin-end: 24;
+            margin-top: 12;
+            margin-bottom: 12;
+            hexpand: true;
+            vexpand: true;
+          };
         };
+
+        [overlay]
+        Gtk.Revealer channel_pagination_loading_revealer {
+          halign: center;
+          valign: end;
+          reveal-child: false;
+          transition-type: crossfade;
+          transition-duration: 200;
+          margin-bottom: 24;
+
+          child: Gtk.Box {
+            halign: center;
+            spacing: 10;
+            can-focus: false;
+            styles ["pagination-loading-pill"]
+
+            Gtk.Spinner {
+              spinning: true;
+              width-request: 16;
+              height-request: 16;
+            }
+
+            Gtk.Label {
+              label: "Loading more videos…";
+              styles ["caption", "dim-label"]
+            }
+          };
+        }
       };
     }
 

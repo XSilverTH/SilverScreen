@@ -113,6 +113,7 @@ Adw.ApplicationWindow MainWindow {
           vexpand: true;
           hhomogeneous: false;
           vhomogeneous: false;
+          notify => $OnViewStackNotify();
           Adw.ViewStackPage {
             name: "subscriptions";
             title: "Subscriptions";
@@ -128,10 +129,9 @@ Adw.ApplicationWindow MainWindow {
             name: "history";
             title: "History";
             icon-name: "document-open-recent-symbolic";
-            child: Adw.StatusPage {
-              title: "History";
-              description: "Local watch history is intentionally not persisted in this shell step.";
-              icon-name: "applications-internet-symbolic";
+            child: Gtk.Box history_host {
+              hexpand: true;
+              vexpand: true;
             };
           }
         }

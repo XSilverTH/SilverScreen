@@ -40,6 +40,7 @@ public partial class ChannelView : ViewBase<Box>
     private readonly EventControllerScroll _scrollController;
     private readonly EventControllerMotion _clueMotionController;
     private readonly GestureClick _clueClickGesture;
+    private readonly Revealer _paginationLoadingRevealer;
 
     private bool _isHeaderCollapsed;
     private double _lastScrollY;
@@ -99,6 +100,7 @@ public partial class ChannelView : ViewBase<Box>
         _clueRevealer = GetRequiredObject<Revealer>("channel_clue_revealer");
         _revealClue = GetRequiredObject<Box>("channel_reveal_clue");
         _scrolledWindow = GetRequiredObject<ScrolledWindow>("channel_scrolled_window");
+        _paginationLoadingRevealer = GetRequiredObject<Revealer>("channel_pagination_loading_revealer");
 
         _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null)
@@ -347,6 +349,7 @@ public partial class ChannelView : ViewBase<Box>
         else
         {
             ApplyVideos(state.Videos);
+            _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
             _stack.VisibleChildName = "content";
         }
     }
