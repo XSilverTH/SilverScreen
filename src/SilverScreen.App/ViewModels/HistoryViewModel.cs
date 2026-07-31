@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -20,6 +21,7 @@ public sealed record HistoryViewState(
 
 public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService, IStatusReporter shell) : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
@@ -45,9 +47,8 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
 
     public async Task RefreshAsync()
     {
+        Logger.Information("HistoryViewModel refreshing watch history");
         ThrowIfDisposed();
-        if (_requestCancellation is not null)
-            await _requestCancellation.CancelAsync();
 
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();

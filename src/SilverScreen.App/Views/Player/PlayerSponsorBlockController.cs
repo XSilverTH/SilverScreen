@@ -1,5 +1,6 @@
 using Cairo;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
@@ -9,6 +10,7 @@ namespace SilverScreen.Views.Player;
 
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
     private const uint SkipPromptDurationMilliseconds = 3_000;
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
     private readonly IPreferencesService _preferences;
@@ -217,7 +219,11 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         if (state.IsPaused || !_preferences.GetPreferences().SponsorBlockAutoSkipEnabled ||
             !string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
         var segment = FindSponsorBlockSegmentAtPosition(_segments, state.Position);
-        if (segment is not null && _autoSkippedSegmentIds.Add(segment.Id)) _seekAbsolute(segment.End.TotalSeconds);
+        if (segment is not null && _autoSkippedSegmentIds.Add(segment.Id))
+        {
+            Logger.Information("Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s", segment.Id, segment.Category, videoId, segment.End.TotalSeconds);
+            _seekAbsolute(segment.End.TotalSeconds);
+        }
     }
 
     private void UpdateManualPrompt(LibMpvPlaybackState state, string videoId)

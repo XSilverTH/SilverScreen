@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -18,6 +19,7 @@ public sealed class SearchViewModel(
     IStatusReporter shell)
     : INotifyPropertyChanged, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
@@ -74,13 +76,13 @@ public sealed class SearchViewModel(
 
     public async Task SubmitAsync(string text)
     {
+        Logger.Information("Search submitted: {Text}", text);
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
             shell.ReportStatus("Empty search ignored.");
             return;
         }
-
         try
         {
             var parsedUrl = YouTubeUrlParser.Parse(query);

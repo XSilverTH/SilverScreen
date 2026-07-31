@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -6,6 +7,7 @@ namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed class YouTubeAuthenticationService : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<YouTubeAuthenticationService>();
     private readonly SemaphoreSlim _bootstrapGate = new(1, 1);
     private readonly Lock _gate = new();
     private readonly YouTubeWebOptions _options;
@@ -61,7 +63,12 @@ public sealed class YouTubeAuthenticationService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(bootstrapClient);
         var snapshot = GetCurrentCredentials();
-        if (snapshot is null) return null;
+        if (snapshot is null)
+        {
+            Logger.Debug("No current credentials available for YouTube authenticated session");
+            return null;
+        }
+
         await _bootstrapGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -79,10 +86,19 @@ public sealed class YouTubeAuthenticationService : IDisposable
             if (includeRatingBootstrapHeaders)
                 request.Headers.Add("Referer", YouTubeWebOptions.Referer);
             using var response = await bootstrapClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.Warning("Failed to bootstrap YouTube session config: HTTP status {StatusCode}", response.StatusCode);
+                return null;
+            }
             var html = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var config = YouTubeConfigBootstrap.Extract(html);
-            if (config is null || !IsCurrent(snapshot.SessionVersion)) return null;
+            if (config is null || !IsCurrent(snapshot.SessionVersion))
+            {
+                Logger.Warning("Failed to extract YouTube bootstrap config from HTML response");
+                return null;
+            }
+            Logger.Information("Successfully bootstrapped YouTube session config (ClientVersion: {ClientVersion})", config.ClientVersion);
             var authenticated = new YouTubeAuthenticatedSession(snapshot, config);
             lock (_gate)
             {

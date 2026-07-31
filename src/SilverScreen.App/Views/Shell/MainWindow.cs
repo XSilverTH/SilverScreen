@@ -23,11 +23,13 @@ using License = Gtk.License;
 using Spinner = Gtk.Spinner;
 using PreferencesDialog = SilverScreen.Views.Preferences.PreferencesDialog;
 using Window = Gtk.Window;
+using Serilog;
 
 namespace SilverScreen.Views.Shell;
 
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
+    private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly Avatar _accountAvatar;
     private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
@@ -59,6 +61,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
     {
+        Logger.Information("Initializing MainWindow");
         _services = services;
         _disposeApplicationServices = disposeApplicationServices;
         _stack = GetRequiredObject<ViewStack>("view_stack");

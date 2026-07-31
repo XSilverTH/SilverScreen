@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Serilog;
 using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
@@ -26,6 +27,7 @@ public sealed record LibMpvPlaybackState(
 
 public sealed class LibMpvPlayer : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<LibMpvPlayer>();
     private readonly Task? _commandPump;
 
     private readonly Channel<Action> _commands = Channel.CreateUnbounded<Action>(new UnboundedChannelOptions
@@ -62,8 +64,11 @@ public sealed class LibMpvPlayer : IDisposable
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
         IsAvailable = native.IsAvailable;
         AvailabilityError = native.AvailabilityError;
-        if (!IsAvailable) return;
-
+        if (!IsAvailable)
+        {
+            Logger.Warning("libmpv native library is not available: {Error}", AvailabilityError);
+            return;
+        }
         try
         {
             _handle = native.Create();
@@ -84,9 +89,11 @@ public sealed class LibMpvPlayer : IDisposable
             Observe("sid", LibMpvFormat.Int64);
             _commandPump = Task.Run(PumpCommandsAsync);
             _eventPump = Task.Run(PumpEvents);
+            Logger.Information("LibMpvPlayer initialized successfully");
         }
         catch (Exception exception)
         {
+            Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
             AvailabilityError = exception.Message;
             IsAvailable = false;
             if (_handle != 0) native.Destroy(_handle);
@@ -200,6 +207,8 @@ public sealed class LibMpvPlayer : IDisposable
             _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [], Chapters = [] };
         }
 
+        var primaryVideo = request.Videos.FirstOrDefault();
+        Logger.Information("Loading playback request for video {VideoId} ({Title}) with {Count} item(s) at quality {Quality}", primaryVideo?.Id, primaryVideo?.Title, request.Videos.Length, _quality);
         PublishState();
 
         Enqueue(LoadCurrentRequest);
@@ -625,6 +634,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void PublishFailure(string detail)
     {
+        Logger.Error("LibMpv playback failure: {Detail}", detail);
         Dispatch(() => PlaybackFailed?.Invoke(this, detail));
     }
 

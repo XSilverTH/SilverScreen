@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -5,6 +6,7 @@ namespace SilverScreen.Features.Feed;
 
 public sealed class HomeFeedCoordinator : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<HomeFeedCoordinator>();
     private readonly IAuthenticatedHomeFeedService _feedService;
     private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
@@ -47,6 +49,7 @@ public sealed class HomeFeedCoordinator : IDisposable
 
     public async Task RefreshAsync()
     {
+        Logger.Information("HomeFeedCoordinator refreshing home feed");
         CancellationToken token;
         long requestId;
         lock (_lock)
@@ -59,7 +62,6 @@ public sealed class HomeFeedCoordinator : IDisposable
             _currentRequestId++;
             requestId = _currentRequestId;
         }
-
         if (!IsSessionActive())
         {
             CancelAndClear();
@@ -105,8 +107,9 @@ public sealed class HomeFeedCoordinator : IDisposable
         {
             // Cancellation never publishes errors
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "HomeFeedCoordinator failed to refresh home feed");
             HomeFeedState errorState;
             long errVersion;
             lock (_lock)
@@ -145,6 +148,7 @@ public sealed class HomeFeedCoordinator : IDisposable
 
     public async Task LoadMoreAsync()
     {
+        Logger.Information("HomeFeedCoordinator loading more home feed items");
         CancellationToken token;
         long requestId;
         lock (_lock)

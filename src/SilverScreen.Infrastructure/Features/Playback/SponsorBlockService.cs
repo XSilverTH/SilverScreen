@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -10,6 +11,7 @@ namespace SilverScreen.Infrastructure.Features.Playback;
 
 public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<SponsorBlockService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SkipSegmentsEndpoint = new("https://sponsor.ajay.app/api/skipSegments");
     private readonly bool _disposeHttpClient;
@@ -45,8 +47,11 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
         if (selectedCategories.Length == 0) return [];
 
         var cacheKey = $"{videoId}\n{string.Join(',', selectedCategories)}";
-        if (_segmentsByRequest.TryGetValue(cacheKey, out var cached)) return cached;
-
+        if (_segmentsByRequest.TryGetValue(cacheKey, out var cached))
+        {
+            Logger.Debug("SponsorBlock cache hit for video {VideoId}", videoId);
+            return cached;
+        }
         var query = $"videoID={Uri.EscapeDataString(videoId)}&actionType=skip&" +
                     string.Join('&',
                         selectedCategories.Select(category => $"category={Uri.EscapeDataString(category)}"));
@@ -54,11 +59,15 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
         try
         {
+            Logger.Information("Fetching SponsorBlock segments for video {VideoId} with categories {Categories}", videoId, selectedCategories);
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices) return [];
-
+            if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
+            {
+                Logger.Warning("SponsorBlock request for video {VideoId} returned HTTP status {StatusCode}", videoId, response.StatusCode);
+                return [];
+            }
             await using var responseStream =
                 await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var payload = await JsonSerializer.DeserializeAsync(responseStream,
@@ -81,6 +90,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
                 .ToArray();
 
             _segmentsByRequest.TryAdd(cacheKey, segments);
+            Logger.Information("Fetched {Count} SponsorBlock segments for video {VideoId}", segments.Length, videoId);
             return segments;
         }
         catch (OperationCanceledException)
@@ -89,6 +99,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or NotSupportedException)
         {
+            Logger.Warning(exception, "Failed to fetch SponsorBlock segments for video {VideoId}", videoId);
             return [];
         }
     }

@@ -40,12 +40,15 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
 
     public async Task<AccountProfile?> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
     {
+        Logger.Information("Fetching YouTube account profile");
         var authenticatedSession = await _authentication
             .GetCurrentAsync(_httpClient, false, cancellationToken)
             .ConfigureAwait(false);
         if (authenticatedSession is null)
+        {
+            Logger.Warning("Cannot fetch account profile: YouTube authenticated session is unavailable");
             return null;
-
+        }
         var configuration = authenticatedSession.Configuration;
         var payload = new BrowseRequestPayload
         {
@@ -72,15 +75,21 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
+        {
+            Logger.Warning("Failed to fetch account profile menu: HTTP {StatusCode}", response.StatusCode);
             return null;
-
+        }
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var profile = FindAccountProfile(document.RootElement);
         if (profile is null || !_authentication.IsCurrent(authenticatedSession.CredentialSnapshot.SessionVersion))
+        {
+            Logger.Warning("Account profile could not be parsed from menu response or session changed");
             return null;
+        }
 
+        Logger.Information("Account profile fetched successfully for {DisplayName}", profile.DisplayName);
         CacheProfile(profile);
         return profile;
     }

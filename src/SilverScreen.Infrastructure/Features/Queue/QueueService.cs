@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -6,6 +7,7 @@ namespace SilverScreen.Infrastructure.Features.Queue;
 
 public sealed class QueueService : IQueueService
 {
+    private static readonly ILogger Logger = Log.ForContext<QueueService>();
     private readonly List<QueueItem> _items = [];
     private readonly ReadOnlyCollection<QueueItem> _readOnlyItems;
 
@@ -32,6 +34,7 @@ public sealed class QueueService : IQueueService
     {
         var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
         _items.Add(item);
+        Logger.Information("Added video {VideoId} ({Title}) to playback queue", video.Id, video.Title);
         Changed?.Invoke(this, EventArgs.Empty);
         return item;
     }
@@ -40,6 +43,7 @@ public sealed class QueueService : IQueueService
     {
         var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
         _items.Insert(0, item);
+        Logger.Information("Enqueued video {VideoId} ({Title}) as next in playback queue", video.Id, video.Title);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -63,7 +67,9 @@ public sealed class QueueService : IQueueService
         var index = _items.FindIndex(item => item.Id == itemId);
         if (index < 0)
             return;
+        var videoId = _items[index].Video.Id;
         _items.RemoveAt(index);
+        Logger.Information("Removed video {VideoId} (QueueItemId: {QueueItemId}) from queue", videoId, itemId);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -72,6 +78,7 @@ public sealed class QueueService : IQueueService
         if (_items.Count == 0)
             return;
 
+        Logger.Information("Clearing all {Count} items from playback queue", _items.Count);
         _items.Clear();
         Changed?.Invoke(this, EventArgs.Empty);
     }

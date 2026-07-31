@@ -1,13 +1,14 @@
 using Adw;
 using Gtk;
+using Serilog;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Comments;
-
 public partial class CommentsView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<CommentsView>();
     private readonly Action _closeRequested;
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;

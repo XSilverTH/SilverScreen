@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -8,6 +9,7 @@ namespace SilverScreen.Infrastructure.Features.Thumbnails;
 
 public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<ThumbnailCacheService>();
     private const long DefaultMaxDownloadBytes = 3 * 1024 * 1024;
     private const int DefaultMaxFileCount = 300;
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
@@ -90,6 +92,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             else
             {
                 TouchCacheFile(cachePath);
+                Logger.Debug("Thumbnail cache hit for {Url}", thumbnailUrl);
                 return new ThumbnailResult(cachePath, true);
             }
         }
@@ -128,6 +131,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
                                        or InvalidOperationException)
         {
+            Logger.Warning(ex, "Failed to download thumbnail from {DownloadUri}", downloadUri);
             return null;
         }
         finally

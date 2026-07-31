@@ -27,6 +27,14 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         try
         {
             _manualCookies = LoadStoredCookies();
+            if (_manualCookies is not null)
+            {
+                Logger.Information("Restored YouTube session from Secret Service");
+            }
+            else
+            {
+                Logger.Information("No stored YouTube session found in Secret Service");
+            }
         }
         catch (SessionPersistenceException exception)
         {
@@ -84,10 +92,12 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 _store.Save(encodedCookies);
                 _isAvailable = true;
                 _manualCookies = new ManualSessionCookies(format, cookieContent);
+                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format})", format);
             }
         }
-        catch (SessionPersistenceException)
+        catch (SessionPersistenceException ex)
         {
+            Logger.Error(ex, "Failed to persist YouTube session to Secret Service");
             lock (_gate)
             {
                 _isAvailable = false;
@@ -114,10 +124,12 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 _isAvailable = true;
                 changed = _manualCookies is not null;
                 _manualCookies = null;
+                Logger.Information("Cleared YouTube session and secret store");
             }
         }
-        catch (SessionPersistenceException)
+        catch (SessionPersistenceException ex)
         {
+            Logger.Error(ex, "Failed to clear YouTube session in Secret Service");
             lock (_gate)
             {
                 _isAvailable = false;
@@ -125,7 +137,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
             throw;
         }
-
         if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
     }
 

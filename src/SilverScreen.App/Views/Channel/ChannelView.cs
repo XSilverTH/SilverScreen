@@ -3,6 +3,7 @@ using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -12,9 +13,9 @@ using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 
 namespace SilverScreen.Views.Channel;
-
 public partial class ChannelView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<ChannelView>();
     private const int AvatarSize = 80;
 
     private readonly Action? _backCallback;

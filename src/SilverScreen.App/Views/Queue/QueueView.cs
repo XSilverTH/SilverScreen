@@ -1,5 +1,6 @@
 using Adw;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -8,9 +9,9 @@ using Functions = GLib.Functions;
 using Spinner = Gtk.Spinner;
 
 namespace SilverScreen.Views.Queue;
-
 public partial class QueueView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<QueueView>();
     private readonly Action _closeRequested;
     private readonly StatusPage _emptyPage;
     private readonly SignalListItemFactory _factory;

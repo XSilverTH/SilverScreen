@@ -35,6 +35,7 @@ public sealed class YtDlpHistoryClient(
         if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
             return new HistoryFeedResult([], null, false, "Authentication session not found.", true);
 
+        Logger.Information("Fetching YouTube watch history starting at index {StartIndex}", startIndex);
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         if (cookieFile is null || string.IsNullOrWhiteSpace(cookieFile.Path))
             return new HistoryFeedResult([], null, false, "Failed to create temporary cookie lease.", true);

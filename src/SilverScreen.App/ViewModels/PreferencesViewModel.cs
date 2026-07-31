@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -38,6 +39,7 @@ public enum PreferencesMutuallyExclusiveOption
 
 public sealed class PreferencesViewModel
 {
+    private static readonly ILogger Logger = Log.ForContext<PreferencesViewModel>();
     public const string PersistenceErrorMessage = "Unable to save preferences. Your changes were not applied.";
 
     private readonly IPreferencesService _preferencesService;

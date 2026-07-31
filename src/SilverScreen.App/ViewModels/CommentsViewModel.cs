@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -25,6 +26,7 @@ public sealed record CommentsViewState(
 
 public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<CommentsViewModel>();
     private const string DefaultErrorMessage = "Comments could not be loaded. Try again shortly.";
     private readonly IYouTubeCommentService _comments = comments ?? throw new ArgumentNullException(nameof(comments));
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];

@@ -1,12 +1,13 @@
 using System.Text.Json;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-
 namespace SilverScreen.Infrastructure.Features.Playback;
 
 /// <summary>Persists per-video watch progress locally so cards can reflect playback across launches.</summary>
 public sealed class FileWatchProgressService : IWatchProgressService
 {
+    private static readonly ILogger Logger = Log.ForContext<FileWatchProgressService>();
     private const double CompletionThreshold = 0.9;
     private const double MinimumVisibleFraction = 0.01;
     private const double MinimumVisibleSeconds = 2;
@@ -55,6 +56,7 @@ public sealed class FileWatchProgressService : IWatchProgressService
                 return;
 
             _fractions[video.Id] = fraction;
+            Logger.Debug("Updated watch progress for video {VideoId} to {Fraction:P1}", video.Id, fraction);
             WriteAtomically(_fractions);
             changed = new WatchProgress(video.Id, fraction);
         }
@@ -67,14 +69,13 @@ public sealed class FileWatchProgressService : IWatchProgressService
         try
         {
             if (!File.Exists(filePath)) return [];
-            return JsonSerializer.Deserialize(File.ReadAllText(filePath), WatchProgressJsonContext.Default.WatchProgressMap) ?? [];
+            var map = JsonSerializer.Deserialize(File.ReadAllText(filePath), WatchProgressJsonContext.Default.WatchProgressMap) ?? [];
+            Logger.Information("Loaded watch progress for {Count} videos from {FilePath}", map.Count, filePath);
+            return map;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or IOException)
         {
-            return [];
-        }
-        catch (IOException)
-        {
+            Logger.Warning(ex, "Failed to load watch progress from {FilePath}", filePath);
             return [];
         }
     }
@@ -91,6 +92,10 @@ public sealed class FileWatchProgressService : IWatchProgressService
             File.WriteAllText(temporaryPath,
                 JsonSerializer.Serialize(fractions, WatchProgressJsonContext.Default.WatchProgressMap));
             File.Move(temporaryPath, _filePath, true);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to save watch progress to {FilePath}", _filePath);
         }
         finally
         {

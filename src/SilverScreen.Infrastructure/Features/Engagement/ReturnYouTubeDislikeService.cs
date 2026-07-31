@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -10,6 +11,7 @@ namespace SilverScreen.Infrastructure.Features.Engagement;
 
 public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<ReturnYouTubeDislikeService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
     private readonly bool _disposeHttpClient;
@@ -37,8 +39,11 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         CancellationToken cancellationToken = default)
     {
         if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return null;
-        if (_engagementByVideoId.TryGetValue(videoId, out var cached)) return cached;
-
+        if (_engagementByVideoId.TryGetValue(videoId, out var cached))
+        {
+            Logger.Debug("ReturnYouTubeDislike cache hit for video {VideoId}", videoId);
+            return cached;
+        }
         var requestUri = new UriBuilder(VotesEndpoint)
         {
             Query = $"videoId={Uri.EscapeDataString(videoId)}"
@@ -50,7 +55,10 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
+            {
+                Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode} for video {VideoId}", response.StatusCode, videoId);
                 return null;
+            }
 
             await using var responseStream =
                 await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -63,6 +71,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
             var engagement = new VideoEngagement(payload.Likes, payload.Dislikes);
             _engagementByVideoId.TryAdd(videoId, engagement);
+            Logger.Information("Fetched engagement stats for video {VideoId}: {Likes} likes, {Dislikes} dislikes", videoId, payload.Likes, payload.Dislikes);
             return engagement;
         }
         catch (OperationCanceledException)
@@ -71,6 +80,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or NotSupportedException)
         {
+            Logger.Warning(exception, "Failed to fetch dislike counts for video {VideoId}", videoId);
             return null;
         }
     }

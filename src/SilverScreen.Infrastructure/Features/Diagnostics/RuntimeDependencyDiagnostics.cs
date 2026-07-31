@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Playback;
@@ -7,6 +8,7 @@ namespace SilverScreen.Infrastructure.Features.Diagnostics;
 /// <summary>Checks whether the runtime dependencies configured for SilverScreen can be reached.</summary>
 public sealed class RuntimeDependencyDiagnostics
 {
+    private static readonly ILogger Logger = Log.ForContext<RuntimeDependencyDiagnostics>();
     private readonly Func<string, bool> _isExecutableAvailable;
     private readonly Func<bool> _isLibMpvAvailable;
     private readonly IPreferencesService _preferencesService;
@@ -40,21 +42,38 @@ public sealed class RuntimeDependencyDiagnostics
         var warnings = new List<string>(3);
 
         if (!_isExecutableAvailable(preferences.YtDlpExecutablePath))
-            warnings.Add(RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath));
+        {
+            var msg = RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath);
+            Logger.Warning("Startup dependency warning: {Warning}", msg);
+            warnings.Add(msg);
+        }
 
         switch (preferences.PlaybackBackend)
         {
             case PlaybackBackends.ExternalMpv when
                 !_isExecutableAvailable(preferences.MpvExecutablePath):
-                warnings.Add(RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath));
+                var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath);
+                Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
+                warnings.Add(mpvMsg);
                 break;
             case PlaybackBackends.EmbeddedPlayer when !_isLibMpvAvailable():
-                warnings.Add(RuntimeDependencyGuidance.LibMpvUnavailable);
+                var libMpvMsg = RuntimeDependencyGuidance.LibMpvUnavailable;
+                Logger.Warning("Startup dependency warning: {Warning}", libMpvMsg);
+                warnings.Add(libMpvMsg);
                 break;
         }
 
         if (!_secretServiceAvailability.IsAvailable)
-            warnings.Add(RuntimeDependencyGuidance.SecretServiceUnavailable);
+        {
+            var secretMsg = RuntimeDependencyGuidance.SecretServiceUnavailable;
+            Logger.Warning("Startup dependency warning: {Warning}", secretMsg);
+            warnings.Add(secretMsg);
+        }
+
+        if (warnings.Count == 0)
+        {
+            Logger.Information("All runtime dependencies are verified and available");
+        }
 
         return warnings;
     }

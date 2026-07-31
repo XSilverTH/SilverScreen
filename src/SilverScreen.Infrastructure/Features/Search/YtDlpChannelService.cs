@@ -17,6 +17,7 @@ public sealed class YtDlpChannelService(
     public async Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
         int startIndex, CancellationToken cancellationToken)
     {
+        Logger.Information("Loading channel page for {ChannelUrl} (Sort: {Sort}, StartIndex: {StartIndex})", channelUrl, sort, startIndex);
         var preferences = preferencesService.GetPreferences();
         var options = new YtDlpOptions
         {

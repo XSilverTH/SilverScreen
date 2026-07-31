@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Feed;
@@ -7,6 +8,7 @@ namespace SilverScreen.Features.Session;
 public sealed class SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
     : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<SessionValidationCoordinator>();
     private readonly Lock _lock = new();
 
     private readonly ISessionService _sessionService =
@@ -36,8 +38,8 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
 
     public async Task<string> ValidateAsync()
     {
+        Logger.Information("Starting YouTube session validation");
         CancellationToken token;
-        lock (_lock)
         {
             if (!HasManualSession()) return SessionValidationFormatter.NoActiveSessionMessage;
 

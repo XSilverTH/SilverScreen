@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.YouTube;
@@ -7,6 +8,7 @@ namespace SilverScreen.Infrastructure.Features.Feed;
 /// <summary>Keeps the current server-backed watch-history page sequence for the active session.</summary>
 public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHistoryService>();
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string BackendFailureMessage = "Watch history is temporarily unavailable.";
@@ -28,8 +30,10 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
 
     public async Task<AuthenticatedHistoryResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
     {
+        Logger.Information("Loading first page of watch history");
         if (!IsSessionActive())
         {
+            Logger.Information("No active YouTube session; returning authentication required for history");
             ClearCachedResults();
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
@@ -43,8 +47,9 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Exception while loading first page of watch history");
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
                 BackendFailureMessage);
         }
@@ -52,13 +57,14 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
 
     public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
     {
+        Logger.Information("Loading next page of watch history");
         if (!IsSessionActive())
         {
+            Logger.Information("No active YouTube session; returning authentication required for history");
             ClearCachedResults();
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
-
         string? continuationToken;
         lock (_lock)
         {
@@ -77,8 +83,9 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Exception while loading next page of watch history");
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
                 BackendFailureMessage);
         }

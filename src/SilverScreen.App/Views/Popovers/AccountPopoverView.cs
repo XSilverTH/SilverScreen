@@ -2,6 +2,7 @@ using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
@@ -11,6 +12,7 @@ namespace SilverScreen.Views.Popovers;
 
 public partial class AccountPopoverView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
     private readonly Stack _accountStack;
     private readonly TextView _manualEditor;
     private readonly Label _manualHeading;
@@ -161,6 +163,7 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private void OnWebLoginClicked(object? sender, EventArgs args)
     {
+        Logger.Information("AccountPopoverView web login button clicked");
         _openWebLogin();
     }
 
@@ -172,6 +175,7 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private void OnClearButtonClicked(object? sender, EventArgs args)
     {
+        Logger.Information("AccountPopoverView clear session button clicked");
         _viewModel.ClearSession();
     }
 

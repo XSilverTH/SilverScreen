@@ -42,6 +42,7 @@ public sealed class YtDlpSearchService : ISearchService
     {
         if (string.IsNullOrWhiteSpace(request.Query)) return SearchResultPage.Empty;
 
+        Logger.Information("Searching videos for query {Query} (StartIndex: {StartIndex})", request.Query, request.StartIndex);
         var activeOptions = _staticOptions;
         try
         {

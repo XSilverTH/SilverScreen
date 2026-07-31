@@ -37,6 +37,8 @@ public sealed class YtDlpHomeClient(
             (!int.TryParse(continuationToken, out startIndex) || startIndex < 1))
             return new HomeFeedResult([], null, true, "Invalid recommendation continuation.", false);
 
+        Logger.Information("Fetching YouTube home feed starting at index {StartIndex}", startIndex);
+
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
 
         var cookies = _sessionService.GetManualSessionCookies();
@@ -63,11 +65,11 @@ public sealed class YtDlpHomeClient(
         if (!firstResult.IsSuccess || firstVideos.Count > 0)
             return firstResult;
 
+        Logger.Information("Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
         var (retryResult, retryVideos) =
             await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken).ConfigureAwait(false);
         if (!retryResult.IsSuccess)
             return retryResult;
-
         return new HomeFeedResult(
             retryVideos,
             GetNextContinuationToken(startIndex, retryVideos.Count, pageSize),

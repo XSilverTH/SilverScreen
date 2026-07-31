@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Session;
@@ -8,6 +9,7 @@ namespace SilverScreen.ViewModels;
 
 public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<AccountViewModel>();
     private readonly IAccountProfileService _accountProfileService;
     private readonly ISessionService _sessionService;
     private readonly IStatusReporter _shell;
@@ -88,10 +90,12 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public bool SaveManualSession(string cookieContent)
     {
+        Logger.Information("SaveManualSession called");
         if (!string.IsNullOrWhiteSpace(cookieContent))
             return PersistSession(
                 cookieContent.Trim(),
                 "Manual YouTube session saved securely.");
+        Logger.Warning("Manual session save aborted: empty cookie content");
         _shell.ReportStatus("Manual YouTube session was not saved because no cookie content was entered.");
         return false;
     }
@@ -124,12 +128,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public void ClearSession()
     {
+        Logger.Information("Clearing active YouTube session");
         try
         {
             _sessionService.ClearSession();
         }
         catch (SessionPersistenceException exception)
         {
+            Logger.Error(exception, "Failed to clear YouTube session");
             _shell.ReportStatus(exception.Message);
             return;
         }

@@ -1,4 +1,5 @@
 using System.Text;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -7,6 +8,7 @@ namespace SilverScreen.Infrastructure.Features.Session;
 public sealed class TemporaryCookieFileProvider(ISessionService sessionService, string? tempRoot = null)
     : ICookieFileProvider
 {
+    private static readonly ILogger Logger = Log.ForContext<TemporaryCookieFileProvider>();
     private readonly string _tempRoot = tempRoot ?? Path.GetTempPath();
 
     public CookieFileLease? CreateCookieFile()
@@ -40,11 +42,12 @@ public sealed class TemporaryCookieFileProvider(ISessionService sessionService, 
             {
                 writer.Write(cookies.Content);
             }
-
+            Logger.Debug("Created temporary cookie lease at {CookieFilePath}", cookieFilePath);
             return new CookieFileLease(cookieFilePath, directoryPath);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error(ex, "Failed to create temporary cookie file in {TempRoot}", _tempRoot);
             if (directoryCreated && Directory.Exists(directoryPath)) Directory.Delete(directoryPath, true);
 
             throw;

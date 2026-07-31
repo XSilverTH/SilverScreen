@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using GObject;
 using Gtk;
+using Serilog;
 using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.ViewModels;
@@ -13,6 +14,7 @@ namespace SilverScreen.Views.Account;
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 internal sealed class WebLoginWindow : WindowBase<Window>
 {
+    private static readonly ILogger Logger = Log.ForContext<WebLoginWindow>();
     private const string LoginUri =
         "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
 
@@ -34,6 +36,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
 
     internal WebLoginWindow(Gtk.Window parent, AccountViewModel account, Action closed)
     {
+        Logger.Information("Opening WebLoginWindow for YouTube authentication");
         _account = account;
         _closed = closed;
         _statusLabel = GetRequiredObject<Label>("web_login_status_label");
@@ -136,6 +139,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
 
     private void OnPersisted()
     {
+        Logger.Information("WebLoginWindow captured and persisted YouTube session");
         if (_disposed)
             return;
 
@@ -145,6 +149,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
 
     private void OnReadFailed(Exception exception)
     {
+        Logger.Warning(exception, "WebLoginWindow failed to read cookies");
         if (!_disposed)
             _statusLabel.SetText(
                 "Could not read the YouTube session. Continue signing in or close this window to cancel.");
@@ -152,6 +157,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
 
     private void OnPersistenceFailed()
     {
+        Logger.Warning("WebLoginWindow failed to save session to secret store");
         if (!_disposed)
             _statusLabel.SetText("Could not save the YouTube session because the system keyring is unavailable.");
     }

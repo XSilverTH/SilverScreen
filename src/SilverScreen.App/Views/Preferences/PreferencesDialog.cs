@@ -1,5 +1,6 @@
 using Adw;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -9,6 +10,7 @@ namespace SilverScreen.Views.Preferences;
 
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
+    private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
     private readonly SwitchRow _autoAdvanceNextVideoRow;
     private readonly SwitchRow _discordRichPresenceRow;
     private readonly SwitchRow _fullscreenRow;
@@ -33,9 +35,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)
     {
+        Logger.Information("Opening PreferencesDialog");
         _viewModel = new PreferencesViewModel(preferencesService);
         _reportStatus = reportStatus;
-
         _themeRow = GetRequiredObject<ComboRow>("theme_row");
         _ytdlpPathRow = GetRequiredObject<EntryRow>("ytdlp_path_row");
         _maxResultsRow = GetRequiredObject<EntryRow>("max_results_row");

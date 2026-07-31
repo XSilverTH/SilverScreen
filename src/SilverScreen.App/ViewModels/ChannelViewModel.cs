@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -25,6 +26,7 @@ public sealed record ChannelViewState(
 
 public sealed class ChannelViewModel(IChannelService channelService, IStatusReporter shell) : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private int? _nextStartIndex;
@@ -47,6 +49,7 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
     public async Task OpenChannelAsync(string channelUrl, string fallbackName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
+        Logger.Information("Opening channel {ChannelUrl} (FallbackName: {FallbackName})", channelUrl, fallbackName);
         await LoadAsync(channelUrl, fallbackName, ChannelVideoSort.Newest).ConfigureAwait(false);
     }
 

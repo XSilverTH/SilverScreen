@@ -1,3 +1,4 @@
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.YouTube;
@@ -6,6 +7,7 @@ namespace SilverScreen.Infrastructure.Features.Feed;
 
 public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHomeFeedService>();
     private const string AuthenticationRequiredMessage =
         "Sign in to YouTube to load recommendations.";
 
@@ -41,13 +43,14 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
     public async Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
     {
+        Logger.Information("Loading first page of authenticated home feed");
         if (!IsSessionActive())
         {
+            Logger.Information("No active YouTube session; returning authentication required status");
             ClearCachedResults();
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
-
         try
         {
             var clientResult = await _homeClient.GetHomeFeedAsync(null, cancellationToken);
@@ -57,8 +60,9 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Exception while loading first page of home feed");
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty,
                 BackendFailureMessage);
         }
@@ -66,13 +70,14 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
     public async Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
     {
+        Logger.Information("Loading next page of authenticated home feed");
         if (!IsSessionActive())
         {
+            Logger.Information("No active YouTube session; returning authentication required status");
             ClearCachedResults();
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
-
         string? currentToken;
         lock (_lock)
         {
@@ -92,8 +97,9 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Exception while loading next page of home feed");
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, FeedPage.Empty,
                 BackendFailureMessage);
         }

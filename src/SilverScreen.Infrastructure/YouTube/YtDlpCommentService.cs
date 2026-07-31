@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Search;
@@ -12,6 +13,7 @@ public sealed class YtDlpCommentService(
     TimeSpan? timeout = null)
     : IYouTubeCommentService
 {
+    private static readonly ILogger Logger = Log.ForContext<YtDlpCommentService>();
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
 
@@ -29,6 +31,8 @@ public sealed class YtDlpCommentService(
         if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
             return Failure("Comments are unavailable for this video.");
 
+        Logger.Information("Fetching comments for video {VideoId} (Sort: {Sort})", videoId, sort);
+
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         var cookieFilePath = string.IsNullOrWhiteSpace(cookieFile?.Path) ? null : cookieFile.Path;
 
@@ -45,18 +49,23 @@ public sealed class YtDlpCommentService(
         {
             throw;
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex)
         {
+            Logger.Warning(ex, "Timeout fetching comments for video {VideoId}", videoId);
             return Failure(RuntimeDependencyGuidance.YtDlpTimedOut);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Failed to execute yt-dlp to fetch comments for video {VideoId}", videoId);
             return Failure(RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
         }
 
         if (processResult.ExitCode != 0)
+        {
+            Logger.Warning("yt-dlp comment fetch returned exit code {ExitCode} for video {VideoId}", processResult.ExitCode, videoId);
             return Failure(RuntimeDependencyGuidance.YtDlpFailed(
                 $"the process exited with error code {processResult.ExitCode}."));
+        }
 
         if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
             return Failure(RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
@@ -69,8 +78,9 @@ public sealed class YtDlpCommentService(
                 true,
                 comments.Count == 0 ? "No comments were returned for this video." : "Comments loaded.");
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            Logger.Warning(ex, "Failed to parse comment JSON output for video {VideoId}", videoId);
             return Failure(RuntimeDependencyGuidance.YtDlpFailed("the comment output could not be read."));
         }
     }

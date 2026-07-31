@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -9,9 +10,9 @@ using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.History;
-
 public partial class HistoryView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<HistoryView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly Stack _stack;
     private readonly ScrolledWindow _scrolledWindow;
