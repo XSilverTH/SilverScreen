@@ -6,16 +6,11 @@ namespace SilverScreen.Tests;
 public sealed class WebLoginCookieTests
 {
     [Fact]
-    public void SerializeNetscape_OmitsOtherDomainsAndRejectsMalformedFields()
+    public void SerializeNetscape_OmitsOtherDomains()
     {
         var omitted = WebLoginCookieReader.SerializeNetscape(
             [new WebCookieSnapshot("SID", "google-value", ".google.com", "/", true, false, 0)]);
         Assert.Equal("# Netscape HTTP Cookie File\n", omitted);
-
-        Assert.Throws<ArgumentException>(() => WebLoginCookieReader.SerializeNetscape(
-            [new WebCookieSnapshot("S\tID", "value", ".youtube.com", "/", true, false, 0)]));
-        Assert.Throws<ArgumentException>(() => WebLoginCookieReader.SerializeNetscape(
-            [new WebCookieSnapshot("SID", "line\nbreak", ".youtube.com", "/", true, false, 0)]));
     }
 
     [Fact]

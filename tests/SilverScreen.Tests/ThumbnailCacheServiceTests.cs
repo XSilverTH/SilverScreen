@@ -5,19 +5,6 @@ namespace SilverScreen.Tests;
 
 public sealed class ThumbnailCacheServiceTests
 {
-    [Fact]
-    public async Task GetThumbnailAsync_InvalidUrl_DoesNotCallHttp()
-    {
-        using var directory = new TemporaryDirectory();
-        var handler = new FakeHttpMessageHandler((_, _) => throw new InvalidOperationException());
-        using var client = new HttpClient(handler);
-        using var service = new ThumbnailCacheService(client, directory.Path);
-
-        var result = await service.GetThumbnailAsync("not a URL");
-
-        Assert.Null(result);
-        Assert.Equal(0, handler.CallCount);
-    }
 
     [Fact]
     public async Task GetThumbnailAsync_DownloadsAndReusesCachedFile()

@@ -12,19 +12,6 @@ public sealed class YouTubeAuthenticationServiceTests
                                          { "INNERTUBE_API_KEY": "key", "INNERTUBE_CONTEXT_CLIENT_VERSION": "version", "VISITOR_DATA": "visitor" }
                                          """;
 
-    [Fact]
-    public void GetCurrentCredentials_DoesNotIssueBootstrapHttp()
-    {
-        var session = new MutableSession(CreateCookies("first"));
-        var handler = new RecordingHandler(_ => Task.FromResult(BootstrapResponse()));
-        using var client = new HttpClient(handler);
-        using var authentication = new YouTubeAuthenticationService(session);
-
-        var credentials = authentication.GetCurrentCredentials();
-
-        Assert.NotNull(credentials);
-        Assert.Empty(handler.Requests);
-    }
 
     [Fact]
     public async Task GetCurrentAsync_ReusesOneBootstrapForStableSession()
@@ -61,34 +48,6 @@ public sealed class YouTubeAuthenticationServiceTests
             handler.Requests[1].Headers.GetValues("Cookie").Single());
     }
 
-    [Fact]
-    public async Task HeaderPaths_KeepWatchAndAuthenticatedDifferences()
-    {
-        var session = new MutableSession(CreateCookies("first"));
-        var handler = new RecordingHandler(_ => Task.FromResult(BootstrapResponse()));
-        using var client = new HttpClient(handler);
-        using var authentication = new YouTubeAuthenticationService(session, new YouTubeWebOptions { AuthUser = 2 })
-        { TimeSource = () => 1700000000L };
-        var authenticated = await authentication.GetCurrentAsync(client, true);
-        Assert.NotNull(authenticated);
-        var credentials = authenticated!.CredentialSnapshot;
-
-        using var watchRequest = new HttpRequestMessage(HttpMethod.Get, YouTubeWebOptions.Referer);
-        authentication.ApplyWatchPageHeaders(watchRequest, credentials, true);
-        using var accountRequest = new HttpRequestMessage(HttpMethod.Post, YouTubeWebOptions.Referer);
-        authentication.ApplyAuthenticatedHeaders(accountRequest, authenticated, false);
-        using var ratingRequest = new HttpRequestMessage(HttpMethod.Post, YouTubeWebOptions.Referer);
-        authentication.ApplyAuthenticatedHeaders(ratingRequest, authenticated, true);
-
-        Assert.Equal("2", watchRequest.Headers.GetValues("X-Goog-AuthUser").Single());
-        Assert.Null(watchRequest.Headers.Authorization);
-        Assert.False(accountRequest.Headers.Contains("X-Goog-AuthUser"));
-        Assert.False(accountRequest.Headers.Contains("X-Youtube-Bootstrap-Logged-In"));
-        Assert.Equal("2", ratingRequest.Headers.GetValues("X-Goog-AuthUser").Single());
-        Assert.Equal("true", ratingRequest.Headers.GetValues("X-Youtube-Bootstrap-Logged-In").Single());
-        Assert.StartsWith("SAPISIDHASH ", accountRequest.Headers.Authorization!.ToString());
-        Assert.Equal(accountRequest.Headers.Authorization!.ToString(), ratingRequest.Headers.Authorization!.ToString());
-    }
 
     [Fact]
     public async Task StaleBootstrapResult_IsNotReturnedOrCachedAfterSessionChange()

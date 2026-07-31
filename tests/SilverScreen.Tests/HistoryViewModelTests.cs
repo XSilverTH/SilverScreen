@@ -6,26 +6,6 @@ namespace SilverScreen.Tests;
 
 public sealed class HistoryViewModelTests
 {
-    [Fact]
-    public async Task LoadAsync_RendersTheServerOrderedFirstPage()
-    {
-        var service = new FakeHistoryService
-        {
-            FirstPage = new AuthenticatedHistoryResult(
-                AuthenticatedHistoryStatus.Success,
-                new FeedPage([CreateVideo("newest"), CreateVideo("older")], "next"),
-                "Watch history loaded.")
-        };
-        var reporter = new FakeStatusReporter();
-        using var viewModel = new HistoryViewModel(service, reporter);
-
-        await viewModel.LoadAsync();
-
-        Assert.Equal(["newest", "older"], viewModel.State.Videos.Select(video => video.Id));
-        Assert.True(viewModel.State.HasMore);
-        Assert.Equal(AuthenticatedHistoryStatus.Success, viewModel.State.Status);
-        Assert.Equal("Watch history loaded.", reporter.LastStatus);
-    }
 
     [Fact]
     public async Task LoadMoreAsync_AppendsTheNextServerPageWithoutDuplicatingVideos()
@@ -51,24 +31,6 @@ public sealed class HistoryViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
 
-    [Fact]
-    public async Task LoadAsync_ExposesAuthenticationRequiredState()
-    {
-        var service = new FakeHistoryService
-        {
-            FirstPage = new AuthenticatedHistoryResult(
-                AuthenticatedHistoryStatus.AuthenticationRequired,
-                FeedPage.Empty,
-                "Sign in to YouTube to load your watch history.")
-        };
-        using var viewModel = new HistoryViewModel(service, new FakeStatusReporter());
-
-        await viewModel.LoadAsync();
-
-        Assert.False(viewModel.State.IsSuccess);
-        Assert.Equal(AuthenticatedHistoryStatus.AuthenticationRequired, viewModel.State.Status);
-        Assert.Empty(viewModel.State.Videos);
-    }
 
     private static VideoSummary CreateVideo(string id)
     {

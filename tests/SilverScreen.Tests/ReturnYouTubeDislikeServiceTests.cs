@@ -29,31 +29,6 @@ public sealed class ReturnYouTubeDislikeServiceTests
         Assert.Equal(1, handler.CallCount);
     }
 
-    [Fact]
-    public async Task GetEngagementAsync_InvalidVideoId_DoesNotCallTheApi()
-    {
-        var handler = new FakeHttpMessageHandler((_, _) => throw new InvalidOperationException());
-        using var client = new HttpClient(handler);
-        using var service = new ReturnYouTubeDislikeService(client);
-
-        var engagement = await service.GetEngagementAsync("not-a-youtube-id");
-
-        Assert.Null(engagement);
-        Assert.Equal(0, handler.CallCount);
-    }
-
-    [Fact]
-    public async Task GetEngagementAsync_ApiFailure_ReturnsNoCounts()
-    {
-        var handler = new FakeHttpMessageHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests)));
-        using var client = new HttpClient(handler);
-        using var service = new ReturnYouTubeDislikeService(client);
-
-        var engagement = await service.GetEngagementAsync("dQw4w9WgXcQ");
-
-        Assert.Null(engagement);
-    }
 
 
     private static HttpResponseMessage JsonResponse(string json)

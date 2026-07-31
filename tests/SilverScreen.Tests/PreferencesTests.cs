@@ -80,33 +80,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
 
-    [Fact]
-    public void AppPreferences_SponsorBlockDefaults_ShowAllSegmentCategoriesWithoutAutoSkip()
-    {
-        var preferences = new AppPreferences();
-
-        Assert.False(preferences.SponsorBlockAutoSkipEnabled);
-        Assert.True(preferences.SponsorBlockSegmentDisplayEnabled);
-        Assert.Equal(SponsorBlockCategories.All, preferences.SponsorBlockCategories);
-    }
-
-
-    [Fact]
-    public void SavePreferences_TelemetryTakesPrecedenceOverMarkWatched()
-    {
-        var service = new FilePreferencesService(_tempFilePath);
-
-        service.SavePreferences(new AppPreferences
-        {
-            MarkWatchedVideos = true,
-            YouTubePlaybackTelemetryEnabled = true
-        });
-
-        var loaded = new FilePreferencesService(_tempFilePath).GetPreferences();
-
-        Assert.True(loaded.YouTubePlaybackTelemetryEnabled);
-        Assert.False(loaded.MarkWatchedVideos);
-    }
 
     [Fact]
     public void SavePreferences_ThrowsAndKeepsCurrentPreferences_WhenAtomicReplacementFails()

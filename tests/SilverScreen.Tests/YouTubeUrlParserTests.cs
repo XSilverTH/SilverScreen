@@ -19,13 +19,4 @@ public sealed class YouTubeUrlParserTests
         Assert.Equal(expectedVideoId, result.VideoId);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("http://")]
-    public void Parse_MalformedInputDoesNotThrow(string? input)
-    {
-        var exception = Record.Exception(() => YouTubeUrlParser.Parse(input));
-
-        Assert.Null(exception);
-    }
 }

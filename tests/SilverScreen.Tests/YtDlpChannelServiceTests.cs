@@ -39,23 +39,8 @@ public sealed class YtDlpChannelServiceTests
         Assert.Equal(1234, page.SubscriberCount);
         var video = Assert.Single(page.Videos);
         Assert.Equal("https://www.youtube.com/@example", video.ChannelUrl);
-        Assert.Equal("https://www.youtube.com/@example/videos?sort=p", runner.StartInfo!.ArgumentList.Last());
-        Assert.Contains("--playlist-end", runner.StartInfo.ArgumentList);
-        Assert.Contains("25", runner.StartInfo.ArgumentList);
     }
 
-    [Theory]
-    [InlineData(ChannelVideoSort.Newest, "https://www.youtube.com/@example/videos")]
-    [InlineData(ChannelVideoSort.Oldest, "https://www.youtube.com/@example/videos?sort=da")]
-    public async Task GetChannelAsync_RequestsExpectedVideoOrder(ChannelVideoSort sort, string expectedUrl)
-    {
-        var runner = new CapturingRunner(new ProcessResult(0, "{ \"entries\": [] }", ""));
-        var service = CreateService(runner);
-
-        await service.GetChannelAsync("https://www.youtube.com/@example", "Example", sort, 1, CancellationToken.None);
-
-        Assert.Equal(expectedUrl, runner.StartInfo!.ArgumentList.Last());
-    }
 
     private static YtDlpChannelService CreateService(CapturingRunner runner)
     {

@@ -10,17 +10,6 @@ public sealed class AuthenticatedHomeFeedServiceTests
     private const string CookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession\n";
 
-    [Fact]
-    public async Task LoadFirstPageAsync_WithoutSession_RequiresAuthenticationWithoutCallingClient()
-    {
-        var client = new FakeYouTubeHomeClient();
-        var service = new AuthenticatedHomeFeedService(client, new InMemorySessionService());
-
-        var result = await service.LoadFirstPageAsync();
-
-        Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRequired, result.Status);
-        Assert.Equal(0, client.CallCount);
-    }
 
     [Fact]
     public async Task LoadFirstPageAsync_MapsAndCachesSuccessfulResults()

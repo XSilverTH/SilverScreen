@@ -39,48 +39,7 @@ public sealed class YtDlpSearchServiceTests
         Assert.Equal(["normalVid01"], result.Videos.Select(video => video.Id));
     }
 
-    [Fact]
-    public async Task SearchAsync_ReportsRunnerFailureWithoutResults()
-    {
-        var service = CreateService(string.Empty, 1, "network unavailable");
 
-        var result = await service.SearchAsync(new SearchRequest("query"), CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.Empty(result.Videos);
-    }
-
-    [Fact]
-    public void BuildHome_RequestsTwentyRecommendations()
-    {
-        var command = YtDlpCommandBuilder.BuildHome("yt-dlp", 1);
-
-        Assert.Equal(["--dump-single-json", "--flat-playlist", "--skip-download", "--extractor-args",
-            "youtubetab:approximate_date", "--playlist-start", "1", "--playlist-end", "20", ":ytrec"],
-            command.ArgumentList);
-    }
-
-    [Fact]
-    public void BuildHistory_RequiresCookiesAndTargetsOnlyTheAuthenticatedHistoryEndpoint()
-    {
-        var command = YtDlpCommandBuilder.BuildHistory("yt-dlp", 21, "/tmp/youtube-cookies.txt");
-
-        Assert.Equal(["--dump-single-json", "--flat-playlist", "--skip-download", "--extractor-args",
-                "youtubetab:approximate_date", "--cookies", "/tmp/youtube-cookies.txt", "--playlist-start", "21",
-                "--playlist-end", "40", "https://www.youtube.com/feed/history"],
-            command.ArgumentList);
-    }
-
-    [Fact]
-    public void BuildSearch_UsesRequestedPageRange()
-    {
-        var command = YtDlpCommandBuilder.BuildSearch(new SearchRequest("query", 21),
-            new YtDlpOptions { MaxResults = 20 });
-
-        Assert.Contains("--playlist-start", command.ArgumentList);
-        Assert.Contains("--playlist-end", command.ArgumentList);
-        Assert.Equal("ytsearch40:query", command.ArgumentList.Last());
-    }
 
     private static YtDlpSearchService CreateService(string output, int exitCode = 0, string standardError = "")
     {

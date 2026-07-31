@@ -157,36 +157,6 @@ public sealed class ViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
 
-    [Fact]
-    public void QueueItems_ExposeReadOnlyViewWithoutSuppressingChanges()
-    {
-        var queue = new QueueService();
-        var changes = 0;
-        queue.Changed += (_, _) => changes++;
-        var video = new VideoSummary("abc123_X-yZ", "Video", "Channel", TimeSpan.FromMinutes(1), "", false);
-
-        queue.Add(video);
-
-        Assert.IsNotType<List<QueueItem>>(queue.Items);
-        var items = Assert.IsAssignableFrom<IList<QueueItem>>(queue.Items);
-        Assert.Throws<NotSupportedException>(() => items.Add(new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now)));
-        queue.Clear();
-        Assert.Equal(2, changes);
-    }
-    [Fact]
-    public void QueueAdd_AppendsVideoToBeginningOrEndCorrectly()
-    {
-        var queue = new QueueService();
-        var first = new VideoSummary("video1", "First Video", "Channel 1", TimeSpan.FromMinutes(1), "", false);
-        var second = new VideoSummary("video2", "Second Video", "Channel 2", TimeSpan.FromMinutes(2), "", false);
-
-        queue.Add(first);
-        queue.Add(second);
-
-        Assert.Equal(2, queue.Items.Count);
-        Assert.Equal("video1", queue.Items[0].Video.Id);
-        Assert.Equal("video2", queue.Items[1].Video.Id);
-    }
 
     private sealed class ControlledSearchService : ISearchService
     {

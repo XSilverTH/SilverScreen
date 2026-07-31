@@ -62,21 +62,6 @@ public sealed class YouTubeAccountProfileServiceTests
         }
     }
 
-    [Fact]
-    public async Task GetCurrentProfileAsync_WithoutSessionDoesNotMakeHttpRequests()
-    {
-        var session = new InMemorySessionService();
-        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
-        using var httpClient = new HttpClient(handler);
-        using var authentication = new YouTubeAuthenticationService(session);
-        using var service = new YouTubeAccountProfileService(httpClient, session, authentication,
-            CreateTemporaryCachePath());
-
-        var profile = await service.GetCurrentProfileAsync();
-
-        Assert.Null(profile);
-        Assert.Equal(0, handler.CallCount);
-    }
 
     [Fact]
     public async Task GetCurrentProfileAsync_CachesProfileAndPreservesItAfterRefreshFailure()

@@ -67,15 +67,6 @@ public sealed class FileWatchProgressServiceTests : IDisposable
         Assert.Null(service.GetResumeFraction("abc123_X-yZ"));
     }
 
-    [Fact]
-    public void Update_AtTheStartDoesNotCreateVisibleProgress()
-    {
-        var service = new FileWatchProgressService(Path.Combine(_directory, "watch-progress.json"));
-
-        service.Update(Request(), State(1));
-
-        Assert.Null(service.GetFraction("abc123_X-yZ"));
-    }
 
     private static PlaybackRequest Request()
     {

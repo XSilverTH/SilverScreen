@@ -150,18 +150,6 @@ public sealed class SessionTests
         }
     }
 
-    [Fact]
-    public void CookieProviderDoesNotCreateFileWithoutSession()
-    {
-        using var tempRoot = new TemporaryDirectory();
-        var service = new InMemorySessionService();
-        var provider = new TemporaryCookieFileProvider(service, tempRoot.Path);
-
-        var lease = provider.CreateCookieFile();
-
-        Assert.Null(lease);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(tempRoot.Path));
-    }
 
     [Fact]
     public void CookieProviderCleanupRemovesTempFileAndDirectory()

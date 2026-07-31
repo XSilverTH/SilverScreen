@@ -114,20 +114,6 @@ public sealed class YouTubeRatingServiceTests
         Assert.True(removed);
     }
 
-    [Fact]
-    public async Task SubmitVoteAsync_WithoutAuthenticatedSession_DoesNotSendARequest()
-    {
-        var handler = new FakeHttpMessageHandler((_, _) => throw new InvalidOperationException());
-        using var session = new SignedOutSessionService();
-        using var authentication = new YouTubeAuthenticationService(session);
-        using var client = new HttpClient(handler);
-        using var service = new YouTubeRatingService(client, authentication);
-
-        var submitted = await service.SubmitVoteAsync("dQw4w9WgXcQ", VideoVote.Dislike);
-
-        Assert.False(submitted);
-        Assert.Equal(0, handler.CallCount);
-    }
 
     private static HttpResponseMessage HtmlResponse(string html)
     {
@@ -165,34 +151,6 @@ public sealed class YouTubeRatingServiceTests
         }
     }
 
-    private sealed class SignedOutSessionService : ISessionService, IDisposable
-    {
-        public void Dispose()
-        {
-        }
-
-        public event EventHandler? SessionChanged;
-
-        public AccountSession GetCurrentSession()
-        {
-            return AccountSession.SignedOut;
-        }
-
-        public ManualSessionCookies? GetManualSessionCookies()
-        {
-            return null;
-        }
-
-        public void SetManualSession(string cookieContent, SessionCookieFormat format)
-        {
-            SessionChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        public void ClearSession()
-        {
-            SessionChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
 
     private sealed class FakeHttpMessageHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler

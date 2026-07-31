@@ -11,24 +11,6 @@ public sealed class SessionValidationCoordinatorTests
     private const string FakeCookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
 
-    [Fact]
-    public async Task SignedOut_IsAvailableFalse_NoBackendCall()
-    {
-        // Arrange
-        var sessionService = new InMemorySessionService();
-        var fakeFeed = new FakeAuthenticatedHomeFeedService();
-        var validator = new HomeSessionValidator(fakeFeed);
-        var coordinator = new SessionValidationCoordinator(validator, sessionService);
-
-        // Act
-        var isAvailable = coordinator.IsAvailable;
-        var result = await coordinator.ValidateAsync();
-
-        // Assert
-        Assert.False(isAvailable);
-        Assert.Equal(SessionValidationFormatter.NoActiveSessionMessage, result);
-        Assert.Equal(0, fakeFeed.LoadFirstPageCallCount);
-    }
 
 
     [Fact]

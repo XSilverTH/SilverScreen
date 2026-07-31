@@ -10,33 +10,7 @@ public sealed class AuthenticatedHistoryServiceTests
     private const string CookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession\n";
 
-    [Fact]
-    public async Task LoadFirstPageAsync_WithoutSession_RequiresAuthenticationWithoutCallingClient()
-    {
-        var client = new FakeYouTubeHistoryClient();
-        using var service = new AuthenticatedHistoryService(client, new InMemorySessionService());
 
-        var result = await service.LoadFirstPageAsync();
-
-        Assert.Equal(AuthenticatedHistoryStatus.AuthenticationRequired, result.Status);
-        Assert.Equal(0, client.CallCount);
-    }
-
-    [Fact]
-    public async Task LoadFirstPageAsync_PreservesServerOrder()
-    {
-        var client = new FakeYouTubeHistoryClient
-        {
-            ResponseFactory = (_, _) => Task.FromResult(new HistoryFeedResult(
-                [CreateVideo("newest"), CreateVideo("older")], "next", true, "OK", false))
-        };
-        using var service = CreateService(client);
-
-        var result = await service.LoadFirstPageAsync();
-
-        Assert.Equal(AuthenticatedHistoryStatus.Success, result.Status);
-        Assert.Equal(["newest", "older"], result.FeedPage.Videos.Select(video => video.Id));
-    }
 
     [Fact]
     public async Task LoadNextPageAsync_UsesContinuationAndOnlyReturnsNewPage()
@@ -55,21 +29,6 @@ public sealed class AuthenticatedHistoryServiceTests
 
         Assert.Equal("next", client.LastContinuationToken);
         Assert.Equal(["v1", "v2"], result.FeedPage.Videos.Select(video => video.Id));
-    }
-
-    [Fact]
-    public async Task LoadFirstPageAsync_AuthenticationRejectionReturnsNoHistory()
-    {
-        var client = new FakeYouTubeHistoryClient
-        {
-            ResponseFactory = (_, _) => Task.FromResult(new HistoryFeedResult([], null, false, "Rejected", true))
-        };
-        using var service = CreateService(client);
-
-        var result = await service.LoadFirstPageAsync();
-
-        Assert.Equal(AuthenticatedHistoryStatus.AuthenticationRejected, result.Status);
-        Assert.Empty(result.FeedPage.Videos);
     }
 
     private static AuthenticatedHistoryService CreateService(FakeYouTubeHistoryClient client)

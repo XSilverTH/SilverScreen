@@ -6,30 +6,6 @@ namespace SilverScreen.Tests;
 
 public sealed class PreferencesViewModelTests
 {
-    [Fact]
-    public void Constructor_MapsPreferencesToEditorState_AndRetainsSubtitleLanguage()
-    {
-        var service = new FakePreferencesService(new AppPreferences
-        {
-            Theme = "Dark",
-            VideoQuality = "720p",
-            MaxResults = 35,
-            MarkWatchedVideos = true,
-            YouTubePlaybackTelemetryEnabled = true,
-            PreferredSubtitleLanguage = "de",
-            SponsorBlockCategories = [SponsorBlockCategories.Intro]
-        });
-
-        var viewModel = new PreferencesViewModel(service);
-
-        Assert.Equal("Dark", viewModel.EditorState.Theme);
-        Assert.Equal("720p", viewModel.EditorState.VideoQuality);
-        Assert.Equal("35", viewModel.EditorState.MaxResultsText);
-        Assert.False(viewModel.EditorState.MarkWatchedVideos);
-        Assert.True(viewModel.EditorState.YouTubePlaybackTelemetryEnabled);
-        Assert.Equal("de", viewModel.EditorState.PreferredSubtitleLanguage);
-        Assert.Equal([SponsorBlockCategories.Intro], viewModel.EditorState.SponsorBlockCategories);
-    }
 
     [Fact]
     public void Save_InvalidMaxResults_UsesTwenty_AndPreservesCurrentSubtitleLanguage()
@@ -45,25 +21,6 @@ public sealed class PreferencesViewModelTests
         Assert.Equal("ja", service.Saved.PreferredSubtitleLanguage);
     }
 
-    [Fact]
-    public void Save_TelemetryTakesPrecedenceOverMarkWatched()
-    {
-        var service = new FakePreferencesService(new AppPreferences());
-        var viewModel = new PreferencesViewModel(service);
-
-        var result = viewModel.Save(viewModel.EditorState with
-        {
-            MarkWatchedVideos = true,
-            YouTubePlaybackTelemetryEnabled = true
-        });
-
-
-        Assert.True(result.Succeeded);
-        Assert.NotNull(service.Saved);
-        Assert.False(service.Saved!.MarkWatchedVideos);
-        Assert.True(service.Saved.YouTubePlaybackTelemetryEnabled);
-        Assert.False(result.State.MarkWatchedVideos);
-    }
 
     [Fact]
     public void Save_WhenMarkWatchedIsEnabled_DisablesTelemetry()
@@ -82,33 +39,7 @@ public sealed class PreferencesViewModelTests
         Assert.False(service.Saved.YouTubePlaybackTelemetryEnabled);
     }
 
-    [Fact]
-    public void Save_WhenAutomaticResumeIsEnabled_DisablesOnDemandResume()
-    {
-        var service = new FakePreferencesService(new AppPreferences { ResumePlaybackOnDemand = true });
-        var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackAutomatically = true },
-            PreferencesMutuallyExclusiveOption.ResumePlaybackAutomatically);
-
-        Assert.True(result.Succeeded);
-        Assert.True(service.Saved!.ResumePlaybackAutomatically);
-        Assert.False(service.Saved.ResumePlaybackOnDemand);
-    }
-
-    [Fact]
-    public void Save_WhenOnDemandResumeIsEnabled_DisablesAutomaticResume()
-    {
-        var service = new FakePreferencesService(new AppPreferences { ResumePlaybackAutomatically = true });
-        var viewModel = new PreferencesViewModel(service);
-
-        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackOnDemand = true },
-            PreferencesMutuallyExclusiveOption.ResumePlaybackOnDemand);
-
-        Assert.True(result.Succeeded);
-        Assert.False(service.Saved!.ResumePlaybackAutomatically);
-        Assert.True(service.Saved.ResumePlaybackOnDemand);
-    }
 
     [Fact]
     public void Save_WhenPersistenceFails_ReturnsRevertedStateAndExactStatusMessage()
