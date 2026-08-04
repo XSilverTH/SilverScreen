@@ -144,6 +144,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         {
             PlayAsync = async video =>
                 _shell.Status = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
+            OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
             AddToQueue = video =>
             {
                 _services.Queue.Add(video);
@@ -152,6 +153,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             ReportStatus = message => _shell.Status = message,
             OpenChannelAsync = OpenChannelAsync
         };
+    }
+
+    private async System.Threading.Tasks.Task OpenInAlternatePlayerAsync(VideoSummary video)
+    {
+        var request = new PlaybackRequest([video]);
+        var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
+        _shell.Status = playbackBackend == PlaybackBackends.EmbeddedPlayer
+            ? await _services.Playback.PlayAsync(request).ConfigureAwait(false)
+            : await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
     }
 
     private async System.Threading.Tasks.Task OpenChannelAsync(VideoSummary video)

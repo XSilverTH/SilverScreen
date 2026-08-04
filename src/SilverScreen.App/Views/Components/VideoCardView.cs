@@ -13,6 +13,7 @@ namespace SilverScreen.Views.Components;
 public sealed class VideoCardActions
 {
     public required Func<VideoSummary, Task> PlayAsync { get; init; }
+    public required Func<VideoSummary, Task> OpenInAlternatePlayerAsync { get; init; }
     public required Action<VideoSummary> AddToQueue { get; init; }
     public required Action<string> ReportStatus { get; init; }
     public Func<VideoSummary, Task>? OpenChannelAsync { get; init; }
@@ -66,6 +67,7 @@ public class VideoCardView : ViewBase<Box>
         _menuActionItems =
         [
             CreateMenuAction("play"),
+            CreateMenuAction("play-alternate"),
             CreateMenuAction("add-to-queue"),
             CreateMenuAction("open-channel"),
             CreateMenuAction("copy-link")
@@ -280,9 +282,14 @@ public class VideoCardView : ViewBase<Box>
         else if (ReferenceEquals(sender, _menuActionItems[1]))
         {
             if (_video is { } video)
-                _actions.AddToQueue(video);
+                StartAlternatePlay(video);
         }
         else if (ReferenceEquals(sender, _menuActionItems[2]))
+        {
+            if (_video is { } video)
+                _actions.AddToQueue(video);
+        }
+        else if (ReferenceEquals(sender, _menuActionItems[3]))
         {
             if (_video is { } video)
             {
@@ -296,9 +303,26 @@ public class VideoCardView : ViewBase<Box>
                 }
             }
         }
-        else if (ReferenceEquals(sender, _menuActionItems[3]))
+        else if (ReferenceEquals(sender, _menuActionItems[4]))
         {
             CopyLink();
+        }
+    }
+
+    private void StartAlternatePlay(VideoSummary video)
+    {
+        _ = PlayAlternateAsync(video);
+    }
+
+    private async Task PlayAlternateAsync(VideoSummary video)
+    {
+        try
+        {
+            await _actions.OpenInAlternatePlayerAsync(video);
+        }
+        catch (Exception)
+        {
+            _actions.ReportStatus("Playback could not be started.");
         }
     }
 
