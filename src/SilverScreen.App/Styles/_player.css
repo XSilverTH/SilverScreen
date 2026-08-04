@@ -161,3 +161,62 @@ button.player-chapter-marker:active {
     min-height: 10px;
     min-width: 1px;
 }
+
+
+.player-info-backdrop {
+    background-color: alpha(#000000, 0.42);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    opacity: 1;
+}
+
+.player-info-cue-button {
+    background-color: alpha(#000000, 0.68);
+    border: 1px solid alpha(#ffffff, 0.25);
+    border-radius: 999px;
+    color: alpha(#ffffff, 0.86);
+    padding: 5px 12px;
+    transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.player-info-cue-button:hover,
+.player-info-cue-button:focus-visible {
+    background-color: alpha(#ffffff, 0.2);
+    box-shadow: 0 0 18px alpha(#ffffff, 0.18);
+}
+
+.player-info-panel {
+    background-color: alpha(#1e1e1e, 0.96);
+    border: 1px solid alpha(#ffffff, 0.12);
+    border-radius: 16px;
+    color: #ffffff;
+    padding: 16px;
+}
+
+.player-info-panel button {
+    color: #ffffff;
+}
+
+.player-info-description {
+    background-color: transparent;
+    color: alpha(#ffffff, 0.88);
+    font-size: 1.05em;
+}
+
+.player-info-description text {
+    background-color: transparent;
+}
+
+.player-channel-button {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    min-height: 0;
+    min-width: 0;
+}
+
+.player-channel-button:hover,
+.player-channel-button:focus-visible {
+    background-color: alpha(#ffffff, 0.12);
+}

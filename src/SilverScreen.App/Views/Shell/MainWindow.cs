@@ -83,9 +83,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _statusLabel = GetRequiredObject<Label>("status_label");
         var accountPopover = GetRequiredObject<Popover>("account_popover");
 
-        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer, services.Preferences,
+        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
+            video => _ = OpenChannelAsync(video), services.Preferences,
             services.CookieFiles, services.PlaybackPresence, services.PlaybackTelemetry, services.WatchProgress,
-            services.VideoEngagement, services.YouTubeRating, services.SponsorBlock, services.Session, services.Comments);
+            services.VideoEngagement, services.YouTubeRating, services.SponsorBlock, services.Session, services.Comments,
+            services.VideoDetails);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();

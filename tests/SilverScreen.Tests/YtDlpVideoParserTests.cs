@@ -43,4 +43,26 @@ public sealed class YtDlpVideoParserTests
 
         Assert.Equal(2, videos.Count);
     }
+
+    [Fact]
+    public void ParseDetails_ExtractsDescriptionViewsPublicationAndChannel()
+    {
+        const string output = """
+                              {
+                                "title": "A detailed video",
+                                "uploader": "Example channel",
+                                "description": "The full description.",
+                                "view_count": 1234567,
+                                "timestamp": 1700000000
+                              }
+                              """;
+
+        var details = YtDlpVideoParser.ParseDetails(output);
+
+        Assert.Equal("The full description.", details.Description);
+        Assert.Equal(1_234_567, details.ViewCount);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_000), details.PublishedAt);
+        Assert.Equal("A detailed video", details.Title);
+        Assert.Equal("Example channel", details.ChannelName);
+    }
 }

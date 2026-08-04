@@ -28,6 +28,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private readonly Action _backRequested;
+    private readonly Action<VideoSummary> _channelRequested;
     private readonly Box _centerControls;
     private readonly Label _channelLabel;
     private readonly PlayerChapterOverlay _chapterOverlay;
@@ -52,6 +53,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Box _queueControls;
     private readonly Popover _settingsPopover;
     private readonly Dictionary<uint, Action> _shortcutMap = [];
+    private readonly Button _infoCloseButton;
+    private readonly Button _infoCueButton;
+    private readonly Button _infoBackdrop;
+    private readonly Label _infoTitleLabel;
+    private readonly Label _infoChannelLabel;
+    private readonly Label _infoStatsLabel;
+    private readonly Label _infoStatusLabel;
+    private readonly TextView _infoDescription;
+    private readonly ScrolledWindow _infoDescriptionScroller;
+    private readonly Revealer _infoRevealer;
+    private readonly IYouTubeVideoDetailsService _videoDetails;
     private readonly Label _speedLabel;
     private readonly Scale _speedScale;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
@@ -64,6 +76,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly MenuButton _volumeButton;
     private readonly Popover _volumePopover;
     private readonly Scale _volumeScale;
+    private CancellationTokenSource? _infoLoadCancellation;
+    private VideoSummary? _currentVideo;
+    private bool _infoOpen;
+    private int _infoLoadGeneration;
+    private bool _bottomEdgeActive;
     private string? _commentsVideoId;
     private bool _controlsVisible = true;
     private CookieFileLease? _cookieFile;
@@ -81,19 +98,21 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private TimeSpan _timelinePlaybackPosition;
     private bool _updatingControls;
 
-    public EmbeddedPlayerView(Action presentRequested, Action backRequested, IPreferencesService preferences,
-        ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
+    public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
+        IPreferencesService preferences, ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
         IYouTubePlaybackTelemetryService playbackTelemetry, IWatchProgressService watchProgress,
         IVideoEngagementService videoEngagement, IYouTubeRatingService youtubeRating, ISponsorBlockService sponsorBlock,
-        ISessionService session, IYouTubeCommentService comments)
+        ISessionService session, IYouTubeCommentService comments, IYouTubeVideoDetailsService videoDetails)
     {
         _presentRequested = presentRequested;
         _backRequested = backRequested;
+        _channelRequested = channelRequested;
         _preferences = preferences;
         _cookieFiles = cookieFiles;
         _playbackPresence = playbackPresence;
         _playbackTelemetry = playbackTelemetry;
         _watchProgress = watchProgress;
+        _videoDetails = videoDetails;
         _playerSurface = GetRequiredObject<GLArea>("player_surface");
         _headerBar = GetRequiredObject<Widget>("player_header_bar");
         _centerControls = GetRequiredObject<Box>("player_center_controls");
@@ -120,6 +139,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _channelLabel = GetRequiredObject<Label>("player_channel_label");
         _positionLabel = GetRequiredObject<Label>("player_position_label");
         _durationLabel = GetRequiredObject<Label>("player_duration_label");
+        _infoTitleLabel = GetRequiredObject<Label>("player_info_title_label");
+        _infoCloseButton = GetRequiredObject<Button>("player_info_close_button");
+        _infoCueButton = GetRequiredObject<Button>("player_info_cue_button");
+        _infoBackdrop = GetRequiredObject<Button>("player_info_backdrop");
+        _infoChannelLabel = GetRequiredObject<Label>("player_info_channel_label");
+        _infoStatsLabel = GetRequiredObject<Label>("player_info_stats_label");
+        _infoStatusLabel = GetRequiredObject<Label>("player_info_status_label");
+        _infoDescription = GetRequiredObject<TextView>("player_info_description");
+        _infoDescriptionScroller = GetRequiredObject<ScrolledWindow>("player_info_description_scroller");
+        _infoRevealer = GetRequiredObject<Revealer>("player_info_revealer");
         var likesLabel = GetRequiredObject<Label>("player_likes_label");
         var likeButton = GetRequiredObject<Button>("player_like_button");
         var likeImage = GetRequiredObject<Image>("player_like_image");
@@ -154,6 +183,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
+        SetInfoContent(null);
         SetupControlsAutohide();
         SetupKeyboardShortcuts();
 
@@ -163,6 +193,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     public new void Dispose()
     {
         if (_disposed) return;
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        _infoLoadCancellation = null;
         _subtitleController.Dispose();
         _engagement.Dispose();
         _sponsorBlockController.Dispose();
@@ -208,13 +241,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed) return false;
             EndSession(true);
             _request = request;
             _playbackTelemetrySession = _playbackTelemetry.Start(request);
             _cookieFile = _cookieFiles.CreateCookieFile();
             var preferences = _preferences.GetPreferences();
             var firstVideo = request.Videos[0];
+            _currentVideo = firstVideo;
             _titleLabel.SetText(firstVideo.Title);
             _channelLabel.SetText(firstVideo.ChannelName);
             _durationLabel.SetText(FormatTime(firstVideo.Duration));
@@ -252,6 +285,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Bind(() => _player.AdjustVolume(-5), KEY_Down);
         Bind(() => SeekAbsolute(0), KEY_0, KEY_Home);
         Bind(ReturnToShell, KEY_Escape);
+        Bind(ToggleVideoInfo, KEY_D, KEY_d);
         Bind(() => AdjustSpeed(-1), KEY_bracketleft, KEY_braceleft);
         Bind(() => AdjustSpeed(1), KEY_bracketright, KEY_braceright);
         Bind(() => _player.MovePlaylist(true), KEY_N, KEY_n);
@@ -345,13 +379,18 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool HandleKeyboardShortcut(uint keyval)
     {
         if (!_hasMedia) return false;
+        if (keyval == KEY_Escape && _infoOpen)
+        {
+            CloseVideoInfo();
+            return true;
+        }
+
         if (keyval is KEY_Return or KEY_KP_Enter &&
             (_resumeController.TryResume() || _sponsorBlockController.TrySkipManualSegment()))
         {
             RegisterActivity();
             return true;
         }
-
 
         if (!_shortcutMap.TryGetValue(keyval, out var action)) return false;
 
@@ -394,11 +433,151 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _lastPointerX = x;
         _lastPointerY = y;
         RegisterActivity();
+        UpdateInfoCue(y);
+    }
+
+    private void UpdateInfoCue(double y)
+    {
+        var height = Widget.GetAllocatedHeight();
+        var atBottomEdge = _hasMedia && !_infoOpen && height > 0 && y >= height - 28;
+        if (_bottomEdgeActive == atBottomEdge) return;
+        _bottomEdgeActive = atBottomEdge;
+        _infoCueButton.SetVisible(atBottomEdge);
     }
 
     private bool HasOpenControlPopover()
     {
-        return _volumePopover.GetVisible() || _settingsPopover.GetVisible();
+        return _volumePopover.GetVisible() || _settingsPopover.GetVisible() || _infoOpen;
+    }
+
+    private void ToggleVideoInfo()
+    {
+        if (_infoOpen)
+            CloseVideoInfo();
+        else
+            OpenVideoInfo();
+    }
+
+    private void OnInfoCueButtonClicked(object? sender, EventArgs args)
+    {
+        OpenVideoInfo();
+    }
+
+    private void OnInfoCloseButtonClicked(object? sender, EventArgs args)
+    {
+        CloseVideoInfo();
+    }
+
+    private void OnInfoBackdropClicked(object? sender, EventArgs args)
+    {
+        CloseVideoInfo();
+    }
+
+    private void OpenVideoInfo()
+    {
+        if (!_hasMedia || _currentVideo is not { } video) return;
+
+        _infoOpen = true;
+        _bottomEdgeActive = false;
+        _infoCueButton.SetVisible(false);
+        _infoBackdrop.SetVisible(true);
+        _infoRevealer.RevealChild = true;
+        _infoTitleLabel.SetText(video.Title);
+        _infoChannelLabel.SetText(video.ChannelName);
+        _infoCloseButton.GrabFocus();
+        _infoStatusLabel.SetText("Loading video details…");
+        _infoStatusLabel.SetVisible(true);
+        _infoDescriptionScroller.SetVisible(false);
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _infoLoadCancellation = cancellation;
+        var generation = ++_infoLoadGeneration;
+        _ = LoadVideoInfoAsync(video.Id, generation, cancellation);
+    }
+
+    private async Task LoadVideoInfoAsync(string videoId, int generation, CancellationTokenSource cancellation)
+    {
+        YouTubeVideoDetailsResult result;
+        try
+        {
+            result = await _videoDetails.GetDetailsAsync(videoId, cancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to load video details for {VideoId}", videoId);
+            result = new YouTubeVideoDetailsResult(null, false, "Video details could not be loaded.");
+        }
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (_disposed || !_infoOpen || generation != _infoLoadGeneration ||
+                _currentVideo?.Id != videoId)
+                return false;
+
+            if (result.IsSuccess && result.Details is { } details)
+                SetInfoContent(details);
+            else
+            {
+                _infoStatusLabel.SetText(result.StatusMessage);
+                _infoStatusLabel.SetVisible(true);
+                _infoDescriptionScroller.SetVisible(false);
+            }
+
+            return false;
+        });
+    }
+
+    private void CloseVideoInfo()
+    {
+        if (!_infoOpen && !_infoRevealer.RevealChild) return;
+        _infoOpen = false;
+        ++_infoLoadGeneration;
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        _infoLoadCancellation = null;
+        _infoRevealer.RevealChild = false;
+        _infoBackdrop.SetVisible(false);
+        _infoCueButton.SetVisible(false);
+        SetInfoContent(null);
+        if (_hasMedia) _playerSurface.GrabFocus();
+    }
+
+    private void SetInfoContent(YouTubeVideoDetails? details)
+    {
+        if (details is null)
+        {
+            _infoTitleLabel.SetText(_currentVideo?.Title ?? "Video details");
+            _infoChannelLabel.SetText(_currentVideo?.ChannelName ?? string.Empty);
+            _infoStatsLabel.SetText(string.Empty);
+            _infoStatusLabel.SetText("Move to the bottom edge to reveal video details.");
+            _infoStatusLabel.SetVisible(true);
+            _infoDescriptionScroller.SetVisible(false);
+            return;
+        }
+
+        _infoTitleLabel.SetText(details.Title);
+        _infoChannelLabel.SetText(details.ChannelName);
+        _infoStatsLabel.SetText(BuildInfoStats(details));
+        _infoStatusLabel.SetVisible(string.IsNullOrWhiteSpace(details.Description));
+        _infoStatusLabel.SetText("This video has no description.");
+        _infoDescriptionScroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
+        if (_infoDescription.Buffer is { } buffer)
+            buffer.Text = details.Description ?? string.Empty;
+    }
+
+    private static string BuildInfoStats(YouTubeVideoDetails details)
+    {
+        var parts = new List<string>();
+        if (details.ViewCount is long viewCount && viewCount >= 0)
+            parts.Add($"{viewCount.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)} views");
+        if (details.PublishedAt is { } publishedAt)
+            parts.Add($"Published {publishedAt.ToLocalTime():d}");
+        return string.Join(" · ", parts);
     }
 
 
@@ -472,6 +651,23 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnDislikeButtonClicked(object? sender, EventArgs args)
     {
         _engagement.SubmitVote(VideoVote.Dislike);
+    }
+
+    private void OnPlayerChannelButtonClicked(object? sender, EventArgs args)
+    {
+        OpenCurrentChannel();
+    }
+
+    private void OnInfoChannelButtonClicked(object? sender, EventArgs args)
+    {
+        CloseVideoInfo();
+        OpenCurrentChannel();
+    }
+
+    private void OpenCurrentChannel()
+    {
+        if (_currentVideo is { } video)
+            _channelRequested(video);
     }
 
     private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
@@ -608,6 +804,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (_request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
                 state.PlaylistIndex >= request.Videos.Length) return;
             var video = request.Videos[state.PlaylistIndex];
+            if (_currentVideo?.Id != video.Id && _infoOpen)
+                CloseVideoInfo();
+            _currentVideo = video;
             _titleLabel.SetText(video.Title);
             _channelLabel.SetText(video.ChannelName);
             if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
@@ -615,7 +814,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 _engagement.Load(video);
                 _sponsorBlockController.Load(video);
                 _resumeController.Load(video);
-
             }
 
             _sponsorBlockController.UpdatePlayback(state, video.Id);
@@ -638,6 +836,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnPlaybackFailed(object? sender, string detail)
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
+        CloseVideoInfo();
         _titleLabel.SetText("Playback failed");
         SetLoading(false);
         _channelLabel.SetText($"Embedded playback failed: {detail}");
@@ -650,17 +849,19 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
         _request = null;
+        _currentVideo = null;
         _queueControls.SetVisible(false);
         _hasMedia = false;
         _player.Stop();
         ReleaseSession();
     }
-
     private void EndSession(bool stop)
     {
         if (stop) _player.Stop();
+        CloseVideoInfo();
         ReleaseSession();
         _request = null;
+        _currentVideo = null;
         _hasMedia = false;
         _queueControls.SetVisible(false);
         _engagement.Clear();

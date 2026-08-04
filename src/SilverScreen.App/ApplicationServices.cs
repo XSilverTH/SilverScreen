@@ -34,9 +34,10 @@ public sealed class ApplicationServices(
     IYouTubePlaybackTelemetryService playbackTelemetry,
     IWatchProgressService watchProgress,
     IVideoEngagementService videoEngagement,
-    ISponsorBlockService sponsorBlock,
     IYouTubeRatingService youtubeRating,
-    IYouTubeCommentService comments)
+    ISponsorBlockService sponsorBlock,
+    IYouTubeCommentService comments,
+    IYouTubeVideoDetailsService videoDetails)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -58,6 +59,7 @@ public sealed class ApplicationServices(
     public ISponsorBlockService SponsorBlock { get; } = sponsorBlock;
     public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
     public IYouTubeCommentService Comments { get; } = comments;
+    public IYouTubeVideoDetailsService VideoDetails { get; } = videoDetails;
 }
 
 /// <summary>Registers the application's production services.</summary>
@@ -117,6 +119,11 @@ public static class ApplicationServiceCollectionExtensions
                 provider.GetRequiredService<IYtDlpRunner>()));
         services.AddSingleton<IYouTubeCommentService>(provider =>
             new YtDlpCommentService(
+                provider.GetRequiredService<ICookieFileProvider>(),
+                provider.GetRequiredService<IPreferencesService>(),
+                provider.GetRequiredService<IYtDlpRunner>()));
+        services.AddSingleton<IYouTubeVideoDetailsService>(provider =>
+            new YtDlpVideoDetailsService(
                 provider.GetRequiredService<ICookieFileProvider>(),
                 provider.GetRequiredService<IPreferencesService>(),
                 provider.GetRequiredService<IYtDlpRunner>()));

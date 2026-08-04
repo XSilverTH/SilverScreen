@@ -32,6 +32,35 @@ internal static class YtDlpVideoParser
 
         return videos;
     }
+    public static YouTubeVideoDetails ParseDetails(string output)
+    {
+        using var document = JsonDocument.Parse(output);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new JsonException("yt-dlp video details output must be an object.");
+
+        return new YouTubeVideoDetails(
+            FirstString(root, "description"),
+            GetViewCount(root),
+            GetPublishedAt(root),
+            FirstString(root, "title", "fulltitle") ?? "Untitled YouTube video",
+            FirstString(root, "channel", "uploader", "channel_id", "uploader_id") ?? "YouTube");
+    }
+
+    private static long? GetViewCount(JsonElement element)
+    {
+        if (!element.TryGetProperty("view_count", out var viewCount)) return null;
+
+        var parsed = viewCount.ValueKind switch
+        {
+            JsonValueKind.Number when viewCount.TryGetInt64(out var value) => value,
+            JsonValueKind.String when long.TryParse(viewCount.GetString(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var value) => value,
+            _ => -1
+        };
+        return parsed >= 0 ? parsed : null;
+    }
+
 
     private static VideoSummary[] ParseRoot(JsonElement root)
     {

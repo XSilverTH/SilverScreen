@@ -116,11 +116,18 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           styles ["title-4", "player-title"]
         }
 
-        Gtk.Label player_channel_label {
-          label: "Choose a video to preview the embedded player.";
-          xalign: 0;
-          ellipsize: end;
-          styles ["player-subtitle"]
+        Gtk.Button player_channel_button {
+          clicked => $OnPlayerChannelButtonClicked();
+          tooltip-text: "Open channel";
+          halign: start;
+          styles ["flat", "player-channel-button"]
+
+          child: Gtk.Label player_channel_label {
+            label: "Choose a video to preview the embedded player.";
+            xalign: 0;
+            ellipsize: end;
+            styles ["player-subtitle"]
+          };
         }
       }
 
@@ -404,6 +411,135 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       }
     }
   }
+
+    [overlay]
+    Gtk.Button player_info_backdrop {
+      visible: false;
+      halign: fill;
+      valign: fill;
+      clicked => $OnInfoBackdropClicked();
+      styles ["player-info-backdrop"]
+    }
+
+    [overlay]
+    Gtk.Button player_info_cue_button {
+      visible: false;
+      halign: center;
+      valign: end;
+      margin-bottom: 8;
+      clicked => $OnInfoCueButtonClicked();
+      tooltip-text: "Show video details (D)";
+      styles ["player-info-cue-button"]
+
+      child: Gtk.Box {
+        spacing: 6;
+
+        Gtk.Image {
+          icon-name: "go-up-symbolic";
+          pixel-size: 12;
+        }
+
+        Gtk.Label {
+          label: "Video details";
+        }
+      };
+    }
+
+    [overlay]
+    Gtk.Revealer player_info_revealer {
+      halign: fill;
+      valign: end;
+      hexpand: true;
+      reveal-child: false;
+      transition-type: slide_up;
+      transition-duration: 250;
+
+      child: Gtk.Box player_info_panel {
+        orientation: vertical;
+        spacing: 10;
+        margin-top: 16;
+        margin-bottom: 16;
+        margin-start: 16;
+        margin-end: 16;
+        width-request: 420;
+        height-request: 300;
+        styles ["player-info-panel"]
+
+        Gtk.Box {
+          spacing: 12;
+          valign: center;
+
+          Gtk.Box {
+            orientation: vertical;
+            spacing: 2;
+            hexpand: true;
+
+            Gtk.Label player_info_title_label {
+              label: "Video details";
+              xalign: 0;
+              ellipsize: end;
+              styles ["title-4"]
+            }
+
+            Gtk.Button player_info_channel_button {
+              clicked => $OnInfoChannelButtonClicked();
+              tooltip-text: "Open channel";
+              halign: start;
+              styles ["flat", "player-channel-button"]
+
+              child: Gtk.Label player_info_channel_label {
+                label: "";
+                xalign: 0;
+                ellipsize: end;
+                styles ["caption", "dim-label"]
+              };
+            }
+
+          }
+
+          Gtk.Button player_info_close_button {
+            clicked => $OnInfoCloseButtonClicked();
+            icon-name: "window-close-symbolic";
+            tooltip-text: "Close video details (Escape)";
+            styles ["flat", "circular"]
+          }
+        }
+
+        Gtk.Label player_info_stats_label {
+          label: "";
+          xalign: 0;
+          wrap: true;
+          styles ["caption", "dim-label"]
+        }
+
+        Gtk.Label player_info_status_label {
+          label: "Move to the bottom edge to reveal video details.";
+          xalign: 0;
+          wrap: true;
+          styles ["dim-label"]
+        }
+
+        Gtk.ScrolledWindow player_info_description_scroller {
+          hexpand: true;
+          vexpand: true;
+          visible: false;
+          propagate-natural-height: true;
+
+          Gtk.TextView player_info_description {
+            editable: false;
+            cursor-visible: false;
+            wrap-mode: word;
+            accepts-tab: false;
+            monospace: false;
+            top-margin: 4;
+            bottom-margin: 4;
+            left-margin: 4;
+            right-margin: 4;
+            styles ["player-info-description"]
+          }
+        }
+      };
+    }
 
     [overlay]
     Gtk.Box player_prompt_stack {
