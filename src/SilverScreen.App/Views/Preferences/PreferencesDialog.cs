@@ -22,6 +22,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly StringList _qualityModel;
     private readonly ComboRow _qualityRow;
     private readonly Action<string> _reportStatus;
+    private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly SwitchRow _sponsorBlockAutoSkipRow;
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly SwitchRow _sponsorBlockDisplayRow;
@@ -35,6 +36,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly EntryRow _ytdlpPathRow;
 
     private bool _loading;
+    private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
+    private string? _capturingShortcut;
 
     public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)
     {
@@ -72,6 +75,35 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             [SponsorBlockCategories.Hook] = GetRequiredObject<SwitchRow>("sponsorblock_hook_row"),
             [SponsorBlockCategories.Filler] = GetRequiredObject<SwitchRow>("sponsorblock_filler_row")
         };
+        _shortcutRows = new Dictionary<string, Button>(StringComparer.Ordinal)
+        {
+            ["TogglePause"] = GetRequiredObject<Button>("shortcut_toggle_pause_button"),
+            ["SeekBackward"] = GetRequiredObject<Button>("shortcut_seek_backward_button"),
+            ["SeekForward"] = GetRequiredObject<Button>("shortcut_seek_forward_button"),
+            ["StepFrameBackward"] = GetRequiredObject<Button>("shortcut_step_frame_backward_button"),
+            ["StepFrameForward"] = GetRequiredObject<Button>("shortcut_step_frame_forward_button"),
+            ["ToggleMute"] = GetRequiredObject<Button>("shortcut_toggle_mute_button"),
+            ["VolumeUp"] = GetRequiredObject<Button>("shortcut_volume_up_button"),
+            ["VolumeDown"] = GetRequiredObject<Button>("shortcut_volume_down_button"),
+            ["SeekToBeginning"] = GetRequiredObject<Button>("shortcut_seek_to_beginning_button"),
+            ["ReturnToShell"] = GetRequiredObject<Button>("shortcut_return_to_shell_button"),
+            ["ToggleVideoInfo"] = GetRequiredObject<Button>("shortcut_toggle_video_info_button"),
+            ["SpeedDecrease"] = GetRequiredObject<Button>("shortcut_speed_decrease_button"),
+            ["SpeedIncrease"] = GetRequiredObject<Button>("shortcut_speed_increase_button"),
+            ["NextVideo"] = GetRequiredObject<Button>("shortcut_next_video_button"),
+            ["PreviousVideo"] = GetRequiredObject<Button>("shortcut_previous_video_button"),
+            ["ToggleFullscreen"] = GetRequiredObject<Button>("shortcut_toggle_fullscreen_button"),
+            ["PreferredSubtitle"] = GetRequiredObject<Button>("shortcut_preferred_subtitle_button"),
+            ["ResumeOrSkip"] = GetRequiredObject<Button>("shortcut_resume_or_skip_button")
+        };
+
+        foreach (var button in _shortcutRows.Values)
+            button.OnClicked += OnShortcutButtonClicked;
+
+        var keyController = EventControllerKey.New();
+        keyController.SetPropagationPhase(PropagationPhase.Capture);
+        keyController.OnKeyPressed += (_, args) => CaptureShortcut(args.Keyval);
+        Widget.AddController(keyController);
 
         InitializeFields();
     }
@@ -102,6 +134,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             _sponsorBlockDisplayRow.Active = state.SponsorBlockSegmentDisplayEnabled;
             _resumePlaybackAutomaticallyRow.Active = state.ResumePlaybackAutomatically;
             _resumePlaybackOnDemandRow.Active = state.ResumePlaybackOnDemand;
+            ApplyShortcuts(state.Shortcuts);
 
             foreach (var (category, row) in _sponsorBlockCategoryRows)
                 row.Active = state.SponsorBlockCategories.Contains(category, StringComparer.Ordinal);
@@ -110,6 +143,96 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         {
             _loading = false;
         }
+    }
+    private void ApplyShortcuts(PlayerShortcutBindings shortcuts)
+    {
+        SetShortcut("TogglePause", shortcuts.TogglePause);
+        SetShortcut("SeekBackward", shortcuts.SeekBackward);
+        SetShortcut("SeekForward", shortcuts.SeekForward);
+        SetShortcut("StepFrameBackward", shortcuts.StepFrameBackward);
+        SetShortcut("StepFrameForward", shortcuts.StepFrameForward);
+        SetShortcut("ToggleMute", shortcuts.ToggleMute);
+        SetShortcut("VolumeUp", shortcuts.VolumeUp);
+        SetShortcut("VolumeDown", shortcuts.VolumeDown);
+        SetShortcut("SeekToBeginning", shortcuts.SeekToBeginning);
+        SetShortcut("ReturnToShell", shortcuts.ReturnToShell);
+        SetShortcut("ToggleVideoInfo", shortcuts.ToggleVideoInfo);
+        SetShortcut("SpeedDecrease", shortcuts.SpeedDecrease);
+        SetShortcut("SpeedIncrease", shortcuts.SpeedIncrease);
+        SetShortcut("NextVideo", shortcuts.NextVideo);
+        SetShortcut("PreviousVideo", shortcuts.PreviousVideo);
+        SetShortcut("ToggleFullscreen", shortcuts.ToggleFullscreen);
+        SetShortcut("PreferredSubtitle", shortcuts.PreferredSubtitle);
+        SetShortcut("ResumeOrSkip", shortcuts.ResumeOrSkip);
+    }
+
+    private void SetShortcut(string name, IEnumerable<string> shortcuts)
+    {
+        var values = shortcuts.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        _shortcutValues[name] = values;
+        _shortcutRows[name].SetLabel(values.Length == 0 ? "Unassigned" : GetShortcutLabel(values[0]));
+    }
+
+    private void OnShortcutButtonClicked(object? sender, EventArgs args)
+    {
+        if (sender is not Button button) return;
+        var pair = _shortcutRows.FirstOrDefault(item => ReferenceEquals(item.Value, button));
+        if (pair.Key is not { } name) return;
+        if (_capturingShortcut is { } previous &&
+            _shortcutRows.TryGetValue(previous, out var previousButton))
+            previousButton.RemoveCssClass("suggested-action");
+
+        _capturingShortcut = name;
+        button.SetLabel("Press a key…");
+        button.AddCssClass("suggested-action");
+        button.GrabFocus();
+    }
+
+    private bool CaptureShortcut(uint keyval)
+    {
+        if (_capturingShortcut is not { } name) return false;
+
+        var canonical = CanonicalKeyName(keyval);
+        if (canonical is null) return true;
+
+        var button = _shortcutRows[name];
+        _shortcutValues[name] = [canonical];
+        button.RemoveCssClass("suggested-action");
+        button.SetLabel(GetShortcutLabel(canonical));
+        _capturingShortcut = null;
+        Save();
+        return true;
+    }
+
+    private static string? CanonicalKeyName(uint keyval)
+    {
+        var normalized = Gdk.Functions.KeyvalToLower(keyval);
+        return normalized == 0 ? null : Gdk.Functions.KeyvalName(normalized);
+    }
+
+    private static string GetShortcutLabel(string keyName)
+    {
+        return keyName switch
+        {
+            "space" => "Space",
+            "Return" => "Enter",
+            "KP_Enter" => "Keypad Enter",
+            "Escape" => "Escape",
+            "Left" => "Left Arrow",
+            "Right" => "Right Arrow",
+            "Up" => "Up Arrow",
+            "Down" => "Down Arrow",
+            "comma" => ",",
+            "less" => "<",
+            "period" => ".",
+            "greater" => ">",
+            "bracketleft" => "[",
+            "braceleft" => "{",
+            "bracketright" => "]",
+            "braceright" => "}",
+            _ when keyName.Length == 1 && char.IsLetterOrDigit(keyName[0]) => keyName.ToUpperInvariant(),
+            _ => keyName.Replace('_', ' ')
+        };
     }
 
     private static int GetSelectionIndex(StringList model, string value)
@@ -181,6 +304,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             SponsorBlockSegmentDisplayEnabled = _sponsorBlockDisplayRow.Active,
             ResumePlaybackAutomatically = _resumePlaybackAutomaticallyRow.Active,
             ResumePlaybackOnDemand = _resumePlaybackOnDemandRow.Active,
+            Shortcuts = CreateShortcutBindings(),
             SponsorBlockCategories =
             [
                 .. _sponsorBlockCategoryRows
@@ -188,5 +312,34 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
                     .Select(pair => pair.Key)
             ]
         };
+    }
+    private PlayerShortcutBindings CreateShortcutBindings()
+    {
+        return new PlayerShortcutBindings
+        {
+            TogglePause = ReadShortcut("TogglePause"),
+            SeekBackward = ReadShortcut("SeekBackward"),
+            SeekForward = ReadShortcut("SeekForward"),
+            StepFrameBackward = ReadShortcut("StepFrameBackward"),
+            StepFrameForward = ReadShortcut("StepFrameForward"),
+            ToggleMute = ReadShortcut("ToggleMute"),
+            VolumeUp = ReadShortcut("VolumeUp"),
+            VolumeDown = ReadShortcut("VolumeDown"),
+            SeekToBeginning = ReadShortcut("SeekToBeginning"),
+            ReturnToShell = ReadShortcut("ReturnToShell"),
+            ToggleVideoInfo = ReadShortcut("ToggleVideoInfo"),
+            SpeedDecrease = ReadShortcut("SpeedDecrease"),
+            SpeedIncrease = ReadShortcut("SpeedIncrease"),
+            NextVideo = ReadShortcut("NextVideo"),
+            PreviousVideo = ReadShortcut("PreviousVideo"),
+            ToggleFullscreen = ReadShortcut("ToggleFullscreen"),
+            PreferredSubtitle = ReadShortcut("PreferredSubtitle"),
+            ResumeOrSkip = ReadShortcut("ResumeOrSkip")
+        };
+    }
+
+    private string[] ReadShortcut(string name)
+    {
+        return _shortcutValues.TryGetValue(name, out var values) ? [.. values] : [];
     }
 }

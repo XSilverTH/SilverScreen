@@ -50,6 +50,11 @@ public sealed class PreferencesTests : IDisposable
             SponsorBlockSegmentDisplayEnabled = false,
             ResumePlaybackAutomatically = true,
             ResumePlaybackOnDemand = false,
+            Shortcuts = new PlayerShortcutBindings
+            {
+                TogglePause = ["Pause"],
+                SeekBackward = ["A"]
+            },
 
             SponsorBlockCategories = [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro]
         };
@@ -73,12 +78,40 @@ public sealed class PreferencesTests : IDisposable
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);
         Assert.True(loaded.SponsorBlockAutoSkipEnabled);
+        Assert.Equal(["Pause"], loaded.Shortcuts.TogglePause);
+        Assert.Equal(["A"], loaded.Shortcuts.SeekBackward);
         Assert.False(loaded.SponsorBlockSegmentDisplayEnabled);
         Assert.True(loaded.ResumePlaybackAutomatically);
         Assert.False(loaded.ResumePlaybackOnDemand);
-
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
+
+    [Fact]
+    public void LoadPreferences_MissingShortcuts_UsesCurrentDefaults()
+    {
+        File.WriteAllText(_tempFilePath, "{}");
+
+        var service = new FilePreferencesService(_tempFilePath);
+
+        Assert.Equal(["space", "k"], service.GetPreferences().Shortcuts.TogglePause);
+        Assert.Equal(["Return", "KP_Enter"], service.GetPreferences().Shortcuts.ResumeOrSkip);
+    }
+
+    [Fact]
+    public void GetPreferences_ClonesShortcutBindings()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        service.SavePreferences(new AppPreferences
+        {
+            Shortcuts = new PlayerShortcutBindings { TogglePause = ["Pause"] }
+        });
+
+        var loaded = service.GetPreferences();
+        loaded.Shortcuts.TogglePause[0] = "Changed";
+
+        Assert.Equal(["Pause"], service.GetPreferences().Shortcuts.TogglePause);
+    }
+
 
 
     [Fact]

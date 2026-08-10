@@ -8,7 +8,6 @@ using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Comments;
 using XSTH.Blueprint.Helpers;
-using static Gdk.Constants;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
 
@@ -21,6 +20,27 @@ internal interface IEmbeddedPlayerPresenter
 
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
+    private enum PlayerShortcutAction
+    {
+        TogglePause,
+        SeekBackward,
+        SeekForward,
+        StepFrameBackward,
+        StepFrameForward,
+        ToggleMute,
+        VolumeUp,
+        VolumeDown,
+        SeekToBeginning,
+        ReturnToShell,
+        ToggleVideoInfo,
+        SpeedDecrease,
+        SpeedIncrease,
+        NextVideo,
+        PreviousVideo,
+        ToggleFullscreen,
+        PreferredSubtitle,
+        ResumeOrSkip
+    }
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
     private const double MinimumPlaybackSpeed = 0.25;
@@ -52,7 +72,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly DropDown _qualityDropdown;
     private readonly Box _queueControls;
     private readonly Popover _settingsPopover;
-    private readonly Dictionary<uint, Action> _shortcutMap = [];
+    private readonly Dictionary<uint, PlayerShortcutAction> _shortcutMap = [];
     private readonly Button _infoCloseButton;
     private readonly Button _infoCueButton;
     private readonly Button _infoBackdrop;
@@ -88,6 +108,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool _hasMedia;
     private EventControllerKey? _keyboardController;
     private Widget? _keyboardRoot;
+    private PlayerShortcutBindings _shortcuts = new();
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
@@ -186,6 +207,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetInfoContent(null);
         SetupControlsAutohide();
         SetupKeyboardShortcuts();
+        _preferences.PreferencesChanged += OnPreferencesChanged;
 
         DeclareBindings();
     }
@@ -202,6 +224,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _resumeController.Dispose();
 
         _chapterOverlay.Dispose();
+        _preferences.PreferencesChanged -= OnPreferencesChanged;
         _commentsView.Dispose();
         _disposed = true;
         if (_keyboardRoot is not null && _keyboardController is not null)
@@ -273,31 +296,45 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         return Task.FromResult("Opening embedded player.");
     }
 
+    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
+    {
+        _shortcuts = preferences.Shortcuts ?? new PlayerShortcutBindings();
+        DeclareBindings();
+    }
+
     private void DeclareBindings()
     {
-        Bind(_player.TogglePause, KEY_space, KEY_K, KEY_k);
-        Bind(() => SeekRelative(-10), KEY_Left, KEY_J, KEY_j);
-        Bind(() => SeekRelative(10), KEY_Right, KEY_L, KEY_l);
-        Bind(() => _player.StepFrame(false), KEY_comma, KEY_less);
-        Bind(() => _player.StepFrame(true), KEY_period, KEY_greater);
-        Bind(_player.ToggleMute, KEY_M, KEY_m);
-        Bind(() => _player.AdjustVolume(5), KEY_Up);
-        Bind(() => _player.AdjustVolume(-5), KEY_Down);
-        Bind(() => SeekAbsolute(0), KEY_0, KEY_Home);
-        Bind(ReturnToShell, KEY_Escape);
-        Bind(ToggleVideoInfo, KEY_D, KEY_d);
-        Bind(() => AdjustSpeed(-1), KEY_bracketleft, KEY_braceleft);
-        Bind(() => AdjustSpeed(1), KEY_bracketright, KEY_braceright);
-        Bind(() => _player.MovePlaylist(true), KEY_N, KEY_n);
-        Bind(() => _player.MovePlaylist(false), KEY_P, KEY_p);
-        Bind(ToggleFullscreen, KEY_F, KEY_f);
-        Bind(ShowPreferredSubtitle, KEY_C, KEY_c);
-        return;
+        _shortcuts = _preferences.GetPreferences().Shortcuts ?? new PlayerShortcutBindings();
+        _shortcutMap.Clear();
+        Bind(PlayerShortcutAction.TogglePause, _shortcuts.TogglePause);
+        Bind(PlayerShortcutAction.SeekBackward, _shortcuts.SeekBackward);
+        Bind(PlayerShortcutAction.SeekForward, _shortcuts.SeekForward);
+        Bind(PlayerShortcutAction.StepFrameBackward, _shortcuts.StepFrameBackward);
+        Bind(PlayerShortcutAction.StepFrameForward, _shortcuts.StepFrameForward);
+        Bind(PlayerShortcutAction.ToggleMute, _shortcuts.ToggleMute);
+        Bind(PlayerShortcutAction.VolumeUp, _shortcuts.VolumeUp);
+        Bind(PlayerShortcutAction.VolumeDown, _shortcuts.VolumeDown);
+        Bind(PlayerShortcutAction.SeekToBeginning, _shortcuts.SeekToBeginning);
+        Bind(PlayerShortcutAction.ReturnToShell, _shortcuts.ReturnToShell);
+        Bind(PlayerShortcutAction.ToggleVideoInfo, _shortcuts.ToggleVideoInfo);
+        Bind(PlayerShortcutAction.SpeedDecrease, _shortcuts.SpeedDecrease);
+        Bind(PlayerShortcutAction.SpeedIncrease, _shortcuts.SpeedIncrease);
+        Bind(PlayerShortcutAction.NextVideo, _shortcuts.NextVideo);
+        Bind(PlayerShortcutAction.PreviousVideo, _shortcuts.PreviousVideo);
+        Bind(PlayerShortcutAction.ToggleFullscreen, _shortcuts.ToggleFullscreen);
+        Bind(PlayerShortcutAction.PreferredSubtitle, _shortcuts.PreferredSubtitle);
+        Bind(PlayerShortcutAction.ResumeOrSkip, _shortcuts.ResumeOrSkip);
+    }
 
-        void Bind(Action action, params uint[] keys)
+    private void Bind(PlayerShortcutAction action, IEnumerable<string> keyNames)
+    {
+        foreach (var keyName in keyNames)
         {
-            foreach (var key in keys)
-                _shortcutMap[key] = action;
+            if (string.IsNullOrWhiteSpace(keyName)) continue;
+            var keyval = Gdk.Functions.KeyvalFromName(keyName.Trim());
+            if (keyval == 0) continue;
+
+            _shortcutMap[Gdk.Functions.KeyvalToLower(keyval)] = action;
         }
     }
 
@@ -378,23 +415,75 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private bool HandleKeyboardShortcut(uint keyval)
     {
-        if (!_hasMedia) return false;
-        if (keyval == KEY_Escape && _infoOpen)
+        keyval = Gdk.Functions.KeyvalToLower(keyval);
+        if (!_hasMedia || !_shortcutMap.TryGetValue(keyval, out var action)) return false;
+
+        if (action == PlayerShortcutAction.ResumeOrSkip)
         {
-            CloseVideoInfo();
-            return true;
+            if (!_resumeController.TryResume() && !_sponsorBlockController.TrySkipManualSegment())
+                return false;
+        }
+        else
+        {
+            switch (action)
+            {
+                case PlayerShortcutAction.TogglePause:
+                    _player.TogglePause();
+                    break;
+                case PlayerShortcutAction.SeekBackward:
+                    SeekRelative(-10);
+                    break;
+                case PlayerShortcutAction.SeekForward:
+                    SeekRelative(10);
+                    break;
+                case PlayerShortcutAction.StepFrameBackward:
+                    _player.StepFrame(false);
+                    break;
+                case PlayerShortcutAction.StepFrameForward:
+                    _player.StepFrame(true);
+                    break;
+                case PlayerShortcutAction.ToggleMute:
+                    _player.ToggleMute();
+                    break;
+                case PlayerShortcutAction.VolumeUp:
+                    _player.AdjustVolume(5);
+                    break;
+                case PlayerShortcutAction.VolumeDown:
+                    _player.AdjustVolume(-5);
+                    break;
+                case PlayerShortcutAction.SeekToBeginning:
+                    SeekAbsolute(0);
+                    break;
+                case PlayerShortcutAction.ReturnToShell:
+                    if (_infoOpen) CloseVideoInfo();
+                    else ReturnToShell();
+                    break;
+                case PlayerShortcutAction.ToggleVideoInfo:
+                    ToggleVideoInfo();
+                    break;
+                case PlayerShortcutAction.SpeedDecrease:
+                    AdjustSpeed(-1);
+                    break;
+                case PlayerShortcutAction.SpeedIncrease:
+                    AdjustSpeed(1);
+                    break;
+                case PlayerShortcutAction.NextVideo:
+                    _player.MovePlaylist(true);
+                    break;
+                case PlayerShortcutAction.PreviousVideo:
+                    _player.MovePlaylist(false);
+                    break;
+                case PlayerShortcutAction.ToggleFullscreen:
+                    ToggleFullscreen();
+                    break;
+                case PlayerShortcutAction.PreferredSubtitle:
+                    ShowPreferredSubtitle();
+                    break;
+                case PlayerShortcutAction.ResumeOrSkip:
+                    break;
+            }
         }
 
-        if (keyval is KEY_Return or KEY_KP_Enter &&
-            (_resumeController.TryResume() || _sponsorBlockController.TrySkipManualSegment()))
-        {
-            RegisterActivity();
-            return true;
-        }
-
-        if (!_shortcutMap.TryGetValue(keyval, out var action)) return false;
-
-        action();
         RegisterActivity();
         return true;
     }

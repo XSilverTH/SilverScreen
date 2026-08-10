@@ -18,7 +18,7 @@ public sealed class AppPreferences
     public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
     public bool ResumePlaybackAutomatically { get; set; }
     public bool ResumePlaybackOnDemand { get; set; }
-
+    public PlayerShortcutBindings Shortcuts { get; set; } = new();
 
     public string[] SponsorBlockCategories { get; set; } =
         [.. Models.SponsorBlockCategories.All];

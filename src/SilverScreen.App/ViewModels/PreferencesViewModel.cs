@@ -21,6 +21,7 @@ public sealed record PreferencesEditorState
     public bool SponsorBlockSegmentDisplayEnabled { get; init; } = true;
     public bool ResumePlaybackAutomatically { get; init; }
     public bool ResumePlaybackOnDemand { get; init; }
+    public PlayerShortcutBindings Shortcuts { get; init; } = new();
 
 
     public IReadOnlyList<string> SponsorBlockCategories { get; init; } =
@@ -125,6 +126,7 @@ public sealed class PreferencesViewModel
             ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = preferences is
                 { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+            Shortcuts = preferences.Shortcuts.Clone(),
 
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
             PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage
@@ -153,6 +155,7 @@ public sealed class PreferencesViewModel
             ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = state is
                 { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+            Shortcuts = state.Shortcuts.Clone(),
 
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = current.PreferredSubtitleLanguage

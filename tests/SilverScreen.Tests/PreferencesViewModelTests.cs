@@ -21,6 +21,21 @@ public sealed class PreferencesViewModelTests
         Assert.Equal("ja", service.Saved.PreferredSubtitleLanguage);
     }
 
+    [Fact]
+    public void Save_PersistsShortcutBindings()
+    {
+        var service = new FakePreferencesService(new AppPreferences());
+        var viewModel = new PreferencesViewModel(service);
+        var shortcuts = viewModel.EditorState.Shortcuts.Clone();
+        shortcuts.TogglePause = ["Pause"];
+
+        var result = viewModel.Save(viewModel.EditorState with { Shortcuts = shortcuts });
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(["Pause"], service.Saved!.Shortcuts.TogglePause);
+        Assert.Equal(["Pause"], result.State.Shortcuts.TogglePause);
+    }
+
 
     [Fact]
     public void Save_WhenMarkWatchedIsEnabled_DisablesTelemetry()

@@ -188,4 +188,98 @@ Adw.PreferencesDialog PreferencesDialog {
       }
     }
   }
+  Adw.PreferencesPage {
+    title: "Shortcuts";
+    icon-name: "input-keyboard-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "Playback and Navigation";
+      description: "Click a shortcut, then press one key. Changes apply immediately.";
+
+      Adw.ActionRow shortcut_toggle_pause_row {
+        title: "Play / Pause";
+        Gtk.Button shortcut_toggle_pause_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_seek_backward_row {
+        title: "Seek backward 10 seconds";
+        Gtk.Button shortcut_seek_backward_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_seek_forward_row {
+        title: "Seek forward 10 seconds";
+        Gtk.Button shortcut_seek_forward_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_next_video_row {
+        title: "Next video";
+        Gtk.Button shortcut_next_video_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_previous_video_row {
+        title: "Previous video";
+        Gtk.Button shortcut_previous_video_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_return_to_shell_row {
+        title: "Return to shell";
+        Gtk.Button shortcut_return_to_shell_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_resume_or_skip_row {
+        title: "Resume playback or skip segment";
+        Gtk.Button shortcut_resume_or_skip_button { label: "Unassigned"; }
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Audio and Subtitles";
+      Adw.ActionRow shortcut_toggle_mute_row {
+        title: "Mute / Unmute";
+        Gtk.Button shortcut_toggle_mute_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_volume_up_row {
+        title: "Volume up";
+        Gtk.Button shortcut_volume_up_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_volume_down_row {
+        title: "Volume down";
+        Gtk.Button shortcut_volume_down_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_preferred_subtitle_row {
+        title: "Preferred subtitles";
+        Gtk.Button shortcut_preferred_subtitle_button { label: "Unassigned"; }
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Playback Controls";
+      Adw.ActionRow shortcut_step_frame_backward_row {
+        title: "Step frame backward";
+        Gtk.Button shortcut_step_frame_backward_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_step_frame_forward_row {
+        title: "Step frame forward";
+        Gtk.Button shortcut_step_frame_forward_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_seek_to_beginning_row {
+        title: "Jump to beginning";
+        Gtk.Button shortcut_seek_to_beginning_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_speed_decrease_row {
+        title: "Decrease playback speed";
+        Gtk.Button shortcut_speed_decrease_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_speed_increase_row {
+        title: "Increase playback speed";
+        Gtk.Button shortcut_speed_increase_button { label: "Unassigned"; }
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "View";
+      Adw.ActionRow shortcut_toggle_video_info_row {
+        title: "Video information";
+        Gtk.Button shortcut_toggle_video_info_button { label: "Unassigned"; }
+      }
+      Adw.ActionRow shortcut_toggle_fullscreen_row {
+        title: "Fullscreen";
+        Gtk.Button shortcut_toggle_fullscreen_button { label: "Unassigned"; }
+      }
+    }
+  }
 }

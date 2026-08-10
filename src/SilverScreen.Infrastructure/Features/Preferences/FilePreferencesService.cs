@@ -130,7 +130,8 @@ public sealed class FilePreferencesService : IPreferencesService
             ResumePlaybackOnDemand = source is
                 { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
 
-            SponsorBlockCategories = [.. source.SponsorBlockCategories]
+            SponsorBlockCategories = [.. source.SponsorBlockCategories],
+            Shortcuts = source.Shortcuts.Clone()
         };
     }
 
@@ -151,9 +152,9 @@ public sealed class FilePreferencesService : IPreferencesService
                left.SponsorBlockAutoSkipEnabled == right.SponsorBlockAutoSkipEnabled &&
                left.SponsorBlockSegmentDisplayEnabled == right.SponsorBlockSegmentDisplayEnabled &&
                left.ResumePlaybackAutomatically == right.ResumePlaybackAutomatically &&
-               left.ResumePlaybackOnDemand == right.ResumePlaybackOnDemand &&
                left.SponsorBlockCategories.SequenceEqual(right.SponsorBlockCategories,
-                   StringComparer.Ordinal);
+                   StringComparer.Ordinal) &&
+               left.Shortcuts.Equals(right.Shortcuts);
 
     }
 
