@@ -251,10 +251,10 @@ public sealed class LibMpvPlayer : IDisposable
             seconds.ToString(CultureInfo.InvariantCulture), "relative+exact")));
     }
 
-    public void SeekAbsolute(double seconds)
+    public void SeekAbsolute(double seconds, bool exact = true)
     {
         Enqueue(() => Check(_native.Command(_handle, "seek",
-            seconds.ToString(CultureInfo.InvariantCulture), "absolute+exact")));
+            seconds.ToString(CultureInfo.InvariantCulture), exact ? "absolute+exact" : "absolute+keyframes")));
     }
 
     public void SetVolume(double volume)

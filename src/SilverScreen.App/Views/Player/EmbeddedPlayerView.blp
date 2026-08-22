@@ -394,6 +394,43 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           step-increment: 1;
         };
       };
+
+      [overlay]
+      Gtk.Box player_scrub_cue {
+        orientation: vertical;
+        spacing: 2;
+        halign: start;
+        valign: end;
+        margin-bottom: 24;
+        visible: false;
+        can-target: false;
+        styles ["player-scrub-cue"]
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 8;
+          halign: center;
+
+          Gtk.Label player_scrub_time_label {
+            label: "0:00";
+            styles ["player-scrub-time-label"]
+          }
+
+          Gtk.Label player_scrub_delta_label {
+            label: "+0:00";
+            visible: false;
+            styles ["player-scrub-delta-label"]
+          }
+        }
+
+        Gtk.Label player_scrub_chapter_label {
+          label: "";
+          visible: false;
+          ellipsize: end;
+          max-width-chars: 32;
+          styles ["player-scrub-chapter-label"]
+        }
+      }
     }
 
     Gtk.Box player_time_row {

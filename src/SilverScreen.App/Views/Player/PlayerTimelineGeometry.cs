@@ -26,6 +26,14 @@ internal static class PlayerTimelineGeometry
         return trackStart + fraction * trackWidth;
     }
 
+    internal static TimeSpan GetPositionAtCoordinate(double coordinateX, int trackStart, int trackWidth, TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero || trackWidth <= 0) return TimeSpan.Zero;
+
+        var fraction = Math.Clamp((coordinateX - trackStart) / trackWidth, 0.0, 1.0);
+        return TimeSpan.FromSeconds(fraction * duration.TotalSeconds);
+    }
+
     internal static (int Start, int Width) GetTrack(Scale timeline, Widget coordinateTarget,
         TimeSpan playbackPosition, TimeSpan duration)
     {

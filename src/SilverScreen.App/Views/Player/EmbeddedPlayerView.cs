@@ -91,11 +91,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private readonly PlayerSubtitleController _subtitleController;
     private readonly Scale _timeline;
+    private readonly Overlay _timelineOverlay;
+    private readonly Box _scrubCue;
+    private readonly Label _scrubTimeLabel;
+    private readonly Label _scrubDeltaLabel;
+    private readonly Label _scrubChapterLabel;
+    private readonly EventControllerMotion _timelineMotionController;
+    private readonly GestureDrag _timelineDragGesture;
     private readonly IWatchProgressService _watchProgress;
     private readonly Label _titleLabel;
     private readonly MenuButton _volumeButton;
     private readonly Popover _volumePopover;
     private readonly Scale _volumeScale;
+
+    private const uint SeekThrottleIntervalMilliseconds = 120;
+    private const long ReconciliationLatchMilliseconds = 400;
+
     private CancellationTokenSource? _infoLoadCancellation;
     private VideoSummary? _currentVideo;
     private bool _infoOpen;
@@ -106,6 +117,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private CookieFileLease? _cookieFile;
     private bool _disposed;
     private bool _hasMedia;
+    private bool _isScrubbing;
+    private TimeSpan _scrubStartPosition;
+    private double _pendingSeekTarget = -1;
+    private long _reconciliationLatchExpiry;
+    private uint _throttledSeekSource;
+    private long _lastThrottledSeekTime;
+    private double _latestScrubPosition;
+    private TimeSpan _currentDuration;
+    private IReadOnlyList<LibMpvChapter> _chapters = [];
     private EventControllerKey? _keyboardController;
     private Widget? _keyboardRoot;
     private PlayerShortcutBindings _shortcuts = new();
@@ -118,7 +138,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private double _speed = 1;
     private TimeSpan _timelinePlaybackPosition;
     private bool _updatingControls;
-
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         IPreferencesService preferences, ICookieFileProvider cookieFiles, IPlaybackPresenceService playbackPresence,
         IYouTubePlaybackTelemetryService playbackTelemetry, IWatchProgressService watchProgress,
@@ -150,10 +169,27 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
         var subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
         _timeline = GetRequiredObject<Scale>("player_timeline");
-        var timelineOverlay = GetRequiredObject<Overlay>("player_timeline_overlay");
+        _timelineOverlay = GetRequiredObject<Overlay>("player_timeline_overlay");
+        _scrubCue = GetRequiredObject<Box>("player_scrub_cue");
+        _scrubTimeLabel = GetRequiredObject<Label>("player_scrub_time_label");
+        _scrubDeltaLabel = GetRequiredObject<Label>("player_scrub_delta_label");
+        _scrubChapterLabel = GetRequiredObject<Label>("player_scrub_chapter_label");
         var sponsorBlockSkipButton = GetRequiredObject<Button>("player_sponsorblock_skip_button");
         var resumeButton = GetRequiredObject<Button>("player_resume_button");
         var restartButton = GetRequiredObject<Button>("player_restart_button");
+
+        _timelineMotionController = EventControllerMotion.New();
+        _timelineMotionController.OnMotion += OnTimelineMotion;
+        _timelineMotionController.OnLeave += OnTimelineLeave;
+        _timelineOverlay.AddController(_timelineMotionController);
+
+        _timelineDragGesture = GestureDrag.New();
+        _timelineDragGesture.Button = 1;
+        _timelineDragGesture.SetPropagationPhase(PropagationPhase.Capture);
+        _timelineDragGesture.OnDragBegin += OnTimelineDragBegin;
+        _timelineDragGesture.OnDragUpdate += OnTimelineDragUpdate;
+        _timelineDragGesture.OnDragEnd += OnTimelineDragEnd;
+        _timeline.AddController(_timelineDragGesture);
 
         _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
         _titleLabel = GetRequiredObject<Label>("player_title_label");
@@ -185,13 +221,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         _engagement = new PlayerEngagementController(videoEngagement, youtubeRating, session, likeButton,
             likeImage, likesLabel, dislikeButton, dislikeImage, dislikesLabel);
-        _chapterOverlay = new PlayerChapterOverlay(timelineOverlay, _timeline,
-            () => _timelinePlaybackPosition, SeekAbsolute, RegisterActivity);
+        _chapterOverlay = new PlayerChapterOverlay(_timelineOverlay, _timeline,
+            () => _timelinePlaybackPosition, pos => SeekAbsolute(pos, true), RegisterActivity);
         _sponsorBlockController = new PlayerSponsorBlockController(sponsorBlock, preferences, _timeline,
-            timelineOverlay, sponsorBlockSkipButton, SeekAbsolute);
+            _timelineOverlay, sponsorBlockSkipButton, pos => SeekAbsolute(pos, true));
         _resumeController = new PlayerResumeController(preferences, watchProgress, resumeButton, restartButton,
-            SeekAbsolute);
-
+            pos => SeekAbsolute(pos, true));
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
             if (!_disposed) action();
@@ -214,7 +249,18 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     public new void Dispose()
     {
-        if (_disposed) return;
+        CancelThrottledSeek();
+        _timelineMotionController.OnMotion -= OnTimelineMotion;
+        _timelineMotionController.OnLeave -= OnTimelineLeave;
+        _timelineOverlay.RemoveController(_timelineMotionController);
+        _timelineMotionController.Dispose();
+
+        _timelineDragGesture.OnDragBegin -= OnTimelineDragBegin;
+        _timelineDragGesture.OnDragUpdate -= OnTimelineDragUpdate;
+        _timelineDragGesture.OnDragEnd -= OnTimelineDragEnd;
+        _timeline.RemoveController(_timelineDragGesture);
+        _timelineDragGesture.Dispose();
+
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
@@ -455,7 +501,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                     SeekAbsolute(0);
                     break;
                 case PlayerShortcutAction.ReturnToShell:
-                    if (_infoOpen) CloseVideoInfo();
+                    if (_isScrubbing) CancelScrubbing();
+                    else if (_infoOpen) CloseVideoInfo();
                     else ReturnToShell();
                     break;
                 case PlayerShortcutAction.ToggleVideoInfo:
@@ -488,9 +535,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         return true;
     }
 
-    private void SeekAbsolute(double position)
+    private void SeekAbsolute(double position, bool exact = true)
     {
-        _player.SeekAbsolute(position);
+        _pendingSeekTarget = position;
+        _reconciliationLatchExpiry = Environment.TickCount64 + ReconciliationLatchMilliseconds;
+        _player.SeekAbsolute(position, exact);
     }
 
     private void SeekRelative(double offset)
@@ -837,9 +886,192 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     }
 
 
+    private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
+    {
+        if (_disposed || !_hasMedia || _currentDuration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        {
+            _scrubCue.SetVisible(false);
+            return;
+        }
+
+        RegisterActivity();
+        UpdateScrubCue(args.X);
+    }
+
+    private void OnTimelineLeave(object? sender, EventArgs args)
+    {
+        if (!_isScrubbing)
+            _scrubCue.SetVisible(false);
+    }
+
+    private void UpdateScrubCue(double pointerX)
+    {
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(_timeline, _timelineOverlay,
+            _isScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : _timelinePlaybackPosition,
+            _currentDuration);
+
+        var targetTime = PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, _currentDuration);
+
+        var cueWidth = _scrubCue.GetAllocatedWidth();
+        var hostWidth = _timelineOverlay.GetAllocatedWidth();
+        if (cueWidth <= 0) cueWidth = 80;
+        var badgeX = Math.Clamp(pointerX - cueWidth / 2d, 8, Math.Max(8, hostWidth - cueWidth - 8));
+        _scrubCue.MarginStart = (int)Math.Round(badgeX);
+
+        _scrubTimeLabel.SetText(FormatTime(targetTime));
+
+        if (_isScrubbing)
+        {
+            var delta = targetTime - _scrubStartPosition;
+            _scrubDeltaLabel.SetText(FormatDelta(delta));
+            _scrubDeltaLabel.SetVisible(true);
+        }
+        else
+        {
+            _scrubDeltaLabel.SetVisible(false);
+        }
+
+        var chapter = FindChapterAt(targetTime);
+        if (chapter is not null && !string.IsNullOrWhiteSpace(chapter.Title))
+        {
+            _scrubChapterLabel.SetText(chapter.Title);
+            _scrubChapterLabel.SetVisible(true);
+        }
+        else
+        {
+            _scrubChapterLabel.SetVisible(false);
+        }
+
+        _scrubCue.SetVisible(true);
+    }
+
+    private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
+    {
+        if (_disposed || !_hasMedia || !_timeline.GetSensitive() || _currentDuration <= TimeSpan.Zero)
+            return;
+
+        _isScrubbing = true;
+        _scrubStartPosition = _timelinePlaybackPosition;
+        _latestScrubPosition = _timeline.GetValue();
+        _positionLabel.AddCssClass("player-time-scrubbing");
+        _timeline.AddCssClass("dragging");
+        RegisterActivity();
+        UpdateScrubCue(args.StartX);
+    }
+
+    private void OnTimelineDragUpdate(GestureDrag sender, GestureDrag.DragUpdateSignalArgs args)
+    {
+        if (!_isScrubbing) return;
+        RegisterActivity();
+        sender.GetStartPoint(out var startX, out _);
+        UpdateScrubCue(startX + args.OffsetX);
+    }
+
+    private void OnTimelineDragEnd(GestureDrag sender, GestureDrag.DragEndSignalArgs args)
+    {
+        if (!_isScrubbing) return;
+        _isScrubbing = false;
+        _positionLabel.RemoveCssClass("player-time-scrubbing");
+        _timeline.RemoveCssClass("dragging");
+        _scrubCue.SetVisible(false);
+        CancelThrottledSeek();
+
+        var finalPosition = _timeline.GetValue();
+        SeekAbsolute(finalPosition, true);
+        _timelinePlaybackPosition = TimeSpan.FromSeconds(finalPosition);
+        _positionLabel.SetText(FormatTime(_timelinePlaybackPosition));
+        RegisterActivity();
+    }
+
+    private void CancelScrubbing()
+    {
+        if (!_isScrubbing) return;
+        _isScrubbing = false;
+        CancelThrottledSeek();
+        _positionLabel.RemoveCssClass("player-time-scrubbing");
+        _timeline.RemoveCssClass("dragging");
+        _scrubCue.SetVisible(false);
+        _updatingControls = true;
+        try
+        {
+            _timeline.SetValue(_scrubStartPosition.TotalSeconds);
+            _timelinePlaybackPosition = _scrubStartPosition;
+            _positionLabel.SetText(FormatTime(_scrubStartPosition));
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    private void CancelThrottledSeek()
+    {
+        if (_throttledSeekSource != 0)
+        {
+            Functions.SourceRemove(_throttledSeekSource);
+            _throttledSeekSource = 0;
+        }
+    }
+
+    private static string FormatDelta(TimeSpan delta)
+    {
+        var sign = delta < TimeSpan.Zero ? "-" : "+";
+        var abs = delta.Duration();
+        return abs.TotalHours >= 1
+            ? $"{sign}{(int)abs.TotalHours}:{abs.Minutes:D2}:{abs.Seconds:D2}"
+            : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
+    }
+
+    private LibMpvChapter? FindChapterAt(TimeSpan position)
+    {
+        LibMpvChapter? match = null;
+        foreach (var chapter in _chapters)
+        {
+            if (chapter.Start <= position)
+                match = chapter;
+            else
+                break;
+        }
+
+        return match;
+    }
+
     private void OnTimelineValueChanged(object? sender, EventArgs args)
     {
-        if (!_updatingControls && _timeline.GetSensitive()) SeekAbsolute(_timeline.GetValue());
+        if (_updatingControls || !_timeline.GetSensitive()) return;
+
+        var targetSeconds = _timeline.GetValue();
+        _timelinePlaybackPosition = TimeSpan.FromSeconds(targetSeconds);
+        _positionLabel.SetText(FormatTime(_timelinePlaybackPosition));
+
+        if (_isScrubbing)
+        {
+            _latestScrubPosition = targetSeconds;
+            var now = Environment.TickCount64;
+            var elapsed = now - _lastThrottledSeekTime;
+            if (elapsed >= SeekThrottleIntervalMilliseconds && _throttledSeekSource == 0)
+            {
+                _lastThrottledSeekTime = now;
+                SeekAbsolute(_latestScrubPosition, false);
+            }
+            else if (_throttledSeekSource == 0)
+            {
+                var delay = Math.Max(10u, (uint)(SeekThrottleIntervalMilliseconds - elapsed));
+                _throttledSeekSource = Functions.TimeoutAdd(0, delay, () =>
+                {
+                    _throttledSeekSource = 0;
+                    if (_disposed || !_isScrubbing) return false;
+                    _lastThrottledSeekTime = Environment.TickCount64;
+                    SeekAbsolute(_latestScrubPosition, false);
+                    return false;
+                });
+            }
+        }
+        else
+        {
+            SeekAbsolute(targetSeconds, true);
+            RegisterActivity();
+        }
     }
 
     private void OnRenderRequested(object? sender, EventArgs args)
@@ -872,13 +1104,24 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleController.UpdateTracks(state.SubtitleTracks, _updatingControls);
         try
         {
-            _timelinePlaybackPosition = state.Position;
-            _positionLabel.SetText(FormatTime(state.Position));
             _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : FormatTime(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
-            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
-            _chapterOverlay.Update(state.Chapters, state.Duration);
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
+            _chapterOverlay.Update(state.Chapters, state.Duration);
+
+            if (!_isScrubbing)
+            {
+                var withinLatch = Environment.TickCount64 < _reconciliationLatchExpiry;
+                var isCloseToPending = Math.Abs(state.Position.TotalSeconds - _pendingSeekTarget) <= 1.5;
+
+                if (!withinLatch || isCloseToPending)
+                {
+                    if (isCloseToPending) _reconciliationLatchExpiry = 0;
+                    _timelinePlaybackPosition = state.Position;
+                    _positionLabel.SetText(FormatTime(state.Position));
+                    _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
+                }
+            }
             _playPauseButton.SetIconName(state is { HasMedia: true, IsPaused: false }
                 ? "media-playback-pause-symbolic"
                 : "media-playback-start-symbolic");
@@ -929,6 +1172,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _titleLabel.SetText("Playback failed");
         SetLoading(false);
         _channelLabel.SetText($"Embedded playback failed: {detail}");
+        CancelScrubbing();
+        _currentDuration = TimeSpan.Zero;
+        _chapters = [];
+        _scrubCue.SetVisible(false);
         ResetTransport();
         _engagement.Clear();
         _sponsorBlockController.Clear();
@@ -944,9 +1191,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.Stop();
         ReleaseSession();
     }
+
     private void EndSession(bool stop)
     {
         if (stop) _player.Stop();
+        CancelScrubbing();
+        _currentDuration = TimeSpan.Zero;
+        _chapters = [];
+        _scrubCue.SetVisible(false);
         CloseVideoInfo();
         ReleaseSession();
         _request = null;
@@ -976,6 +1228,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void ResetTransport()
     {
+        CancelScrubbing();
+        _currentDuration = TimeSpan.Zero;
+        _chapters = [];
+        _scrubCue.SetVisible(false);
         _updatingControls = true;
         try
         {
@@ -991,7 +1247,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _updatingControls = false;
         }
     }
-
 
     private void SetLoading(bool loading)
     {

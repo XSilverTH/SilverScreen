@@ -128,18 +128,93 @@ button.player-queue-button:hover {
 }
 
 .player-controls scale trough {
-    background-color: alpha(#ffffff, 0.28);
+    background-color: alpha(#ffffff, 0.24);
     min-height: 4px;
+    border-radius: 9999px;
+    transition: min-height 150ms cubic-bezier(0, 0, 0.2, 1),
+                background-color 150ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.player-controls scale:hover trough {
+    background-color: alpha(#ffffff, 0.35);
+    min-height: 6px;
+}
+
+.player-controls scale:active trough,
+.player-controls scale.dragging trough {
+    background-color: alpha(#ffffff, 0.45);
+    min-height: 8px;
 }
 
 .player-controls scale highlight {
     background-color: #ffffff;
+    border-radius: 9999px;
 }
 
 .player-controls scale slider {
     background-color: #ffffff;
+    min-height: 8px;
+    min-width: 8px;
+    border-radius: 9999px;
+    opacity: 0;
+    box-shadow: 0 2px 4px alpha(#000000, 0.4);
+    transition: opacity 150ms cubic-bezier(0, 0, 0.2, 1),
+                min-height 150ms cubic-bezier(0, 0, 0.2, 1),
+                min-width 150ms cubic-bezier(0, 0, 0.2, 1),
+                box-shadow 150ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.player-controls scale:hover slider {
+    opacity: 1;
+    min-height: 14px;
+    min-width: 14px;
+}
+
+.player-controls scale:active slider,
+.player-controls scale.dragging slider {
+    opacity: 1;
     min-height: 18px;
     min-width: 18px;
+    box-shadow: 0 0 0 4px alpha(#ffffff, 0.28), 0 4px 10px alpha(#000000, 0.6);
+}
+
+/* Floating Scrub Cue Badge */
+.player-scrub-cue {
+    background-color: alpha(#1e1e1e, 0.92);
+    border: 1px solid alpha(#ffffff, 0.14);
+    border-radius: 10px;
+    padding: 6px 12px;
+    box-shadow: 0 6px 20px alpha(#000000, 0.55);
+    transition: opacity 150ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.player-scrub-time-label {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    font-feature-settings: "tnum";
+}
+
+.player-scrub-delta-label {
+    color: #ffffff;
+    background-color: alpha(#ffffff, 0.16);
+    border-radius: 9999px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    font-feature-settings: "tnum";
+}
+
+.player-scrub-chapter-label {
+    color: alpha(#ffffff, 0.72);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* Scrubbing Position Label Highlight */
+.player-time.player-time-scrubbing {
+    color: #ffffff;
+    font-weight: 700;
 }
 
 button.player-chapter-marker,

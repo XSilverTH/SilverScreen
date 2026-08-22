@@ -79,10 +79,31 @@ public sealed class LibMpvPlayerTests
                 Assert.Equal("Chapter 3", chapter.Title);
             });
     }
+    [Fact]
+    public void SeekAbsoluteDispatchesExactAndKeyframeCommands()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
 
+        player.SeekAbsolute(42.5, exact: true);
+        player.SeekAbsolute(100.25, exact: false);
 
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 2, TimeSpan.FromSeconds(2)));
+        Assert.Contains("seek|42.5|absolute+exact", native.Commands);
+        Assert.Contains("seek|100.25|absolute+keyframes", native.Commands);
+    }
 
+    [Fact]
+    public void SeekRelativeDispatchesRelativeExactCommand()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
 
+        player.SeekRelative(-10);
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 1, TimeSpan.FromSeconds(2)));
+        Assert.Contains("seek|-10|relative+exact", native.Commands);
+    }
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);
