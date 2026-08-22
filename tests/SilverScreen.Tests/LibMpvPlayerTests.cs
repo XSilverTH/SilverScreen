@@ -104,6 +104,26 @@ public sealed class LibMpvPlayerTests
         Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 1, TimeSpan.FromSeconds(2)));
         Assert.Contains("seek|-10|relative+exact", native.Commands);
     }
+
+    [Fact]
+    public void PlaylistCommandsDispatchCorrectMpvArguments()
+    {
+        using var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.PlayPlaylistIndex(3);
+        player.RemovePlaylistItem(1);
+        player.MovePlaylistItem(0, 2);
+        player.MovePlaylistItem(4, 1);
+        player.AppendPlaylistItem("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 5, TimeSpan.FromSeconds(2)));
+        Assert.Contains("playlist-play-index|3", native.Commands);
+        Assert.Contains("playlist-remove|1", native.Commands);
+        Assert.Contains("playlist-move|0|3", native.Commands);
+        Assert.Contains("playlist-move|4|1", native.Commands);
+        Assert.Contains("loadfile|https://www.youtube.com/watch?v=dQw4w9WgXcQ|append-play", native.Commands);
+    }
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);

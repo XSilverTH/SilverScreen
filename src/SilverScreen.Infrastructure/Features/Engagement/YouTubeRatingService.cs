@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -27,7 +28,9 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
     private readonly ConcurrentDictionary<string, RatingMetadata>
         _ratingMetadataByVideoId = new(StringComparer.Ordinal);
 
-    public YouTubeRatingService(HttpClient httpClient, YouTubeAuthenticationService authentication)
+    public YouTubeRatingService(
+        [FromKeyedServices("youtube-rating")] HttpClient httpClient,
+        YouTubeAuthenticationService authentication)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _authentication = authentication ?? throw new ArgumentNullException(nameof(authentication));

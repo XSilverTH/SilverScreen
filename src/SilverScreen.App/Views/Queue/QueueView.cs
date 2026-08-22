@@ -32,13 +32,16 @@ public partial class QueueView : ViewBase<Box>
     private QueueItem[] _displayedItems = [];
     private bool _disposed;
 
+    private readonly Action<int>? _trackJumpRequested;
+
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, IWatchProgressService watchProgress,
-        Action closeRequested)
+        Action closeRequested, Action<int>? trackJumpRequested = null)
     {
         _viewModel = viewModel;
         _thumbnails = thumbnails;
         _watchProgress = watchProgress;
         _closeRequested = closeRequested;
+        _trackJumpRequested = trackJumpRequested;
         GetRequiredObject<Button>("queue_clear_button");
         _emptyPage = GetRequiredObject<StatusPage>("queue_empty_page");
         _footer = GetRequiredObject<Box>("queue_footer");
@@ -93,13 +96,34 @@ public partial class QueueView : ViewBase<Box>
     private void Render(QueuePresentationState state)
     {
         ApplyItems(state.Items);
-        _summary.SetText(FormatSummary(state.Items.Count, state.TotalDuration));
+        if (state.CurrentPlayingIndex >= 0 && state.CurrentPlayingIndex < state.Items.Count)
+        {
+            var remainingTicks = state.Items.Skip(state.CurrentPlayingIndex).Sum(item => item.Video.Duration.Ticks);
+            var remainingDuration = TimeSpan.FromTicks(remainingTicks);
+            _summary.SetText($"Playing {state.CurrentPlayingIndex + 1} of {state.Items.Count} · {FormatDuration(remainingDuration)} remaining");
+        }
+        else
+        {
+            _summary.SetText(FormatSummary(state.Items.Count, state.TotalDuration));
+        }
         _emptyPage.Visible = !state.IsVisible;
         _scrolledWindow.Visible = state.IsVisible;
-        _footer.Visible = state.IsVisible;
+        _footer.Visible = state.IsVisible && _trackJumpRequested is null;
         _playButton.Sensitive = state.CanPlay;
         _playStack.VisibleChildName = state.IsLaunching ? "launching" : "idle";
         _playSpinner.Spinning = state.IsLaunching;
+        RefreshVisibleRows();
+    }
+
+    private void RefreshVisibleRows()
+    {
+        foreach (var row in _rowsByCell.Values)
+        {
+            if (row.Item is { } item)
+            {
+                row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
+            }
+        }
     }
 
     private void ApplyItems(IReadOnlyList<QueueItem> items)
@@ -136,7 +160,7 @@ public partial class QueueView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove);
+        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove, OnRowPlayRequested);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
@@ -148,7 +172,7 @@ public partial class QueueView : ViewBase<Box>
             !_itemsById.TryGetValue(id, out var item))
             return;
 
-        row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length);
+        row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
     }
 
     private int GetItemIndex(Guid itemId)
@@ -158,6 +182,19 @@ public partial class QueueView : ViewBase<Box>
                 return index;
 
         return -1;
+    }
+
+    private void OnRowPlayRequested(Guid itemId, int index)
+    {
+        if (_trackJumpRequested is not null)
+        {
+            _trackJumpRequested(index);
+        }
+        else
+        {
+            _viewModel.Move(itemId, 0);
+            _viewModel.PlayAllAsync().FireAndForget(Logger);
+        }
     }
 
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)

@@ -1,3 +1,4 @@
+using SilverScreen.Core.Services;
 using System.Diagnostics;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Search;
@@ -43,8 +44,16 @@ public sealed class YtDlpSearchServiceTests
 
     private static YtDlpSearchService CreateService(string output, int exitCode = 0, string standardError = "")
     {
-        return new YtDlpSearchService(new YtDlpOptions(),
+        return new YtDlpSearchService(
+            new TestPreferences(),
             new FakeRunner(new ProcessResult(exitCode, output, standardError)));
+    }
+
+    private sealed class TestPreferences : IPreferencesService
+    {
+        public event EventHandler<AppPreferences>? PreferencesChanged { add { } remove { } }
+        public AppPreferences GetPreferences() => new();
+        public void SavePreferences(AppPreferences preferences) { }
     }
 
     private sealed class FakeRunner(ProcessResult result) : IYtDlpRunner

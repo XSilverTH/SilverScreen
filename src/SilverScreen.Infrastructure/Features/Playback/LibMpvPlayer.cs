@@ -245,6 +245,30 @@ public sealed class LibMpvPlayer : IDisposable
         Enqueue(() => Check(_native.Command(_handle, forward ? "playlist-next" : "playlist-prev")));
     }
 
+    public void PlayPlaylistIndex(int index)
+    {
+        Enqueue(() => Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    public void RemovePlaylistItem(int index)
+    {
+        Enqueue(() => Check(_native.Command(_handle, "playlist-remove", index.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    public void MovePlaylistItem(int fromIndex, int toIndex)
+    {
+        if (fromIndex == toIndex) return;
+        var mpvTarget = toIndex > fromIndex ? toIndex + 1 : toIndex;
+        Enqueue(() => Check(_native.Command(_handle, "playlist-move",
+            fromIndex.ToString(CultureInfo.InvariantCulture),
+            mpvTarget.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    public void AppendPlaylistItem(string url)
+    {
+        Enqueue(() => Check(_native.Command(_handle, "loadfile", url, "append-play")));
+    }
+
     public void SeekRelative(double seconds)
     {
         Enqueue(() => Check(_native.Command(_handle, "seek",

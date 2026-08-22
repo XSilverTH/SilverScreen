@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 using System.Text.Json;
 using Serilog;
@@ -16,8 +17,11 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
     private readonly ISessionService _sessionService;
     private AccountProfile? _cachedProfile;
 
-    public YouTubeAccountProfileService(HttpClient httpClient, ISessionService sessionService,
-        YouTubeAuthenticationService authentication, string? profileCachePath = null)
+    public YouTubeAccountProfileService(
+        [FromKeyedServices("youtube-account")] HttpClient httpClient,
+        ISessionService sessionService,
+        YouTubeAuthenticationService authentication,
+        string? profileCachePath = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));

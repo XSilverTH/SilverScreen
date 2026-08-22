@@ -2,6 +2,10 @@ using Gtk 4.0;
 
 menu queue_item_actions {
   item {
+    label: "Play now";
+    action: "queue.play-now";
+  }
+  item {
     label: "Move up";
     action: "queue.move-up";
   }
@@ -34,10 +38,32 @@ Gtk.Box QueueItemRowView {
     valign: center;
   }
 
-  Label position {
-    label: "";
-    styles ["caption", "dim-label"]
-    valign: start;
+  Gtk.Stack state_stack {
+    valign: center;
+    width-request: 20;
+    hhomogeneous: true;
+    vhomogeneous: true;
+
+    Gtk.StackPage {
+      name: "index";
+      child: Gtk.Label position {
+        label: "";
+        styles ["caption", "dim-label"]
+        halign: center;
+        valign: center;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "playing";
+      child: Gtk.Image playing_icon {
+        icon-name: "audio-volume-high-symbolic";
+        tooltip-text: "Now playing";
+        halign: center;
+        valign: center;
+        styles ["queue-now-playing-icon"]
+      };
+    }
   }
 
   Overlay thumbnail {
@@ -58,6 +84,16 @@ Gtk.Box QueueItemRowView {
       visible: false;
       show-text: false;
       styles ["watched-progress-bar", "queue-progress-bar"]
+    }
+
+    [overlay]
+    Gtk.Label duration_pill {
+      label: "";
+      halign: end;
+      valign: end;
+      margin-end: 4;
+      margin-bottom: 4;
+      styles ["caption", "queue-duration-pill"]
     }
   }
 

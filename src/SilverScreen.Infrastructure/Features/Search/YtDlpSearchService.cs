@@ -11,31 +11,17 @@ public sealed class YtDlpSearchService : ISearchService
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpSearchService>();
     private readonly ICookieFileProvider? _cookieFileProvider;
-    private readonly IPreferencesService? _preferencesService;
+    private readonly IPreferencesService _preferencesService;
     private readonly IYtDlpRunner _runner;
-    private readonly YtDlpOptions _staticOptions;
 
-    public YtDlpSearchService()
-        : this(new YtDlpOptions(), new YtDlpRunner())
-    {
-    }
-
-    public YtDlpSearchService(YtDlpOptions options, IYtDlpRunner runner,
+    public YtDlpSearchService(
+        IPreferencesService preferencesService,
+        IYtDlpRunner runner,
         ICookieFileProvider? cookieFileProvider = null)
     {
-        _staticOptions = options;
-        _runner = runner;
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _cookieFileProvider = cookieFileProvider;
-        _preferencesService = null;
-    }
-
-    public YtDlpSearchService(IPreferencesService preferencesService, IYtDlpRunner runner,
-        ICookieFileProvider cookieFileProvider)
-    {
-        _staticOptions = new YtDlpOptions();
-        _runner = runner;
-        _cookieFileProvider = cookieFileProvider;
-        _preferencesService = preferencesService;
     }
 
     public async Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
@@ -43,7 +29,7 @@ public sealed class YtDlpSearchService : ISearchService
         if (string.IsNullOrWhiteSpace(request.Query)) return SearchResultPage.Empty;
 
         Logger.Information("Searching videos for query {Query} (StartIndex: {StartIndex})", request.Query, request.StartIndex);
-        var activeOptions = _staticOptions;
+        var activeOptions = GetActiveOptions();
         try
         {
             activeOptions = GetActiveOptions();
@@ -98,9 +84,8 @@ public sealed class YtDlpSearchService : ISearchService
 
     private YtDlpOptions GetActiveOptions()
     {
-        if (_preferencesService is null) return _staticOptions;
         var prefs = _preferencesService.GetPreferences();
-        return _staticOptions with
+        return new YtDlpOptions
         {
             ExecutablePath = prefs.YtDlpExecutablePath,
             MaxResults = prefs.MaxResults

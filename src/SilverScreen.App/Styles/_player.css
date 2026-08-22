@@ -105,6 +105,17 @@ button.player-queue-button:hover {
     background-color: alpha(#ffffff, 0.16);
 }
 
+button.player-queue-toggle:checked,
+button.player-queue-toggle.active {
+    background-color: alpha(@accent_bg_color, 0.35);
+    color: #ffffff;
+}
+
+button.player-queue-toggle:checked:hover,
+button.player-queue-toggle.active:hover {
+    background-color: alpha(@accent_bg_color, 0.45);
+}
+
 .player-queue-separator {
     background-color: alpha(#ffffff, 0.2);
     margin-bottom: 6px;

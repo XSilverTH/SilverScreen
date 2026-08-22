@@ -26,14 +26,18 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Action<Guid, int> _dropRequested;
     private readonly DropTarget _dropTarget;
     private readonly Label _duration;
+    private readonly Label _durationPill;
     private readonly Image _grip;
     private readonly SimpleAction _moveDownAction;
     private readonly Action<Guid, int> _moveRequested;
     private readonly SimpleAction _moveUpAction;
     private readonly Widget _placeholder;
+    private readonly SimpleAction _playNowAction;
+    private readonly Action<Guid, int>? _playRequested;
     private readonly Label _position;
     private readonly SimpleAction _removeAction;
     private readonly Action<Guid> _removeRequested;
+    private readonly Stack _stateStack;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
     private readonly IWatchProgressService _watchProgress;
@@ -45,25 +49,29 @@ public partial class QueueItemRowView : ViewBase<Box>
     private bool _disposed;
     private int _index;
     private QueueItem? _item;
+    public QueueItem? Item => _item;
     private CancellationTokenSource? _thumbnailCancellation;
-
     public QueueItemRowView(
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         Action<Guid, int> moveRequested,
         Action<Guid, int> dropRequested,
-        Action<Guid> removeRequested)
+        Action<Guid> removeRequested,
+        Action<Guid, int>? playRequested = null)
     {
         _thumbnails = thumbnails;
         _watchProgress = watchProgress;
         _moveRequested = moveRequested;
         _dropRequested = dropRequested;
         _removeRequested = removeRequested;
+        _playRequested = playRequested;
 
         _grip = GetRequiredObject<Image>("grip");
+        _stateStack = GetRequiredObject<Stack>("state_stack");
         _position = GetRequiredObject<Label>("position");
         _thumbnail = GetRequiredObject<Overlay>("thumbnail");
         _placeholder = GetRequiredObject<Widget>("placeholder");
+        _durationPill = GetRequiredObject<Label>("duration_pill");
         _watchedProgress = GetRequiredObject<ProgressBar>("watched_progress");
         _title = GetRequiredObject<Label>("title");
         _channel = GetRequiredObject<Label>("channel");
@@ -71,6 +79,11 @@ public partial class QueueItemRowView : ViewBase<Box>
         var menu = GetRequiredObject<MenuButton>("menu");
 
         _actions = SimpleActionGroup.New();
+        _playNowAction = CreateAction("play-now", () =>
+        {
+            if (_item is { } item)
+                _playRequested?.Invoke(item.Id, _index);
+        });
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
         _moveDownAction = CreateAction("move-down", () => MoveBy(1));
         _removeAction = CreateAction("remove", () =>
@@ -78,6 +91,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             if (_item is { } item)
                 _removeRequested(item.Id);
         });
+        _actions.AddAction(_playNowAction);
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
         _actions.AddAction(_removeAction);
@@ -100,6 +114,23 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dropTarget = DropTarget.New(Type.String, DragAction.Move);
         _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
         Widget.AddController(_dropTarget);
+
+        var detailsClick = GestureClick.New();
+        detailsClick.OnReleased += (_, _) =>
+        {
+            if (_item is { } item)
+                _playRequested?.Invoke(item.Id, _index);
+        };
+        var details = GetRequiredObject<Box>("details");
+        details.AddController(detailsClick);
+
+        var thumbnailClick = GestureClick.New();
+        thumbnailClick.OnReleased += (_, _) =>
+        {
+            if (_item is { } item)
+                _playRequested?.Invoke(item.Id, _index);
+        };
+        _thumbnail.AddController(thumbnailClick);
         _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
@@ -109,7 +140,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             _removeRequested(item.Id);
     }
 
-    public void Bind(QueueItem item, int index, int itemCount)
+    public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         Unbind();
@@ -118,11 +149,33 @@ public partial class QueueItemRowView : ViewBase<Box>
         _position.SetText((index + 1).ToString());
         _title.SetText(item.Video.Title);
         _channel.SetText(item.Video.ChannelName);
-        _duration.SetText(FormatDuration(item.Video.Duration));
+        var formattedDuration = FormatDuration(item.Video.Duration);
+        _duration.SetText(formattedDuration);
+        _durationPill.SetText(formattedDuration);
         SetWatchProgress(_watchProgress.GetFraction(item.Video.Id));
+        _playNowAction.Enabled = _playRequested is not null && index != currentPlayingIndex;
         _moveUpAction.Enabled = index > 0;
         _moveDownAction.Enabled = index < itemCount - 1;
         _removeAction.Enabled = true;
+
+        if (index == currentPlayingIndex)
+        {
+            _stateStack.VisibleChildName = "playing";
+            Widget.AddCssClass("now-playing");
+            Widget.RemoveCssClass("played");
+        }
+        else if (currentPlayingIndex >= 0 && index < currentPlayingIndex)
+        {
+            _stateStack.VisibleChildName = "index";
+            Widget.RemoveCssClass("now-playing");
+            Widget.AddCssClass("played");
+        }
+        else
+        {
+            _stateStack.VisibleChildName = "index";
+            Widget.RemoveCssClass("now-playing");
+            Widget.RemoveCssClass("played");
+        }
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = new CancellationTokenSource();
         LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
@@ -137,6 +190,11 @@ public partial class QueueItemRowView : ViewBase<Box>
         _title.SetText(string.Empty);
         _channel.SetText(string.Empty);
         _duration.SetText(string.Empty);
+        _durationPill.SetText(string.Empty);
+        _stateStack.VisibleChildName = "index";
+        Widget.RemoveCssClass("now-playing");
+        Widget.RemoveCssClass("played");
+        _playNowAction.Enabled = false;
         _moveUpAction.Enabled = false;
         _moveDownAction.Enabled = false;
         _removeAction.Enabled = false;

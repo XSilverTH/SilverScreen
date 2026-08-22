@@ -20,7 +20,7 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
     public string[] ToggleFullscreen { get; set; } = ["f"];
     public string[] PreferredSubtitle { get; set; } = ["c"];
     public string[] ResumeOrSkip { get; set; } = ["Return", "KP_Enter"];
-
+    public string[] ToggleQueue { get; set; } = ["q"];
     public PlayerShortcutBindings Clone()
     {
         return new PlayerShortcutBindings
@@ -42,7 +42,8 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
             PreviousVideo = [.. PreviousVideo],
             ToggleFullscreen = [.. ToggleFullscreen],
             PreferredSubtitle = [.. PreferredSubtitle],
-            ResumeOrSkip = [.. ResumeOrSkip]
+            ResumeOrSkip = [.. ResumeOrSkip],
+            ToggleQueue = [.. ToggleQueue]
         };
     }
 
@@ -66,7 +67,8 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
                PreviousVideo.SequenceEqual(other.PreviousVideo, StringComparer.Ordinal) &&
                ToggleFullscreen.SequenceEqual(other.ToggleFullscreen, StringComparer.Ordinal) &&
                PreferredSubtitle.SequenceEqual(other.PreferredSubtitle, StringComparer.Ordinal) &&
-               ResumeOrSkip.SequenceEqual(other.ResumeOrSkip, StringComparer.Ordinal);
+               ResumeOrSkip.SequenceEqual(other.ResumeOrSkip, StringComparer.Ordinal) &&
+               ToggleQueue.SequenceEqual(other.ToggleQueue, StringComparer.Ordinal);
     }
 
     public override bool Equals(object? obj) => Equals(obj as PlayerShortcutBindings);
@@ -92,6 +94,7 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
         AddToHash(ref hash, ToggleFullscreen);
         AddToHash(ref hash, PreferredSubtitle);
         AddToHash(ref hash, ResumeOrSkip);
+        AddToHash(ref hash, ToggleQueue);
         return hash.ToHashCode();
 
         static void AddToHash(ref HashCode hash, IEnumerable<string> values)

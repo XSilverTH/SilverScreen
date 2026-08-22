@@ -18,4 +18,6 @@ public interface IQueueService
     void Remove(Guid itemId);
 
     void Clear();
+
+    void Replace(IEnumerable<VideoSummary> videos);
 }

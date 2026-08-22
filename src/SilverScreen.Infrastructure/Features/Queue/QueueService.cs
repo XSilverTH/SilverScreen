@@ -82,4 +82,13 @@ public sealed class QueueService : IQueueService
         _items.Clear();
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    public void Replace(IEnumerable<VideoSummary> videos)
+    {
+        _items.Clear();
+        foreach (var video in videos)
+            _items.Add(new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now));
+        Logger.Information("Replaced playback queue with {Count} items", _items.Count);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 }

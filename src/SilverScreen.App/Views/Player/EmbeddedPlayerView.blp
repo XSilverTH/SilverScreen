@@ -6,7 +6,22 @@ Adw.OverlaySplitView EmbeddedPlayerView {
   collapsed: true;
   focusable: true;
 
-  content: Gtk.Overlay {
+  sidebar: Gtk.Box comments_sidebar_host {
+    hexpand: false;
+    vexpand: true;
+  };
+
+  content: Adw.OverlaySplitView player_queue_split_view {
+    sidebar-position: end;
+    collapsed: true;
+    focusable: true;
+
+    sidebar: Gtk.Box player_queue_sidebar_host {
+      hexpand: false;
+      vexpand: true;
+    };
+
+    content: Gtk.Overlay {
     hexpand: true;
     vexpand: true;
     styles ["embedded-player"]
@@ -149,10 +164,11 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           styles ["player-queue-separator"]
         }
 
-        Gtk.Button player_queue_button {
+        Gtk.ToggleButton player_queue_button {
+          toggled => $OnQueueButtonToggled();
           icon-name: "view-list-symbolic";
-          tooltip-text: "Manage play queue";
-          styles ["flat", "player-queue-button"]
+          tooltip-text: "Up next (Q)";
+          styles ["flat", "player-queue-button", "player-queue-toggle"]
         }
 
         Gtk.Separator {
@@ -604,11 +620,6 @@ Adw.OverlaySplitView EmbeddedPlayerView {
         styles ["player-resume-restart-button"]
       }
     }
-  };
-
-
-  sidebar: Gtk.Box comments_sidebar_host {
-    hexpand: false;
-    vexpand: true;
+    };
   };
 }

@@ -66,6 +66,41 @@ listview child:active {
     border-bottom: 2px solid @accent_bg_color;
 }
 
+.queue-row.now-playing {
+    background-color: alpha(@accent_bg_color, 0.14);
+    border-left: 3px solid @accent_bg_color;
+    border-top: 1px solid alpha(@accent_bg_color, 0.35);
+    border-right: 1px solid alpha(@accent_bg_color, 0.35);
+    border-bottom: 1px solid alpha(@accent_bg_color, 0.35);
+}
+
+.queue-row.now-playing:hover {
+    background-color: alpha(@accent_bg_color, 0.20);
+    border-left: 3px solid @accent_bg_color;
+}
+
+.queue-row.played {
+    opacity: 0.72;
+}
+
+.queue-row.played:hover {
+    opacity: 1.0;
+}
+
+.queue-now-playing-icon {
+    color: @accent_bg_color;
+    -gtk-icon-size: 16px;
+}
+
+.queue-duration-pill {
+    background-color: alpha(#000000, 0.82);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 4px;
+}
+
 .queue-indicator {
     min-height: 0;
     min-width: 0;

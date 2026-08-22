@@ -1,3 +1,4 @@
+using SilverScreen.Views.Player;
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Feed;
@@ -30,15 +31,8 @@ public sealed class ApplicationServices(
     IAuthenticatedHistoryService history,
     SessionValidationCoordinator sessionValidation,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
-    ICookieFileProvider cookieFiles,
-    IPlaybackPresenceService playbackPresence,
-    IYouTubePlaybackTelemetryService playbackTelemetry,
     IWatchProgressService watchProgress,
-    IVideoEngagementService videoEngagement,
-    IYouTubeRatingService youtubeRating,
-    ISponsorBlockService sponsorBlock,
-    IYouTubeCommentService comments,
-    IYouTubeVideoDetailsService videoDetails)
+    PlayerDependencies player)
 {
     public IPreferencesService Preferences { get; } = preferences;
     public IQueueService Queue { get; } = queue;
@@ -53,15 +47,8 @@ public sealed class ApplicationServices(
     public IAuthenticatedHistoryService History { get; } = history;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
-    public ICookieFileProvider CookieFiles { get; } = cookieFiles;
-    public IPlaybackPresenceService PlaybackPresence { get; } = playbackPresence;
-    public IYouTubePlaybackTelemetryService PlaybackTelemetry { get; } = playbackTelemetry;
     public IWatchProgressService WatchProgress { get; } = watchProgress;
-    public IVideoEngagementService VideoEngagement { get; } = videoEngagement;
-    public ISponsorBlockService SponsorBlock { get; } = sponsorBlock;
-    public IYouTubeRatingService YouTubeRating { get; } = youtubeRating;
-    public IYouTubeCommentService Comments { get; } = comments;
-    public IYouTubeVideoDetailsService VideoDetails { get; } = videoDetails;
+    public PlayerDependencies Player { get; } = player;
 }
 
 /// <summary>Registers the application's production services.</summary>
@@ -89,11 +76,7 @@ public static class ApplicationServiceCollectionExtensions
             Timeout = TimeSpan.FromSeconds(10)
         });
         services.AddSingleton<YouTubeAuthenticationService>();
-        services.AddSingleton<IAccountProfileService>(provider =>
-            new YouTubeAccountProfileService(
-                provider.GetRequiredKeyedService<HttpClient>("youtube-account"),
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<YouTubeAuthenticationService>()));
+        services.AddSingleton<IAccountProfileService, YouTubeAccountProfileService>();
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
             new DiscordPresenceService(
@@ -108,40 +91,20 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<ISearchSuggestionService, YouTubeSearchSuggestionService>();
         services.AddSingleton<IChannelService, YtDlpChannelService>();
         services.AddSingleton<IVideoEngagementService, ReturnYouTubeDislikeService>();
-        services.AddSingleton<IYouTubeRatingService>(provider =>
-            new YouTubeRatingService(
-                provider.GetRequiredKeyedService<HttpClient>("youtube-rating"),
-                provider.GetRequiredService<YouTubeAuthenticationService>()));
+        services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
-        services.AddSingleton<IYouTubeHomeClient>(provider =>
-            new YtDlpHomeClient(
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<ICookieFileProvider>(),
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IYtDlpRunner>()));
-        services.AddSingleton<IYouTubeCommentService>(provider =>
-            new YtDlpCommentService(
-                provider.GetRequiredService<ICookieFileProvider>(),
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IYtDlpRunner>()));
-        services.AddSingleton<IYouTubeVideoDetailsService>(provider =>
-            new YtDlpVideoDetailsService(
-                provider.GetRequiredService<ICookieFileProvider>(),
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IYtDlpRunner>()));
+        services.AddSingleton<IYouTubeHomeClient, YtDlpHomeClient>();
+        services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
+        services.AddSingleton<IYouTubeVideoDetailsService, YtDlpVideoDetailsService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
-        services.AddSingleton<IYouTubeHistoryClient>(provider =>
-            new YtDlpHistoryClient(
-                provider.GetRequiredService<ISessionService>(),
-                provider.GetRequiredService<ICookieFileProvider>(),
-                provider.GetRequiredService<IPreferencesService>(),
-                provider.GetRequiredService<IYtDlpRunner>()));
+        services.AddSingleton<IYouTubeHistoryClient, YtDlpHistoryClient>();
         services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<HomeSessionValidator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
         services.AddSingleton<SessionValidationCoordinator>();
+        services.AddSingleton<PlayerDependencies>();
         services.AddSingleton<ApplicationServices>();
 
         return services;

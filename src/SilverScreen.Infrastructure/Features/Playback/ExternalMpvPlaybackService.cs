@@ -15,31 +15,9 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     private readonly IPlaybackPresenceService? _playbackPresenceService;
     private readonly IYouTubePlaybackTelemetryService? _playbackTelemetryService;
     private readonly IWatchProgressService? _watchProgressService;
-    private readonly IPreferencesService? _preferencesService;
-    private readonly PlaybackOptions _staticOptions;
+    private readonly IPreferencesService _preferencesService;
     private bool _disposed;
     private long _nextPlaybackId;
-
-    public ExternalMpvPlaybackService()
-        : this(new PlaybackOptions(), new MpvCommandBuilder())
-    {
-    }
-
-    public ExternalMpvPlaybackService(
-        PlaybackOptions options,
-        MpvCommandBuilder commandBuilder,
-        ICookieFileProvider? cookieFileProvider = null,
-        IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-        IWatchProgressService? watchProgressService = null)
-    {
-        _staticOptions = options;
-        _cookieFileProvider = cookieFileProvider;
-        _preferencesService = null;
-        _playbackPresenceService = playbackPresenceService;
-        _playbackTelemetryService = playbackTelemetryService;
-        _watchProgressService = watchProgressService;
-    }
 
     public ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
@@ -48,9 +26,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
         IWatchProgressService? watchProgressService = null)
     {
-        _staticOptions = new PlaybackOptions();
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
         _cookieFileProvider = cookieFileProvider;
-        _preferencesService = preferencesService;
         _playbackPresenceService = playbackPresenceService;
         _playbackTelemetryService = playbackTelemetryService;
         _watchProgressService = watchProgressService;
@@ -74,7 +51,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
     {
         CookieFileLease? cookieFile = null;
         DirectoryInfo? ipcDirectory = null;
-        var activeOptions = _staticOptions;
+        var activeOptions = GetActiveOptions();
 
         try
         {
@@ -131,7 +108,6 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
     private PlaybackOptions GetActiveOptions()
     {
-        if (_preferencesService is null) return _staticOptions;
         var prefs = _preferencesService.GetPreferences();
         return new PlaybackOptions
         {
@@ -140,7 +116,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
             MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,
             AutoAdvanceNextVideo = prefs.AutoAdvanceNextVideo,
-            ExternalMpvEnabled = _staticOptions.ExternalMpvEnabled
+            ExternalMpvEnabled = true
         };
     }
 

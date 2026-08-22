@@ -167,6 +167,57 @@ public sealed class ViewModelTests
         Assert.Single(queue.Items);
     }
 
+    [Fact]
+    public void QueueViewModelTracksCurrentPlayingIndex()
+    {
+        var queue = new QueueService();
+        var video1 = queue.Add(new VideoSummary("vid1", "First", "Channel", TimeSpan.FromMinutes(3), "", false));
+        var video2 = queue.Add(new VideoSummary("vid2", "Second", "Channel", TimeSpan.FromMinutes(4), "", false));
+
+        using var viewModel = new QueueViewModel(queue, new FakePlaybackService());
+        Assert.Equal(-1, viewModel.State.CurrentPlayingIndex);
+
+        var stateChanges = 0;
+        viewModel.StateChanged += (_, state) =>
+        {
+            stateChanges++;
+            Assert.Equal(1, state.CurrentPlayingIndex);
+        };
+
+        viewModel.SetCurrentPlayingIndex(1);
+        Assert.Equal(1, viewModel.State.CurrentPlayingIndex);
+        Assert.Equal(1, stateChanges);
+
+        // Setting same index should be no-op
+        viewModel.SetCurrentPlayingIndex(1);
+        Assert.Equal(1, stateChanges);
+    }
+
+    [Fact]
+    public void QueueServiceReplaceAtomicallyUpdatesQueue()
+    {
+        var queue = new QueueService();
+        queue.Add(new VideoSummary("old1", "Old 1", "Channel", TimeSpan.FromMinutes(1), "", false));
+        queue.Add(new VideoSummary("old2", "Old 2", "Channel", TimeSpan.FromMinutes(2), "", false));
+
+        var changes = 0;
+        queue.Changed += (_, _) => changes++;
+
+        var newVideos = new[]
+        {
+            new VideoSummary("new1", "New 1", "Channel", TimeSpan.FromMinutes(5), "", false),
+            new VideoSummary("new2", "New 2", "Channel", TimeSpan.FromMinutes(10), "", false),
+            new VideoSummary("new3", "New 3", "Channel", TimeSpan.FromMinutes(15), "", false)
+        };
+
+        queue.Replace(newVideos);
+
+        Assert.Equal(1, changes);
+        Assert.Equal(3, queue.Items.Count);
+        Assert.Equal(new[] { "new1", "new2", "new3" }, queue.Items.Select(item => item.Video.Id));
+        Assert.Equal(TimeSpan.FromMinutes(30), queue.TotalDuration);
+    }
+
 
     [Fact]
     public async Task SearchProjectsOnlyUniqueNonShortVideos()
