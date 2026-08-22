@@ -109,7 +109,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
 
-            _ = ObserveProcessExitAsync(started, cookieFileForProcess, playbackId);
+            ObserveProcessExitAsync(started, cookieFileForProcess, playbackId).FireAndForget(Logger);
 
             return "Opening in MPV.";
         }

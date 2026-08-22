@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
-
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -13,6 +13,7 @@ namespace SilverScreen.Views.Home;
 
 public partial class HomeView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<HomeView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly ScrolledWindow _scrolledWindow;
     private readonly Overlay _contentOverlay;
@@ -89,7 +90,7 @@ public partial class HomeView : ViewBase<Box>
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 240)
             return;
 
-        _ = _viewModel.LoadMoreAsync();
+        _viewModel.LoadMoreAsync().FireAndForget(Logger);
     }
 
     private void OnStateChanged(object? sender, HomeFeedState state)

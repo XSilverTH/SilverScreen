@@ -16,6 +16,7 @@ namespace SilverScreen.Views.Queue;
 
 public partial class QueueItemRowView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
     private readonly SimpleActionGroup _actions;
@@ -124,7 +125,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _removeAction.Enabled = true;
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = new CancellationTokenSource();
-        _ = LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token);
+        LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
     }
 
     public void Unbind()
@@ -201,8 +202,9 @@ public partial class QueueItemRowView : ViewBase<Box>
         {
             return;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to load thumbnail for queue item {VideoId}", video.Id);
             return;
         }
 
@@ -242,10 +244,9 @@ public partial class QueueItemRowView : ViewBase<Box>
                     texture?.Dispose();
                 }
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Log.Error("Failed to load thumbnail: {Message}", e.Message);
-                // ignored
+                Logger.Warning(exception, "Failed to render thumbnail texture for queue item {VideoId}", video.Id);
             }
             finally
             {

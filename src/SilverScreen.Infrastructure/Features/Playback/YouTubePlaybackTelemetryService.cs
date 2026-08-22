@@ -226,7 +226,7 @@ public sealed class YouTubePlaybackTelemetryService(
             _disposed = true;
             var client = _client;
             _client = null;
-            _ = DisposeClientAfterSendsAsync(_sendTail, client);
+            DisposeClientAfterSendsAsync(_sendTail, client).FireAndForget(Logger);
         }
 
         private void FlushSegment(TimeSpan end)

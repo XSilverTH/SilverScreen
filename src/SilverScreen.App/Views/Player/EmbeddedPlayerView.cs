@@ -302,6 +302,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
         catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to resolve playback URLs for request");
             return Task.FromResult(exception.Message);
         }
 
@@ -631,7 +632,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var cancellation = new CancellationTokenSource();
         _infoLoadCancellation = cancellation;
         var generation = ++_infoLoadGeneration;
-        _ = LoadVideoInfoAsync(video.Id, generation, cancellation);
+        LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
     }
 
     private async Task LoadVideoInfoAsync(string videoId, int generation, CancellationTokenSource cancellation)

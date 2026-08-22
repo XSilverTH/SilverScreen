@@ -34,7 +34,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
     {
         _player = player;
         _raiseRequested = raiseRequested;
-        _ = ConnectAsync();
+        ConnectAsync().FireAndForget(Logger);
     }
 
     public void Dispose()
@@ -163,7 +163,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
     private void UpdateInhibition()
     {
-        _ = UpdateInhibitionAsync();
+        UpdateInhibitionAsync().FireAndForget(Logger);
     }
 
     private async Task UpdateInhibitionAsync()

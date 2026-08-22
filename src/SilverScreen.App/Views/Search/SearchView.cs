@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
-
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
@@ -13,6 +13,7 @@ namespace SilverScreen.Views.Search;
 
 public partial class SearchView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<SearchView>();
 
     private readonly Stack _stack;
     private readonly Label _loadingLabel;
@@ -90,7 +91,7 @@ public partial class SearchView : ViewBase<Box>
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _ = _viewModel.RefreshAsync();
+        _viewModel.RefreshAsync().FireAndForget(Logger);
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
@@ -101,7 +102,7 @@ public partial class SearchView : ViewBase<Box>
         var currentY = _vadjustment.Value;
         if (currentY + _vadjustment.PageSize >= _vadjustment.Upper - 240)
         {
-            _ = _viewModel.LoadMoreAsync();
+            _viewModel.LoadMoreAsync().FireAndForget(Logger);
         }
     }
 

@@ -118,6 +118,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (SessionPersistenceException exception)
         {
+            Logger.Warning(exception, "Failed to persist YouTube session");
             _shell.ReportStatus(exception.Message);
             return false;
         }
@@ -154,8 +155,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         {
             _shell.ReportStatus(await _validation.ValidateAsync().ConfigureAwait(false));
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to validate YouTube session");
             _shell.ReportStatus(SessionValidationFormatter.FormatUnexpectedError());
         }
         // finally
@@ -181,7 +183,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return;
 
         _profileCancellation = new CancellationTokenSource();
-        _ = LoadProfileAsync(_profileCancellation.Token);
+        LoadProfileAsync(_profileCancellation.Token).FireAndForget(Logger);
     }
 
     private async Task LoadProfileAsync(CancellationToken cancellationToken)
@@ -195,8 +197,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         {
             return;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to load current YouTube account profile");
             return;
         }
 

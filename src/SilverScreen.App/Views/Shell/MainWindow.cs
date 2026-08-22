@@ -89,7 +89,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var accountPopover = GetRequiredObject<Popover>("account_popover");
 
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
-            video => _ = OpenChannelAsync(video), services.Preferences,
+            video => OpenChannelAsync(video).FireAndForget(Logger), services.Preferences,
             services.CookieFiles, services.PlaybackPresence, services.PlaybackTelemetry, services.WatchProgress,
             services.VideoEngagement, services.YouTubeRating, services.SponsorBlock, services.Session, services.Comments,
             services.VideoDetails);
@@ -206,7 +206,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack.VisibleChildName = "search";
         _navigationBackButton.Visible = true;
         UpdateHomeRefreshButton(_searchView.IsLoading);
-        _ = _searchViewModel.SubmitAsync(query);
+        _searchViewModel.SubmitAsync(query).FireAndForget(Logger);
     }
 
     private void CloseSearch()
@@ -254,13 +254,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
         if (_stack.VisibleChildName == "channel")
-            _ = _channel.RefreshAsync();
+            _channel.RefreshAsync().FireAndForget(Logger);
         else if (_stack.VisibleChildName == "history")
-            _ = _history.RefreshAsync();
+            _history.RefreshAsync().FireAndForget(Logger);
         else if (_stack.VisibleChildName == "search")
-            _ = _searchView.RefreshAsync();
+            _searchView.RefreshAsync().FireAndForget(Logger);
         else
-            _ = _home.RefreshAsync();
+            _home.RefreshAsync().FireAndForget(Logger);
     }
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
@@ -299,7 +299,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         else if (_stack.VisibleChildName == "history")
         {
             UpdateHomeRefreshButton(_history.IsLoading);
-            _ = _historyViewModel.LoadAsync();
+            _historyViewModel.LoadAsync().FireAndForget(Logger);
         }
         else if (_stack.VisibleChildName == "search")
         {

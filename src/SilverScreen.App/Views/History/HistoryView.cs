@@ -85,7 +85,7 @@ public partial class HistoryView : ViewBase<Box>
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _ = _viewModel.RefreshAsync();
+        _viewModel.RefreshAsync().FireAndForget(Logger);
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
@@ -95,7 +95,7 @@ public partial class HistoryView : ViewBase<Box>
             return;
 
         if (_viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true })
-            _ = _viewModel.LoadMoreAsync();
+            _viewModel.LoadMoreAsync().FireAndForget(Logger);
     }
 
     private void OnStateChanged(object? sender, HistoryViewState state)

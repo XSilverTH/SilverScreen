@@ -59,8 +59,9 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
         {
             return SessionValidationFormatter.FormatCancellation();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Unexpected error during session validation");
             return SessionValidationFormatter.FormatUnexpectedError();
         }
         finally

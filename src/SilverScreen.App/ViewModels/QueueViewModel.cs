@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 
@@ -14,6 +15,7 @@ public sealed record QueuePresentationState(IReadOnlyList<QueueItem> Items, Time
 
 public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<QueueViewModel>();
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
     private readonly IStatusReporter _shell;
@@ -82,8 +84,9 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
         {
             _shell.ReportStatus(await _playback.PlayAsync(new PlaybackRequest(videos)));
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to start playback for queue items");
             _shell.ReportStatus("Playback could not be started.");
         }
         finally

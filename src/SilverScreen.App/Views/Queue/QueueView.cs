@@ -76,7 +76,7 @@ public partial class QueueView : ViewBase<Box>
 
     private void OnPlayButtonClicked(object? sender, EventArgs args)
     {
-        _ = _viewModel.PlayAllAsync();
+        _viewModel.PlayAllAsync().FireAndForget(Logger);
     }
 
     private void OnStateChanged(object? sender, QueuePresentationState state)

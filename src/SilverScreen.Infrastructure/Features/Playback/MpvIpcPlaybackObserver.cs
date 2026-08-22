@@ -35,7 +35,7 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cancellation.Cancel();
         DeleteEndpoint();
-        _ = ObserveCompletionAsync();
+        ObserveCompletionAsync().FireAndForget(Logger);
     }
 
     private async Task ObserveCompletionAsync()

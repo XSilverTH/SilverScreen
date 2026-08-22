@@ -225,7 +225,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
 
     private void ScheduleConnectionTimeout(IDiscordRpcClient client)
     {
-        _ = RestartStaleConnectionAsync(client);
+        RestartStaleConnectionAsync(client).FireAndForget(Logger);
     }
 
     private async Task RestartStaleConnectionAsync(IDiscordRpcClient client)

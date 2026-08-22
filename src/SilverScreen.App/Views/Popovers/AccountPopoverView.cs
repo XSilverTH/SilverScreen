@@ -103,7 +103,7 @@ public partial class AccountPopoverView : ViewBase<Box>
             return;
 
         _avatarCancellation = new CancellationTokenSource();
-        _ = LoadAvatarAsync(avatarUrl, _avatarCancellation.Token);
+        LoadAvatarAsync(avatarUrl, _avatarCancellation.Token).FireAndForget(Logger);
     }
 
     private async Task LoadAvatarAsync(string avatarUrl, CancellationToken cancellationToken)
@@ -123,8 +123,9 @@ public partial class AccountPopoverView : ViewBase<Box>
         {
             return;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to load account avatar from {AvatarUrl}", avatarUrl);
             return;
         }
 

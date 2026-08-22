@@ -48,8 +48,8 @@ internal sealed class PlayerEngagementController(
         var cancellation = new CancellationTokenSource();
         _cancellation = cancellation;
         var version = ++_loadVersion;
-        _ = UpdateEngagementAsync(video.Id, version, cancellation.Token);
-        _ = UpdateRatingStateAsync(video.Id, version, cancellation.Token);
+        UpdateEngagementAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
+        UpdateRatingStateAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
     }
 
     public void SubmitVote(VideoVote vote)
@@ -60,7 +60,7 @@ internal sealed class PlayerEngagementController(
         var version = _loadVersion;
         var token = _cancellation?.Token ?? CancellationToken.None;
         SetReactionSensitive(false);
-        _ = SubmitVoteAsync(videoId, vote, removeVote, version, token);
+        SubmitVoteAsync(videoId, vote, removeVote, version, token).FireAndForget(Logger);
     }
 
     public void Clear()
@@ -150,7 +150,7 @@ internal sealed class PlayerEngagementController(
             if (!succeeded) return false;
             SetRatingState(removeVote ? YouTubeRatingState.None :
                 vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
-            _ = UpdateEngagementAsync(videoId, version, CancellationToken.None);
+            UpdateEngagementAsync(videoId, version, CancellationToken.None).FireAndForget(Logger);
             return false;
         });
     }

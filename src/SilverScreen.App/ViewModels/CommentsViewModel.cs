@@ -120,7 +120,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         var cancellation = new CancellationTokenSource();
         _loadCancellation = cancellation;
         var generation = ++_loadGeneration;
-        _ = LoadCommentsAsync(_videoId, _sort, generation, cancellation);
+        LoadCommentsAsync(_videoId, _sort, generation, cancellation).FireAndForget(Logger);
     }
 
     private async Task LoadCommentsAsync(string videoId, YouTubeCommentSort sort, long generation,
@@ -136,8 +136,9 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         {
             return;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to load comments for video {VideoId}", videoId);
             result = new YouTubeCommentsResult([], false, DefaultErrorMessage);
         }
 

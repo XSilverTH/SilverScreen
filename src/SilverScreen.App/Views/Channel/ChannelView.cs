@@ -179,7 +179,7 @@ public partial class ChannelView : ViewBase<Box>
 
         double currentY = _vadjustment.Value;
         if (currentY + _vadjustment.PageSize >= _vadjustment.Upper - 240)
-            _ = _viewModel.LoadMoreAsync();
+            _viewModel.LoadMoreAsync().FireAndForget(Logger);
         long now = Environment.TickCount64;
 
         if ((now - _lastHeaderStateChangeTicks) < LayoutStabilizationMs)
@@ -303,7 +303,7 @@ public partial class ChannelView : ViewBase<Box>
                 _avatarCancellation?.Cancel();
                 _avatarCancellation?.Dispose();
                 _avatarCancellation = new CancellationTokenSource();
-                _ = LoadAvatarAsync(state.AvatarUrl, gen, _avatarCancellation.Token);
+                LoadAvatarAsync(state.AvatarUrl, gen, _avatarCancellation.Token).FireAndForget(Logger);
             }
             else
             {
@@ -376,16 +376,20 @@ public partial class ChannelView : ViewBase<Box>
         {
             await _viewModel.SetSortSelection(selected);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Ignore cancelled or failed sort requests
+            // Ignore cancelled sort requests
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to update channel sort selection");
         }
     }
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
         if (_viewModel.State.Url is { } url)
-            _ = _viewModel.OpenChannelAsync(url, _viewModel.State.Name);
+            _viewModel.OpenChannelAsync(url, _viewModel.State.Name).FireAndForget(Logger);
     }
 
 
@@ -430,8 +434,13 @@ public partial class ChannelView : ViewBase<Box>
                 () => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true),
                 cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (OperationCanceledException)
         {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to load avatar from {AvatarUrl}", avatarUrl);
             return;
         }
 
@@ -474,8 +483,9 @@ public partial class ChannelView : ViewBase<Box>
                     texture?.Dispose();
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                Logger.Warning(exception, "Failed to render channel avatar texture from {AvatarUrl}", avatarUrl);
                 // Leave placeholder intact on decode error
             }
             finally

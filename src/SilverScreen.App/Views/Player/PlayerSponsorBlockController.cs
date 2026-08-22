@@ -86,7 +86,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         var cancellation = new CancellationTokenSource();
         _cancellation = cancellation;
         var loadVersion = ++_loadVersion;
-        _ = LoadAsync(video.Id, categories, loadVersion, cancellation.Token);
+        LoadAsync(video.Id, categories, loadVersion, cancellation.Token).FireAndForget(Logger);
     }
 
     public void UpdatePlayback(LibMpvPlaybackState state, string videoId)
@@ -144,8 +144,11 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to load SponsorBlock segments for video {VideoId}", videoId);
+        }
     }
-
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
         IdleAdd(0, () =>

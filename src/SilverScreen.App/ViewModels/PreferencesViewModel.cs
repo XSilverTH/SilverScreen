@@ -77,8 +77,9 @@ public sealed class PreferencesViewModel
             EditorState = normalizedState;
             return new PreferencesSaveResult(true, EditorState);
         }
-        catch (PreferencesPersistenceException)
+        catch (PreferencesPersistenceException exception)
         {
+            Logger.Warning(exception, "Failed to persist preferences");
             _preferences = _preferencesService.GetPreferences();
             EditorState = FromPreferences(_preferences);
             return new PreferencesSaveResult(false, EditorState, PersistenceErrorMessage);

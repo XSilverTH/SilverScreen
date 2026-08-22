@@ -74,11 +74,12 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to refresh watch history");
             const string message = "Could not load watch history.";
             State = new HistoryViewState([], message, false, false, AuthenticatedHistoryStatus.TemporaryBackendFailure);
             shell.ReportStatus(message);
@@ -114,11 +115,12 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to load more watch history");
             const string message = "Could not load more watch history.";
             State = State with { Summary = message, IsLoadingMore = false };
             shell.ReportStatus(message);

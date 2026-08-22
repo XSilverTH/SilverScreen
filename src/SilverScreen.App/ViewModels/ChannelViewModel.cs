@@ -113,11 +113,12 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to load more channel videos for {ChannelUrl}", State.Url);
             const string message = "Could not load more channel videos.";
             State = State with { Summary = message, IsLoadingMore = false };
             shell.ReportStatus(message);
@@ -190,11 +191,12 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to load channel for {ChannelUrl}", channelUrl);
             const string message = "Could not load channel.";
             _nextStartIndex = null;
             State = State with { Summary = message, IsLoading = false, IsSuccess = false, Videos = [] };

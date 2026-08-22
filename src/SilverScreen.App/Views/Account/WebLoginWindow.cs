@@ -89,7 +89,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
             return;
         }
 
-        _ = FinishDisposalAsync(stopped);
+        FinishDisposalAsync(stopped).FireAndForget(Logger);
     }
 
     internal void Present()
@@ -143,7 +143,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
         if (_disposed)
             return;
 
-        _ = _account.ValidateAsync();
+        _account.ValidateAsync().FireAndForget(Logger);
         Dispose();
     }
 

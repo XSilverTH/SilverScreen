@@ -138,8 +138,9 @@ public sealed class SearchViewModel(
                     return;
             }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to submit search or play URL for query {Query}", query);
             shell.ReportStatus("The requested action could not be completed.");
         }
     }
@@ -179,11 +180,12 @@ public sealed class SearchViewModel(
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to load more search results for query {Query}", _query);
             const string message = "Search could not be completed.";
             State = State with { Summary = message, IsLoadingMore = false };
             shell.ReportStatus(message);
@@ -221,11 +223,12 @@ public sealed class SearchViewModel(
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             if (generation != _requestGeneration || _disposed)
                 return;
 
+            Logger.Warning(exception, "Failed to execute search for query {Query}", query);
             const string message = "Search could not be completed.";
             _continuationToken = null;
             State = new SearchViewState([], message, false);

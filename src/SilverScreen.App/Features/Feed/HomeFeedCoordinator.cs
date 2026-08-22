@@ -29,7 +29,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         if (IsSessionActive())
         {
             State = new HomeFeedState(HomeFeedStateKind.InitialLoading, [], IsLoading: true);
-            _ = RefreshAsync();
+            RefreshAsync().FireAndForget(Logger);
         }
         else
         {
@@ -204,8 +204,9 @@ public sealed class HomeFeedCoordinator : IDisposable
         {
             // Cancellation never publishes errors
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "HomeFeedCoordinator failed to load more recommendations");
             HomeFeedState errorState;
             long errVersion;
             lock (_lock)
@@ -341,7 +342,7 @@ public sealed class HomeFeedCoordinator : IDisposable
     {
         if (IsSessionActive())
         {
-            _ = RefreshAsync();
+            RefreshAsync().FireAndForget(Logger);
         }
         else
         {

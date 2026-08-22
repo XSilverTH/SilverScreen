@@ -2,6 +2,7 @@ using Gdk;
 using GdkPixbuf;
 using Gio;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using XSTH.Blueprint.Helpers;
@@ -21,6 +22,7 @@ public sealed class VideoCardActions
 
 public class VideoCardView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private readonly VideoCardActions _actions;
@@ -137,7 +139,7 @@ public class VideoCardView : ViewBase<Box>
         _thumbnailCancellation = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             : new CancellationTokenSource();
-        _ = LoadThumbnailAsync(video, generation, _thumbnailCancellation.Token);
+        LoadThumbnailAsync(video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
     }
 
     public void Unbind()
@@ -197,8 +199,9 @@ public class VideoCardView : ViewBase<Box>
         {
             return;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to load thumbnail for video {VideoId}", video.Id);
             // A corrupt or unsupported cached image leaves the placeholder intact.
             return;
         }
@@ -244,8 +247,9 @@ public class VideoCardView : ViewBase<Box>
                     texture?.Dispose();
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Logger.Warning(exception, "Failed to render thumbnail texture for video {VideoId}", video.Id);
                 // A corrupt or unsupported cached image leaves the placeholder intact.
             }
             finally
@@ -326,7 +330,7 @@ public class VideoCardView : ViewBase<Box>
             {
                 if (_actions.OpenChannelAsync is { } openChannel)
                 {
-                    _ = openChannel(video);
+                    openChannel(video).FireAndForget(Logger);
                 }
                 else
                 {
@@ -342,7 +346,7 @@ public class VideoCardView : ViewBase<Box>
 
     private void StartAlternatePlay(VideoSummary video)
     {
-        _ = PlayAlternateAsync(video);
+        PlayAlternateAsync(video).FireAndForget(Logger);
     }
 
     private async Task PlayAlternateAsync(VideoSummary video)
@@ -351,8 +355,9 @@ public class VideoCardView : ViewBase<Box>
         {
             await _actions.OpenInAlternatePlayerAsync(video);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to start alternate playback for video {VideoId}", video.Id);
             _actions.ReportStatus("Playback could not be started.");
         }
     }
@@ -365,7 +370,7 @@ public class VideoCardView : ViewBase<Box>
         sender.SetState(EventSequenceState.Claimed);
         if (_actions.OpenChannelAsync is { } openChannel)
         {
-            _ = openChannel(video);
+            openChannel(video).FireAndForget(Logger);
         }
         else
         {
@@ -380,7 +385,7 @@ public class VideoCardView : ViewBase<Box>
 
     private void StartPlay(VideoSummary video)
     {
-        _ = PlayAsync(video);
+        PlayAsync(video).FireAndForget(Logger);
     }
 
     private async Task PlayAsync(VideoSummary video)
@@ -389,8 +394,9 @@ public class VideoCardView : ViewBase<Box>
         {
             await _actions.PlayAsync(video);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "Failed to start playback for video {VideoId}", video.Id);
             _actions.ReportStatus("Playback could not be started.");
         }
     }
