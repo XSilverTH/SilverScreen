@@ -28,12 +28,14 @@ public class VideoCardView : ViewBase<Box>
     private readonly Label _channel;
     private readonly GestureClick _channelClick;
     private readonly GestureClick _click;
+    private readonly PopoverMenu _contextMenu;
     private readonly Label _duration;
     private readonly ProgressBar _watchedProgress;
     private readonly MenuButton _menu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly Widget _placeholder;
+    private readonly GestureClick _rightClick;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
     private readonly IWatchProgressService _watchProgress;
@@ -79,12 +81,22 @@ public class VideoCardView : ViewBase<Box>
         }
 
         _menu.InsertActionGroup("video", _menuActions);
+        _card.InsertActionGroup("video", _menuActions);
+
+        _contextMenu = PopoverMenu.NewFromModel(_menu.MenuModel!);
+        _contextMenu.SetParent(_card);
+        _contextMenu.HasArrow = false;
+        _contextMenu.InsertActionGroup("video", _menuActions);
 
         _click = GestureClick.New();
         _click.Button = 0;
         _click.OnReleased += OnCardReleased;
         _card.AddController(_click);
 
+        _rightClick = GestureClick.New();
+        _rightClick.Button = 3;
+        _rightClick.OnPressed += OnCardRightClicked;
+        _card.AddController(_rightClick);
         _channelClick = GestureClick.New();
         _channelClick.Button = 1;
         _channelClick.OnReleased += OnChannelReleased;
@@ -99,6 +111,7 @@ public class VideoCardView : ViewBase<Box>
 
         _video = video;
         _title.SetText(video.Title);
+        _title.TooltipText = video.Title;
         _channel.SetText(video.ChannelName);
         if (video.PublishedAt is { } publishedAt)
         {
@@ -132,6 +145,8 @@ public class VideoCardView : ViewBase<Box>
         _video = null;
         _bindingGeneration++;
         _title.SetText(string.Empty);
+        _title.TooltipText = string.Empty;
+        _contextMenu.Popdown();
         _channel.SetText(string.Empty);
         _duration.SetText(string.Empty);
         _uploadDate.SetText(string.Empty);
@@ -272,6 +287,22 @@ public class VideoCardView : ViewBase<Box>
             _actions.AddToQueue(video);
     }
 
+    private void OnCardRightClicked(GestureClick sender, GestureClick.PressedSignalArgs args)
+    {
+        if (_video is null)
+            return;
+
+        sender.SetState(EventSequenceState.Claimed);
+        var rect = new Rectangle
+        {
+            X = (int)args.X,
+            Y = (int)args.Y,
+            Width = 1,
+            Height = 1
+        };
+        _contextMenu.SetPointingTo(rect);
+        _contextMenu.Popup();
+    }
     private void OnMenuActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
     {
         if (ReferenceEquals(sender, _menuActionItems[0]))
@@ -449,14 +480,21 @@ public class VideoCardView : ViewBase<Box>
         _click.OnReleased -= OnCardReleased;
         _card.RemoveController(_click);
         _click.Dispose();
+        _rightClick.OnPressed -= OnCardRightClicked;
+        _card.RemoveController(_rightClick);
+        _rightClick.Dispose();
         _channelClick.OnReleased -= OnChannelReleased;
         _channel.RemoveController(_channelClick);
         _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         _channelClick.Dispose();
 
+        _contextMenu.Popdown();
+        _contextMenu.Unparent();
+        _contextMenu.Dispose();
 
         _menu.MenuModel = null;
         _menu.InsertActionGroup("video", null);
+        _card.InsertActionGroup("video", null);
         foreach (var action in _menuActionItems)
         {
             action.OnActivate -= OnMenuActionActivated;
