@@ -24,12 +24,16 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         ".bmp"
     };
 
-    private readonly bool _disposeHttpClient;
+    private readonly Lock _lock = new();
+    private readonly LinkedList<string> _lruEntries = new();
+    private readonly Dictionary<string, LinkedListNode<string>> _entryLookup =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private bool _initialized;
 
+    private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
     private readonly long _maxDownloadBytes;
     private readonly int _maxFileCount;
-
     public ThumbnailCacheService()
         : this(CreateDefaultHttpClient(), GetDefaultCacheDirectory(), disposeHttpClient: true)
     {
@@ -62,6 +66,17 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private string CacheDirectory { get; }
 
+    internal int CachedFileCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                EnsureInitializedLocked();
+                return _entryLookup.Count;
+            }
+        }
+    }
     public void Dispose()
     {
         if (_disposeHttpClient) _httpClient.Dispose();
@@ -82,14 +97,22 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         if (!TryCreateHttpUri(thumbnailUrl, out var uri))
             return null;
 
+        if (!_initialized)
+        {
+            lock (_lock)
+            {
+                EnsureInitializedLocked();
+            }
+        }
+
         var cachePath = GetCachePath(uri);
         if (File.Exists(cachePath))
         {
+            RecordHit(cachePath);
             TouchCacheFile(cachePath);
             Logger.Debug("Thumbnail cache hit for {Url}", thumbnailUrl);
             return new ThumbnailResult(cachePath, true);
         }
-
         Directory.CreateDirectory(CacheDirectory);
         var temporaryPath = Path.Combine(CacheDirectory, $"{Path.GetFileName(cachePath)}.{Guid.NewGuid():N}.tmp");
         var downloadUri = uri;
@@ -114,7 +137,6 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             if (!copied)
                 return null;
 
-
             downloadCompleted = true;
         }
         catch (OperationCanceledException)
@@ -133,27 +155,34 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 DeleteFileIfExists(temporaryPath);
         }
 
-
         try
         {
             if (File.Exists(cachePath))
             {
-                File.Delete(temporaryPath);
+                DeleteFileIfExists(temporaryPath);
+                RecordHit(cachePath);
                 TouchCacheFile(cachePath);
                 return new ThumbnailResult(cachePath, true);
             }
 
             File.Move(temporaryPath, cachePath);
-            CleanupOldCacheFiles();
+            RecordAddAndEvict(cachePath);
             return new ThumbnailResult(cachePath, false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DeleteFileIfExists(temporaryPath);
+            if (File.Exists(cachePath))
+            {
+                RecordHit(cachePath);
+                TouchCacheFile(cachePath);
+                return new ThumbnailResult(cachePath, true);
+            }
+
+            Logger.Warning(ex, "Failed to cache thumbnail for {CachePath}", cachePath);
             return null;
         }
     }
-
 
     private static string CreateCacheKey(string thumbnailUrl)
     {
@@ -222,26 +251,142 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             await target.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
         }
     }
-
-    private void CleanupOldCacheFiles()
+    private void EnsureInitializedLocked()
     {
+        if (_initialized)
+            return;
+
+        _initialized = true;
+
+        if (!Directory.Exists(CacheDirectory))
+            return;
+
         try
         {
-            var files = Directory.EnumerateFiles(CacheDirectory)
-                .Where(file => !file.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
-                .Select(file => new FileInfo(file))
-                .OrderByDescending(file => file.LastWriteTimeUtc)
-                .Skip(_maxFileCount)
-                .ToList();
+            var entries = new List<(string Path, DateTime LastWriteTimeUtc)>();
+            foreach (var file in Directory.EnumerateFiles(CacheDirectory))
+            {
+                if (file.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(file) < DateTime.UtcNow.AddMinutes(-5))
+                            DeleteFileIfExists(file);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                    }
+                    continue;
+                }
+                try
+                {
+                    var lastWrite = File.GetLastWriteTimeUtc(file);
+                    entries.Add((file, lastWrite));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
 
-            foreach (var file in files)
-                file.Delete();
+            entries.Sort((a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc));
+
+            var excessCount = entries.Count - _maxFileCount;
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (i < excessCount)
+                {
+                    DeleteFileIfExists(entry.Path);
+                }
+                else
+                {
+                    if (!_entryLookup.ContainsKey(entry.Path))
+                    {
+                        var node = _lruEntries.AddLast(entry.Path);
+                        _entryLookup[entry.Path] = node;
+                    }
+                }
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
+            Logger.Warning(ex, "Failed to initialize thumbnail cache index from disk.");
         }
     }
 
+    private void RecordHit(string cachePath)
+    {
+        List<string>? filesToDelete = null;
+        lock (_lock)
+        {
+            EnsureInitializedLocked();
+
+            if (_entryLookup.TryGetValue(cachePath, out var node))
+            {
+                if (node != _lruEntries.Last)
+                {
+                    _lruEntries.Remove(node);
+                    _lruEntries.AddLast(node);
+                }
+            }
+            else
+            {
+                var newNode = _lruEntries.AddLast(cachePath);
+                _entryLookup[cachePath] = newNode;
+
+                while (_lruEntries.Count > _maxFileCount && _lruEntries.First is { } oldest)
+                {
+                    _lruEntries.RemoveFirst();
+                    _entryLookup.Remove(oldest.Value);
+                    filesToDelete ??= [];
+                    filesToDelete.Add(oldest.Value);
+                }
+            }
+        }
+
+        if (filesToDelete is not null)
+        {
+            foreach (var file in filesToDelete)
+                DeleteFileIfExists(file);
+        }
+    }
+
+    private void RecordAddAndEvict(string cachePath)
+    {
+        List<string>? filesToDelete = null;
+        lock (_lock)
+        {
+            EnsureInitializedLocked();
+
+            if (_entryLookup.TryGetValue(cachePath, out var node))
+            {
+                if (node != _lruEntries.Last)
+                {
+                    _lruEntries.Remove(node);
+                    _lruEntries.AddLast(node);
+                }
+            }
+            else
+            {
+                var newNode = _lruEntries.AddLast(cachePath);
+                _entryLookup[cachePath] = newNode;
+            }
+
+            while (_lruEntries.Count > _maxFileCount && _lruEntries.First is { } oldest)
+            {
+                _lruEntries.RemoveFirst();
+                _entryLookup.Remove(oldest.Value);
+                filesToDelete ??= [];
+                filesToDelete.Add(oldest.Value);
+            }
+        }
+
+        if (filesToDelete is not null)
+        {
+            foreach (var file in filesToDelete)
+                DeleteFileIfExists(file);
+        }
+    }
 
     private static void TouchCacheFile(string path)
     {

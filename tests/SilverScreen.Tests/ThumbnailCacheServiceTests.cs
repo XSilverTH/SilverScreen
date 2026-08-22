@@ -170,6 +170,190 @@ public sealed class ThumbnailCacheServiceTests
         Assert.Equal(0, handler.CallCount);
     }
 
+    [Fact]
+    public async Task GetThumbnailAsync_EvictsOldestFiles_WhenLimitExceeded()
+    {
+        using var directory = new TemporaryDirectory();
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent("image"u8.ToArray())
+        }));
+        using var client = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
+
+        var r1 = await service.GetThumbnailAsync("https://example.com/1.jpg");
+        var r2 = await service.GetThumbnailAsync("https://example.com/2.jpg");
+        var r3 = await service.GetThumbnailAsync("https://example.com/3.jpg");
+        var r4 = await service.GetThumbnailAsync("https://example.com/4.jpg");
+        var r5 = await service.GetThumbnailAsync("https://example.com/5.jpg");
+
+        Assert.NotNull(r1);
+        Assert.NotNull(r2);
+        Assert.NotNull(r3);
+        Assert.NotNull(r4);
+        Assert.NotNull(r5);
+
+        Assert.Equal(3, service.CachedFileCount);
+        var diskFiles = Directory.EnumerateFiles(directory.Path).Where(f => !f.EndsWith(".tmp")).ToList();
+        Assert.Equal(3, diskFiles.Count);
+
+        Assert.False(File.Exists(r1.LocalPath));
+        Assert.False(File.Exists(r2.LocalPath));
+        Assert.True(File.Exists(r3.LocalPath));
+        Assert.True(File.Exists(r4.LocalPath));
+        Assert.True(File.Exists(r5.LocalPath));
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_CacheHitUpdatesLru_PreventsEviction()
+    {
+        using var directory = new TemporaryDirectory();
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent("image"u8.ToArray())
+        }));
+        using var client = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
+
+        var r1 = await service.GetThumbnailAsync("https://example.com/1.jpg");
+        var r2 = await service.GetThumbnailAsync("https://example.com/2.jpg");
+        var r3 = await service.GetThumbnailAsync("https://example.com/3.jpg");
+
+        // Hit 1 again, promoting it to MRU (order is now: 2 [oldest], 3, 1 [newest])
+        var r1Hit = await service.GetThumbnailAsync("https://example.com/1.jpg");
+        Assert.NotNull(r1Hit);
+        Assert.True(r1Hit.WasCacheHit);
+
+        // Add 4 -> should evict 2 (oldest), keeping 3, 1, 4
+        var r4 = await service.GetThumbnailAsync("https://example.com/4.jpg");
+        Assert.NotNull(r4);
+
+        Assert.Equal(3, service.CachedFileCount);
+        Assert.True(File.Exists(r1!.LocalPath));
+        Assert.False(File.Exists(r2!.LocalPath));
+        Assert.True(File.Exists(r3!.LocalPath));
+        Assert.True(File.Exists(r4.LocalPath));
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_ConcurrentDownloads_RespectsMaxFileCount()
+    {
+        using var directory = new TemporaryDirectory();
+        var handler = new FakeHttpMessageHandler(async (req, ct) =>
+        {
+            await Task.Yield();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent("image"u8.ToArray())
+            };
+        });
+        using var client = new HttpClient(handler);
+        const int maxFiles = 5;
+        const int totalDownloads = 40;
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: maxFiles);
+
+        var tasks = Enumerable.Range(0, totalDownloads)
+            .Select(i => service.GetThumbnailAsync($"https://example.com/concurrent_{i}.jpg"))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, Assert.NotNull);
+        Assert.Equal(maxFiles, service.CachedFileCount);
+        var diskFiles = Directory.EnumerateFiles(directory.Path).Where(f => !f.EndsWith(".tmp")).ToList();
+        Assert.Equal(maxFiles, diskFiles.Count);
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_ConcurrentRequestsForSameUrl_ReturnsSameCachedFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var handler = new FakeHttpMessageHandler(async (_, _) =>
+        {
+            await Task.Delay(10);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent("image"u8.ToArray())
+            };
+        });
+        using var client = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 10);
+
+        var url = "https://example.com/same_image.jpg";
+        var tasks = Enumerable.Range(0, 20)
+            .Select(_ => service.GetThumbnailAsync(url))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, Assert.NotNull);
+        var firstPath = results[0]!.LocalPath;
+        Assert.All(results, r => Assert.Equal(firstPath, r!.LocalPath));
+        Assert.True(File.Exists(firstPath));
+        Assert.Equal(1, service.CachedFileCount);
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_PreExistingFilesOnDisk_AreDiscoveredAndEvicted()
+    {
+        using var directory = new TemporaryDirectory();
+        // Pre-create 5 files on disk with staggered timestamps
+        var filePaths = new List<string>();
+        for (var i = 0; i < 5; i++)
+        {
+            var path = Path.Combine(directory.Path, $"pre_existing_{i}.img");
+            await File.WriteAllBytesAsync(path, "old_image"u8.ToArray());
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(i - 10));
+            filePaths.Add(path);
+        }
+
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent("new_image"u8.ToArray())
+        }));
+        using var client = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
+
+        // Adding 1 new file when 5 pre-existed should trigger init (which evicts oldest 2, keeping 3),
+        // and then adding the new file evicts 1 more so total is 3.
+        var newResult = await service.GetThumbnailAsync("https://example.com/new_download.jpg");
+
+        Assert.NotNull(newResult);
+        Assert.Equal(3, service.CachedFileCount);
+        var remainingFiles = Directory.EnumerateFiles(directory.Path).Where(f => !f.EndsWith(".tmp")).ToList();
+        Assert.Equal(3, remainingFiles.Count);
+
+        // Oldest pre-existing files (0, 1, 2) should be gone
+        Assert.False(File.Exists(filePaths[0]));
+        Assert.False(File.Exists(filePaths[1]));
+        Assert.False(File.Exists(filePaths[2]));
+        // Pre-existing (3, 4) and new download should exist
+        Assert.True(File.Exists(filePaths[3]));
+        Assert.True(File.Exists(filePaths[4]));
+        Assert.True(File.Exists(newResult.LocalPath));
+    }
+
+    [Fact]
+    public async Task GetThumbnailAsync_TemporaryFilesFromAbortedDownloads_CleanedUpOnInit()
+    {
+        using var directory = new TemporaryDirectory();
+        var staleTmpFile = Path.Combine(directory.Path, "orphaned.12345.tmp");
+        await File.WriteAllBytesAsync(staleTmpFile, "junk"u8.ToArray());
+        File.SetLastWriteTimeUtc(staleTmpFile, DateTime.UtcNow.AddMinutes(-10));
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent("image"u8.ToArray())
+        }));
+        using var client = new HttpClient(handler);
+        using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 5);
+
+        var result = await service.GetThumbnailAsync("https://example.com/image.jpg");
+
+        Assert.NotNull(result);
+        Assert.False(File.Exists(staleTmpFile));
+        Assert.Equal(1, service.CachedFileCount);
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public TemporaryDirectory()
