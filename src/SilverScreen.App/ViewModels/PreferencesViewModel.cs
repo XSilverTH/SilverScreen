@@ -119,14 +119,13 @@ public sealed class PreferencesViewModel
             OpenInFullscreen = preferences.OpenInFullscreen,
             AutoAdvanceNextVideo = preferences.AutoAdvanceNextVideo,
             MaxResultsText = preferences.MaxResults.ToString(),
-            MarkWatchedVideos = preferences is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
+            MarkWatchedVideos = preferences.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = preferences.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = preferences.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = preferences.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = preferences.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
-            ResumePlaybackOnDemand = preferences is
-                { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+            ResumePlaybackOnDemand = preferences.ResumePlaybackOnDemand,
             Shortcuts = preferences.Shortcuts.Clone(),
 
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
@@ -148,14 +147,13 @@ public sealed class PreferencesViewModel
             OpenInFullscreen = state.OpenInFullscreen,
             AutoAdvanceNextVideo = state.AutoAdvanceNextVideo,
             MaxResults = maxResults,
-            MarkWatchedVideos = state is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
+            MarkWatchedVideos = state.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = state.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = state.DiscordRichPresenceEnabled,
             SponsorBlockAutoSkipEnabled = state.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = state.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,
-            ResumePlaybackOnDemand = state is
-                { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true },
+            ResumePlaybackOnDemand = state.ResumePlaybackOnDemand,
             Shortcuts = state.Shortcuts.Clone(),
 
             SponsorBlockCategories = [.. state.SponsorBlockCategories],

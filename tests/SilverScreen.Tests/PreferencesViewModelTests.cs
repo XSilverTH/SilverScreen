@@ -53,6 +53,78 @@ public sealed class PreferencesViewModelTests
         Assert.True(service.Saved!.MarkWatchedVideos);
         Assert.False(service.Saved.YouTubePlaybackTelemetryEnabled);
     }
+    [Fact]
+    public void Save_WhenTelemetryIsEnabled_DisablesMarkWatched()
+    {
+        var service = new FakePreferencesService(new AppPreferences
+        {
+            MarkWatchedVideos = true
+        });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { YouTubePlaybackTelemetryEnabled = true },
+            PreferencesMutuallyExclusiveOption.YouTubePlaybackTelemetry);
+
+        Assert.True(result.Succeeded);
+        Assert.True(service.Saved!.YouTubePlaybackTelemetryEnabled);
+        Assert.False(service.Saved.MarkWatchedVideos);
+    }
+
+    [Fact]
+    public void Save_WhenResumeAutomaticallyIsEnabled_DisablesResumeOnDemand()
+    {
+        var service = new FakePreferencesService(new AppPreferences
+        {
+            ResumePlaybackOnDemand = true
+        });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackAutomatically = true },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackAutomatically);
+
+        Assert.True(result.Succeeded);
+        Assert.True(service.Saved!.ResumePlaybackAutomatically);
+        Assert.False(service.Saved.ResumePlaybackOnDemand);
+    }
+
+    [Fact]
+    public void Save_WhenResumeOnDemandIsEnabled_DisablesResumeAutomatically()
+    {
+        var service = new FakePreferencesService(new AppPreferences
+        {
+            ResumePlaybackAutomatically = true
+        });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { ResumePlaybackOnDemand = true },
+            PreferencesMutuallyExclusiveOption.ResumePlaybackOnDemand);
+
+        Assert.True(result.Succeeded);
+        Assert.True(service.Saved!.ResumePlaybackOnDemand);
+        Assert.False(service.Saved.ResumePlaybackAutomatically);
+    }
+
+    [Fact]
+    public void Save_WithNoChangedOptionAndConflictingFlags_NormalizesUsingPrecedenceRules()
+    {
+        var service = new FakePreferencesService(new AppPreferences());
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with
+        {
+            MarkWatchedVideos = true,
+            YouTubePlaybackTelemetryEnabled = true,
+            ResumePlaybackAutomatically = true,
+            ResumePlaybackOnDemand = true
+        });
+
+        Assert.True(result.Succeeded);
+        // Fallback rule: MarkWatchedVideos is false if telemetry is enabled; ResumePlaybackOnDemand is false if auto-resume is true
+        Assert.False(service.Saved!.MarkWatchedVideos);
+        Assert.True(service.Saved.YouTubePlaybackTelemetryEnabled);
+        Assert.True(service.Saved.ResumePlaybackAutomatically);
+        Assert.False(service.Saved.ResumePlaybackOnDemand);
+    }
 
 
 

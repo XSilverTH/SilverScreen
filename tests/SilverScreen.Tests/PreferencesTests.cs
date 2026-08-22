@@ -85,6 +85,49 @@ public sealed class PreferencesTests : IDisposable
         Assert.False(loaded.ResumePlaybackOnDemand);
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
+    [Fact]
+    public void SavePreferences_PersistsConflictingFlags_WithoutSilentlyMutatingThem()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        var conflicting = new AppPreferences
+        {
+            MarkWatchedVideos = true,
+            YouTubePlaybackTelemetryEnabled = true,
+            ResumePlaybackAutomatically = true,
+            ResumePlaybackOnDemand = true
+        };
+
+        service.SavePreferences(conflicting);
+
+        var inMemory = service.GetPreferences();
+        Assert.True(inMemory.MarkWatchedVideos);
+        Assert.True(inMemory.YouTubePlaybackTelemetryEnabled);
+        Assert.True(inMemory.ResumePlaybackAutomatically);
+        Assert.True(inMemory.ResumePlaybackOnDemand);
+
+        var secondService = new FilePreferencesService(_tempFilePath);
+        var loaded = secondService.GetPreferences();
+        Assert.True(loaded.MarkWatchedVideos);
+        Assert.True(loaded.YouTubePlaybackTelemetryEnabled);
+        Assert.True(loaded.ResumePlaybackAutomatically);
+        Assert.True(loaded.ResumePlaybackOnDemand);
+    }
+
+    [Fact]
+    public void SavePreferences_WhenOnlyResumePlaybackOnDemandChanges_PersistsAndRaisesEvent()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        service.SavePreferences(new AppPreferences { ResumePlaybackOnDemand = false });
+
+        var events = 0;
+        service.PreferencesChanged += (_, _) => events++;
+
+        service.SavePreferences(new AppPreferences { ResumePlaybackOnDemand = true });
+
+        Assert.Equal(1, events);
+        var secondService = new FilePreferencesService(_tempFilePath);
+        Assert.True(secondService.GetPreferences().ResumePlaybackOnDemand);
+    }
 
     [Fact]
     public void LoadPreferences_MissingShortcuts_UsesCurrentDefaults()
