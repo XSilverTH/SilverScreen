@@ -50,18 +50,6 @@ public sealed class HomeFeedCoordinator : IDisposable
     public async Task RefreshAsync()
     {
         Logger.Information("HomeFeedCoordinator refreshing home feed");
-        CancellationToken token;
-        long requestId;
-        lock (_lock)
-        {
-            _cts?.Cancel();
-            _cts?.Dispose();
-            _cts = new CancellationTokenSource();
-            token = _cts.Token;
-            _isLoading = true;
-            _currentRequestId++;
-            requestId = _currentRequestId;
-        }
         if (!IsSessionActive())
         {
             CancelAndClear();
@@ -69,97 +57,33 @@ public sealed class HomeFeedCoordinator : IDisposable
             return;
         }
 
-        // During refresh with existing videos: Ready + IsLoading true; initial: InitialLoading + IsLoading true
-        HomeFeedState pendingState;
-        long version;
-        lock (_lock)
-        {
-            if (_currentRequestId != requestId) return;
-
-            if (_videos.Count > 0)
-                pendingState = new HomeFeedState(
-                    HomeFeedStateKind.Ready,
-                    [.. _videos],
-                    IsLoading: true,
-                    HasContinuation: !string.IsNullOrEmpty(_continuationToken));
-            else
-                pendingState = new HomeFeedState(
-                    HomeFeedStateKind.InitialLoading,
-                    [],
-                    IsLoading: true);
-
-            _stateVersion++;
-            State = pendingState;
-            version = _stateVersion;
-        }
-
-        PublishStateWithVersion(pendingState, version);
-
-        try
-        {
-            var result = await _feedService.LoadFirstPageAsync(token);
-
-            token.ThrowIfCancellationRequested();
-
-            ProcessResult(result, true, requestId);
-        }
-        catch (OperationCanceledException)
-        {
-            // Cancellation never publishes errors
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "HomeFeedCoordinator failed to refresh home feed");
-            HomeFeedState errorState;
-            long errVersion;
-            lock (_lock)
-            {
-                if (_currentRequestId == requestId)
-                {
-                    errorState = new HomeFeedState(
-                        HomeFeedStateKind.SafeError,
-                        [.. _videos],
-                        "Could not load YouTube recommendations.",
-                        false,
-                        false,
-                        !string.IsNullOrEmpty(_continuationToken));
-
-                    _stateVersion++;
-                    State = errorState;
-                    errVersion = _stateVersion;
-                }
-                else
-                {
-                    return;
-                }
-            }
-
-            PublishStateWithVersion(errorState, errVersion);
-        }
-        finally
-        {
-            lock (_lock)
-            {
-                if (_currentRequestId == requestId)
-                    _isLoading = false;
-            }
-        }
+        await ExecuteFeedRequestAsync(
+            token => _feedService.LoadFirstPageAsync(token),
+            isFirstPage: true,
+            "HomeFeedCoordinator failed to refresh home feed");
     }
 
     public async Task LoadMoreAsync()
     {
         Logger.Information("HomeFeedCoordinator loading more home feed items");
+        await ExecuteFeedRequestAsync(
+            token => _feedService.LoadNextPageAsync(token),
+            isFirstPage: false,
+            "HomeFeedCoordinator failed to load more recommendations",
+            guard: () => !_isLoading && IsSessionActive() && !string.IsNullOrEmpty(_continuationToken));
+    }
+
+    private async Task ExecuteFeedRequestAsync(
+        Func<CancellationToken, Task<AuthenticatedHomeFeedResult>> fetchDelegate,
+        bool isFirstPage,
+        string failureLogMessage,
+        Func<bool>? guard = null)
+    {
         CancellationToken token;
         long requestId;
         lock (_lock)
         {
-            if (_isLoading)
-                return;
-
-            if (!IsSessionActive())
-                return;
-
-            if (string.IsNullOrEmpty(_continuationToken))
+            if (guard != null && !guard())
                 return;
 
             _cts?.Cancel();
@@ -171,7 +95,6 @@ public sealed class HomeFeedCoordinator : IDisposable
             requestId = _currentRequestId;
         }
 
-        // LoadMore: Ready + IsLoadingMore true
         HomeFeedState pendingState;
         long version;
         lock (_lock)
@@ -179,11 +102,23 @@ public sealed class HomeFeedCoordinator : IDisposable
             if (_currentRequestId != requestId)
                 return;
 
-            pendingState = new HomeFeedState(
-                HomeFeedStateKind.Ready,
-                [.. _videos],
-                IsLoadingMore: true,
-                HasContinuation: !string.IsNullOrEmpty(_continuationToken));
+            if (isFirstPage)
+                pendingState = _videos.Count > 0
+                    ? new HomeFeedState(
+                        HomeFeedStateKind.Ready,
+                        [.. _videos],
+                        IsLoading: true,
+                        HasContinuation: !string.IsNullOrEmpty(_continuationToken))
+                    : new HomeFeedState(
+                        HomeFeedStateKind.InitialLoading,
+                        [],
+                        IsLoading: true);
+            else
+                pendingState = new HomeFeedState(
+                    HomeFeedStateKind.Ready,
+                    [.. _videos],
+                    IsLoadingMore: true,
+                    HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
             _stateVersion++;
             State = pendingState;
@@ -194,11 +129,11 @@ public sealed class HomeFeedCoordinator : IDisposable
 
         try
         {
-            var result = await _feedService.LoadNextPageAsync(token);
+            var result = await fetchDelegate(token);
 
             token.ThrowIfCancellationRequested();
 
-            ProcessResult(result, false, requestId);
+            ProcessResult(result, isFirstPage, requestId);
         }
         catch (OperationCanceledException)
         {
@@ -206,7 +141,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "HomeFeedCoordinator failed to load more recommendations");
+            Logger.Warning(ex, failureLogMessage);
             HomeFeedState errorState;
             long errVersion;
             lock (_lock)
