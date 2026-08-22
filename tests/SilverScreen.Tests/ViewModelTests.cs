@@ -34,6 +34,25 @@ public sealed class ViewModelTests
     }
 
     [Fact]
+    public async Task SearchTracksCurrentQuery_AndClearsOnReset()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+
+        Assert.Null(viewModel.CurrentQuery);
+
+        var search = viewModel.SubmitAsync("dotnet core tutorials");
+        Assert.Equal("dotnet core tutorials", viewModel.CurrentQuery);
+        service.Requests[0].Completion.SetResult(new SearchResultPage([]));
+        await search;
+
+        Assert.Equal("dotnet core tutorials", viewModel.CurrentQuery);
+
+        viewModel.Reset();
+        Assert.Null(viewModel.CurrentQuery);
+    }
+
+    [Fact]
     public async Task ResetCancelsPendingSearchAndClearsResults()
     {
         var service = new ControlledSearchService();
@@ -51,6 +70,36 @@ public sealed class ViewModelTests
         request.Completion.TrySetCanceled();
         await search;
     }
+    [Fact]
+    public async Task FetchSuggestionsAsync_ReturnsSuggestionsFromService()
+    {
+        var searchService = new ControlledSearchService();
+        var suggestionService = new FakeSearchSuggestionService(["suggestion 1", "suggestion 2"]);
+        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter(), suggestionService);
+
+        var suggestions = await viewModel.FetchSuggestionsAsync("query");
+
+        Assert.Equal(2, suggestions.Count);
+        Assert.Equal("suggestion 1", suggestions[0]);
+        Assert.Equal("suggestion 2", suggestions[1]);
+    }
+
+    [Fact]
+    public async Task FetchSuggestionsAsync_ReturnsEmptyWhenNoServiceOrEmptyQuery()
+    {
+        var searchService = new ControlledSearchService();
+        using var viewModelWithoutService = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter());
+
+        var withoutService = await viewModelWithoutService.FetchSuggestionsAsync("query");
+        Assert.Empty(withoutService);
+
+        var suggestionService = new FakeSearchSuggestionService(["suggestion 1"]);
+        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter(), suggestionService);
+
+        var emptyQuery = await viewModelWithService.FetchSuggestionsAsync("   ");
+        Assert.Empty(emptyQuery);
+    }
+
 
     [Fact]
     public void QueuePresentationTracksChanges_AndUnsubscribesOnDispose()
@@ -207,6 +256,14 @@ public sealed class ViewModelTests
         public void ReportStatus(string message)
         {
             Message = message;
+        }
+    }
+
+    private sealed class FakeSearchSuggestionService(IReadOnlyList<string> suggestions) : ISearchSuggestionService
+    {
+        public Task<IReadOnlyList<string>> GetSuggestionsAsync(string query, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(suggestions);
         }
     }
 }

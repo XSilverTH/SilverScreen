@@ -1,0 +1,80 @@
+/* Search Popover & Dedicated Search Page Styles */
+
+/* Search Popover Content */
+.search-popover-box {
+    padding: 2px;
+}
+
+.search-popover-entry {
+    border-radius: 8px;
+}
+
+/* Scrolled Window */
+.search-suggestions-scroll {
+    background-color: transparent;
+    border: none;
+}
+
+/* ListBox Container */
+.search-suggestions-list {
+    background-color: transparent;
+    border-radius: 8px;
+}
+
+/* Suggestion Row Items */
+.search-suggestion-row {
+    border-radius: 8px;
+    margin-bottom: 2px;
+    padding: 2px 4px;
+    background-color: transparent;
+    color: @popover_fg_color;
+    transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.search-suggestion-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Hover State (Mouse) */
+.search-suggestion-row:hover {
+    background-color: alpha(@popover_fg_color, 0.08);
+}
+
+/* Keyboard Active / Selected State */
+.search-suggestion-row:selected,
+.search-suggestion-row:focus {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+}
+
+.search-suggestion-row:selected .suggestion-icon,
+.search-suggestion-row:focus .suggestion-icon,
+.search-suggestion-row:selected .suggestion-label,
+.search-suggestion-row:focus .suggestion-label,
+.search-suggestion-row:selected .suggestion-label b,
+.search-suggestion-row:focus .suggestion-label b {
+    color: @accent_fg_color;
+    opacity: 1.0;
+}
+
+/* Icon & Label Styling */
+.suggestion-icon {
+    transition: color 120ms ease-out, opacity 120ms ease-out;
+}
+
+.suggestion-label {
+    font-size: 10.5pt;
+    letter-spacing: 0.15px;
+    color: @popover_fg_color;
+}
+
+/* Bold suggestion text completion markup */
+.suggestion-label b {
+    font-weight: 700;
+    color: @popover_fg_color;
+}
+
+/* Dedicated Search View Styles */
+.search-view {
+    background-color: @window_bg_color;
+}

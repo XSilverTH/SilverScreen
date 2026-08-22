@@ -1,0 +1,114 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box SearchView {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+  styles ["search-view"]
+
+  Gtk.Stack search_stack {
+    hexpand: true;
+    vexpand: true;
+
+    Gtk.StackPage {
+      name: "loading";
+      child: Gtk.Box search_loading_page {
+        orientation: vertical;
+        spacing: 12;
+        halign: center;
+        valign: center;
+        margin-top: 48;
+        margin-bottom: 48;
+
+        Gtk.Spinner search_loading_spinner {
+          spinning: true;
+          halign: center;
+        }
+
+        Gtk.Label search_loading_label {
+          label: "Searching YouTube…";
+          styles ["dim-label"]
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "content";
+      child: Gtk.Overlay search_content_overlay {
+        hexpand: true;
+        vexpand: true;
+
+        child: Gtk.ScrolledWindow search_scrolled_window {
+          hexpand: true;
+          vexpand: true;
+
+          child: Gtk.GridView search_video_grid {
+            min-columns: 1;
+            max-columns: 4;
+            single-click-activate: false;
+            margin-start: 24;
+            margin-end: 24;
+            margin-top: 12;
+            margin-bottom: 12;
+            hexpand: true;
+            vexpand: true;
+          };
+        };
+
+        [overlay]
+        Gtk.Revealer search_pagination_loading_revealer {
+          halign: center;
+          valign: end;
+          reveal-child: false;
+          transition-type: crossfade;
+          transition-duration: 200;
+          margin-bottom: 24;
+
+          child: Gtk.Box {
+            halign: center;
+            spacing: 10;
+            can-focus: false;
+            styles ["pagination-loading-pill"]
+
+            Gtk.Spinner {
+              spinning: true;
+              width-request: 16;
+              height-request: 16;
+            }
+
+            Gtk.Label {
+              label: "Loading more results…";
+              styles ["caption", "dim-label"]
+            }
+          };
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "empty";
+      child: Adw.StatusPage search_empty_page {
+        icon-name: "system-search-symbolic";
+        title: "No results found";
+        description: "Try different keywords or check spelling.";
+      };
+    }
+
+    Gtk.StackPage {
+      name: "error";
+      child: Adw.StatusPage search_error_page {
+        icon-name: "network-error-symbolic";
+        title: "Could not complete search";
+        description: "Failed to load search results. Check your network connection and try again.";
+
+        child: Gtk.Button search_retry_button {
+          label: "Retry";
+          halign: center;
+          clicked => $OnRetryButtonClicked();
+          styles ["suggested-action"]
+        };
+      };
+    }
+  }
+}

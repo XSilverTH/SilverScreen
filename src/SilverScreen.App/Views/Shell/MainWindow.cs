@@ -14,6 +14,7 @@ using SilverScreen.Views.History;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
+using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
@@ -43,15 +44,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly HomeView _home;
     private readonly Button _homeRefreshButton;
     private readonly Spinner _homeRefreshSpinner;
-    private readonly Stack _homeRefreshStack;
     private readonly Stack _mainStack;
+    private readonly Stack _homeRefreshStack;
+    private readonly Button _navigationBackButton;
     private readonly PlaybackModeRoutingService _playback;
     private readonly ToggleButton _queueButton;
     private readonly Label _queueButtonLabel;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
-    private readonly Button _searchButton;
-    private readonly Image _searchButtonIcon;
+
+    private readonly SearchPopoverView _searchPopover;
+    private readonly SearchView _searchView;
+    private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
     private readonly ShellViewModel _shell = new();
     private readonly ViewStack _stack;
@@ -67,8 +71,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _stack = GetRequiredObject<ViewStack>("view_stack");
         _mainStack = GetRequiredObject<Stack>("main_stack");
         var switcher = GetRequiredObject<ViewSwitcher>("view_switcher");
-        _searchButton = GetRequiredObject<Button>("search_button");
-        _searchButtonIcon = GetRequiredObject<Image>("search_button_icon");
+        _navigationBackButton = GetRequiredObject<Button>("navigation_back_button");
+        GetRequiredObject<MenuButton>("search_button");
+        var searchPopover = GetRequiredObject<Popover>("search_popover");
         _homeRefreshButton = GetRequiredObject<Button>("home_refresh_button");
         _homeRefreshSpinner = GetRequiredObject<Spinner>("home_refresh_spinner");
         _homeRefreshStack = GetRequiredObject<Stack>("home_refresh_stack");
@@ -93,15 +98,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels, _shell);
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions, CloseChannel);
+        _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _home = new HomeView(
             new HomeViewModel(services.HomeFeed),
-            new SearchViewModel(services.Search, _playback, _shell),
             services.Thumbnails,
             services.WatchProgress,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
-        _home.SearchModeChanged += OnHomeSearchModeChanged;
-        _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _historyViewModel = new HistoryViewModel(services.History, _shell);
         _history = new HistoryView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
@@ -110,7 +113,20 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var homeHost = GetRequiredObject<Box>("home_host");
         homeHost.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
-        UpdateSearchButton(_home.IsSearchActive);
+
+        _searchViewModel = new SearchViewModel(services.Search, _playback, _shell, services.SearchSuggestions);
+        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, () => searchPopover.Popdown());
+        searchPopover.Child = _searchPopover.Widget;
+        searchPopover.OnClosed += (_, _) => _searchPopover.OnClosed();
+        searchPopover.OnNotify += (_, e) =>
+        {
+            if (e.Pspec.GetName() == "visible" && searchPopover.GetVisible())
+                _searchPopover.OnOpened();
+        };
+
+        _searchView = new SearchView(_searchViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
+
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
         queueSidebarHost.Append(_queueView.Widget);
@@ -125,6 +141,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         switcher.Stack = _stack;
         var channelPage = _stack.AddTitled(_channel.Widget, "channel", "Channel");
         channelPage.Visible = false;
+        var searchPage = _stack.AddTitled(_searchView.Widget, "search", "Search");
+        searchPage.Visible = false;
         _stack.VisibleChildName = _shell.SelectedPage;
 
         accountPopover.Child = _accountPopover.Widget;
@@ -163,7 +181,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             ? await _services.Playback.PlayAsync(request).ConfigureAwait(false)
             : await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
     }
-
     private async System.Threading.Tasks.Task OpenChannelAsync(VideoSummary video)
     {
         if (string.IsNullOrWhiteSpace(video.ChannelUrl))
@@ -181,9 +198,37 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         _channelViewModel.Clear();
         _stack.VisibleChildName = "home";
+        _navigationBackButton.Visible = false;
+        UpdateHomeRefreshButton(_home.IsLoading);
+    }
+    private void OnSearchSubmitted(string query)
+    {
+        _stack.VisibleChildName = "search";
+        _navigationBackButton.Visible = true;
+        UpdateHomeRefreshButton(_searchView.IsLoading);
+        _ = _searchViewModel.SubmitAsync(query);
+    }
+
+    private void CloseSearch()
+    {
+        _searchViewModel.Reset();
+        _stack.VisibleChildName = "home";
+        _navigationBackButton.Visible = false;
         UpdateHomeRefreshButton(_home.IsLoading);
     }
 
+    private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
+    {
+        if (_stack.VisibleChildName == "search")
+            CloseSearch();
+        else if (_stack.VisibleChildName == "channel")
+            CloseChannel();
+        else
+        {
+            _stack.VisibleChildName = "home";
+            _navigationBackButton.Visible = false;
+        }
+    }
     private void OpenEmbeddedPlayer()
     {
         _mainStack.VisibleChildName = "player";
@@ -212,13 +257,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             _ = _channel.RefreshAsync();
         else if (_stack.VisibleChildName == "history")
             _ = _history.RefreshAsync();
+        else if (_stack.VisibleChildName == "search")
+            _ = _searchView.RefreshAsync();
         else
             _ = _home.RefreshAsync();
     }
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history")
+        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history" && _stack.VisibleChildName != "search")
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
@@ -234,9 +281,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateHomeRefreshButton(_history.IsLoading);
     }
 
+    private void OnSearchRefreshLoadingChanged(object? sender, bool isLoading)
+    {
+        if (!_closed && _stack.VisibleChildName == "search")
+            UpdateHomeRefreshButton(_searchView.IsLoading);
+    }
+
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
         if (_closed) return;
+        _navigationBackButton.Visible = _stack.VisibleChildName is "search" or "channel";
 
         if (_stack.VisibleChildName == "channel")
         {
@@ -246,6 +300,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         {
             UpdateHomeRefreshButton(_history.IsLoading);
             _ = _historyViewModel.LoadAsync();
+        }
+        else if (_stack.VisibleChildName == "search")
+        {
+            UpdateHomeRefreshButton(_searchView.IsLoading);
         }
         else
         {
@@ -258,31 +316,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _homeRefreshStack.VisibleChildName = isLoading ? "loading" : "idle";
         _homeRefreshSpinner.Spinning = isLoading;
     }
-
-    private void OnSearchButtonClicked(object? sender, EventArgs args)
-    {
-        if (_home.IsSearchActive)
-            _home.ReturnToHome();
-        else
-            _home.ActivateSearch();
-    }
-
-    private void OnHomeSearchModeChanged(object? sender, bool isSearchActive)
-    {
-        if (!_closed)
-        {
-            UpdateSearchButton(isSearchActive);
-            if (_stack.VisibleChildName != "channel")
-                UpdateHomeRefreshButton(_home.IsLoading);
-        }
-    }
-
-    private void UpdateSearchButton(bool isSearchActive)
-    {
-        _searchButton.TooltipText = isSearchActive ? "Back to Home" : "Search";
-        _searchButtonIcon.IconName = isSearchActive ? "go-previous-symbolic" : "system-search-symbolic";
-    }
-
 
     private void RegisterApplicationActions()
     {
@@ -394,12 +427,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _closed = true;
         _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
         _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
+        _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
+        _searchView.Dispose();
+        _searchPopover.Dispose();
+        _searchViewModel.Dispose();
         _history.Dispose();
         _historyViewModel.Dispose();
         _channel.Dispose();
         _channelViewModel.Dispose();
         _shell.PropertyChanged -= OnShellPropertyChanged;
-        _home.SearchModeChanged -= OnHomeSearchModeChanged;
         _queueViewModel.StateChanged -= OnQueueStateChanged;
         _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged;
         _home.Dispose();

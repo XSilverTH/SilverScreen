@@ -23,6 +23,7 @@ public sealed class ApplicationServices(
     IAccountProfileService accountProfile,
     IPlaybackService playback,
     ISearchService search,
+    ISearchSuggestionService searchSuggestions,
     IChannelService channels,
     IThumbnailService thumbnails,
     HomeFeedCoordinator homeFeed,
@@ -45,6 +46,7 @@ public sealed class ApplicationServices(
     public IAccountProfileService AccountProfile { get; } = accountProfile;
     public IPlaybackService Playback { get; } = playback;
     public ISearchService Search { get; } = search;
+    public ISearchSuggestionService SearchSuggestions { get; } = searchSuggestions;
     public IChannelService Channels { get; } = channels;
     public IThumbnailService Thumbnails { get; } = thumbnails;
     public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
@@ -103,6 +105,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<YtDlpRunner>();
         services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
         services.AddSingleton<ISearchService, YtDlpSearchService>();
+        services.AddSingleton<ISearchSuggestionService, YouTubeSearchSuggestionService>();
         services.AddSingleton<IChannelService, YtDlpChannelService>();
         services.AddSingleton<IVideoEngagementService, ReturnYouTubeDislikeService>();
         services.AddSingleton<IYouTubeRatingService>(provider =>

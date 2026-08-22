@@ -1,0 +1,52 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box SearchPopoverView {
+  orientation: vertical;
+  spacing: 8;
+  margin-top: 10;
+  margin-bottom: 10;
+  margin-start: 10;
+  margin-end: 10;
+  width-request: 440;
+  styles ["search-popover-box"]
+
+  Gtk.SearchEntry search_entry {
+    placeholder-text: "Search or paste a YouTube URL";
+    width-request: 420;
+    hexpand: true;
+    activate => $OnSearchEntryActivated();
+    search-changed => $OnSearchTextChanged();
+    styles ["search-popover-entry"]
+  }
+
+  Gtk.Revealer suggestions_revealer {
+    reveal-child: false;
+    transition-type: slide_down;
+    transition-duration: 150;
+
+    child: Gtk.Box {
+      orientation: vertical;
+      spacing: 6;
+
+      Gtk.Separator {
+        styles ["spacer"]
+      }
+
+      Gtk.ScrolledWindow suggestions_scroll {
+        hscrollbar-policy: never;
+        vscrollbar-policy: automatic;
+        min-content-height: 0;
+        max-content-height: 280;
+        propagate-natural-height: true;
+        styles ["search-suggestions-scroll"]
+
+        child: Gtk.ListBox suggestions_list {
+          selection-mode: single;
+          can-focus: false;
+          styles ["search-suggestions-list", "navigation-sidebar"]
+        };
+      }
+    };
+  }
+}

@@ -16,7 +16,8 @@ public sealed record SearchViewState(
 public sealed class SearchViewModel(
     ISearchService searchService,
     IPlaybackService playbackService,
-    IStatusReporter shell)
+    IStatusReporter shell,
+    ISearchSuggestionService? suggestionService = null)
     : INotifyPropertyChanged, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
@@ -44,6 +45,7 @@ public sealed class SearchViewModel(
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
+    public string? CurrentQuery => _query;
 
 
     public void Dispose()
@@ -70,6 +72,28 @@ public sealed class SearchViewModel(
         _continuationToken = null;
         _query = null;
         State = new SearchViewState([], "Search results will appear here.", false);
+    }
+
+    public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        var query = text.Trim();
+        if (string.IsNullOrWhiteSpace(query) || suggestionService is null)
+            return [];
+
+        try
+        {
+            return await suggestionService.GetSuggestionsAsync(query, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to fetch search suggestions for query {Query}", query);
+            return [];
+        }
     }
 
     public event EventHandler<SearchViewState>? StateChanged;

@@ -32,6 +32,15 @@ Adw.ApplicationWindow MainWindow {
       [top]
       Adw.HeaderBar {
         [start]
+        Button navigation_back_button {
+          icon-name: "go-previous-symbolic";
+          tooltip-text: "Back to Home";
+          visible: false;
+          clicked => $OnNavigationBackButtonClicked();
+          styles ["flat"]
+        }
+
+        [start]
         MenuButton account_button {
           tooltip-text: "Account";
           styles ["flat", "circular"]
@@ -46,14 +55,12 @@ Adw.ApplicationWindow MainWindow {
         }
 
         [start]
-        Button search_button {
+        MenuButton search_button {
           tooltip-text: "Search";
-          clicked => $OnSearchButtonClicked();
+          icon-name: "system-search-symbolic";
           styles ["flat"]
 
-          child: Image search_button_icon {
-            icon-name: "system-search-symbolic";
-          };
+          popover: Popover search_popover {};
         }
         title-widget: Adw.ViewSwitcher view_switcher {
           policy: wide;
