@@ -31,55 +31,158 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const uint SeekThrottleIntervalMilliseconds = 120;
     private const long ReconciliationLatchMilliseconds = 400;
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
+    [BlueprintWidget("player_surface")]
+    private GLArea _playerSurface = null!;
+
+    [BlueprintWidget("player_header_bar")]
+    private Widget _headerBar = null!;
+
+    [BlueprintWidget("player_center_controls")]
+    private Box _centerControls = null!;
+
+    [BlueprintWidget("player_controls")]
+    private Widget _playerControls = null!;
+
+    [BlueprintWidget("player_play_pause_button")]
+    private Button _playPauseButton = null!;
+
+    [BlueprintWidget("player_volume_button")]
+    private MenuButton _volumeButton = null!;
+
+    [BlueprintWidget("player_volume_scale")]
+    private Scale _volumeScale = null!;
+
+    [BlueprintWidget("player_volume_popover")]
+    private Popover _volumePopover = null!;
+
+    [BlueprintWidget("player_settings_popover")]
+    private Popover _settingsPopover = null!;
+
+    [BlueprintWidget("player_quality_dropdown")]
+    private DropDown _qualityDropdown = null!;
+
+    [BlueprintWidget("player_queue_controls")]
+    private Box _queueControls = null!;
+
+    [BlueprintWidget("player_speed_label")]
+    private Label _speedLabel = null!;
+
+    [BlueprintWidget("player_speed_scale")]
+    private Scale _speedScale = null!;
+
+    [BlueprintWidget("player_subtitle_dropdown")]
+    private DropDown _subtitleDropdown = null!;
+
+    [BlueprintWidget("player_subtitle_model")]
+    private StringList _subtitleModel = null!;
+
+    [BlueprintWidget("player_timeline")]
+    private Scale _timeline = null!;
+
+    [BlueprintWidget("player_timeline_overlay")]
+    private Overlay _timelineOverlay = null!;
+
+    [BlueprintWidget("player_scrub_cue")]
+    private Box _scrubCue = null!;
+
+    [BlueprintWidget("player_scrub_time_label")]
+    private Label _scrubTimeLabel = null!;
+
+    [BlueprintWidget("player_scrub_delta_label")]
+    private Label _scrubDeltaLabel = null!;
+
+    [BlueprintWidget("player_scrub_chapter_label")]
+    private Label _scrubChapterLabel = null!;
+
+    [BlueprintWidget("player_sponsorblock_skip_button")]
+    private Button _sponsorBlockSkipButton = null!;
+
+    [BlueprintWidget("player_resume_button")]
+    private Button _resumeButton = null!;
+
+    [BlueprintWidget("player_restart_button")]
+    private Button _restartButton = null!;
+
+    [BlueprintWidget("player_position_label")]
+    private Label _positionLabel = null!;
+
+    [BlueprintWidget("player_duration_label")]
+    private Label _durationLabel = null!;
+
+    [BlueprintWidget("player_loading_indicator")]
+    private Box _loadingIndicator = null!;
+
+    [BlueprintWidget("player_title_label")]
+    private Label _titleLabel = null!;
+
+    [BlueprintWidget("player_channel_label")]
+    private Label _channelLabel = null!;
+
+    [BlueprintWidget("player_likes_label")]
+    private Label _likesLabel = null!;
+
+    [BlueprintWidget("player_like_button")]
+    private Button _likeButton = null!;
+
+    [BlueprintWidget("player_like_image")]
+    private Image _likeImage = null!;
+
+    [BlueprintWidget("player_dislike_button")]
+    private Button _dislikeButton = null!;
+
+    [BlueprintWidget("player_dislikes_label")]
+    private Label _dislikesLabel = null!;
+
+    [BlueprintWidget("player_dislike_image")]
+    private Image _dislikeImage = null!;
+
+    [BlueprintWidget("player_subtitle_button")]
+    private Button _subtitleButton = null!;
+
+    [BlueprintWidget("player_comments_button")]
+    private ToggleButton _commentsButton = null!;
+
+    [BlueprintWidget("comments_sidebar_host")]
+    private Box _commentsSidebarHost = null!;
+
+    [BlueprintWidget("player_queue_split_view")]
+    private OverlaySplitView _queueSplitView = null!;
+
+    [BlueprintWidget("player_queue_button")]
+    private ToggleButton _queueButton = null!;
+
+    [BlueprintWidget("player_previous_queue_button")]
+    private Button _previousQueueButton = null!;
+
+    [BlueprintWidget("player_next_queue_button")]
+    private Button _nextQueueButton = null!;
+
+    [BlueprintWidget("player_queue_sidebar_host")]
+    private Box _playerQueueSidebarHost = null!;
+
+    [BlueprintWidget("player_info_host")]
+    private Box _playerInfoHost = null!;
+
     private readonly Action _backRequested;
-    private readonly Box _centerControls;
-    private readonly Label _channelLabel;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
-    private readonly ToggleButton _commentsButton;
     private readonly CommentsView _commentsView;
     private readonly DesktopMediaIntegration _desktopMedia;
-    private readonly Label _durationLabel;
     private readonly PlayerEngagementController _engagement;
     private readonly ImmutableArray<IPlayerFeature> _features;
-    private readonly Widget _headerBar;
     private readonly VideoInfoPanelView _infoPanel;
-    private readonly Box _loadingIndicator;
-    private readonly Button _nextQueueButton;
-    private readonly Button _playPauseButton;
     private readonly PlaybackSession _session;
     private readonly LibMpvPlayer _player;
-    private readonly Widget _playerControls;
-    private readonly GLArea _playerSurface;
-    private readonly Label _positionLabel;
     private readonly IPreferencesService _preferences;
     private readonly Action _presentRequested;
-    private readonly Button _previousQueueButton;
-    private readonly DropDown _qualityDropdown;
-    private readonly ToggleButton _queueButton;
-    private readonly Box _queueControls;
     private readonly IQueueService _queueService;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly PlayerResumeController _resumeController;
-    private readonly Label _scrubChapterLabel;
-    private readonly Box _scrubCue;
-    private readonly Label _scrubDeltaLabel;
-    private readonly Label _scrubTimeLabel;
-    private readonly Popover _settingsPopover;
-    private readonly Label _speedLabel;
-    private readonly Scale _speedScale;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
-
     private readonly PlayerSubtitleController _subtitleController;
-    private readonly Scale _timeline;
     private readonly PlayerTimelineController _timelineController;
-    private readonly Overlay _timelineOverlay;
-    private readonly Label _titleLabel;
     private readonly PlayerChromeController _chromeController;
-    private readonly MenuButton _volumeButton;
-    private readonly Popover _volumePopover;
-    private readonly Scale _volumeScale;
     private readonly PlayerShortcutController _shortcutController;
     private string? _commentsVideoId;
     private bool _disposed;
@@ -96,61 +199,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _backRequested = backRequested;
         _channelRequested = channelRequested;
         _preferences = dependencies.Preferences;
-        _playerSurface = GetRequiredObject<GLArea>("player_surface");
-        _headerBar = GetRequiredObject<Widget>("player_header_bar");
-        _centerControls = GetRequiredObject<Box>("player_center_controls");
-        _playerControls = GetRequiredObject<Widget>("player_controls");
-        _playPauseButton = GetRequiredObject<Button>("player_play_pause_button");
-        _volumeButton = GetRequiredObject<MenuButton>("player_volume_button");
-        _volumeScale = GetRequiredObject<Scale>("player_volume_scale");
-        _volumePopover = GetRequiredObject<Popover>("player_volume_popover");
-        _settingsPopover = GetRequiredObject<Popover>("player_settings_popover");
-        _qualityDropdown = GetRequiredObject<DropDown>("player_quality_dropdown");
-        _queueControls = GetRequiredObject<Box>("player_queue_controls");
-        _speedLabel = GetRequiredObject<Label>("player_speed_label");
-        _speedScale = GetRequiredObject<Scale>("player_speed_scale");
-        var subtitleDropdown = GetRequiredObject<DropDown>("player_subtitle_dropdown");
-        var subtitleModel = GetRequiredObject<StringList>("player_subtitle_model");
-        _timeline = GetRequiredObject<Scale>("player_timeline");
-        _timelineOverlay = GetRequiredObject<Overlay>("player_timeline_overlay");
-        _scrubCue = GetRequiredObject<Box>("player_scrub_cue");
-        _scrubTimeLabel = GetRequiredObject<Label>("player_scrub_time_label");
-        _scrubDeltaLabel = GetRequiredObject<Label>("player_scrub_delta_label");
-        _scrubChapterLabel = GetRequiredObject<Label>("player_scrub_chapter_label");
-        var sponsorBlockSkipButton = GetRequiredObject<Button>("player_sponsorblock_skip_button");
-        var resumeButton = GetRequiredObject<Button>("player_resume_button");
-        var restartButton = GetRequiredObject<Button>("player_restart_button");
-
-        _positionLabel = GetRequiredObject<Label>("player_position_label");
-        _durationLabel = GetRequiredObject<Label>("player_duration_label");
-
-        _loadingIndicator = GetRequiredObject<Box>("player_loading_indicator");
-        _titleLabel = GetRequiredObject<Label>("player_title_label");
-        _channelLabel = GetRequiredObject<Label>("player_channel_label");
-        var likesLabel = GetRequiredObject<Label>("player_likes_label");
-        var likeButton = GetRequiredObject<Button>("player_like_button");
-        var likeImage = GetRequiredObject<Image>("player_like_image");
-        var dislikeButton = GetRequiredObject<Button>("player_dislike_button");
-        var dislikesLabel = GetRequiredObject<Label>("player_dislikes_label");
-        var dislikeImage = GetRequiredObject<Image>("player_dislike_image");
-        var subtitleButton = GetRequiredObject<Button>("player_subtitle_button");
-        _commentsButton = GetRequiredObject<ToggleButton>("player_comments_button");
-        var commentsSidebarHost = GetRequiredObject<Box>("comments_sidebar_host");
         _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments);
-        commentsSidebarHost.Append(_commentsView.Widget);
+        _commentsSidebarHost.Append(_commentsView.Widget);
         _commentsButton.BindProperty("active", Widget, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
-        var queueSplitView = GetRequiredObject<OverlaySplitView>("player_queue_split_view");
-        _queueButton = GetRequiredObject<ToggleButton>("player_queue_button");
-        _previousQueueButton = GetRequiredObject<Button>("player_previous_queue_button");
-        _nextQueueButton = GetRequiredObject<Button>("player_next_queue_button");
-        var playerQueueSidebarHost = GetRequiredObject<Box>("player_queue_sidebar_host");
+
         _queueService = dependencies.Queue;
         _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
         _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, dependencies.WatchProgress, CloseQueue,
             OnTrackJumpRequested);
-        playerQueueSidebarHost.Append(_queueView.Widget);
-        _queueButton.BindProperty("active", queueSplitView, "show-sidebar",
+        _playerQueueSidebarHost.Append(_queueView.Widget);
+        _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         _queueService.Changed += OnQueueChanged;
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
@@ -162,12 +221,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _scrubTimeLabel, _scrubDeltaLabel, _scrubChapterLabel, _positionLabel, _durationLabel,
             (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity);
         _engagement = new PlayerEngagementController(dependencies.VideoEngagement, dependencies.YouTubeRating,
-            dependencies.Session, likeButton, likeImage, likesLabel, dislikeButton, dislikeImage, dislikesLabel);
+            dependencies.Session, _likeButton, _likeImage, _likesLabel, _dislikeButton, _dislikeImage, _dislikesLabel);
         _chapterOverlay = new PlayerChapterOverlay(_timelineOverlay, _timeline,
             () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
         _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences, _timeline,
-            _timelineOverlay, sponsorBlockSkipButton, pos => SeekAbsolute(pos));
-        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, resumeButton, restartButton,
+            _timelineOverlay, _sponsorBlockSkipButton, pos => SeekAbsolute(pos));
+        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, _resumeButton, _restartButton,
             pos => SeekAbsolute(pos));
         _features = [_engagement, _sponsorBlockController, _resumeController];
         _desktopMedia = new DesktopMediaIntegration(_player, _presentRequested);
@@ -176,14 +235,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.VideoChanged += OnSessionVideoChanged;
         _session.SessionEnded += OnSessionEnded;
         _session.Failed += OnSessionFailed;
-        var playerInfoHost = GetRequiredObject<Box>("player_info_host");
         _infoPanel = new VideoInfoPanelView(dependencies.VideoDetails, _channelRequested, () =>
         {
             if (_session.HasMedia) _playerSurface.GrabFocus();
         });
-        playerInfoHost.Append(_infoPanel.Widget);
-        _subtitleController = new PlayerSubtitleController(_preferences, subtitleDropdown, subtitleModel,
-            subtitleButton, trackId => _player.SelectSubtitleTrack(trackId));
+        _playerInfoHost.Append(_infoPanel.Widget);
+        _subtitleController = new PlayerSubtitleController(_preferences, _subtitleDropdown, _subtitleModel,
+            _subtitleButton, trackId => _player.SelectSubtitleTrack(trackId));
         _player.RenderRequested += OnRenderRequested;
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;

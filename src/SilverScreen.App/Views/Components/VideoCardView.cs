@@ -21,29 +21,46 @@ public sealed class VideoCardActions
     public Func<VideoSummary, Task>? OpenChannelAsync { get; init; }
 }
 
-public class VideoCardView : ViewBase<Box>
+public partial class VideoCardView : ViewBase<Box>
 {
+    [BlueprintWidget("card")]
+    private Box _card = null!;
+
+    [BlueprintWidget("channel")]
+    private Label _channel = null!;
+
+    [BlueprintWidget("duration")]
+    private Label _duration = null!;
+
+    [BlueprintWidget("menu")]
+    private MenuButton _menu = null!;
+
+    [BlueprintWidget("placeholder")]
+    private Widget _placeholder = null!;
+
+    [BlueprintWidget("thumbnail")]
+    private Overlay _thumbnail = null!;
+
+    [BlueprintWidget("title")]
+    private Label _title = null!;
+
+    [BlueprintWidget("upload_date")]
+    private Label _uploadDate = null!;
+
+    [BlueprintWidget("watched_progress")]
+    private ProgressBar _watchedProgress = null!;
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
-    private readonly Box _card;
-    private readonly Label _channel;
     private readonly GestureClick _channelClick;
     private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
-    private readonly Label _duration;
-    private readonly MenuButton _menu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
-    private readonly Widget _placeholder;
     private readonly GestureClick _rightClick;
-    private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
-    private readonly Label _title;
-    private readonly Label _uploadDate;
     private readonly IWatchProgressService _watchProgress;
-    private readonly ProgressBar _watchedProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -58,15 +75,6 @@ public class VideoCardView : ViewBase<Box>
         _watchProgress = watchProgress;
         _actions = actions;
 
-        _card = GetRequiredObject<Box>("card");
-        _thumbnail = GetRequiredObject<Overlay>("thumbnail");
-        _placeholder = GetRequiredObject<Widget>("placeholder");
-        _duration = GetRequiredObject<Label>("duration");
-        _watchedProgress = GetRequiredObject<ProgressBar>("watched_progress");
-        _title = GetRequiredObject<Label>("title");
-        _channel = GetRequiredObject<Label>("channel");
-        _uploadDate = GetRequiredObject<Label>("upload_date");
-        _menu = GetRequiredObject<MenuButton>("menu");
 
         _menuActions = SimpleActionGroup.New();
         _menuActionItems =

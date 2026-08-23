@@ -12,22 +12,37 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Home;
 
-public class HomeView : ViewBase<Box>
+public partial class HomeView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HomeView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly Overlay _contentOverlay;
-    private readonly Label _paginationLoadingLabel;
-    private readonly Revealer _paginationLoadingRevealer;
-    private readonly ScrolledWindow _scrolledWindow;
-    private readonly Box _statusHost;
-    private readonly Box _statusLoadingPage;
-    private readonly StatusPage _statusPage;
+
+    [BlueprintWidget("home_content_overlay")]
+    private Overlay _contentOverlay = null!;
+
+    [BlueprintWidget("home_pagination_loading_label")]
+    private Label _paginationLoadingLabel = null!;
+
+    [BlueprintWidget("home_pagination_loading_revealer")]
+    private Revealer _paginationLoadingRevealer = null!;
+
+    [BlueprintWidget("home_scrolled_window")]
+    private ScrolledWindow _scrolledWindow = null!;
+
+    [BlueprintWidget("home_status_host")]
+    private Box _statusHost = null!;
+
+    [BlueprintWidget("home_status_loading_page")]
+    private Box _statusLoadingPage = null!;
+
+    [BlueprintWidget("home_status_page")]
+    private StatusPage _statusPage = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    private readonly GridView _videoGrid;
+    [BlueprintWidget("home_video_grid")]
+    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -47,13 +62,6 @@ public class HomeView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _statusHost = GetRequiredObject<Box>("home_status_host");
-        _statusLoadingPage = GetRequiredObject<Box>("home_status_loading_page");
-        _statusPage = GetRequiredObject<StatusPage>("home_status_page");
-        _contentOverlay = GetRequiredObject<Overlay>("home_content_overlay");
-        _scrolledWindow = GetRequiredObject<ScrolledWindow>("home_scrolled_window");
-        _paginationLoadingRevealer = GetRequiredObject<Revealer>("home_pagination_loading_revealer");
-        _paginationLoadingLabel = GetRequiredObject<Label>("home_pagination_loading_label");
         _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged += OnScrollValueChanged;
@@ -65,7 +73,7 @@ public class HomeView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        _videoGrid = GetRequiredObject<GridView>("home_video_grid");
+
         _videoGrid.Model = _videoSelection;
         _videoGrid.Factory = _videoFactory;
 

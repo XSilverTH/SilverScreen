@@ -11,15 +11,22 @@ public partial class CommentsView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
     private readonly Action _closeRequested;
-    private readonly StatusPage _emptyPage;
-    private readonly StatusPage _errorPage;
+    [BlueprintWidget("comments_empty_page")]
+    private StatusPage _emptyPage = null!;
+
+    [BlueprintWidget("comments_error_page")]
+    private StatusPage _errorPage = null!;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
-    private readonly ListView _list;
+    [BlueprintWidget("comments_list")]
+    private ListView _list = null!;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
-    private readonly DropDown _sortDropdown;
-    private readonly Stack _stack;
+    [BlueprintWidget("comments_sort_dropdown")]
+    private DropDown _sortDropdown = null!;
+
+    [BlueprintWidget("comments_stack")]
+    private Stack _stack = null!;
     private readonly CommentsViewModel _viewModel;
     private bool _disposed;
     private CommentsViewState _state;
@@ -30,11 +37,6 @@ public partial class CommentsView : ViewBase<Box>
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _state = _viewModel.State;
         _viewModel.StateChanged += OnViewModelStateChanged;
-        _sortDropdown = GetRequiredObject<DropDown>("comments_sort_dropdown");
-        _stack = GetRequiredObject<Stack>("comments_stack");
-        GetRequiredObject<ScrolledWindow>("comments_scrolled_window");
-        _emptyPage = GetRequiredObject<StatusPage>("comments_empty_page");
-        _errorPage = GetRequiredObject<StatusPage>("comments_error_page");
 
         _itemIds = StringList.New([]);
         _selection = NoSelection.New(_itemIds);
@@ -43,7 +45,7 @@ public partial class CommentsView : ViewBase<Box>
         _factory.OnBind += OnRowBind;
         _factory.OnUnbind += OnRowUnbind;
         _factory.OnTeardown += OnRowTeardown;
-        _list = GetRequiredObject<ListView>("comments_list");
+
         _list.Model = _selection;
         _list.Factory = _factory;
         _stack.VisibleChildName = "unavailable";

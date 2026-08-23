@@ -6,23 +6,28 @@ namespace SilverScreen.Views.Comments;
 
 public partial class CommentRowView : ViewBase<Box>
 {
-    private readonly Label _author;
-    private readonly Label _likes;
-    private readonly Label _publishedTime;
-    private readonly Button _repliesButton;
+    [BlueprintWidget("comment_author_label")]
+    private Label _author = null!;
+
+    [BlueprintWidget("comment_likes_label")]
+    private Label _likes = null!;
+
+    [BlueprintWidget("comment_published_time_label")]
+    private Label _publishedTime = null!;
+
+    [BlueprintWidget("comment_replies_button")]
+    private Button _repliesButton = null!;
+
+    [BlueprintWidget("comment_text_label")]
+    private Label _text = null!;
+
     private readonly Action<string> _repliesToggleRequested;
-    private readonly Label _text;
     private string? _boundCommentId;
 
     public CommentRowView(Action<string> repliesToggleRequested)
     {
         _repliesToggleRequested =
             repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
-        _author = GetRequiredObject<Label>("comment_author_label");
-        _publishedTime = GetRequiredObject<Label>("comment_published_time_label");
-        _text = GetRequiredObject<Label>("comment_text_label");
-        _likes = GetRequiredObject<Label>("comment_likes_label");
-        _repliesButton = GetRequiredObject<Button>("comment_replies_button");
     }
 
     private void OnRepliesButtonClicked(object? sender, EventArgs args)

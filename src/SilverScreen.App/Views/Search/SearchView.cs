@@ -17,18 +17,30 @@ public partial class SearchView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<SearchView>();
 
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly StatusPage _emptyPage;
-    private readonly StatusPage _errorPage;
-    private readonly Label _loadingLabel;
-    private readonly Revealer _paginationLoadingRevealer;
+    [BlueprintWidget("search_empty_page")]
+    private StatusPage _emptyPage = null!;
 
-    private readonly Stack _stack;
+    [BlueprintWidget("search_error_page")]
+    private StatusPage _errorPage = null!;
+
+    [BlueprintWidget("search_loading_label")]
+    private Label _loadingLabel = null!;
+
+    [BlueprintWidget("search_pagination_loading_revealer")]
+    private Revealer _paginationLoadingRevealer = null!;
+
+    [BlueprintWidget("search_scrolled_window")]
+    private ScrolledWindow _scrolledWindow = null!;
+
+    [BlueprintWidget("search_stack")]
+    private Stack _stack = null!;
     private readonly IThumbnailService _thumbnails;
 
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    private readonly GridView _videoGrid;
+    [BlueprintWidget("search_video_grid")]
+    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -50,15 +62,7 @@ public partial class SearchView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _stack = GetRequiredObject<Stack>("search_stack");
-        _loadingLabel = GetRequiredObject<Label>("search_loading_label");
-        _videoGrid = GetRequiredObject<GridView>("search_video_grid");
-        _emptyPage = GetRequiredObject<StatusPage>("search_empty_page");
-        var scrolledWindow = GetRequiredObject<ScrolledWindow>("search_scrolled_window");
-        _paginationLoadingRevealer = GetRequiredObject<Revealer>("search_pagination_loading_revealer");
-        _errorPage = GetRequiredObject<StatusPage>("search_error_page");
-
-        _vadjustment = scrolledWindow.Vadjustment;
+        _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _videoIds = StringList.New([]);

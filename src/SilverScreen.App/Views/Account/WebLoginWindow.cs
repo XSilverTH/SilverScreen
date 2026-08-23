@@ -13,8 +13,13 @@ using Window = Adw.Window;
 namespace SilverScreen.Views.Account;
 
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
-internal sealed class WebLoginWindow : WindowBase<Window>
+public sealed partial class WebLoginWindow : WindowBase<Window>
 {
+    [BlueprintWidget("web_login_status_label")]
+    private Label _statusLabel = null!;
+
+    [BlueprintWidget("web_view_container")]
+    private Box _webViewContainer = null!;
     private const string LoginUri =
         "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
 
@@ -30,7 +35,6 @@ internal sealed class WebLoginWindow : WindowBase<Window>
     private readonly Action _closed;
     private readonly CookieManager _cookieManager;
     private readonly NetworkSession _networkSession;
-    private readonly Label _statusLabel;
     private readonly WebView _webView;
     private bool _closedInvoked;
     private bool _disposed;
@@ -41,8 +45,6 @@ internal sealed class WebLoginWindow : WindowBase<Window>
         Logger.Information("Opening WebLoginWindow for YouTube authentication");
         _account = account;
         _closed = closed;
-        _statusLabel = GetRequiredObject<Label>("web_login_status_label");
-        var webViewContainer = GetRequiredObject<Box>("web_view_container");
         Widget.TransientFor = parent;
 
         _networkSession = NetworkSession.NewEphemeral();
@@ -52,7 +54,7 @@ internal sealed class WebLoginWindow : WindowBase<Window>
         _webView.Vexpand = true;
         _webView.GetSettings().SetUserAgent(BrowserUserAgent);
 
-        webViewContainer.Append(_webView);
+        _webViewContainer.Append(_webView);
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,

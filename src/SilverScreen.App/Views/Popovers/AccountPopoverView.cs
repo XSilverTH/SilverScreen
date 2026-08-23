@@ -14,13 +14,23 @@ namespace SilverScreen.Views.Popovers;
 public partial class AccountPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
-    private readonly Stack _accountStack;
-    private readonly TextView _manualEditor;
-    private readonly Label _manualHeading;
+    [BlueprintWidget("account_stack")]
+    private Stack _accountStack = null!;
+
+    [BlueprintWidget("manual_editor")]
+    private TextView _manualEditor = null!;
+
+    [BlueprintWidget("manual_heading")]
+    private Label _manualHeading = null!;
+
+    [BlueprintWidget("signed_in_avatar")]
+    private Avatar _signedInAvatar = null!;
+
+    [BlueprintWidget("signed_in_display_name")]
+    private Label _signedInDisplayName = null!;
+
     private readonly Action _openWebLogin;
     private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
-    private readonly Avatar _signedInAvatar;
-    private readonly Label _signedInDisplayName;
     private readonly IThumbnailService _thumbnails;
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
@@ -35,11 +45,6 @@ public partial class AccountPopoverView : ViewBase<Box>
         Action openWebLogin,
         Action<bool, string, Texture?> sessionAppearanceChanged)
     {
-        _accountStack = GetRequiredObject<Stack>("account_stack");
-        _signedInAvatar = GetRequiredObject<Avatar>("signed_in_avatar");
-        _signedInDisplayName = GetRequiredObject<Label>("signed_in_display_name");
-        _manualHeading = GetRequiredObject<Label>("manual_heading");
-        _manualEditor = GetRequiredObject<TextView>("manual_editor");
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _openWebLogin = openWebLogin;

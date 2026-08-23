@@ -15,19 +15,30 @@ public partial class QueueView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<QueueView>();
     private readonly Action _closeRequested;
-    private readonly StatusPage _emptyPage;
+    [BlueprintWidget("queue_empty_page")]
+    private StatusPage _emptyPage = null!;
     private readonly SignalListItemFactory _factory;
-    private readonly Box _footer;
+    [BlueprintWidget("queue_footer")]
+    private Box _footer = null!;
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
-    private readonly ListView _list;
-    private readonly Button _playButton;
-    private readonly Spinner _playSpinner;
-    private readonly Stack _playStack;
+    [BlueprintWidget("queue_list")]
+    private ListView _list = null!;
+
+    [BlueprintWidget("queue_play_button")]
+    private Button _playButton = null!;
+
+    [BlueprintWidget("queue_play_spinner")]
+    private Spinner _playSpinner = null!;
+
+    [BlueprintWidget("queue_play_stack")]
+    private Stack _playStack = null!;
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
-    private readonly ScrolledWindow _scrolledWindow;
+    [BlueprintWidget("queue_scrolled_window")]
+    private ScrolledWindow _scrolledWindow = null!;
     private readonly NoSelection _selection;
-    private readonly Label _summary;
+    [BlueprintWidget("queue_summary_label")]
+    private Label _summary = null!;
     private readonly IThumbnailService _thumbnails;
 
     private readonly Action<int>? _trackJumpRequested;
@@ -44,14 +55,6 @@ public partial class QueueView : ViewBase<Box>
         _watchProgress = watchProgress;
         _closeRequested = closeRequested;
         _trackJumpRequested = trackJumpRequested;
-        GetRequiredObject<Button>("queue_clear_button");
-        _emptyPage = GetRequiredObject<StatusPage>("queue_empty_page");
-        _footer = GetRequiredObject<Box>("queue_footer");
-        _playButton = GetRequiredObject<Button>("queue_play_button");
-        _playSpinner = GetRequiredObject<Spinner>("queue_play_spinner");
-        _playStack = GetRequiredObject<Stack>("queue_play_stack");
-        _scrolledWindow = GetRequiredObject<ScrolledWindow>("queue_scrolled_window");
-        _summary = GetRequiredObject<Label>("queue_summary_label");
 
         _itemIds = StringList.New([]);
         _selection = NoSelection.New(_itemIds);
@@ -60,7 +63,7 @@ public partial class QueueView : ViewBase<Box>
         _factory.OnBind += OnRowBind;
         _factory.OnUnbind += OnRowUnbind;
         _factory.OnTeardown += OnRowTeardown;
-        _list = GetRequiredObject<ListView>("queue_list");
+
         _list.Model = _selection;
         _list.Factory = _factory;
 

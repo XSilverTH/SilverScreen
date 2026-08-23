@@ -22,35 +22,63 @@ public partial class ChannelView : ViewBase<Box>
     private const double TopRevealThreshold = 1.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
-    private readonly Overlay _avatarOverlay;
-    private readonly Widget _avatarPlaceholder;
+    [BlueprintWidget("channel_avatar_overlay")]
+    private Overlay _avatarOverlay = null!;
 
+    [BlueprintWidget("channel_avatar_placeholder")]
+    private Widget _avatarPlaceholder = null!;
     private readonly Action? _backCallback;
-    private readonly Label _barTitle;
-
+    [BlueprintWidget("channel_bar_title")]
+    private Label _barTitle = null!;
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly Label _channelHandle;
-    private readonly Label _channelName;
+    [BlueprintWidget("channel_handle")]
+    private Label _channelHandle = null!;
+
+    [BlueprintWidget("channel_name")]
+    private Label _channelName = null!;
     private readonly GestureClick _clueClickGesture;
     private readonly EventControllerMotion _clueMotionController;
-    private readonly Revealer _clueRevealer;
-    private readonly Label _descriptionLabel;
-    private readonly StatusPage _emptyPage;
-    private readonly StatusPage _errorPage;
-    private readonly Revealer _headerRevealer;
-    private readonly Label _metaDot1;
-    private readonly Revealer _paginationLoadingRevealer;
-    private readonly Box _revealClue;
+    [BlueprintWidget("channel_clue_revealer")]
+    private Revealer _clueRevealer = null!;
+
+    [BlueprintWidget("channel_description")]
+    private Label _descriptionLabel = null!;
+
+    [BlueprintWidget("channel_empty_page")]
+    private StatusPage _emptyPage = null!;
+
+    [BlueprintWidget("channel_error_page")]
+    private StatusPage _errorPage = null!;
+
+    [BlueprintWidget("channel_header_revealer")]
+    private Revealer _headerRevealer = null!;
+
+    [BlueprintWidget("channel_meta_dot1")]
+    private Label _metaDot1 = null!;
+
+    [BlueprintWidget("channel_pagination_loading_revealer")]
+    private Revealer _paginationLoadingRevealer = null!;
+
+    [BlueprintWidget("channel_reveal_clue")]
+    private Box _revealClue = null!;
     private readonly EventControllerScroll _scrollController;
-    private readonly ScrolledWindow _scrolledWindow;
-    private readonly DropDown _sortDropdown;
-    private readonly Stack _stack;
-    private readonly Label _subscribersLabel;
+    [BlueprintWidget("channel_scrolled_window")]
+    private ScrolledWindow _scrolledWindow = null!;
+
+    [BlueprintWidget("channel_sort_dropdown")]
+    private DropDown _sortDropdown = null!;
+
+    [BlueprintWidget("channel_stack")]
+    private Stack _stack = null!;
+
+    [BlueprintWidget("channel_subscribers")]
+    private Label _subscribersLabel = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    private readonly GridView _videoGrid;
+    [BlueprintWidget("channel_video_grid")]
+    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -85,25 +113,6 @@ public partial class ChannelView : ViewBase<Box>
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
         _backCallback = backCallback;
 
-        GetRequiredObject<Button>("channel_back_button");
-        _barTitle = GetRequiredObject<Label>("channel_bar_title");
-        _avatarOverlay = GetRequiredObject<Overlay>("channel_avatar_overlay");
-        _avatarPlaceholder = GetRequiredObject<Widget>("channel_avatar_placeholder");
-        _channelName = GetRequiredObject<Label>("channel_name");
-        _channelHandle = GetRequiredObject<Label>("channel_handle");
-        _subscribersLabel = GetRequiredObject<Label>("channel_subscribers");
-        _metaDot1 = GetRequiredObject<Label>("channel_meta_dot1");
-        _descriptionLabel = GetRequiredObject<Label>("channel_description");
-        _sortDropdown = GetRequiredObject<DropDown>("channel_sort_dropdown");
-        _stack = GetRequiredObject<Stack>("channel_stack");
-        _videoGrid = GetRequiredObject<GridView>("channel_video_grid");
-        _emptyPage = GetRequiredObject<StatusPage>("channel_empty_page");
-        _errorPage = GetRequiredObject<StatusPage>("channel_error_page");
-        _headerRevealer = GetRequiredObject<Revealer>("channel_header_revealer");
-        _clueRevealer = GetRequiredObject<Revealer>("channel_clue_revealer");
-        _revealClue = GetRequiredObject<Box>("channel_reveal_clue");
-        _scrolledWindow = GetRequiredObject<ScrolledWindow>("channel_scrolled_window");
-        _paginationLoadingRevealer = GetRequiredObject<Revealer>("channel_pagination_loading_revealer");
 
         _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;

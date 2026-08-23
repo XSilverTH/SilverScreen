@@ -12,30 +12,143 @@ namespace SilverScreen.Views.Preferences;
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
-    private readonly SwitchRow _autoAdvanceNextVideoRow;
-    private readonly SwitchRow _discordRichPresenceRow;
-    private readonly SwitchRow _fullscreenRow;
-    private readonly SwitchRow _markWatchedRow;
-    private readonly EntryRow _maxResultsRow;
-    private readonly EntryRow _mpvPathRow;
-    private readonly StringList _playbackBackendModel;
-    private readonly ComboRow _playbackBackendRow;
-    private readonly StringList _qualityModel;
-    private readonly ComboRow _qualityRow;
+    [BlueprintWidget("theme_row")]
+    private ComboRow _themeRow = null!;
+
+    [BlueprintWidget("ytdlp_path_row")]
+    private EntryRow _ytdlpPathRow = null!;
+
+    [BlueprintWidget("max_results_row")]
+    private EntryRow _maxResultsRow = null!;
+
+    [BlueprintWidget("mpv_path_row")]
+    private EntryRow _mpvPathRow = null!;
+
+    [BlueprintWidget("quality_row")]
+    private ComboRow _qualityRow = null!;
+
+    [BlueprintWidget("playback_backend_row")]
+    private ComboRow _playbackBackendRow = null!;
+
+    [BlueprintWidget("auto_advance_next_video_row")]
+    private SwitchRow _autoAdvanceNextVideoRow = null!;
+
+    [BlueprintWidget("fullscreen_row")]
+    private SwitchRow _fullscreenRow = null!;
+
+    [BlueprintWidget("mark_watched_row")]
+    private SwitchRow _markWatchedRow = null!;
+
+    [BlueprintWidget("youtube_playback_telemetry_row")]
+    private SwitchRow _youTubePlaybackTelemetryRow = null!;
+
+    [BlueprintWidget("discord_rich_presence_row")]
+    private SwitchRow _discordRichPresenceRow = null!;
+
+    [BlueprintWidget("theme_model")]
+    private StringList _themeModel = null!;
+
+    [BlueprintWidget("quality_model")]
+    private StringList _qualityModel = null!;
+
+    [BlueprintWidget("playback_backend_model")]
+    private StringList _playbackBackendModel = null!;
+
+    [BlueprintWidget("sponsorblock_auto_skip_row")]
+    private SwitchRow _sponsorBlockAutoSkipRow = null!;
+
+    [BlueprintWidget("sponsorblock_display_row")]
+    private SwitchRow _sponsorBlockDisplayRow = null!;
+
+    [BlueprintWidget("resume_playback_automatically_row")]
+    private SwitchRow _resumePlaybackAutomaticallyRow = null!;
+
+    [BlueprintWidget("resume_playback_on_demand_row")]
+    private SwitchRow _resumePlaybackOnDemandRow = null!;
+
+    [BlueprintWidget("sponsorblock_sponsor_row")]
+    private SwitchRow _sponsorBlockSponsorRow = null!;
+
+    [BlueprintWidget("sponsorblock_selfpromo_row")]
+    private SwitchRow _sponsorBlockSelfPromoRow = null!;
+
+    [BlueprintWidget("sponsorblock_interaction_row")]
+    private SwitchRow _sponsorBlockInteractionRow = null!;
+
+    [BlueprintWidget("sponsorblock_intro_row")]
+    private SwitchRow _sponsorBlockIntroRow = null!;
+
+    [BlueprintWidget("sponsorblock_outro_row")]
+    private SwitchRow _sponsorBlockOutroRow = null!;
+
+    [BlueprintWidget("sponsorblock_preview_row")]
+    private SwitchRow _sponsorBlockPreviewRow = null!;
+
+    [BlueprintWidget("sponsorblock_hook_row")]
+    private SwitchRow _sponsorBlockHookRow = null!;
+
+    [BlueprintWidget("sponsorblock_filler_row")]
+    private SwitchRow _sponsorBlockFillerRow = null!;
+
+    [BlueprintWidget("shortcut_toggle_pause_button")]
+    private Button _shortcutTogglePauseButton = null!;
+
+    [BlueprintWidget("shortcut_seek_backward_button")]
+    private Button _shortcutSeekBackwardButton = null!;
+
+    [BlueprintWidget("shortcut_seek_forward_button")]
+    private Button _shortcutSeekForwardButton = null!;
+
+    [BlueprintWidget("shortcut_step_frame_backward_button")]
+    private Button _shortcutStepFrameBackwardButton = null!;
+
+    [BlueprintWidget("shortcut_step_frame_forward_button")]
+    private Button _shortcutStepFrameForwardButton = null!;
+
+    [BlueprintWidget("shortcut_toggle_mute_button")]
+    private Button _shortcutToggleMuteButton = null!;
+
+    [BlueprintWidget("shortcut_volume_up_button")]
+    private Button _shortcutVolumeUpButton = null!;
+
+    [BlueprintWidget("shortcut_volume_down_button")]
+    private Button _shortcutVolumeDownButton = null!;
+
+    [BlueprintWidget("shortcut_seek_to_beginning_button")]
+    private Button _shortcutSeekToBeginningButton = null!;
+
+    [BlueprintWidget("shortcut_return_to_shell_button")]
+    private Button _shortcutReturnToShellButton = null!;
+
+    [BlueprintWidget("shortcut_toggle_video_info_button")]
+    private Button _shortcutToggleVideoInfoButton = null!;
+
+    [BlueprintWidget("shortcut_speed_decrease_button")]
+    private Button _shortcutSpeedDecreaseButton = null!;
+
+    [BlueprintWidget("shortcut_speed_increase_button")]
+    private Button _shortcutSpeedIncreaseButton = null!;
+
+    [BlueprintWidget("shortcut_next_video_button")]
+    private Button _shortcutNextVideoButton = null!;
+
+    [BlueprintWidget("shortcut_previous_video_button")]
+    private Button _shortcutPreviousVideoButton = null!;
+
+    [BlueprintWidget("shortcut_toggle_fullscreen_button")]
+    private Button _shortcutToggleFullscreenButton = null!;
+
+    [BlueprintWidget("shortcut_preferred_subtitle_button")]
+    private Button _shortcutPreferredSubtitleButton = null!;
+
+    [BlueprintWidget("shortcut_resume_or_skip_button")]
+    private Button _shortcutResumeOrSkipButton = null!;
+
     private readonly Action<string> _reportStatus;
-    private readonly SwitchRow _resumePlaybackAutomaticallyRow;
-    private readonly SwitchRow _resumePlaybackOnDemandRow;
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
-    private readonly SwitchRow _sponsorBlockAutoSkipRow;
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
-    private readonly SwitchRow _sponsorBlockDisplayRow;
-
-    private readonly StringList _themeModel;
-    private readonly ComboRow _themeRow;
     private readonly PreferencesViewModel _viewModel;
-    private readonly SwitchRow _youTubePlaybackTelemetryRow;
-    private readonly EntryRow _ytdlpPathRow;
     private string? _capturingShortcut;
 
     private bool _loading;
@@ -45,57 +158,37 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         Logger.Information("Opening PreferencesDialog");
         _viewModel = new PreferencesViewModel(preferencesService);
         _reportStatus = reportStatus;
-        _themeRow = GetRequiredObject<ComboRow>("theme_row");
-        _ytdlpPathRow = GetRequiredObject<EntryRow>("ytdlp_path_row");
-        _maxResultsRow = GetRequiredObject<EntryRow>("max_results_row");
-        _mpvPathRow = GetRequiredObject<EntryRow>("mpv_path_row");
-        _qualityRow = GetRequiredObject<ComboRow>("quality_row");
-        _playbackBackendRow = GetRequiredObject<ComboRow>("playback_backend_row");
-        _autoAdvanceNextVideoRow = GetRequiredObject<SwitchRow>("auto_advance_next_video_row");
-        _fullscreenRow = GetRequiredObject<SwitchRow>("fullscreen_row");
-        _markWatchedRow = GetRequiredObject<SwitchRow>("mark_watched_row");
-        _youTubePlaybackTelemetryRow = GetRequiredObject<SwitchRow>("youtube_playback_telemetry_row");
-        _discordRichPresenceRow = GetRequiredObject<SwitchRow>("discord_rich_presence_row");
-        _themeModel = GetRequiredObject<StringList>("theme_model");
-        _qualityModel = GetRequiredObject<StringList>("quality_model");
-        _playbackBackendModel = GetRequiredObject<StringList>("playback_backend_model");
-        _sponsorBlockAutoSkipRow = GetRequiredObject<SwitchRow>("sponsorblock_auto_skip_row");
-        _sponsorBlockDisplayRow = GetRequiredObject<SwitchRow>("sponsorblock_display_row");
-        _resumePlaybackAutomaticallyRow = GetRequiredObject<SwitchRow>("resume_playback_automatically_row");
-        _resumePlaybackOnDemandRow = GetRequiredObject<SwitchRow>("resume_playback_on_demand_row");
-
         _sponsorBlockCategoryRows = new Dictionary<string, SwitchRow>
         {
-            [SponsorBlockCategories.Sponsor] = GetRequiredObject<SwitchRow>("sponsorblock_sponsor_row"),
-            [SponsorBlockCategories.SelfPromotion] = GetRequiredObject<SwitchRow>("sponsorblock_selfpromo_row"),
-            [SponsorBlockCategories.InteractionReminder] =
-                GetRequiredObject<SwitchRow>("sponsorblock_interaction_row"),
-            [SponsorBlockCategories.Intro] = GetRequiredObject<SwitchRow>("sponsorblock_intro_row"),
-            [SponsorBlockCategories.Outro] = GetRequiredObject<SwitchRow>("sponsorblock_outro_row"),
-            [SponsorBlockCategories.Preview] = GetRequiredObject<SwitchRow>("sponsorblock_preview_row"),
-            [SponsorBlockCategories.Hook] = GetRequiredObject<SwitchRow>("sponsorblock_hook_row"),
-            [SponsorBlockCategories.Filler] = GetRequiredObject<SwitchRow>("sponsorblock_filler_row")
+            [SponsorBlockCategories.Sponsor] = _sponsorBlockSponsorRow,
+            [SponsorBlockCategories.SelfPromotion] = _sponsorBlockSelfPromoRow,
+            [SponsorBlockCategories.InteractionReminder] = _sponsorBlockInteractionRow,
+            [SponsorBlockCategories.Intro] = _sponsorBlockIntroRow,
+            [SponsorBlockCategories.Outro] = _sponsorBlockOutroRow,
+            [SponsorBlockCategories.Preview] = _sponsorBlockPreviewRow,
+            [SponsorBlockCategories.Hook] = _sponsorBlockHookRow,
+            [SponsorBlockCategories.Filler] = _sponsorBlockFillerRow
         };
         _shortcutRows = new Dictionary<string, Button>(StringComparer.Ordinal)
         {
-            ["TogglePause"] = GetRequiredObject<Button>("shortcut_toggle_pause_button"),
-            ["SeekBackward"] = GetRequiredObject<Button>("shortcut_seek_backward_button"),
-            ["SeekForward"] = GetRequiredObject<Button>("shortcut_seek_forward_button"),
-            ["StepFrameBackward"] = GetRequiredObject<Button>("shortcut_step_frame_backward_button"),
-            ["StepFrameForward"] = GetRequiredObject<Button>("shortcut_step_frame_forward_button"),
-            ["ToggleMute"] = GetRequiredObject<Button>("shortcut_toggle_mute_button"),
-            ["VolumeUp"] = GetRequiredObject<Button>("shortcut_volume_up_button"),
-            ["VolumeDown"] = GetRequiredObject<Button>("shortcut_volume_down_button"),
-            ["SeekToBeginning"] = GetRequiredObject<Button>("shortcut_seek_to_beginning_button"),
-            ["ReturnToShell"] = GetRequiredObject<Button>("shortcut_return_to_shell_button"),
-            ["ToggleVideoInfo"] = GetRequiredObject<Button>("shortcut_toggle_video_info_button"),
-            ["SpeedDecrease"] = GetRequiredObject<Button>("shortcut_speed_decrease_button"),
-            ["SpeedIncrease"] = GetRequiredObject<Button>("shortcut_speed_increase_button"),
-            ["NextVideo"] = GetRequiredObject<Button>("shortcut_next_video_button"),
-            ["PreviousVideo"] = GetRequiredObject<Button>("shortcut_previous_video_button"),
-            ["ToggleFullscreen"] = GetRequiredObject<Button>("shortcut_toggle_fullscreen_button"),
-            ["PreferredSubtitle"] = GetRequiredObject<Button>("shortcut_preferred_subtitle_button"),
-            ["ResumeOrSkip"] = GetRequiredObject<Button>("shortcut_resume_or_skip_button")
+            ["TogglePause"] = _shortcutTogglePauseButton,
+            ["SeekBackward"] = _shortcutSeekBackwardButton,
+            ["SeekForward"] = _shortcutSeekForwardButton,
+            ["StepFrameBackward"] = _shortcutStepFrameBackwardButton,
+            ["StepFrameForward"] = _shortcutStepFrameForwardButton,
+            ["ToggleMute"] = _shortcutToggleMuteButton,
+            ["VolumeUp"] = _shortcutVolumeUpButton,
+            ["VolumeDown"] = _shortcutVolumeDownButton,
+            ["SeekToBeginning"] = _shortcutSeekToBeginningButton,
+            ["ReturnToShell"] = _shortcutReturnToShellButton,
+            ["ToggleVideoInfo"] = _shortcutToggleVideoInfoButton,
+            ["SpeedDecrease"] = _shortcutSpeedDecreaseButton,
+            ["SpeedIncrease"] = _shortcutSpeedIncreaseButton,
+            ["NextVideo"] = _shortcutNextVideoButton,
+            ["PreviousVideo"] = _shortcutPreviousVideoButton,
+            ["ToggleFullscreen"] = _shortcutToggleFullscreenButton,
+            ["PreferredSubtitle"] = _shortcutPreferredSubtitleButton,
+            ["ResumeOrSkip"] = _shortcutResumeOrSkipButton
         };
 
         foreach (var button in _shortcutRows.Values)

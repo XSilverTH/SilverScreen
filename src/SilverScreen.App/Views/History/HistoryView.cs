@@ -16,18 +16,32 @@ public partial class HistoryView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly StatusPage _emptyPage;
-    private readonly StatusPage _errorPage;
-    private readonly Label _paginationLoadingLabel;
-    private readonly Revealer _paginationLoadingRevealer;
-    private readonly ScrolledWindow _scrolledWindow;
-    private readonly StatusPage _signedOutPage;
-    private readonly Stack _stack;
+    [BlueprintWidget("history_empty_page")]
+    private StatusPage _emptyPage = null!;
+
+    [BlueprintWidget("history_error_page")]
+    private StatusPage _errorPage = null!;
+
+    [BlueprintWidget("history_pagination_loading_label")]
+    private Label _paginationLoadingLabel = null!;
+
+    [BlueprintWidget("history_pagination_loading_revealer")]
+    private Revealer _paginationLoadingRevealer = null!;
+
+    [BlueprintWidget("history_scrolled_window")]
+    private ScrolledWindow _scrolledWindow = null!;
+
+    [BlueprintWidget("history_signed_out_page")]
+    private StatusPage _signedOutPage = null!;
+
+    [BlueprintWidget("history_stack")]
+    private Stack _stack = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    private readonly GridView _videoGrid;
+    [BlueprintWidget("history_video_grid")]
+    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -47,15 +61,6 @@ public partial class HistoryView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _stack = GetRequiredObject<Stack>("history_stack");
-        _scrolledWindow = GetRequiredObject<ScrolledWindow>("history_scrolled_window");
-        _videoGrid = GetRequiredObject<GridView>("history_video_grid");
-        _signedOutPage = GetRequiredObject<StatusPage>("history_signed_out_page");
-        _emptyPage = GetRequiredObject<StatusPage>("history_empty_page");
-        _errorPage = GetRequiredObject<StatusPage>("history_error_page");
-        GetRequiredObject<Button>("history_retry_button");
-        _paginationLoadingRevealer = GetRequiredObject<Revealer>("history_pagination_loading_revealer");
-        _paginationLoadingLabel = GetRequiredObject<Label>("history_pagination_loading_label");
 
         _vadjustment = _scrolledWindow.Vadjustment;
         if (_vadjustment is not null)

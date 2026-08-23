@@ -14,11 +14,19 @@ public partial class SearchPopoverView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
     private readonly Action _popdownAction;
 
-    private readonly SearchEntry _searchEntry;
+    [BlueprintWidget("search_entry")]
+    private SearchEntry _searchEntry = null!;
+
+    [BlueprintWidget("suggestions_scroll")]
+    private ScrolledWindow _suggestionsScroll = null!;
+
+    [BlueprintWidget("suggestions_list")]
+    private ListBox _suggestionsList = null!;
+
+    [BlueprintWidget("suggestions_revealer")]
+    private Revealer _suggestionsRevealer = null!;
     private readonly EventControllerKey _searchKeyController;
     private readonly Action<string> _submitCallback;
-    private readonly ListBox _suggestionsList;
-    private readonly Revealer _suggestionsRevealer;
     private readonly SearchViewModel _viewModel;
     private string[] _currentSuggestions = [];
     private bool _disposed;
@@ -37,13 +45,9 @@ public partial class SearchPopoverView : ViewBase<Box>
         _submitCallback = submitCallback ?? throw new ArgumentNullException(nameof(submitCallback));
         _popdownAction = popdownAction ?? throw new ArgumentNullException(nameof(popdownAction));
 
-        _searchEntry = GetRequiredObject<SearchEntry>("search_entry");
-        _suggestionsRevealer = GetRequiredObject<Revealer>("suggestions_revealer");
-        var suggestionsScroll = GetRequiredObject<ScrolledWindow>("suggestions_scroll");
-        _suggestionsList = GetRequiredObject<ListBox>("suggestions_list");
+        _suggestionsScroll.CanFocus = false;
+        _suggestionsScroll.FocusOnClick = false;
 
-        suggestionsScroll.CanFocus = false;
-        suggestionsScroll.FocusOnClick = false;
         _suggestionsList.CanFocus = false;
         _suggestionsList.FocusOnClick = false;
 

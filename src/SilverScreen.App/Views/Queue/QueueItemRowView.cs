@@ -21,29 +21,54 @@ public partial class QueueItemRowView : ViewBase<Box>
     private const int ThumbnailHeight = 54;
     private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
-    private readonly Label _channel;
+    [BlueprintWidget("channel")]
+    private Label _channel = null!;
+
+    [BlueprintWidget("details")]
+    private Box _details = null!;
+
+    [BlueprintWidget("duration")]
+    private Label _duration = null!;
+
+    [BlueprintWidget("duration_pill")]
+    private Label _durationPill = null!;
+
+    [BlueprintWidget("grip")]
+    private Image _grip = null!;
+
+    [BlueprintWidget("menu")]
+    private MenuButton _menu = null!;
+
+    [BlueprintWidget("placeholder")]
+    private Widget _placeholder = null!;
+
+    [BlueprintWidget("position")]
+    private Label _position = null!;
+
+    [BlueprintWidget("state_stack")]
+    private Stack _stateStack = null!;
+
+    [BlueprintWidget("thumbnail")]
+    private Overlay _thumbnail = null!;
+
+    [BlueprintWidget("title")]
+    private Label _title = null!;
+
+    [BlueprintWidget("watched_progress")]
+    private ProgressBar _watchedProgress = null!;
     private readonly WidgetPaintable _dragPaintable;
     private readonly DragSource _dragSource;
     private readonly Action<Guid, int> _dropRequested;
     private readonly DropTarget _dropTarget;
-    private readonly Label _duration;
-    private readonly Label _durationPill;
-    private readonly Image _grip;
     private readonly SimpleAction _moveDownAction;
     private readonly Action<Guid, int> _moveRequested;
     private readonly SimpleAction _moveUpAction;
-    private readonly Widget _placeholder;
     private readonly SimpleAction _playNowAction;
     private readonly Action<Guid, int>? _playRequested;
-    private readonly Label _position;
     private readonly SimpleAction _removeAction;
     private readonly Action<Guid> _removeRequested;
-    private readonly Stack _stateStack;
-    private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
-    private readonly Label _title;
     private readonly IWatchProgressService _watchProgress;
-    private readonly ProgressBar _watchedProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -66,17 +91,6 @@ public partial class QueueItemRowView : ViewBase<Box>
         _removeRequested = removeRequested;
         _playRequested = playRequested;
 
-        _grip = GetRequiredObject<Image>("grip");
-        _stateStack = GetRequiredObject<Stack>("state_stack");
-        _position = GetRequiredObject<Label>("position");
-        _thumbnail = GetRequiredObject<Overlay>("thumbnail");
-        _placeholder = GetRequiredObject<Widget>("placeholder");
-        _durationPill = GetRequiredObject<Label>("duration_pill");
-        _watchedProgress = GetRequiredObject<ProgressBar>("watched_progress");
-        _title = GetRequiredObject<Label>("title");
-        _channel = GetRequiredObject<Label>("channel");
-        _duration = GetRequiredObject<Label>("duration");
-        var menu = GetRequiredObject<MenuButton>("menu");
 
         _actions = SimpleActionGroup.New();
         _playNowAction = CreateAction("play-now", () =>
@@ -95,7 +109,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
         _actions.AddAction(_removeAction);
-        menu.InsertActionGroup("queue", _actions);
+        _menu.InsertActionGroup("queue", _actions);
 
         _dragSource = DragSource.New();
         _dragSource.Actions = DragAction.Move;
@@ -121,8 +135,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         };
-        var details = GetRequiredObject<Box>("details");
-        details.AddController(detailsClick);
+        _details.AddController(detailsClick);
 
         var thumbnailClick = GestureClick.New();
         thumbnailClick.OnReleased += (_, _) =>
