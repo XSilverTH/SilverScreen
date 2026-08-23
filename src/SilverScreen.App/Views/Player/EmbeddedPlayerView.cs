@@ -24,8 +24,6 @@ internal interface IEmbeddedPlayerPresenter
 
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
-    private const long ControlsIdleDelayMilliseconds = 1_500;
-    private const uint ControlsVisibilityCheckMilliseconds = 100;
     private const double MinimumPlaybackSpeed = 0.25;
     private const double MaximumPlaybackSpeed = 5;
     private const double PlaybackSpeedIncrement = 0.25;
@@ -78,17 +76,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerTimelineController _timelineController;
     private readonly Overlay _timelineOverlay;
     private readonly Label _titleLabel;
+    private readonly PlayerChromeController _chromeController;
     private readonly MenuButton _volumeButton;
     private readonly Popover _volumePopover;
     private readonly Scale _volumeScale;
     private readonly PlayerShortcutController _shortcutController;
     private string? _commentsVideoId;
-    private bool _controlsVisible = true;
     private bool _disposed;
 
-    private long _lastActivityMilliseconds;
-    private double _lastPointerX = double.NaN;
-    private double _lastPointerY = double.NaN;
     private bool _rendererReady;
     private double _speed = 1;
     private bool _syncingQueue;
@@ -193,7 +188,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
-        SetupControlsAutohide();
+        _chromeController = new PlayerChromeController(
+            Widget,
+            _headerBar,
+            _centerControls,
+            _playerControls,
+            () => _volumePopover.GetVisible() || _settingsPopover.GetVisible() || _infoPanel.IsOpen,
+            () => _chapterOverlay.Layout(),
+            y => _infoPanel.UpdatePointer(y, Widget.GetAllocatedHeight(), _session.HasMedia));
         _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia, RegisterActivity);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () => _player.TogglePause());
         _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () => SeekRelative(-10));
@@ -238,6 +240,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         _chapterOverlay.Dispose();
         _preferences.PreferencesChanged -= OnPreferencesChanged;
+        _chromeController.Dispose();
         _commentsView.Dispose();
         _queueService.Changed -= OnQueueChanged;
         _queueView.Dispose();
@@ -350,30 +353,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         return true;
     }
 
-    private void SetupControlsAutohide()
-    {
-        var motion = EventControllerMotion.New();
-        motion.SetPropagationPhase(PropagationPhase.Capture);
-        motion.OnMotion += (_, args) => RegisterPointerActivity(args.X, args.Y);
-        Widget.AddController(motion);
-
-        var click = GestureClick.New();
-        click.Button = 0;
-        click.SetPropagationPhase(PropagationPhase.Capture);
-        click.OnPressed += (_, _) => RegisterActivity();
-        Widget.AddController(click);
-
-        RegisterActivity();
-        Functions.TimeoutAdd(0, ControlsVisibilityCheckMilliseconds, () =>
-        {
-            if (_disposed) return false;
-            if (_controlsVisible &&
-                !HasOpenControlPopover() &&
-                Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
-                SetControlsVisible(false);
-            return true;
-        });
-    }
 
 
     private void SeekAbsolute(double position, bool exact = true)
@@ -404,42 +383,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void RegisterActivity()
     {
-        _lastActivityMilliseconds = Environment.TickCount64;
-        _chapterOverlay.Layout();
-        SetControlsVisible(true);
-    }
-
-    private void RegisterPointerActivity(double x, double y)
-    {
-        if (Math.Abs(x - _lastPointerX) < 0.2 && Math.Abs(y - _lastPointerY) < 0.2) return;
-        _lastPointerX = x;
-        _lastPointerY = y;
-        RegisterActivity();
-        _infoPanel.UpdatePointer(y, Widget.GetAllocatedHeight(), _session.HasMedia);
-    }
-
-    private bool HasOpenControlPopover()
-    {
-        return _volumePopover.GetVisible() || _settingsPopover.GetVisible() || _infoPanel.IsOpen;
-    }
-    private void SetControlsVisible(bool visible)
-    {
-        if (_controlsVisible == visible) return;
-        _controlsVisible = visible;
-        SetControlVisible(_headerBar, visible);
-        SetControlVisible(_centerControls, visible);
-        SetControlVisible(_playerControls, visible);
-        if (!visible)
-            Widget.GrabFocus();
-    }
-
-    private static void SetControlVisible(Widget control, bool visible)
-    {
-        control.SetSensitive(visible);
-        if (visible)
-            control.RemoveCssClass("player-chrome-hidden");
-        else
-            control.AddCssClass("player-chrome-hidden");
+        _chromeController.RegisterActivity();
     }
 
     private void OnBackButtonClicked(object? sender, EventArgs args)
