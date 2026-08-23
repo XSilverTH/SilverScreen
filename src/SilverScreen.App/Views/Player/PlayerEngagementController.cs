@@ -58,6 +58,16 @@ internal sealed class PlayerEngagementController(
     {
     }
 
+    public void Clear()
+    {
+        if (_disposed) return;
+        CancelLoad();
+        _videoId = null;
+        likesLabel.SetText("—");
+        dislikesLabel.SetText("—");
+        SetRatingState(YouTubeRatingState.None);
+    }
+
     public void SubmitVote(VideoVote vote)
     {
         if (_videoId is not { } videoId || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return;
@@ -67,16 +77,6 @@ internal sealed class PlayerEngagementController(
         var token = _cancellation?.Token ?? CancellationToken.None;
         SetReactionSensitive(false);
         SubmitVoteAsync(videoId, vote, removeVote, version, token).FireAndForget(Logger);
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        CancelLoad();
-        _videoId = null;
-        likesLabel.SetText("—");
-        dislikesLabel.SetText("—");
-        SetRatingState(YouTubeRatingState.None);
     }
 
     private async Task UpdateEngagementAsync(string videoId, long version, CancellationToken cancellationToken)

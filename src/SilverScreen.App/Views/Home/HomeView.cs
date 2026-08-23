@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
@@ -17,32 +16,11 @@ public partial class HomeView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<HomeView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
 
-    [BlueprintWidget("home_content_overlay")]
-    private Overlay _contentOverlay = null!;
 
-    [BlueprintWidget("home_pagination_loading_label")]
-    private Label _paginationLoadingLabel = null!;
-
-    [BlueprintWidget("home_pagination_loading_revealer")]
-    private Revealer _paginationLoadingRevealer = null!;
-
-    [BlueprintWidget("home_scrolled_window")]
-    private ScrolledWindow _scrolledWindow = null!;
-
-    [BlueprintWidget("home_status_host")]
-    private Box _statusHost = null!;
-
-    [BlueprintWidget("home_status_loading_page")]
-    private Box _statusLoadingPage = null!;
-
-    [BlueprintWidget("home_status_page")]
-    private StatusPage _statusPage = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    [BlueprintWidget("home_video_grid")]
-    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -62,7 +40,7 @@ public partial class HomeView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _vadjustment = _scrolledWindow.Vadjustment;
+        _vadjustment = home_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged += OnScrollValueChanged;
 
@@ -74,8 +52,8 @@ public partial class HomeView : ViewBase<Box>
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
 
-        _videoGrid.Model = _videoSelection;
-        _videoGrid.Factory = _videoFactory;
+        home_video_grid.Model = _videoSelection;
+        home_video_grid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -88,7 +66,7 @@ public partial class HomeView : ViewBase<Box>
     public Task RefreshAsync()
     {
         return _viewModel.State is
-        { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
+            { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
             : Task.CompletedTask;
     }
@@ -119,8 +97,8 @@ public partial class HomeView : ViewBase<Box>
         ApplyVideos(state.Videos);
 
         var hasDisplayedVideos = _displayedVideos.Length > 0;
-        _statusHost.Visible = false;
-        _contentOverlay.Visible = false;
+        home_status_host.Visible = false;
+        home_content_overlay.Visible = false;
 
         if (!hasDisplayedVideos)
         {
@@ -128,19 +106,19 @@ public partial class HomeView : ViewBase<Box>
             return;
         }
 
-        _contentOverlay.Visible = true;
-        _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
-        _paginationLoadingLabel.SetText("Loading more videos…");
+        home_content_overlay.Visible = true;
+        home_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+        home_pagination_loading_label.SetText("Loading more videos…");
     }
 
     private void ShowStatus(HomeFeedState state)
     {
-        _statusLoadingPage.Visible = false;
-        _statusPage.Visible = false;
+        home_status_loading_page.Visible = false;
+        home_status_page.Visible = false;
 
         if (state.Kind == HomeFeedStateKind.InitialLoading)
         {
-            _statusLoadingPage.Visible = true;
+            home_status_loading_page.Visible = true;
         }
         else
         {
@@ -154,13 +132,13 @@ public partial class HomeView : ViewBase<Box>
                     "dialog-password-symbolic"),
                 _ => ("Could not load YouTube recommendations.", "network-error-symbolic")
             };
-            _statusPage.Title = "Home";
-            _statusPage.Description = description;
-            _statusPage.IconName = icon;
-            _statusPage.Visible = true;
+            home_status_page.Title = "Home";
+            home_status_page.Description = description;
+            home_status_page.IconName = icon;
+            home_status_page.Visible = true;
         }
 
-        _statusHost.Visible = true;
+        home_status_host.Visible = true;
     }
 
     private void ApplyVideos(IReadOnlyList<VideoSummary> videos)
@@ -243,7 +221,7 @@ public partial class HomeView : ViewBase<Box>
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged -= OnScrollValueChanged;
 
-        _videoGrid.Factory = null;
+        home_video_grid.Factory = null;
         foreach (var association in _cardsByListItem)
             DisposeVideoCardCell(association.Key, association.Value);
         _cardsByListItem.Clear();
@@ -252,8 +230,8 @@ public partial class HomeView : ViewBase<Box>
         _videoFactory.OnBind -= OnVideoCardBind;
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
-        _scrolledWindow.Child = null;
-        _videoGrid.Dispose();
+        home_scrolled_window.Child = null;
+        home_video_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
         _videoIds.Dispose();

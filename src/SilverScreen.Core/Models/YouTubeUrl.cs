@@ -125,12 +125,12 @@ public static class YouTubeUrlParser
         return trimmedQuery.Length == 0
             ? null
             : (from pair in trimmedQuery.Split('&', StringSplitOptions.RemoveEmptyEntries)
-               let separatorIndex = pair.IndexOf('=', StringComparison.Ordinal)
-               let rawKey = separatorIndex >= 0 ? pair[..separatorIndex] : pair
-               where SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase)
-               select separatorIndex >= 0 ? pair[(separatorIndex + 1)..] : string.Empty
+                let separatorIndex = pair.IndexOf('=', StringComparison.Ordinal)
+                let rawKey = separatorIndex >= 0 ? pair[..separatorIndex] : pair
+                where SafeUnescape(rawKey).Equals(key, StringComparison.OrdinalIgnoreCase)
+                select separatorIndex >= 0 ? pair[(separatorIndex + 1)..] : string.Empty
                 into rawValue
-               select SafeUnescape(rawValue.Replace('+', ' '))).FirstOrDefault();
+                select SafeUnescape(rawValue.Replace('+', ' '))).FirstOrDefault();
     }
 
     private static string SafeUnescape(string value)

@@ -7,26 +7,23 @@ internal sealed class PlayerChromeController : IDisposable
 {
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
-
-    private readonly Widget _viewWidget;
-    private readonly Widget _headerBar;
     private readonly Box _centerControls;
-    private readonly Widget _playerControls;
+    private readonly GestureClick _clickGesture;
     private readonly Func<bool> _hasOpenPopover;
-    private readonly Action? _onActivity;
-    private readonly Action<double>? _onPointerMoved;
+    private readonly Widget _headerBar;
 
     private readonly EventControllerMotion _motionController;
-    private readonly GestureClick _clickGesture;
+    private readonly Action? _onActivity;
+    private readonly Action<double>? _onPointerMoved;
+    private readonly Widget _playerControls;
 
-    private bool _controlsVisible = true;
+    private readonly Widget _viewWidget;
+
+    private bool _disposed;
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
     private uint _timeoutSource;
-    private bool _disposed;
-
-    public bool ControlsVisible => _controlsVisible;
 
     public PlayerChromeController(
         Widget viewWidget,
@@ -61,15 +58,35 @@ internal sealed class PlayerChromeController : IDisposable
         _timeoutSource = Functions.TimeoutAdd(0, ControlsVisibilityCheckMilliseconds, () =>
         {
             if (_disposed) return false;
-            if (_controlsVisible &&
+            if (ControlsVisible &&
                 !_hasOpenPopover() &&
                 Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
-            {
                 SetControlsVisible(false);
-            }
 
             return true;
         });
+    }
+
+    public bool ControlsVisible { get; private set; } = true;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_timeoutSource != 0)
+        {
+            Functions.SourceRemove(_timeoutSource);
+            _timeoutSource = 0;
+        }
+
+        _motionController.OnMotion -= OnMotion;
+        _viewWidget.RemoveController(_motionController);
+        _motionController.Dispose();
+
+        _clickGesture.OnPressed -= OnPressed;
+        _viewWidget.RemoveController(_clickGesture);
+        _clickGesture.Dispose();
     }
 
     public void RegisterActivity()
@@ -92,28 +109,21 @@ internal sealed class PlayerChromeController : IDisposable
 
     public void SetControlsVisible(bool visible)
     {
-        if (_controlsVisible == visible) return;
-        _controlsVisible = visible;
+        if (ControlsVisible == visible) return;
+        ControlsVisible = visible;
         SetControlVisible(_headerBar, visible);
         SetControlVisible(_centerControls, visible);
         SetControlVisible(_playerControls, visible);
-        if (!visible)
-        {
-            _viewWidget.GrabFocus();
-        }
+        if (!visible) _viewWidget.GrabFocus();
     }
 
     private static void SetControlVisible(Widget control, bool visible)
     {
         control.SetSensitive(visible);
         if (visible)
-        {
             control.RemoveCssClass("player-chrome-hidden");
-        }
         else
-        {
             control.AddCssClass("player-chrome-hidden");
-        }
     }
 
     private void OnMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
@@ -124,25 +134,5 @@ internal sealed class PlayerChromeController : IDisposable
     private void OnPressed(GestureClick sender, GestureClick.PressedSignalArgs args)
     {
         RegisterActivity();
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        if (_timeoutSource != 0)
-        {
-            Functions.SourceRemove(_timeoutSource);
-            _timeoutSource = 0;
-        }
-
-        _motionController.OnMotion -= OnMotion;
-        _viewWidget.RemoveController(_motionController);
-        _motionController.Dispose();
-
-        _clickGesture.OnPressed -= OnPressed;
-        _viewWidget.RemoveController(_clickGesture);
-        _clickGesture.Dispose();
     }
 }

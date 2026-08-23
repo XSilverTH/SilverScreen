@@ -8,38 +8,31 @@ internal sealed class PlayerTimelineController : IDisposable
 {
     private const uint SeekThrottleIntervalMilliseconds = 120;
     private const long ReconciliationLatchMilliseconds = 400;
+    private readonly Label _durationLabel;
+    private readonly Label _positionLabel;
+    private readonly Action _registerActivity;
+    private readonly Label _scrubChapterLabel;
+    private readonly Box _scrubCue;
+    private readonly Label _scrubDeltaLabel;
+    private readonly Label _scrubTimeLabel;
+    private readonly Action<double, bool> _seekAbsolute;
 
     private readonly Scale _timeline;
-    private readonly Overlay _timelineOverlay;
-    private readonly Box _scrubCue;
-    private readonly Label _scrubTimeLabel;
-    private readonly Label _scrubDeltaLabel;
-    private readonly Label _scrubChapterLabel;
-    private readonly Label _positionLabel;
-    private readonly Label _durationLabel;
-    private readonly Action<double, bool> _seekAbsolute;
-    private readonly Action _registerActivity;
-
-    private readonly EventControllerMotion _timelineMotionController;
     private readonly GestureDrag _timelineDragGesture;
 
+    private readonly EventControllerMotion _timelineMotionController;
+    private readonly Overlay _timelineOverlay;
+
     private IReadOnlyList<LibMpvChapter> _chapters = [];
-    private TimeSpan _currentDuration;
-    private TimeSpan _timelinePlaybackPosition;
+    private bool _disposed;
     private bool _hasMedia;
-    private bool _isScrubbing;
-    private TimeSpan _scrubStartPosition;
+    private long _lastThrottledSeekTime;
     private double _latestScrubPosition;
     private double _pendingSeekTarget = -1;
     private long _reconciliationLatchExpiry;
-    private long _lastThrottledSeekTime;
+    private TimeSpan _scrubStartPosition;
     private uint _throttledSeekSource;
     private bool _updatingControls;
-    private bool _disposed;
-
-    public bool IsScrubbing => _isScrubbing;
-    public TimeSpan PlaybackPosition => _timelinePlaybackPosition;
-    public TimeSpan CurrentDuration => _currentDuration;
 
     public PlayerTimelineController(
         Scale timeline,
@@ -80,21 +73,49 @@ internal sealed class PlayerTimelineController : IDisposable
         _timeline.OnValueChanged += OnTimelineValueChanged;
     }
 
+    public bool IsScrubbing { get; private set; }
+
+    public TimeSpan PlaybackPosition { get; private set; }
+
+    public TimeSpan CurrentDuration { get; private set; }
+
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        CancelThrottledSeek();
+        _timelineMotionController.OnMotion -= OnTimelineMotion;
+        _timelineMotionController.OnLeave -= OnTimelineLeave;
+        _timelineOverlay.RemoveController(_timelineMotionController);
+        _timelineMotionController.Dispose();
+
+        _timelineDragGesture.OnDragBegin -= OnTimelineDragBegin;
+        _timelineDragGesture.OnDragUpdate -= OnTimelineDragUpdate;
+        _timelineDragGesture.OnDragEnd -= OnTimelineDragEnd;
+        _timeline.RemoveController(_timelineDragGesture);
+        _timelineDragGesture.Dispose();
+
+        _timeline.OnValueChanged -= OnTimelineValueChanged;
+    }
+
     public void UpdatePosition(LibMpvPlaybackState state)
     {
         if (_disposed) return;
         _hasMedia = state.HasMedia;
-        _currentDuration = state.Duration;
+        CurrentDuration = state.Duration;
         _chapters = state.Chapters;
 
         _updatingControls = true;
         try
         {
-            _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : PlayerTimeFormatter.FormatTime(state.Duration));
+            _durationLabel.SetText(state.Duration == TimeSpan.Zero
+                ? "Live"
+                : PlayerTimeFormatter.FormatTime(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
 
-            if (!_isScrubbing)
+            if (!IsScrubbing)
             {
                 var withinLatch = Environment.TickCount64 < _reconciliationLatchExpiry;
                 var isCloseToPending = Math.Abs(state.Position.TotalSeconds - _pendingSeekTarget) <= 1.5;
@@ -102,7 +123,7 @@ internal sealed class PlayerTimelineController : IDisposable
                 if (!withinLatch || isCloseToPending)
                 {
                     if (isCloseToPending) _reconciliationLatchExpiry = 0;
-                    _timelinePlaybackPosition = state.Position;
+                    PlaybackPosition = state.Position;
                     _positionLabel.SetText(PlayerTimeFormatter.FormatTime(state.Position));
                     _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0,
                         Math.Max(0, state.Duration.TotalSeconds)));
@@ -124,8 +145,8 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public void CancelScrubbing()
     {
-        if (!_isScrubbing) return;
-        _isScrubbing = false;
+        if (!IsScrubbing) return;
+        IsScrubbing = false;
         CancelThrottledSeek();
         _positionLabel.RemoveCssClass("player-time-scrubbing");
         _timeline.RemoveCssClass("dragging");
@@ -134,7 +155,7 @@ internal sealed class PlayerTimelineController : IDisposable
         try
         {
             _timeline.SetValue(_scrubStartPosition.TotalSeconds);
-            _timelinePlaybackPosition = _scrubStartPosition;
+            PlaybackPosition = _scrubStartPosition;
             _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_scrubStartPosition));
         }
         finally
@@ -146,7 +167,7 @@ internal sealed class PlayerTimelineController : IDisposable
     public void Reset()
     {
         CancelScrubbing();
-        _currentDuration = TimeSpan.Zero;
+        CurrentDuration = TimeSpan.Zero;
         _chapters = [];
         _scrubCue.SetVisible(false);
         _updatingControls = true;
@@ -157,7 +178,7 @@ internal sealed class PlayerTimelineController : IDisposable
             _timeline.SetSensitive(false);
             _positionLabel.SetText("0:00");
             _durationLabel.SetText("0:00");
-            _timelinePlaybackPosition = TimeSpan.Zero;
+            PlaybackPosition = TimeSpan.Zero;
         }
         finally
         {
@@ -167,13 +188,13 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public void SetDuration(TimeSpan duration)
     {
-        _currentDuration = duration;
+        CurrentDuration = duration;
         _durationLabel.SetText(PlayerTimeFormatter.FormatTime(duration));
     }
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
     {
-        if (_disposed || !_hasMedia || _currentDuration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        if (_disposed || !_hasMedia || CurrentDuration <= TimeSpan.Zero || !_timeline.GetSensitive())
         {
             _scrubCue.SetVisible(false);
             return;
@@ -185,18 +206,18 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineLeave(object? sender, EventArgs args)
     {
-        if (!_isScrubbing)
+        if (!IsScrubbing)
             _scrubCue.SetVisible(false);
     }
 
     private void UpdateScrubCue(double pointerX)
     {
         var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(_timeline, _timelineOverlay,
-            _isScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : _timelinePlaybackPosition,
-            _currentDuration);
+            IsScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : PlaybackPosition,
+            CurrentDuration);
 
         var targetTime =
-            PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, _currentDuration);
+            PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, CurrentDuration);
 
         var cueWidth = _scrubCue.GetAllocatedWidth();
         var hostWidth = _timelineOverlay.GetAllocatedWidth();
@@ -206,7 +227,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
         _scrubTimeLabel.SetText(PlayerTimeFormatter.FormatTime(targetTime));
 
-        if (_isScrubbing)
+        if (IsScrubbing)
         {
             var delta = targetTime - _scrubStartPosition;
             _scrubDeltaLabel.SetText(FormatDelta(delta));
@@ -233,11 +254,11 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
     {
-        if (_disposed || !_hasMedia || !_timeline.GetSensitive() || _currentDuration <= TimeSpan.Zero)
+        if (_disposed || !_hasMedia || !_timeline.GetSensitive() || CurrentDuration <= TimeSpan.Zero)
             return;
 
-        _isScrubbing = true;
-        _scrubStartPosition = _timelinePlaybackPosition;
+        IsScrubbing = true;
+        _scrubStartPosition = PlaybackPosition;
         _latestScrubPosition = _timeline.GetValue();
         _positionLabel.AddCssClass("player-time-scrubbing");
         _timeline.AddCssClass("dragging");
@@ -247,7 +268,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineDragUpdate(GestureDrag sender, GestureDrag.DragUpdateSignalArgs args)
     {
-        if (!_isScrubbing) return;
+        if (!IsScrubbing) return;
         _registerActivity();
         sender.GetStartPoint(out var startX, out _);
         UpdateScrubCue(startX + args.OffsetX);
@@ -255,8 +276,8 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineDragEnd(GestureDrag sender, GestureDrag.DragEndSignalArgs args)
     {
-        if (!_isScrubbing) return;
-        _isScrubbing = false;
+        if (!IsScrubbing) return;
+        IsScrubbing = false;
         _positionLabel.RemoveCssClass("player-time-scrubbing");
         _timeline.RemoveCssClass("dragging");
         _scrubCue.SetVisible(false);
@@ -264,8 +285,8 @@ internal sealed class PlayerTimelineController : IDisposable
 
         var finalPosition = _timeline.GetValue();
         SeekAbsolute(finalPosition);
-        _timelinePlaybackPosition = TimeSpan.FromSeconds(finalPosition);
-        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_timelinePlaybackPosition));
+        PlaybackPosition = TimeSpan.FromSeconds(finalPosition);
+        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(PlaybackPosition));
         _registerActivity();
     }
 
@@ -274,10 +295,10 @@ internal sealed class PlayerTimelineController : IDisposable
         if (_updatingControls || !_timeline.GetSensitive()) return;
 
         var targetSeconds = _timeline.GetValue();
-        _timelinePlaybackPosition = TimeSpan.FromSeconds(targetSeconds);
-        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_timelinePlaybackPosition));
+        PlaybackPosition = TimeSpan.FromSeconds(targetSeconds);
+        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(PlaybackPosition));
 
-        if (_isScrubbing)
+        if (IsScrubbing)
         {
             _latestScrubPosition = targetSeconds;
             var now = Environment.TickCount64;
@@ -293,7 +314,7 @@ internal sealed class PlayerTimelineController : IDisposable
                 _throttledSeekSource = Functions.TimeoutAdd(0, delay, () =>
                 {
                     _throttledSeekSource = 0;
-                    if (_disposed || !_isScrubbing) return false;
+                    if (_disposed || !IsScrubbing) return false;
                     _lastThrottledSeekTime = Environment.TickCount64;
                     SeekAbsolute(_latestScrubPosition, false);
                     return false;
@@ -318,12 +339,10 @@ internal sealed class PlayerTimelineController : IDisposable
     {
         LibMpvChapter? match = null;
         foreach (var chapter in _chapters)
-        {
             if (chapter.Start <= position)
                 match = chapter;
             else
                 break;
-        }
 
         return match;
     }
@@ -335,25 +354,5 @@ internal sealed class PlayerTimelineController : IDisposable
         return abs.TotalHours >= 1
             ? $"{sign}{(int)abs.TotalHours}:{abs.Minutes:D2}:{abs.Seconds:D2}"
             : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
-    }
-
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        CancelThrottledSeek();
-        _timelineMotionController.OnMotion -= OnTimelineMotion;
-        _timelineMotionController.OnLeave -= OnTimelineLeave;
-        _timelineOverlay.RemoveController(_timelineMotionController);
-        _timelineMotionController.Dispose();
-
-        _timelineDragGesture.OnDragBegin -= OnTimelineDragBegin;
-        _timelineDragGesture.OnDragUpdate -= OnTimelineDragUpdate;
-        _timelineDragGesture.OnDragEnd -= OnTimelineDragEnd;
-        _timeline.RemoveController(_timelineDragGesture);
-        _timelineDragGesture.Dispose();
-
-        _timeline.OnValueChanged -= OnTimelineValueChanged;
     }
 }

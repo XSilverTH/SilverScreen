@@ -23,32 +23,6 @@ public sealed class VideoCardActions
 
 public partial class VideoCardView : ViewBase<Box>
 {
-    [BlueprintWidget("card")]
-    private Box _card = null!;
-
-    [BlueprintWidget("channel")]
-    private Label _channel = null!;
-
-    [BlueprintWidget("duration")]
-    private Label _duration = null!;
-
-    [BlueprintWidget("menu")]
-    private MenuButton _menu = null!;
-
-    [BlueprintWidget("placeholder")]
-    private Widget _placeholder = null!;
-
-    [BlueprintWidget("thumbnail")]
-    private Overlay _thumbnail = null!;
-
-    [BlueprintWidget("title")]
-    private Label _title = null!;
-
-    [BlueprintWidget("upload_date")]
-    private Label _uploadDate = null!;
-
-    [BlueprintWidget("watched_progress")]
-    private ProgressBar _watchedProgress = null!;
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
@@ -91,27 +65,27 @@ public partial class VideoCardView : ViewBase<Box>
             _menuActions.AddAction(action);
         }
 
-        _menu.InsertActionGroup("video", _menuActions);
-        _card.InsertActionGroup("video", _menuActions);
+        menu.InsertActionGroup("video", _menuActions);
+        card.InsertActionGroup("video", _menuActions);
 
-        _contextMenu = PopoverMenu.NewFromModel(_menu.MenuModel!);
-        _contextMenu.SetParent(_card);
+        _contextMenu = PopoverMenu.NewFromModel(menu.MenuModel!);
+        _contextMenu.SetParent(card);
         _contextMenu.HasArrow = false;
         _contextMenu.InsertActionGroup("video", _menuActions);
 
         _click = GestureClick.New();
         _click.Button = 0;
         _click.OnReleased += OnCardReleased;
-        _card.AddController(_click);
+        card.AddController(_click);
 
         _rightClick = GestureClick.New();
         _rightClick.Button = 3;
         _rightClick.OnPressed += OnCardRightClicked;
-        _card.AddController(_rightClick);
+        card.AddController(_rightClick);
         _channelClick = GestureClick.New();
         _channelClick.Button = 1;
         _channelClick.OnReleased += OnChannelReleased;
-        _channel.AddController(_channelClick);
+        channel.AddController(_channelClick);
         _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
@@ -121,29 +95,29 @@ public partial class VideoCardView : ViewBase<Box>
         Unbind();
 
         _video = video;
-        _title.SetText(video.Title);
-        _title.TooltipText = video.Title;
-        _channel.SetText(video.ChannelName);
+        title.SetText(video.Title);
+        title.TooltipText = video.Title;
+        channel.SetText(video.ChannelName);
         if (video.PublishedAt is { } publishedAt)
         {
-            _uploadDate.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
-            _uploadDate.Visible = true;
+            upload_date.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
+            upload_date.Visible = true;
         }
         else if (video.ApproximateUploadDate is { } uploadDate)
         {
-            _uploadDate.SetText(FormatUploadAge(uploadDate, DateOnly.FromDateTime(DateTime.Now)));
-            _uploadDate.Visible = true;
+            upload_date.SetText(FormatUploadAge(uploadDate, DateOnly.FromDateTime(DateTime.Now)));
+            upload_date.Visible = true;
         }
         else
         {
-            _uploadDate.SetText(string.Empty);
-            _uploadDate.Visible = false;
+            upload_date.SetText(string.Empty);
+            upload_date.Visible = false;
         }
 
-        _duration.SetText(FormatDuration(video.Duration));
+        duration.SetText(FormatDuration(video.Duration));
         SetWatchProgress(_watchProgress.GetFraction(video.Id));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
-        _menu.TooltipText = $"More actions for {video.Title}";
+        menu.TooltipText = $"More actions for {video.Title}";
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
@@ -155,16 +129,16 @@ public partial class VideoCardView : ViewBase<Box>
     {
         _video = null;
         _bindingGeneration++;
-        _title.SetText(string.Empty);
-        _title.TooltipText = string.Empty;
+        title.SetText(string.Empty);
+        title.TooltipText = string.Empty;
         _contextMenu.Popdown();
-        _channel.SetText(string.Empty);
-        _duration.SetText(string.Empty);
-        _uploadDate.SetText(string.Empty);
-        _uploadDate.Visible = false;
+        channel.SetText(string.Empty);
+        duration.SetText(string.Empty);
+        upload_date.SetText(string.Empty);
+        upload_date.Visible = false;
         SetWatchProgress(null);
         _thumbnailAlternativeText = string.Empty;
-        _menu.TooltipText = string.Empty;
+        menu.TooltipText = string.Empty;
         _thumbnailCancellation?.Cancel();
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;
@@ -187,8 +161,8 @@ public partial class VideoCardView : ViewBase<Box>
     private void SetWatchProgress(double? fraction)
     {
         var isVisible = fraction is > 0;
-        _watchedProgress.SetVisible(isVisible);
-        _watchedProgress.Fraction = isVisible ? fraction!.Value : 0;
+        watched_progress.SetVisible(isVisible);
+        watched_progress.Fraction = isVisible ? fraction!.Value : 0;
     }
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)
@@ -222,7 +196,7 @@ public partial class VideoCardView : ViewBase<Box>
             try
             {
                 if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
-                    _thumbnail.GetRoot() is null)
+                    thumbnail.GetRoot() is null)
                     return false;
 
                 Texture? texture = null;
@@ -244,7 +218,7 @@ public partial class VideoCardView : ViewBase<Box>
                     picture.Vexpand = true;
 
                     ClearThumbnail();
-                    _thumbnail.Child = picture;
+                    thumbnail.Child = picture;
                     _boundTexture = texture;
                     _boundPicture = picture;
                     texture = null;
@@ -279,7 +253,7 @@ public partial class VideoCardView : ViewBase<Box>
         var texture = _boundTexture;
         _boundPicture = null;
         _boundTexture = null;
-        _thumbnail.Child = _placeholder;
+        thumbnail.Child = placeholder;
         if (picture is not null)
         {
             picture.Paintable = null!;
@@ -484,13 +458,13 @@ public partial class VideoCardView : ViewBase<Box>
         Unbind();
 
         _click.OnReleased -= OnCardReleased;
-        _card.RemoveController(_click);
+        card.RemoveController(_click);
         _click.Dispose();
         _rightClick.OnPressed -= OnCardRightClicked;
-        _card.RemoveController(_rightClick);
+        card.RemoveController(_rightClick);
         _rightClick.Dispose();
         _channelClick.OnReleased -= OnChannelReleased;
-        _channel.RemoveController(_channelClick);
+        channel.RemoveController(_channelClick);
         _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         _channelClick.Dispose();
 
@@ -498,9 +472,9 @@ public partial class VideoCardView : ViewBase<Box>
         _contextMenu.Unparent();
         _contextMenu.Dispose();
 
-        _menu.MenuModel = null;
-        _menu.InsertActionGroup("video", null);
-        _card.InsertActionGroup("video", null);
+        menu.MenuModel = null;
+        menu.InsertActionGroup("video", null);
+        card.InsertActionGroup("video", null);
         foreach (var action in _menuActionItems)
         {
             action.OnActivate -= OnMenuActionActivated;

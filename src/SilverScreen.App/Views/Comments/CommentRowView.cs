@@ -6,21 +6,6 @@ namespace SilverScreen.Views.Comments;
 
 public partial class CommentRowView : ViewBase<Box>
 {
-    [BlueprintWidget("comment_author_label")]
-    private Label _author = null!;
-
-    [BlueprintWidget("comment_likes_label")]
-    private Label _likes = null!;
-
-    [BlueprintWidget("comment_published_time_label")]
-    private Label _publishedTime = null!;
-
-    [BlueprintWidget("comment_replies_button")]
-    private Button _repliesButton = null!;
-
-    [BlueprintWidget("comment_text_label")]
-    private Label _text = null!;
-
     private readonly Action<string> _repliesToggleRequested;
     private string? _boundCommentId;
 
@@ -40,13 +25,13 @@ public partial class CommentRowView : ViewBase<Box>
     {
         _boundCommentId = comment.Id;
         Widget.MarginStart = comment.ParentId is null ? 8 : 32;
-        _author.SetText(comment.AuthorName);
-        _publishedTime.SetText(comment.PublishedTimeText);
-        _publishedTime.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
-        _text.SetText(comment.Text);
-        _likes.SetText(FormatCount(comment.LikeCount));
-        _repliesButton.SetVisible(replyCount > 0);
-        _repliesButton.SetLabel(repliesVisible
+        comment_author_label.SetText(comment.AuthorName);
+        comment_published_time_label.SetText(comment.PublishedTimeText);
+        comment_published_time_label.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
+        comment_text_label.SetText(comment.Text);
+        comment_likes_label.SetText(FormatCount(comment.LikeCount));
+        comment_replies_button.SetVisible(replyCount > 0);
+        comment_replies_button.SetLabel(repliesVisible
             ? $"Hide {FormatReplyCount(replyCount)}"
             : $"Show {FormatReplyCount(replyCount)}");
     }
@@ -55,13 +40,13 @@ public partial class CommentRowView : ViewBase<Box>
     {
         _boundCommentId = null;
         Widget.MarginStart = 8;
-        _author.SetText(string.Empty);
-        _publishedTime.SetText(string.Empty);
-        _publishedTime.SetVisible(false);
-        _text.SetText(string.Empty);
-        _likes.SetText(string.Empty);
-        _repliesButton.SetVisible(false);
-        _repliesButton.SetLabel(string.Empty);
+        comment_author_label.SetText(string.Empty);
+        comment_published_time_label.SetText(string.Empty);
+        comment_published_time_label.SetVisible(false);
+        comment_text_label.SetText(string.Empty);
+        comment_likes_label.SetText(string.Empty);
+        comment_replies_button.SetVisible(false);
+        comment_replies_button.SetLabel(string.Empty);
     }
 
     private static string FormatCount(long value)

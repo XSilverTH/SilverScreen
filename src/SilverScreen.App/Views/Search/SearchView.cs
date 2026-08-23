@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
@@ -17,30 +16,13 @@ public partial class SearchView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<SearchView>();
 
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    [BlueprintWidget("search_empty_page")]
-    private StatusPage _emptyPage = null!;
 
-    [BlueprintWidget("search_error_page")]
-    private StatusPage _errorPage = null!;
 
-    [BlueprintWidget("search_loading_label")]
-    private Label _loadingLabel = null!;
-
-    [BlueprintWidget("search_pagination_loading_revealer")]
-    private Revealer _paginationLoadingRevealer = null!;
-
-    [BlueprintWidget("search_scrolled_window")]
-    private ScrolledWindow _scrolledWindow = null!;
-
-    [BlueprintWidget("search_stack")]
-    private Stack _stack = null!;
     private readonly IThumbnailService _thumbnails;
 
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    [BlueprintWidget("search_video_grid")]
-    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -62,7 +44,7 @@ public partial class SearchView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _vadjustment = _scrolledWindow.Vadjustment;
+        _vadjustment = search_scrolled_window.Vadjustment;
         if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _videoIds = StringList.New([]);
@@ -72,8 +54,8 @@ public partial class SearchView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        _videoGrid.Model = _videoSelection;
-        _videoGrid.Factory = _videoFactory;
+        search_video_grid.Model = _videoSelection;
+        search_video_grid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -121,30 +103,32 @@ public partial class SearchView : ViewBase<Box>
     {
         if (state.IsLoading)
         {
-            _loadingLabel.SetText(string.IsNullOrWhiteSpace(state.Summary) ? "Searching YouTube…" : state.Summary);
-            _stack.VisibleChildName = "loading";
+            search_loading_label.SetText(
+                string.IsNullOrWhiteSpace(state.Summary) ? "Searching YouTube…" : state.Summary);
+            search_stack.VisibleChildName = "loading";
         }
         else if (state.Videos.Count == 0)
         {
             if (state.Summary.Contains("could not", StringComparison.OrdinalIgnoreCase) ||
                 state.Summary.Contains("failed", StringComparison.OrdinalIgnoreCase))
             {
-                _errorPage.Description = state.Summary;
-                _stack.VisibleChildName = "error";
+                search_error_page.Description = state.Summary;
+                search_stack.VisibleChildName = "error";
             }
             else
             {
-                _emptyPage.Description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search complete."
-                    ? "Try different keywords or check spelling."
-                    : state.Summary;
-                _stack.VisibleChildName = "empty";
+                search_empty_page.Description =
+                    string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search complete."
+                        ? "Try different keywords or check spelling."
+                        : state.Summary;
+                search_stack.VisibleChildName = "empty";
             }
         }
         else
         {
             ApplyVideos(state.Videos);
-            _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
-            _stack.VisibleChildName = "content";
+            search_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+            search_stack.VisibleChildName = "content";
         }
     }
 
@@ -229,7 +213,7 @@ public partial class SearchView : ViewBase<Box>
 
         _viewModel.StateChanged -= OnStateChanged;
 
-        _videoGrid.Factory = null;
+        search_video_grid.Factory = null;
         foreach (var association in _cardsByListItem)
             DisposeVideoCardCell(association.Key, association.Value);
         _cardsByListItem.Clear();
@@ -239,7 +223,7 @@ public partial class SearchView : ViewBase<Box>
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
 
-        _videoGrid.Dispose();
+        search_video_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
         _videoIds.Dispose();

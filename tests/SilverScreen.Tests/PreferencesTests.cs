@@ -217,7 +217,8 @@ public sealed class PreferencesTests : IDisposable
 
         foreach (var property in properties)
         {
-            var tempPath = Path.Combine(Path.GetTempPath(), $"silverscreen-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
+            var tempPath = Path.Combine(Path.GetTempPath(),
+                $"silverscreen-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
             try
             {
                 var basePrefs = new AppPreferences();
@@ -270,7 +271,8 @@ public sealed class PreferencesTests : IDisposable
 
         foreach (var property in properties)
         {
-            var tempPath = Path.Combine(Path.GetTempPath(), $"silverscreen-shortcut-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
+            var tempPath = Path.Combine(Path.GetTempPath(),
+                $"silverscreen-shortcut-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
             try
             {
                 var baseShortcuts = new PlayerShortcutBindings();
@@ -316,47 +318,47 @@ public sealed class PreferencesTests : IDisposable
     public void LoadPreferences_FromExistingPreferencesJsonFile_LoadsAllPropertiesAccurately()
     {
         const string existingJson = """
-        {
-          "Theme": "Dark",
-          "PlaybackBackend": "embedded-player",
-          "OpenInFullscreen": false,
-          "AutoAdvanceNextVideo": false,
-          "MpvExecutablePath": "/usr/bin/mpv",
-          "VideoQuality": "720p",
-          "PreferredSubtitleLanguage": "ja",
-          "YtDlpExecutablePath": "/usr/bin/yt-dlp",
-          "MaxResults": 35,
-          "MarkWatchedVideos": true,
-          "YouTubePlaybackTelemetryEnabled": false,
-          "DiscordRichPresenceEnabled": true,
-          "SponsorBlockAutoSkipEnabled": true,
-          "SponsorBlockSegmentDisplayEnabled": true,
-          "ResumePlaybackAutomatically": true,
-          "ResumePlaybackOnDemand": false,
-          "Shortcuts": {
-            "TogglePause": ["space", "p"],
-            "SeekBackward": ["Left", "h"],
-            "SeekForward": ["Right", "l"],
-            "StepFrameBackward": ["comma"],
-            "StepFrameForward": ["period"],
-            "ToggleMute": ["m"],
-            "VolumeUp": ["Up"],
-            "VolumeDown": ["Down"],
-            "SeekToBeginning": ["Home"],
-            "ReturnToShell": ["Escape"],
-            "ToggleVideoInfo": ["i"],
-            "SpeedDecrease": ["[", "{"],
-            "SpeedIncrease": ["]", "}"],
-            "NextVideo": [">"],
-            "PreviousVideo": ["<"],
-            "ToggleFullscreen": ["f"],
-            "PreferredSubtitle": ["s"],
-            "ResumeOrSkip": ["Return"],
-            "ToggleQueue": ["q"]
-          },
-          "SponsorBlockCategories": ["sponsor", "selfpromo", "outro"]
-        }
-        """;
+                                    {
+                                      "Theme": "Dark",
+                                      "PlaybackBackend": "embedded-player",
+                                      "OpenInFullscreen": false,
+                                      "AutoAdvanceNextVideo": false,
+                                      "MpvExecutablePath": "/usr/bin/mpv",
+                                      "VideoQuality": "720p",
+                                      "PreferredSubtitleLanguage": "ja",
+                                      "YtDlpExecutablePath": "/usr/bin/yt-dlp",
+                                      "MaxResults": 35,
+                                      "MarkWatchedVideos": true,
+                                      "YouTubePlaybackTelemetryEnabled": false,
+                                      "DiscordRichPresenceEnabled": true,
+                                      "SponsorBlockAutoSkipEnabled": true,
+                                      "SponsorBlockSegmentDisplayEnabled": true,
+                                      "ResumePlaybackAutomatically": true,
+                                      "ResumePlaybackOnDemand": false,
+                                      "Shortcuts": {
+                                        "TogglePause": ["space", "p"],
+                                        "SeekBackward": ["Left", "h"],
+                                        "SeekForward": ["Right", "l"],
+                                        "StepFrameBackward": ["comma"],
+                                        "StepFrameForward": ["period"],
+                                        "ToggleMute": ["m"],
+                                        "VolumeUp": ["Up"],
+                                        "VolumeDown": ["Down"],
+                                        "SeekToBeginning": ["Home"],
+                                        "ReturnToShell": ["Escape"],
+                                        "ToggleVideoInfo": ["i"],
+                                        "SpeedDecrease": ["[", "{"],
+                                        "SpeedIncrease": ["]", "}"],
+                                        "NextVideo": [">"],
+                                        "PreviousVideo": ["<"],
+                                        "ToggleFullscreen": ["f"],
+                                        "PreferredSubtitle": ["s"],
+                                        "ResumeOrSkip": ["Return"],
+                                        "ToggleQueue": ["q"]
+                                      },
+                                      "SponsorBlockCategories": ["sponsor", "selfpromo", "outro"]
+                                    }
+                                    """;
 
         File.WriteAllText(_tempFilePath, existingJson);
 
@@ -439,7 +441,7 @@ public sealed class PreferencesTests : IDisposable
         if (type == typeof(bool))
             return !(bool)(currentValue ?? false);
         if (type == typeof(int))
-            return ((int)(currentValue ?? 0)) + 42;
+            return (int)(currentValue ?? 0) + 42;
         if (type == typeof(EquatableArray<string>))
             return new EquatableArray<string>(["custom_cat_1", "custom_cat_2"]);
         if (type == typeof(PlayerShortcutBindings))

@@ -38,7 +38,7 @@ public sealed class YouTubeRatingServiceTests
         });
         using var session = new SignedInSessionService();
         using var authentication = new YouTubeAuthenticationService(session)
-        { TimeSource = () => 1700000000L };
+            { TimeSource = () => 1700000000L };
         using var client = new HttpClient(handler);
         using var service = new YouTubeRatingService(client, authentication);
 

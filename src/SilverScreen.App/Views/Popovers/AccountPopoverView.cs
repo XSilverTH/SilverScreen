@@ -1,4 +1,3 @@
-using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
@@ -14,20 +13,7 @@ namespace SilverScreen.Views.Popovers;
 public partial class AccountPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
-    [BlueprintWidget("account_stack")]
-    private Stack _accountStack = null!;
 
-    [BlueprintWidget("manual_editor")]
-    private TextView _manualEditor = null!;
-
-    [BlueprintWidget("manual_heading")]
-    private Label _manualHeading = null!;
-
-    [BlueprintWidget("signed_in_avatar")]
-    private Avatar _signedInAvatar = null!;
-
-    [BlueprintWidget("signed_in_display_name")]
-    private Label _signedInDisplayName = null!;
 
     private readonly Action _openWebLogin;
     private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
@@ -69,8 +55,8 @@ public partial class AccountPopoverView : ViewBase<Box>
         var hasManualSession = _viewModel.HasManualSession;
         if (_editing)
         {
-            _accountStack.VisibleChildName = "manual";
-            _manualHeading.SetText(hasManualSession
+            account_stack.VisibleChildName = "manual";
+            manual_heading.SetText(hasManualSession
                 ? "Replace with manual session"
                 : "Add manual session");
             return;
@@ -79,8 +65,8 @@ public partial class AccountPopoverView : ViewBase<Box>
         if (hasManualSession)
         {
             var displayName = _viewModel.DisplayName;
-            _signedInAvatar.Text = displayName;
-            _signedInDisplayName.SetText(displayName);
+            signed_in_avatar.Text = displayName;
+            signed_in_display_name.SetText(displayName);
             UpdateAvatar(_viewModel.AvatarUrl);
         }
         else
@@ -88,7 +74,7 @@ public partial class AccountPopoverView : ViewBase<Box>
             UpdateAvatar(null);
         }
 
-        _accountStack.VisibleChildName = hasManualSession ? "signed_in" : "signed_out";
+        account_stack.VisibleChildName = hasManualSession ? "signed_in" : "signed_out";
         _sessionAppearanceChanged(hasManualSession, _viewModel.DisplayName, _avatarTexture);
     }
 
@@ -101,7 +87,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         _avatarCancellation?.Cancel();
         _avatarCancellation?.Dispose();
         _avatarCancellation = null;
-        _signedInAvatar.CustomImage = null!;
+        signed_in_avatar.CustomImage = null!;
         _avatarTexture?.Dispose();
         _avatarTexture = null;
 
@@ -149,7 +135,7 @@ public partial class AccountPopoverView : ViewBase<Box>
                 var texture = Texture.NewForPixbuf(pixbufForTexture);
                 pixbufForTexture.Dispose();
                 decodedPixbuf = null;
-                _signedInAvatar.CustomImage = texture;
+                signed_in_avatar.CustomImage = texture;
                 _avatarTexture = texture;
                 _sessionAppearanceChanged(true, _viewModel.DisplayName, texture);
             }
@@ -194,7 +180,7 @@ public partial class AccountPopoverView : ViewBase<Box>
 
     private void OnManualSaveButtonClicked(object? sender, EventArgs args)
     {
-        if (!_viewModel.SaveManualSession(GetText(_manualEditor))) return;
+        if (!_viewModel.SaveManualSession(GetText(manual_editor))) return;
         _editing = false;
         Render();
     }
@@ -216,7 +202,7 @@ public partial class AccountPopoverView : ViewBase<Box>
         _disposed = true;
         _avatarCancellation?.Cancel();
         _avatarCancellation?.Dispose();
-        _signedInAvatar.CustomImage = null!;
+        signed_in_avatar.CustomImage = null!;
         _avatarTexture?.Dispose();
         _viewModel.StateChanged -= OnStateChanged;
         _viewModel.Dispose();

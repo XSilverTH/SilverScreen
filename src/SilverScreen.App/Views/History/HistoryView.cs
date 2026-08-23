@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
@@ -16,32 +15,12 @@ public partial class HistoryView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    [BlueprintWidget("history_empty_page")]
-    private StatusPage _emptyPage = null!;
 
-    [BlueprintWidget("history_error_page")]
-    private StatusPage _errorPage = null!;
 
-    [BlueprintWidget("history_pagination_loading_label")]
-    private Label _paginationLoadingLabel = null!;
-
-    [BlueprintWidget("history_pagination_loading_revealer")]
-    private Revealer _paginationLoadingRevealer = null!;
-
-    [BlueprintWidget("history_scrolled_window")]
-    private ScrolledWindow _scrolledWindow = null!;
-
-    [BlueprintWidget("history_signed_out_page")]
-    private StatusPage _signedOutPage = null!;
-
-    [BlueprintWidget("history_stack")]
-    private Stack _stack = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    [BlueprintWidget("history_video_grid")]
-    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -62,7 +41,7 @@ public partial class HistoryView : ViewBase<Box>
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
 
-        _vadjustment = _scrolledWindow.Vadjustment;
+        _vadjustment = history_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged += OnScrollValueChanged;
 
@@ -73,8 +52,8 @@ public partial class HistoryView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        _videoGrid.Model = _videoSelection;
-        _videoGrid.Factory = _videoFactory;
+        history_video_grid.Model = _videoSelection;
+        history_video_grid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -123,15 +102,15 @@ public partial class HistoryView : ViewBase<Box>
 
         if (state.IsLoading && _displayedVideos.Length == 0)
         {
-            _stack.VisibleChildName = "loading";
+            history_stack.VisibleChildName = "loading";
             return;
         }
 
         if (_displayedVideos.Length > 0)
         {
-            _stack.VisibleChildName = "content";
-            _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
-            _paginationLoadingLabel.SetText("Loading more history…");
+            history_stack.VisibleChildName = "content";
+            history_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+            history_pagination_loading_label.SetText("Loading more history…");
             return;
         }
 
@@ -139,26 +118,26 @@ public partial class HistoryView : ViewBase<Box>
         {
             case AuthenticatedHistoryStatus.AuthenticationRequired:
             case AuthenticatedHistoryStatus.AuthenticationRejected:
-                _signedOutPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                history_signed_out_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
                     ? state.Summary
                     : "Watch history requires an active YouTube session.";
-                _stack.VisibleChildName = "signed_out";
+                history_stack.VisibleChildName = "signed_out";
                 break;
 
             case AuthenticatedHistoryStatus.TemporaryBackendFailure:
-                _errorPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                history_error_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
                     ? state.Summary
                     : "Failed to load your watch history. Check your network connection and try again.";
-                _stack.VisibleChildName = "error";
+                history_stack.VisibleChildName = "error";
                 break;
 
             case AuthenticatedHistoryStatus.Empty:
             case AuthenticatedHistoryStatus.Success:
             default:
-                _emptyPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                history_empty_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
                     ? state.Summary
                     : "Videos you watch on YouTube will appear here.";
-                _stack.VisibleChildName = "empty";
+                history_stack.VisibleChildName = "empty";
                 break;
         }
     }
@@ -244,7 +223,7 @@ public partial class HistoryView : ViewBase<Box>
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged -= OnScrollValueChanged;
 
-        _videoGrid.Factory = null;
+        history_video_grid.Factory = null;
         foreach (var association in _cardsByListItem)
             DisposeVideoCardCell(association.Key, association.Value);
         _cardsByListItem.Clear();
@@ -253,8 +232,8 @@ public partial class HistoryView : ViewBase<Box>
         _videoFactory.OnBind -= OnVideoCardBind;
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
-        _scrolledWindow.Child = null;
-        _videoGrid.Dispose();
+        history_scrolled_window.Child = null;
+        history_video_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
         _videoIds.Dispose();

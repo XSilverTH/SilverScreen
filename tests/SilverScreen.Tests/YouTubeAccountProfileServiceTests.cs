@@ -48,7 +48,7 @@ public sealed class YouTubeAccountProfileServiceTests
         {
             using var httpClient = new HttpClient(handler);
             using var authentication = new YouTubeAuthenticationService(session)
-            { TimeSource = () => 1700000000L };
+                { TimeSource = () => 1700000000L };
             using var service = new YouTubeAccountProfileService(httpClient, session, authentication, cachePath);
 
             var profile = await service.GetCurrentProfileAsync();

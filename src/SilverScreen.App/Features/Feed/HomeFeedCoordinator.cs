@@ -229,33 +229,33 @@ public sealed class HomeFeedCoordinator : IDisposable
                 // Success
                 case AuthenticatedHomeFeedStatus.Success:
                 default:
-                    {
-                        var newVideos = result.FeedPage.Videos
-                            .Where(v => !v.IsShort)
-                            .ToList();
+                {
+                    var newVideos = result.FeedPage.Videos
+                        .Where(v => !v.IsShort)
+                        .ToList();
 
-                        if (isFirstPage) _videos.Clear();
+                    if (isFirstPage) _videos.Clear();
 
-                        foreach (var video in newVideos.Where(video => _videos.All(existing => existing.Id != video.Id)))
-                            _videos.Add(video);
+                    foreach (var video in newVideos.Where(video => _videos.All(existing => existing.Id != video.Id)))
+                        _videos.Add(video);
 
-                        _continuationToken = result.FeedPage.ContinuationToken;
+                    _continuationToken = result.FeedPage.ContinuationToken;
 
-                        if (_videos.Count == 0)
-                            nextState = new HomeFeedState(
-                                HomeFeedStateKind.Empty,
-                                [],
-                                "No recommendations are available right now.");
-                        else
-                            nextState = new HomeFeedState(
-                                HomeFeedStateKind.Ready,
-                                [.. _videos],
-                                IsLoading: false,
-                                IsLoadingMore: false,
-                                HasContinuation: !string.IsNullOrEmpty(_continuationToken));
+                    if (_videos.Count == 0)
+                        nextState = new HomeFeedState(
+                            HomeFeedStateKind.Empty,
+                            [],
+                            "No recommendations are available right now.");
+                    else
+                        nextState = new HomeFeedState(
+                            HomeFeedStateKind.Ready,
+                            [.. _videos],
+                            IsLoading: false,
+                            IsLoadingMore: false,
+                            HasContinuation: !string.IsNullOrEmpty(_continuationToken));
 
-                        break;
-                    }
+                    break;
+                }
             }
 
             _stateVersion++;

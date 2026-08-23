@@ -21,41 +21,8 @@ public partial class QueueItemRowView : ViewBase<Box>
     private const int ThumbnailHeight = 54;
     private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
-    [BlueprintWidget("channel")]
-    private Label _channel = null!;
 
-    [BlueprintWidget("details")]
-    private Box _details = null!;
 
-    [BlueprintWidget("duration")]
-    private Label _duration = null!;
-
-    [BlueprintWidget("duration_pill")]
-    private Label _durationPill = null!;
-
-    [BlueprintWidget("grip")]
-    private Image _grip = null!;
-
-    [BlueprintWidget("menu")]
-    private MenuButton _menu = null!;
-
-    [BlueprintWidget("placeholder")]
-    private Widget _placeholder = null!;
-
-    [BlueprintWidget("position")]
-    private Label _position = null!;
-
-    [BlueprintWidget("state_stack")]
-    private Stack _stateStack = null!;
-
-    [BlueprintWidget("thumbnail")]
-    private Overlay _thumbnail = null!;
-
-    [BlueprintWidget("title")]
-    private Label _title = null!;
-
-    [BlueprintWidget("watched_progress")]
-    private ProgressBar _watchedProgress = null!;
     private readonly WidgetPaintable _dragPaintable;
     private readonly DragSource _dragSource;
     private readonly Action<Guid, int> _dropRequested;
@@ -109,7 +76,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
         _actions.AddAction(_removeAction);
-        _menu.InsertActionGroup("queue", _actions);
+        menu.InsertActionGroup("queue", _actions);
 
         _dragSource = DragSource.New();
         _dragSource.Actions = DragAction.Move;
@@ -121,7 +88,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             using var value = new Value(item.Id.ToString());
             return ContentProvider.NewForValue(value);
         };
-        _grip.AddController(_dragSource);
+        grip.AddController(_dragSource);
         _dragPaintable = WidgetPaintable.New(Widget);
         _dragSource.SetIcon(_dragPaintable, 0, 0);
 
@@ -135,7 +102,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         };
-        _details.AddController(detailsClick);
+        details.AddController(detailsClick);
 
         var thumbnailClick = GestureClick.New();
         thumbnailClick.OnReleased += (_, _) =>
@@ -143,7 +110,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         };
-        _thumbnail.AddController(thumbnailClick);
+        thumbnail.AddController(thumbnailClick);
         _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
@@ -161,12 +128,12 @@ public partial class QueueItemRowView : ViewBase<Box>
         Unbind();
         Item = item;
         _index = index;
-        _position.SetText((index + 1).ToString());
-        _title.SetText(item.Video.Title);
-        _channel.SetText(item.Video.ChannelName);
+        position.SetText((index + 1).ToString());
+        title.SetText(item.Video.Title);
+        channel.SetText(item.Video.ChannelName);
         var formattedDuration = FormatDuration(item.Video.Duration);
-        _duration.SetText(formattedDuration);
-        _durationPill.SetText(formattedDuration);
+        duration.SetText(formattedDuration);
+        duration_pill.SetText(formattedDuration);
         SetWatchProgress(_watchProgress.GetFraction(item.Video.Id));
         _playNowAction.Enabled = _playRequested is not null && index != currentPlayingIndex;
         _moveUpAction.Enabled = index > 0;
@@ -175,19 +142,19 @@ public partial class QueueItemRowView : ViewBase<Box>
 
         if (index == currentPlayingIndex)
         {
-            _stateStack.VisibleChildName = "playing";
+            state_stack.VisibleChildName = "playing";
             Widget.AddCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
         else if (currentPlayingIndex >= 0 && index < currentPlayingIndex)
         {
-            _stateStack.VisibleChildName = "index";
+            state_stack.VisibleChildName = "index";
             Widget.RemoveCssClass("now-playing");
             Widget.AddCssClass("played");
         }
         else
         {
-            _stateStack.VisibleChildName = "index";
+            state_stack.VisibleChildName = "index";
             Widget.RemoveCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
@@ -202,12 +169,12 @@ public partial class QueueItemRowView : ViewBase<Box>
         Item = null;
         _index = 0;
         _bindingGeneration++;
-        _position.SetText(string.Empty);
-        _title.SetText(string.Empty);
-        _channel.SetText(string.Empty);
-        _duration.SetText(string.Empty);
-        _durationPill.SetText(string.Empty);
-        _stateStack.VisibleChildName = "index";
+        position.SetText(string.Empty);
+        title.SetText(string.Empty);
+        channel.SetText(string.Empty);
+        duration.SetText(string.Empty);
+        duration_pill.SetText(string.Empty);
+        state_stack.VisibleChildName = "index";
         Widget.RemoveCssClass("now-playing");
         Widget.RemoveCssClass("played");
         _playNowAction.Enabled = false;
@@ -237,8 +204,8 @@ public partial class QueueItemRowView : ViewBase<Box>
     private void SetWatchProgress(double? fraction)
     {
         var isVisible = fraction is > 0;
-        _watchedProgress.SetVisible(isVisible);
-        _watchedProgress.Fraction = isVisible ? fraction!.Value : 0;
+        watched_progress.SetVisible(isVisible);
+        watched_progress.Fraction = isVisible ? fraction!.Value : 0;
     }
 
     private bool HandleDrop(string? value, double y)
@@ -288,7 +255,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             try
             {
                 if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
-                    _thumbnail.GetRoot() is null)
+                    thumbnail.GetRoot() is null)
                     return false;
 
                 Texture? texture = null;
@@ -306,7 +273,7 @@ public partial class QueueItemRowView : ViewBase<Box>
                     picture.Hexpand = true;
                     picture.Vexpand = true;
                     ClearThumbnail();
-                    _thumbnail.Child = picture;
+                    thumbnail.Child = picture;
                     _boundTexture = texture;
                     _boundPicture = picture;
                     texture = null;
@@ -340,7 +307,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         var texture = _boundTexture;
         _boundPicture = null;
         _boundTexture = null;
-        _thumbnail.Child = _placeholder;
+        thumbnail.Child = placeholder;
         if (picture is not null)
         {
             picture.Paintable = null!;
@@ -374,7 +341,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _disposed = true;
         Unbind();
         _watchProgress.ProgressChanged -= OnWatchProgressChanged;
-        _grip.RemoveController(_dragSource);
+        grip.RemoveController(_dragSource);
         Widget.RemoveController(_dropTarget);
         _dragPaintable.Dispose();
         _dragSource.Dispose();

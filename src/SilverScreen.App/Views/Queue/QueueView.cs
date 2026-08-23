@@ -1,4 +1,3 @@
-using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
@@ -7,7 +6,6 @@ using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
-using Spinner = Gtk.Spinner;
 
 namespace SilverScreen.Views.Queue;
 
@@ -15,30 +13,13 @@ public partial class QueueView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<QueueView>();
     private readonly Action _closeRequested;
-    [BlueprintWidget("queue_empty_page")]
-    private StatusPage _emptyPage = null!;
     private readonly SignalListItemFactory _factory;
-    [BlueprintWidget("queue_footer")]
-    private Box _footer = null!;
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
-    [BlueprintWidget("queue_list")]
-    private ListView _list = null!;
 
-    [BlueprintWidget("queue_play_button")]
-    private Button _playButton = null!;
 
-    [BlueprintWidget("queue_play_spinner")]
-    private Spinner _playSpinner = null!;
-
-    [BlueprintWidget("queue_play_stack")]
-    private Stack _playStack = null!;
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
-    [BlueprintWidget("queue_scrolled_window")]
-    private ScrolledWindow _scrolledWindow = null!;
     private readonly NoSelection _selection;
-    [BlueprintWidget("queue_summary_label")]
-    private Label _summary = null!;
     private readonly IThumbnailService _thumbnails;
 
     private readonly Action<int>? _trackJumpRequested;
@@ -64,8 +45,8 @@ public partial class QueueView : ViewBase<Box>
         _factory.OnUnbind += OnRowUnbind;
         _factory.OnTeardown += OnRowTeardown;
 
-        _list.Model = _selection;
-        _list.Factory = _factory;
+        queue_list.Model = _selection;
+        queue_list.Factory = _factory;
 
 
         _viewModel.StateChanged += OnStateChanged;
@@ -105,20 +86,20 @@ public partial class QueueView : ViewBase<Box>
         {
             var remainingTicks = state.Items.Skip(state.CurrentPlayingIndex).Sum(item => item.Video.Duration.Ticks);
             var remainingDuration = TimeSpan.FromTicks(remainingTicks);
-            _summary.SetText(
+            queue_summary_label.SetText(
                 $"Playing {state.CurrentPlayingIndex + 1} of {state.Items.Count} · {FormatDuration(remainingDuration)} remaining");
         }
         else
         {
-            _summary.SetText(FormatSummary(state.Items.Count, state.TotalDuration));
+            queue_summary_label.SetText(FormatSummary(state.Items.Count, state.TotalDuration));
         }
 
-        _emptyPage.Visible = !state.IsVisible;
-        _scrolledWindow.Visible = state.IsVisible;
-        _footer.Visible = state.IsVisible && _trackJumpRequested is null;
-        _playButton.Sensitive = state.CanPlay;
-        _playStack.VisibleChildName = state.IsLaunching ? "launching" : "idle";
-        _playSpinner.Spinning = state.IsLaunching;
+        queue_empty_page.Visible = !state.IsVisible;
+        queue_scrolled_window.Visible = state.IsVisible;
+        queue_footer.Visible = state.IsVisible && _trackJumpRequested is null;
+        queue_play_button.Sensitive = state.CanPlay;
+        queue_play_stack.VisibleChildName = state.IsLaunching ? "launching" : "idle";
+        queue_play_spinner.Spinning = state.IsLaunching;
         RefreshVisibleRows();
     }
 
@@ -259,7 +240,7 @@ public partial class QueueView : ViewBase<Box>
             row.Dispose();
 
         _rowsByCell.Clear();
-        _list.Dispose();
+        queue_list.Dispose();
         _selection.Dispose();
         _factory.Dispose();
         _itemIds.Dispose();

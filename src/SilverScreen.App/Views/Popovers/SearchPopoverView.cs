@@ -14,17 +14,7 @@ public partial class SearchPopoverView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
     private readonly Action _popdownAction;
 
-    [BlueprintWidget("search_entry")]
-    private SearchEntry _searchEntry = null!;
 
-    [BlueprintWidget("suggestions_scroll")]
-    private ScrolledWindow _suggestionsScroll = null!;
-
-    [BlueprintWidget("suggestions_list")]
-    private ListBox _suggestionsList = null!;
-
-    [BlueprintWidget("suggestions_revealer")]
-    private Revealer _suggestionsRevealer = null!;
     private readonly EventControllerKey _searchKeyController;
     private readonly Action<string> _submitCallback;
     private readonly SearchViewModel _viewModel;
@@ -45,18 +35,18 @@ public partial class SearchPopoverView : ViewBase<Box>
         _submitCallback = submitCallback ?? throw new ArgumentNullException(nameof(submitCallback));
         _popdownAction = popdownAction ?? throw new ArgumentNullException(nameof(popdownAction));
 
-        _suggestionsScroll.CanFocus = false;
-        _suggestionsScroll.FocusOnClick = false;
+        suggestions_scroll.CanFocus = false;
+        suggestions_scroll.FocusOnClick = false;
 
-        _suggestionsList.CanFocus = false;
-        _suggestionsList.FocusOnClick = false;
+        suggestions_list.CanFocus = false;
+        suggestions_list.FocusOnClick = false;
 
-        _suggestionsList.OnRowActivated += OnSuggestionRowActivated;
+        suggestions_list.OnRowActivated += OnSuggestionRowActivated;
 
         _searchKeyController = EventControllerKey.New();
         _searchKeyController.SetPropagationPhase(PropagationPhase.Capture);
         _searchKeyController.OnKeyPressed += OnSearchKeyPressed;
-        _searchEntry.AddController(_searchKeyController);
+        search_entry.AddController(_searchKeyController);
     }
 
     public void OnOpened()
@@ -67,8 +57,8 @@ public partial class SearchPopoverView : ViewBase<Box>
         Functions.IdleAdd(0, () =>
         {
             if (_disposed) return false;
-            _searchEntry.GrabFocus();
-            _searchEntry.SelectRegion(0, -1);
+            search_entry.GrabFocus();
+            search_entry.SelectRegion(0, -1);
 
             return false;
         });
@@ -84,7 +74,7 @@ public partial class SearchPopoverView : ViewBase<Box>
 
     private void OnSearchEntryActivated(object? sender = null, EventArgs? args = null)
     {
-        Submit(_searchEntry.GetText());
+        Submit(search_entry.GetText());
     }
 
     private void Submit(string query)
@@ -112,7 +102,7 @@ public partial class SearchPopoverView : ViewBase<Box>
                 if (_currentSuggestions.Length == 0)
                     return false;
 
-                if (!_suggestionsRevealer.RevealChild) _suggestionsRevealer.RevealChild = true;
+                if (!suggestions_revealer.RevealChild) suggestions_revealer.RevealChild = true;
 
                 _selectedSuggestionIndex = Math.Min(_selectedSuggestionIndex + 1, _currentSuggestions.Length - 1);
                 if (_selectedSuggestionIndex >= 0) HighlightSuggestion(_selectedSuggestionIndex);
@@ -130,10 +120,10 @@ public partial class SearchPopoverView : ViewBase<Box>
                         return true;
                     case 0:
                         _selectedSuggestionIndex = -1;
-                        _suggestionsList.UnselectAll();
+                        suggestions_list.UnselectAll();
                         _suppressSearchChanged = true;
-                        _searchEntry.SetText(_originalTypedQuery);
-                        _searchEntry.SetPosition(-1);
+                        search_entry.SetText(_originalTypedQuery);
+                        search_entry.SetPosition(-1);
                         _suppressSearchChanged = false;
                         return true;
                     default:
@@ -141,7 +131,7 @@ public partial class SearchPopoverView : ViewBase<Box>
                 }
 
             case "Escape":
-                if (_suggestionsRevealer.RevealChild)
+                if (suggestions_revealer.RevealChild)
                 {
                     DismissSuggestions();
                     return true;
@@ -156,14 +146,14 @@ public partial class SearchPopoverView : ViewBase<Box>
                 {
                     var selectedQuery = _currentSuggestions[_selectedSuggestionIndex];
                     _suppressSearchChanged = true;
-                    _searchEntry.SetText(selectedQuery);
-                    _searchEntry.SetPosition(-1);
+                    search_entry.SetText(selectedQuery);
+                    search_entry.SetPosition(-1);
                     _suppressSearchChanged = false;
                     Submit(selectedQuery);
                     return true;
                 }
 
-                Submit(_searchEntry.GetText());
+                Submit(search_entry.GetText());
                 return true;
 
             case "Tab":
@@ -171,11 +161,11 @@ public partial class SearchPopoverView : ViewBase<Box>
                     return false;
                 var selectedQuery2 = _currentSuggestions[_selectedSuggestionIndex];
                 _suppressSearchChanged = true;
-                _searchEntry.SetText(selectedQuery2);
-                _searchEntry.SetPosition(-1);
+                search_entry.SetText(selectedQuery2);
+                search_entry.SetPosition(-1);
                 _originalTypedQuery = selectedQuery2;
                 _suppressSearchChanged = false;
-                _searchEntry.GrabFocus();
+                search_entry.GrabFocus();
                 return true;
 
             default:
@@ -188,14 +178,14 @@ public partial class SearchPopoverView : ViewBase<Box>
         if (index < 0 || index >= _currentSuggestions.Length)
             return;
 
-        var row = _suggestionsList.GetRowAtIndex(index);
-        if (row is not null) _suggestionsList.SelectRow(row);
+        var row = suggestions_list.GetRowAtIndex(index);
+        if (row is not null) suggestions_list.SelectRow(row);
 
         _suppressSearchChanged = true;
-        _searchEntry.SetText(_currentSuggestions[index]);
-        _searchEntry.SetPosition(-1);
+        search_entry.SetText(_currentSuggestions[index]);
+        search_entry.SetPosition(-1);
         _suppressSearchChanged = false;
-        _searchEntry.GrabFocus();
+        search_entry.GrabFocus();
     }
 
     private void OnSearchTextChanged(object? sender = null, EventArgs? args = null)
@@ -207,7 +197,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         _suggestionDebounceCts?.Dispose();
         _suggestionDebounceCts = new CancellationTokenSource();
 
-        var text = _searchEntry.GetText();
+        var text = search_entry.GetText();
         _originalTypedQuery = text;
         _selectedSuggestionIndex = -1;
 
@@ -249,7 +239,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         _currentSuggestions = [.. suggestions.Take(8)];
         _selectedSuggestionIndex = -1;
 
-        while (_suggestionsList.GetFirstChild() is { } child) _suggestionsList.Remove(child);
+        while (suggestions_list.GetFirstChild() is { } child) suggestions_list.Remove(child);
 
         foreach (var suggestion in _currentSuggestions)
         {
@@ -284,10 +274,10 @@ public partial class SearchPopoverView : ViewBase<Box>
             rowBox.Append(label);
 
             row.SetChild(rowBox);
-            _suggestionsList.Append(row);
+            suggestions_list.Append(row);
         }
 
-        _suggestionsRevealer.RevealChild = true;
+        suggestions_revealer.RevealChild = true;
     }
 
     private void OnSuggestionRowActivated(ListBox sender, ListBox.RowActivatedSignalArgs args)
@@ -296,8 +286,8 @@ public partial class SearchPopoverView : ViewBase<Box>
         if (index < 0 || index >= _currentSuggestions.Length) return;
         var suggestion = _currentSuggestions[index];
         _suppressSearchChanged = true;
-        _searchEntry.SetText(suggestion);
-        _searchEntry.SetPosition(-1);
+        search_entry.SetText(suggestion);
+        search_entry.SetPosition(-1);
         _suppressSearchChanged = false;
         Submit(suggestion);
     }
@@ -309,7 +299,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         _suggestionDebounceCts = null;
         _selectedSuggestionIndex = -1;
         _currentSuggestions = [];
-        _suggestionsRevealer.RevealChild = false;
+        suggestions_revealer.RevealChild = false;
     }
 
     internal static string FormatSuggestionMarkup(string rawQuery, string suggestion)
@@ -336,10 +326,10 @@ public partial class SearchPopoverView : ViewBase<Box>
         _suggestionDebounceCts?.Dispose();
         _suggestionDebounceCts = null;
 
-        _searchEntry.RemoveController(_searchKeyController);
+        search_entry.RemoveController(_searchKeyController);
         _searchKeyController.Dispose();
 
-        _suggestionsList.OnRowActivated -= OnSuggestionRowActivated;
+        suggestions_list.OnRowActivated -= OnSuggestionRowActivated;
 
         base.Dispose();
     }

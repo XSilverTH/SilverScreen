@@ -1,4 +1,3 @@
-using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.ViewModels;
@@ -11,22 +10,12 @@ public partial class CommentsView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
     private readonly Action _closeRequested;
-    [BlueprintWidget("comments_empty_page")]
-    private StatusPage _emptyPage = null!;
 
-    [BlueprintWidget("comments_error_page")]
-    private StatusPage _errorPage = null!;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
-    [BlueprintWidget("comments_list")]
-    private ListView _list = null!;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
-    [BlueprintWidget("comments_sort_dropdown")]
-    private DropDown _sortDropdown = null!;
 
-    [BlueprintWidget("comments_stack")]
-    private Stack _stack = null!;
     private readonly CommentsViewModel _viewModel;
     private bool _disposed;
     private CommentsViewState _state;
@@ -46,9 +35,9 @@ public partial class CommentsView : ViewBase<Box>
         _factory.OnUnbind += OnRowUnbind;
         _factory.OnTeardown += OnRowTeardown;
 
-        _list.Model = _selection;
-        _list.Factory = _factory;
-        _stack.VisibleChildName = "unavailable";
+        comments_list.Model = _selection;
+        comments_list.Factory = _factory;
+        comments_stack.VisibleChildName = "unavailable";
     }
 
     public void SetVideo(string? videoId)
@@ -68,7 +57,7 @@ public partial class CommentsView : ViewBase<Box>
 
     private void OnSortDropdownNotify(object? sender, EventArgs args)
     {
-        _viewModel.SetSortSelection(_sortDropdown.GetSelected());
+        _viewModel.SetSortSelection(comments_sort_dropdown.GetSelected());
     }
 
     private void OnViewModelStateChanged(object? sender, CommentsViewState state)
@@ -93,21 +82,21 @@ public partial class CommentsView : ViewBase<Box>
         switch (state.Status)
         {
             case CommentsViewStatus.Unavailable:
-                _stack.VisibleChildName = "unavailable";
+                comments_stack.VisibleChildName = "unavailable";
                 break;
             case CommentsViewStatus.Loading:
-                _stack.VisibleChildName = "loading";
+                comments_stack.VisibleChildName = "loading";
                 break;
             case CommentsViewStatus.Error:
-                _errorPage.Description = state.StatusMessage;
-                _stack.VisibleChildName = "error";
+                comments_error_page.Description = state.StatusMessage;
+                comments_stack.VisibleChildName = "error";
                 break;
             case CommentsViewStatus.Empty:
-                _emptyPage.Description = state.StatusMessage;
-                _stack.VisibleChildName = "empty";
+                comments_empty_page.Description = state.StatusMessage;
+                comments_stack.VisibleChildName = "empty";
                 break;
             case CommentsViewStatus.List:
-                _stack.VisibleChildName = "list";
+                comments_stack.VisibleChildName = "list";
                 break;
         }
     }
@@ -167,7 +156,7 @@ public partial class CommentsView : ViewBase<Box>
             row.Dispose();
 
         _rowsByCell.Clear();
-        _list.Dispose();
+        comments_list.Dispose();
         _selection.Dispose();
         _factory.Dispose();
         _itemIds.Dispose();

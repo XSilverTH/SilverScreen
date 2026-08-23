@@ -1,5 +1,6 @@
 using Gtk;
 using SilverScreen.Core.Models;
+using Functions = Gdk.Functions;
 
 namespace SilverScreen.Views.Player;
 
@@ -28,15 +29,15 @@ public static class PlayerShortcutActions
 
 internal sealed class PlayerShortcutController : IDisposable
 {
-    private readonly Widget _viewWidget;
+    private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
     private readonly Func<bool> _hasMedia;
     private readonly Action _registerActivity;
-    private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> _shortcutMap = [];
+    private readonly Widget _viewWidget;
+    private bool _disposed;
 
     private EventControllerKey? _keyboardController;
     private Widget? _keyboardRoot;
-    private bool _disposed;
 
     public PlayerShortcutController(Widget viewWidget, Func<bool> hasMedia, Action registerActivity)
     {
@@ -48,6 +49,17 @@ internal sealed class PlayerShortcutController : IDisposable
         key.SetPropagationPhase(PropagationPhase.Capture);
         key.OnKeyPressed += OnKeyPressed;
         _keyboardController = key;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Detach();
+        _actionHandlers.Clear();
+        _shortcutMap.Clear();
+        _keyboardController?.Dispose();
+        _keyboardController = null;
     }
 
     public void RegisterAction(string actionName, Action action)
@@ -108,37 +120,23 @@ internal sealed class PlayerShortcutController : IDisposable
         foreach (var keyName in keyNames)
         {
             if (string.IsNullOrWhiteSpace(keyName)) continue;
-            var keyval = Gdk.Functions.KeyvalFromName(keyName.Trim());
+            var keyval = Functions.KeyvalFromName(keyName.Trim());
             if (keyval == 0) continue;
 
-            _shortcutMap[Gdk.Functions.KeyvalToLower(keyval)] = actionName;
+            _shortcutMap[Functions.KeyvalToLower(keyval)] = actionName;
         }
     }
 
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
         if (_disposed || !_hasMedia()) return false;
-        var keyval = Gdk.Functions.KeyvalToLower(args.Keyval);
+        var keyval = Functions.KeyvalToLower(args.Keyval);
         if (!_shortcutMap.TryGetValue(keyval, out var actionName)) return false;
         if (!_actionHandlers.TryGetValue(actionName, out var handlers) || handlers.Count == 0) return false;
 
-        foreach (var handler in handlers)
-        {
-            handler();
-        }
+        foreach (var handler in handlers) handler();
 
         _registerActivity();
         return true;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        Detach();
-        _actionHandlers.Clear();
-        _shortcutMap.Clear();
-        _keyboardController?.Dispose();
-        _keyboardController = null;
     }
 }

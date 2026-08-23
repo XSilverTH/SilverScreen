@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using GObject;
-using Gtk;
 using Serilog;
 using SilverScreen.Features.Session;
 using SilverScreen.Infrastructure;
@@ -15,11 +14,6 @@ namespace SilverScreen.Views.Account;
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 public sealed partial class WebLoginWindow : WindowBase<Window>
 {
-    [BlueprintWidget("web_login_status_label")]
-    private Label _statusLabel = null!;
-
-    [BlueprintWidget("web_view_container")]
-    private Box _webViewContainer = null!;
     private const string LoginUri =
         "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
 
@@ -54,7 +48,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         _webView.Vexpand = true;
         _webView.GetSettings().SetUserAgent(BrowserUserAgent);
 
-        _webViewContainer.Append(_webView);
+        web_view_container.Append(_webView);
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,
@@ -119,7 +113,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         if (YouTubeCredentials.ParseNetscape(cookieText) is null)
             return null;
 
-        _statusLabel.SetText("Finishing sign-in…");
+        web_login_status_label.SetText("Finishing sign-in…");
         return cookieText;
     }
 
@@ -155,7 +149,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     {
         Logger.Warning(exception, "WebLoginWindow failed to read cookies");
         if (!_disposed)
-            _statusLabel.SetText(
+            web_login_status_label.SetText(
                 "Could not read the YouTube session. Continue signing in or close this window to cancel.");
     }
 
@@ -163,7 +157,8 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     {
         Logger.Warning("WebLoginWindow failed to save session to secret store");
         if (!_disposed)
-            _statusLabel.SetText("Could not save the YouTube session because the system keyring is unavailable.");
+            web_login_status_label.SetText(
+                "Could not save the YouTube session because the system keyring is unavailable.");
     }
 
     private async Task FinishDisposalAsync(Task stopped)

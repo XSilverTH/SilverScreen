@@ -1,9 +1,7 @@
 using System.ComponentModel;
-using Adw;
 using Gdk;
 using Gio;
 using GObject;
-using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure;
@@ -23,7 +21,6 @@ using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
 using Functions = GLib.Functions;
 using License = Gtk.License;
-using Spinner = Gtk.Spinner;
 using PreferencesDialog = SilverScreen.Views.Preferences.PreferencesDialog;
 using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
@@ -33,17 +30,8 @@ namespace SilverScreen.Views.Shell;
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
-    [BlueprintWidget("account_avatar")]
-    private Avatar _accountAvatar = null!;
 
-    [BlueprintWidget("account_button")]
-    private MenuButton _accountButton = null!;
 
-    [BlueprintWidget("account_popover")]
-    private Popover _accountPopoverWidget = null!;
-
-    [BlueprintWidget("app_menu_button")]
-    private MenuButton _appMenuButton = null!;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly ChannelView _channel;
@@ -53,56 +41,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly HistoryView _history;
     private readonly HistoryViewModel _historyViewModel;
     private readonly HomeView _home;
-    [BlueprintWidget("history_host")]
-    private Box _historyHost = null!;
 
-    [BlueprintWidget("home_host")]
-    private Box _homeHost = null!;
 
-    [BlueprintWidget("home_refresh_button")]
-    private Button _homeRefreshButton = null!;
-
-    [BlueprintWidget("home_refresh_spinner")]
-    private Spinner _homeRefreshSpinner = null!;
-
-    [BlueprintWidget("home_refresh_stack")]
-    private Stack _homeRefreshStack = null!;
-
-    [BlueprintWidget("main_stack")]
-    private Stack _mainStack = null!;
-
-    [BlueprintWidget("navigation_back_button")]
-    private Button _navigationBackButton = null!;
-
-    [BlueprintWidget("player_host")]
-    private Box _playerHost = null!;
     private readonly PlaybackModeRoutingService _playback;
-    [BlueprintWidget("queue_button")]
-    private ToggleButton _queueButton = null!;
 
-    [BlueprintWidget("queue_button_label")]
-    private Label _queueButtonLabel = null!;
 
-    [BlueprintWidget("queue_sidebar_host")]
-    private Box _queueSidebarHost = null!;
-
-    [BlueprintWidget("queue_split_view")]
-    private OverlaySplitView _queueSplitView = null!;
-
-    [BlueprintWidget("search_button")]
-    private MenuButton _searchButton = null!;
-
-    [BlueprintWidget("search_popover")]
-    private Popover _searchPopoverWidget = null!;
-
-    [BlueprintWidget("status_label")]
-    private Label _statusLabel = null!;
-
-    [BlueprintWidget("view_stack")]
-    private ViewStack _stack = null!;
-
-    [BlueprintWidget("view_switcher")]
-    private ViewSwitcher _viewSwitcher = null!;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
 
@@ -122,7 +65,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
             video => OpenChannelAsync(video).FireAndForget(Logger), services.Player);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
-        _playerHost.Append(_embeddedPlayer.Widget);
+        player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels, _shell);
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions,
@@ -137,17 +80,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _historyViewModel = new HistoryViewModel(services.History, _shell);
         _history = new HistoryView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
-        _historyHost.Append(_history.Widget);
-        _homeHost.Append(_home.Widget);
+        history_host.Append(_history.Widget);
+        home_host.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
 
         _searchViewModel = new SearchViewModel(services.Search, _playback, _shell, services.SearchSuggestions);
-        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, _searchPopoverWidget.Popdown);
-        _searchPopoverWidget.Child = _searchPopover.Widget;
-        _searchPopoverWidget.OnClosed += (_, _) => _searchPopover.OnClosed();
-        _searchPopoverWidget.OnNotify += (_, e) =>
+        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
+        search_popover.Child = _searchPopover.Widget;
+        search_popover.OnClosed += (_, _) => _searchPopover.OnClosed();
+        search_popover.OnNotify += (_, e) =>
         {
-            if (e.Pspec.GetName() == "visible" && _searchPopoverWidget.GetVisible())
+            if (e.Pspec.GetName() == "visible" && search_popover.GetVisible())
                 _searchPopover.OnOpened();
         };
 
@@ -156,7 +99,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
-        _queueSidebarHost.Append(_queueView.Widget);
+        queue_sidebar_host.Append(_queueView.Widget);
         _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation,
             _shell);
         _accountPopover = new AccountPopoverView(
@@ -165,15 +108,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             OpenWebLogin,
             UpdateAccountAppearance);
 
-        _viewSwitcher.Stack = _stack;
-        var channelPage = _stack.AddTitled(_channel.Widget, "channel", "Channel");
+        view_switcher.Stack = view_stack;
+        var channelPage = view_stack.AddTitled(_channel.Widget, "channel", "Channel");
         channelPage.Visible = false;
-        var searchPage = _stack.AddTitled(_searchView.Widget, "search", "Search");
+        var searchPage = view_stack.AddTitled(_searchView.Widget, "search", "Search");
         searchPage.Visible = false;
-        _stack.VisibleChildName = _shell.SelectedPage;
+        view_stack.VisibleChildName = _shell.SelectedPage;
 
-        _accountPopoverWidget.Child = _accountPopover.Widget;
-        _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
+        account_popover.Child = _accountPopover.Widget;
+        queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         RegisterApplicationActions();
         _shell.PropertyChanged += OnShellPropertyChanged;
@@ -217,7 +160,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             return;
         }
 
-        _stack.VisibleChildName = "channel";
+        view_stack.VisibleChildName = "channel";
         UpdateHomeRefreshButton(_channel.IsLoading);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName).ConfigureAwait(false);
     }
@@ -225,15 +168,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseChannel()
     {
         _channelViewModel.Clear();
-        _stack.VisibleChildName = "home";
-        _navigationBackButton.Visible = false;
+        view_stack.VisibleChildName = "home";
+        navigation_back_button.Visible = false;
         UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OnSearchSubmitted(string query)
     {
-        _stack.VisibleChildName = "search";
-        _navigationBackButton.Visible = true;
+        view_stack.VisibleChildName = "search";
+        navigation_back_button.Visible = true;
         UpdateHomeRefreshButton(_searchView.IsLoading);
         _searchViewModel.SubmitAsync(query).FireAndForget(Logger);
     }
@@ -241,14 +184,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseSearch()
     {
         _searchViewModel.Reset();
-        _stack.VisibleChildName = "home";
-        _navigationBackButton.Visible = false;
+        view_stack.VisibleChildName = "home";
+        navigation_back_button.Visible = false;
         UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        switch (_stack.VisibleChildName)
+        switch (view_stack.VisibleChildName)
         {
             case "search":
                 CloseSearch();
@@ -257,15 +200,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 CloseChannel();
                 break;
             default:
-                _stack.VisibleChildName = "home";
-                _navigationBackButton.Visible = false;
+                view_stack.VisibleChildName = "home";
+                navigation_back_button.Visible = false;
                 break;
         }
     }
 
     private void OpenEmbeddedPlayer()
     {
-        _mainStack.VisibleChildName = "player";
+        main_stack.VisibleChildName = "player";
         if (_services.Preferences.GetPreferences().OpenInFullscreen)
             Widget.Fullscreen();
     }
@@ -273,7 +216,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseEmbeddedPlayer()
     {
         Widget.Unfullscreen();
-        _mainStack.VisibleChildName = "shell";
+        main_stack.VisibleChildName = "shell";
     }
 
     private void ReportStartupDependencyWarnings()
@@ -287,7 +230,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
-        switch (_stack.VisibleChildName)
+        switch (view_stack.VisibleChildName)
         {
             case "channel":
                 _channel.RefreshAsync().FireAndForget(Logger);
@@ -306,35 +249,35 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history" &&
-            _stack.VisibleChildName != "search")
+        if (!_closed && view_stack.VisibleChildName != "channel" && view_stack.VisibleChildName != "history" &&
+            view_stack.VisibleChildName != "search")
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OnChannelRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName == "channel")
+        if (!_closed && view_stack.VisibleChildName == "channel")
             UpdateHomeRefreshButton(_channel.IsLoading);
     }
 
     private void OnHistoryRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName == "history")
+        if (!_closed && view_stack.VisibleChildName == "history")
             UpdateHomeRefreshButton(_history.IsLoading);
     }
 
     private void OnSearchRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName == "search")
+        if (!_closed && view_stack.VisibleChildName == "search")
             UpdateHomeRefreshButton(_searchView.IsLoading);
     }
 
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
         if (_closed) return;
-        _navigationBackButton.Visible = _stack.VisibleChildName is "search" or "channel";
+        navigation_back_button.Visible = view_stack.VisibleChildName is "search" or "channel";
 
-        switch (_stack.VisibleChildName)
+        switch (view_stack.VisibleChildName)
         {
             case "channel":
                 UpdateHomeRefreshButton(_channel.IsLoading);
@@ -354,9 +297,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateHomeRefreshButton(bool isLoading)
     {
-        _homeRefreshButton.Sensitive = !isLoading;
-        _homeRefreshStack.VisibleChildName = isLoading ? "loading" : "idle";
-        _homeRefreshSpinner.Spinning = isLoading;
+        home_refresh_button.Sensitive = !isLoading;
+        home_refresh_stack.VisibleChildName = isLoading ? "loading" : "idle";
+        home_refresh_spinner.Spinning = isLoading;
     }
 
     private void RegisterApplicationActions()
@@ -404,11 +347,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             switch (args.PropertyName)
             {
                 case nameof(ShellViewModel.Status):
-                    _statusLabel.SetText(_shell.Status);
-                    _statusLabel.TooltipText = _shell.Status;
+                    status_label.SetText(_shell.Status);
+                    status_label.TooltipText = _shell.Status;
                     break;
                 case nameof(ShellViewModel.SelectedPage):
-                    _stack.VisibleChildName = _shell.SelectedPage;
+                    view_stack.VisibleChildName = _shell.SelectedPage;
                     break;
             }
 
@@ -430,21 +373,21 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void UpdateQueueButton(QueuePresentationState state)
     {
         var hasItems = state.Items.Count > 0;
-        _queueButton.Visible = hasItems;
-        _queueButton.Active = hasItems && _queueButton.Active;
+        queue_button.Visible = hasItems;
+        queue_button.Active = hasItems && queue_button.Active;
 
         if (hasItems)
-            _queueButtonLabel.SetText(state.Items.Count.ToString());
+            queue_button_label.SetText(state.Items.Count.ToString());
     }
 
     private void CloseQueue()
     {
-        _queueButton.Active = false;
+        queue_button.Active = false;
     }
 
     private void OpenWebLogin()
     {
-        _accountButton.Popover?.Popdown();
+        account_button.Popover?.Popdown();
         if (_webLogin is not null)
         {
             _webLogin.Present();
@@ -457,10 +400,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateAccountAppearance(bool hasManualSession, string displayName, Texture? avatar)
     {
-        _accountButton.TooltipText = hasManualSession ? "YouTube session active" : "Account";
-        _accountAvatar.Text = hasManualSession ? displayName : string.Empty;
-        _accountAvatar.ShowInitials = hasManualSession;
-        _accountAvatar.CustomImage = avatar!;
+        account_button.TooltipText = hasManualSession ? "YouTube session active" : "Account";
+        account_avatar.Text = hasManualSession ? displayName : string.Empty;
+        account_avatar.ShowInitials = hasManualSession;
+        account_avatar.CustomImage = avatar!;
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)

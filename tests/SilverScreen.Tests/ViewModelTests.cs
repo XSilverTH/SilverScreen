@@ -266,8 +266,7 @@ public sealed class ViewModelTests
     {
         public List<(string Query, int StartIndex, CancellationToken Token, TaskCompletionSource<SearchResultPage>
                 Completion)>
-            Requests
-        { get; } = [];
+            Requests { get; } = [];
 
         public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
         {

@@ -1,12 +1,10 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using Adw;
 using GObject;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure;
 using SilverScreen.Infrastructure.Features.Playback;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Comments;
@@ -29,162 +27,30 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-    [BlueprintWidget("player_surface")]
-    private GLArea _playerSurface = null!;
-
-    [BlueprintWidget("player_header_bar")]
-    private Widget _headerBar = null!;
-
-    [BlueprintWidget("player_center_controls")]
-    private Box _centerControls = null!;
-
-    [BlueprintWidget("player_controls")]
-    private Widget _playerControls = null!;
-
-    [BlueprintWidget("player_play_pause_button")]
-    private Button _playPauseButton = null!;
-
-    [BlueprintWidget("player_volume_button")]
-    private MenuButton _volumeButton = null!;
-
-    [BlueprintWidget("player_volume_scale")]
-    private Scale _volumeScale = null!;
-
-    [BlueprintWidget("player_volume_popover")]
-    private Popover _volumePopover = null!;
-
-    [BlueprintWidget("player_settings_popover")]
-    private Popover _settingsPopover = null!;
-
-    [BlueprintWidget("player_quality_dropdown")]
-    private DropDown _qualityDropdown = null!;
-
-    [BlueprintWidget("player_queue_controls")]
-    private Box _queueControls = null!;
-
-    [BlueprintWidget("player_speed_label")]
-    private Label _speedLabel = null!;
-
-    [BlueprintWidget("player_speed_scale")]
-    private Scale _speedScale = null!;
-
-    [BlueprintWidget("player_subtitle_dropdown")]
-    private DropDown _subtitleDropdown = null!;
-
-    [BlueprintWidget("player_subtitle_model")]
-    private StringList _subtitleModel = null!;
-
-    [BlueprintWidget("player_timeline")]
-    private Scale _timeline = null!;
-
-    [BlueprintWidget("player_timeline_overlay")]
-    private Overlay _timelineOverlay = null!;
-
-    [BlueprintWidget("player_scrub_cue")]
-    private Box _scrubCue = null!;
-
-    [BlueprintWidget("player_scrub_time_label")]
-    private Label _scrubTimeLabel = null!;
-
-    [BlueprintWidget("player_scrub_delta_label")]
-    private Label _scrubDeltaLabel = null!;
-
-    [BlueprintWidget("player_scrub_chapter_label")]
-    private Label _scrubChapterLabel = null!;
-
-    [BlueprintWidget("player_sponsorblock_skip_button")]
-    private Button _sponsorBlockSkipButton = null!;
-
-    [BlueprintWidget("player_resume_button")]
-    private Button _resumeButton = null!;
-
-    [BlueprintWidget("player_restart_button")]
-    private Button _restartButton = null!;
-
-    [BlueprintWidget("player_position_label")]
-    private Label _positionLabel = null!;
-
-    [BlueprintWidget("player_duration_label")]
-    private Label _durationLabel = null!;
-
-    [BlueprintWidget("player_loading_indicator")]
-    private Box _loadingIndicator = null!;
-
-    [BlueprintWidget("player_title_label")]
-    private Label _titleLabel = null!;
-
-    [BlueprintWidget("player_channel_label")]
-    private Label _channelLabel = null!;
-
-    [BlueprintWidget("player_likes_label")]
-    private Label _likesLabel = null!;
-
-    [BlueprintWidget("player_like_button")]
-    private Button _likeButton = null!;
-
-    [BlueprintWidget("player_like_image")]
-    private Image _likeImage = null!;
-
-    [BlueprintWidget("player_dislike_button")]
-    private Button _dislikeButton = null!;
-
-    [BlueprintWidget("player_dislikes_label")]
-    private Label _dislikesLabel = null!;
-
-    [BlueprintWidget("player_dislike_image")]
-    private Image _dislikeImage = null!;
-
-    [BlueprintWidget("player_subtitle_button")]
-    private Button _subtitleButton = null!;
-
-    [BlueprintWidget("player_comments_button")]
-    private ToggleButton _commentsButton = null!;
-
-    [BlueprintWidget("comments_sidebar_host")]
-    private Box _commentsSidebarHost = null!;
-
-    [BlueprintWidget("player_queue_split_view")]
-    private OverlaySplitView _queueSplitView = null!;
-
-    [BlueprintWidget("player_queue_button")]
-    private ToggleButton _queueButton = null!;
-
-    [BlueprintWidget("player_previous_queue_button")]
-    private Button _previousQueueButton = null!;
-
-    [BlueprintWidget("player_next_queue_button")]
-    private Button _nextQueueButton = null!;
-
-    [BlueprintWidget("player_queue_sidebar_host")]
-    private Box _playerQueueSidebarHost = null!;
-
-    [BlueprintWidget("player_info_host")]
-    private Box _playerInfoHost = null!;
 
     private readonly Action _backRequested;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
+    private readonly PlayerChromeController _chromeController;
     private readonly CommentsView _commentsView;
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly PlayerEngagementController _engagement;
     private readonly ImmutableArray<IPlayerFeature> _features;
     private readonly VideoInfoPanelView _infoPanel;
-    private readonly PlaybackSession _session;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
-    private readonly Action _presentRequested;
     private readonly IQueueService _queueService;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly PlayerResumeController _resumeController;
+    private readonly PlaybackSession _session;
+    private readonly PlayerShortcutController _shortcutController;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
-    private readonly PlayerChromeController _chromeController;
-    private readonly PlayerShortcutController _shortcutController;
+    
     private string? _commentsVideoId;
     private bool _disposed;
-
     private bool _rendererReady;
     private double _speed = 1;
     private bool _syncingQueue;
@@ -193,21 +59,20 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
     {
-        _presentRequested = presentRequested;
         _backRequested = backRequested;
         _channelRequested = channelRequested;
         _preferences = dependencies.Preferences;
         _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments);
-        _commentsSidebarHost.Append(_commentsView.Widget);
-        _commentsButton.BindProperty("active", Widget, "show-sidebar",
+        comments_sidebar_host!.Append(_commentsView.Widget);
+        player_comments_button.BindProperty("active", Widget, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
 
         _queueService = dependencies.Queue;
         _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
         _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, dependencies.WatchProgress, CloseQueue,
             OnTrackJumpRequested);
-        _playerQueueSidebarHost.Append(_queueView.Widget);
-        _queueButton.BindProperty("active", _queueSplitView, "show-sidebar",
+        player_queue_sidebar_host.Append(_queueView.Widget);
+        player_queue_button.BindProperty("active", player_queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         _queueService.Changed += OnQueueChanged;
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
@@ -215,19 +80,23 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (!_disposed) action();
             return false;
         }));
-        _timelineController = new PlayerTimelineController(_timeline, _timelineOverlay, _scrubCue,
-            _scrubTimeLabel, _scrubDeltaLabel, _scrubChapterLabel, _positionLabel, _durationLabel,
+        _timelineController = new PlayerTimelineController(player_timeline, player_timeline_overlay, player_scrub_cue,
+            player_scrub_time_label, player_scrub_delta_label, player_scrub_chapter_label, player_position_label,
+            player_duration_label,
             (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity);
         _engagement = new PlayerEngagementController(dependencies.VideoEngagement, dependencies.YouTubeRating,
-            dependencies.Session, _likeButton, _likeImage, _likesLabel, _dislikeButton, _dislikeImage, _dislikesLabel);
-        _chapterOverlay = new PlayerChapterOverlay(_timelineOverlay, _timeline,
+            dependencies.Session, player_like_button, player_like_image, player_likes_label, player_dislike_button,
+            player_dislike_image, player_dislikes_label);
+        _chapterOverlay = new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
             () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
-        _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences, _timeline,
-            _timelineOverlay, _sponsorBlockSkipButton, pos => SeekAbsolute(pos));
-        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, _resumeButton, _restartButton,
+        _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences,
+            player_timeline,
+            player_timeline_overlay, player_sponsorblock_skip_button, pos => SeekAbsolute(pos));
+        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, player_resume_button,
+            player_restart_button,
             pos => SeekAbsolute(pos));
         _features = [_engagement, _sponsorBlockController, _resumeController];
-        _desktopMedia = new DesktopMediaIntegration(_player, _presentRequested);
+        _desktopMedia = new DesktopMediaIntegration(_player, presentRequested);
         _session = new PlaybackSession(dependencies.CookieFiles, dependencies.PlaybackPresence,
             dependencies.PlaybackTelemetry, dependencies.WatchProgress, _desktopMedia);
         _session.VideoChanged += OnSessionVideoChanged;
@@ -235,21 +104,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.Failed += OnSessionFailed;
         _infoPanel = new VideoInfoPanelView(dependencies.VideoDetails, _channelRequested, () =>
         {
-            if (_session.HasMedia) _playerSurface.GrabFocus();
+            if (_session.HasMedia) player_surface.GrabFocus();
         });
-        _playerInfoHost.Append(_infoPanel.Widget);
-        _subtitleController = new PlayerSubtitleController(_preferences, _subtitleDropdown, _subtitleModel,
-            _subtitleButton, trackId => _player.SelectSubtitleTrack(trackId));
+        player_info_host.Append(_infoPanel.Widget);
+        _subtitleController = new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
+            player_subtitle_model,
+            player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId));
         _player.RenderRequested += OnRenderRequested;
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
         _chromeController = new PlayerChromeController(
             Widget,
-            _headerBar,
-            _centerControls,
-            _playerControls,
-            () => _volumePopover.GetVisible() || _settingsPopover.GetVisible() || _infoPanel.IsOpen,
+            player_header_bar,
+            player_center_controls,
+            player_controls,
+            () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
             () => _chapterOverlay.Layout(),
             y => _infoPanel.UpdatePointer(y, Widget.GetAllocatedHeight(), _session.HasMedia));
         _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia, RegisterActivity);
@@ -265,13 +135,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _shortcutController.RegisterAction(PlayerShortcutActions.ReturnToShell, () =>
         {
             if (_timelineController.IsScrubbing) _timelineController.CancelScrubbing();
-            else if (_queueButton.Active) _queueButton.Active = false;
-            else if (_commentsButton.Active) _commentsButton.Active = false;
+            else if (player_queue_button.Active) player_queue_button.Active = false;
+            else if (player_comments_button.Active) player_comments_button.Active = false;
             else if (_infoPanel.IsOpen) _infoPanel.Close();
             else ReturnToShell();
         });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleQueue, () => _queueButton.Active = !_queueButton.Active);
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleVideoInfo, () => _infoPanel.Toggle(_session.CurrentVideo));
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleQueue,
+            () => player_queue_button.Active = !player_queue_button.Active);
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleVideoInfo,
+            () => _infoPanel.Toggle(_session.CurrentVideo));
         _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () => AdjustSpeed(-1));
         _shortcutController.RegisterAction(PlayerShortcutActions.SpeedIncrease, () => AdjustSpeed(1));
         _shortcutController.RegisterAction(PlayerShortcutActions.NextVideo, () => _player.MovePlaylist(true));
@@ -306,7 +178,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         if (_rendererReady)
         {
-            _playerSurface.MakeCurrent();
+            player_surface.MakeCurrent();
             _player.ShutdownRenderer();
             _rendererReady = false;
         }
@@ -321,6 +193,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.Dispose();
         _desktopMedia.Dispose();
     }
+
     public Task<string> PresentAsync(PlaybackRequest request)
     {
         try
@@ -360,9 +233,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
-            _queueControls.SetVisible(request.Videos.Length > 1);
-            _previousQueueButton.Sensitive = false;
-            _nextQueueButton.Sensitive = request.Videos.Length > 1;
+            player_queue_controls.SetVisible(request.Videos.Length > 1);
+            player_previous_queue_button.Sensitive = false;
+            player_next_queue_button.Sensitive = request.Videos.Length > 1;
             _shortcutController.Attach();
             Widget.GrabFocus();
             if (_rendererReady) _player.Load(request, preferences, _session.CookieFilePath);
@@ -379,8 +252,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnPlayerSurfaceRealize(object? sender, EventArgs args)
     {
-        _playerSurface.MakeCurrent();
-        if (_playerSurface.GetError() is not null)
+        player_surface.MakeCurrent();
+        if (player_surface.GetError() is not null)
         {
             OnPlaybackFailed(this, "Unable to create an OpenGL context for embedded playback.");
             return;
@@ -396,7 +269,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
     {
-        _playerSurface.MakeCurrent();
+        player_surface.MakeCurrent();
         _player.ShutdownRenderer();
         _rendererReady = false;
     }
@@ -404,11 +277,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool OnPlayerSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
     {
         if (_disposed || !_rendererReady) return false;
-        _player.Render(_playerSurface.GetAllocatedWidth() * _playerSurface.GetScaleFactor(),
-            _playerSurface.GetAllocatedHeight() * _playerSurface.GetScaleFactor());
+        _player.Render(player_surface.GetAllocatedWidth() * player_surface.GetScaleFactor(),
+            player_surface.GetAllocatedHeight() * player_surface.GetScaleFactor());
         return true;
     }
-
 
 
     private void SeekAbsolute(double position, bool exact = true)
@@ -471,7 +343,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void CloseQueue()
     {
-        _queueButton.Active = false;
+        player_queue_button.Active = false;
     }
 
     private void OnTrackJumpRequested(int index)
@@ -550,36 +422,36 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnCommentsButtonToggled(object? sender, EventArgs args)
     {
-        if (_commentsButton.Active)
+        if (player_comments_button.Active)
             _commentsView.EnsureLoaded();
     }
 
     private void CloseComments()
     {
-        _commentsButton.Active = false;
+        player_comments_button.Active = false;
     }
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
     {
-        if (!_updatingControls) _player.SetVolume(_volumeScale.GetValue());
+        if (!_updatingControls) _player.SetVolume(player_volume_scale.GetValue());
     }
 
     private void OnQualityDropdownNotify(object? sender, EventArgs args)
     {
-        if (!_updatingControls) _player.SetQuality(QualityAt(_qualityDropdown.GetSelected()));
+        if (!_updatingControls) _player.SetQuality(QualityAt(player_quality_dropdown.GetSelected()));
     }
 
     private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
     {
         if (_updatingControls) return;
 
-        var speed = SnapPlaybackSpeed(_speedScale.GetValue());
-        if (Math.Abs(_speedScale.GetValue() - speed) > 0.0001)
+        var speed = SnapPlaybackSpeed(player_speed_scale.GetValue());
+        if (Math.Abs(player_speed_scale.GetValue() - speed) > 0.0001)
         {
             _updatingControls = true;
             try
             {
-                _speedScale.SetValue(speed);
+                player_speed_scale.SetValue(speed);
             }
             finally
             {
@@ -602,7 +474,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (_disposed) return;
 
-        _playerSurface.QueueRender();
+        player_surface.QueueRender();
     }
 
     private void OnStateChanged(object? sender, LibMpvPlaybackState state)
@@ -619,22 +491,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _timelineController.UpdatePosition(state);
             _chapterOverlay.Update(state.Chapters, state.Duration);
 
-            _playPauseButton.SetIconName(state is { HasMedia: true, IsPaused: false }
+            player_play_pause_button.SetIconName(state is { HasMedia: true, IsPaused: false }
                 ? "media-playback-pause-symbolic"
                 : "media-playback-start-symbolic");
-            _playPauseButton.SetTooltipText(state is { HasMedia: true, IsPaused: false }
+            player_play_pause_button.SetTooltipText(state is { HasMedia: true, IsPaused: false }
                 ? "Pause (Space or K)"
                 : "Play (Space or K)");
-            _volumeScale.SetValue(Math.Clamp(state.Volume, 0, 100));
-            _volumeButton.SetIconName(VolumeIcon(state.Volume, state.IsMuted));
+            player_volume_scale.SetValue(Math.Clamp(state.Volume, 0, 100));
+            player_volume_button.SetIconName(VolumeIcon(state.Volume, state.IsMuted));
             var speed = SnapPlaybackSpeed(state.Speed);
-            _speedScale.SetValue(speed);
+            player_speed_scale.SetValue(speed);
             SetSpeedLabel(speed);
             if (_session.Request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
                 state.PlaylistIndex >= request.Videos.Length) return;
             _queueViewModel.SetCurrentPlayingIndex(state.PlaylistIndex);
-            _previousQueueButton.Sensitive = state.PlaylistIndex > 0;
-            _nextQueueButton.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
+            player_previous_queue_button.Sensitive = state.PlaylistIndex > 0;
+            player_next_queue_button.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
             var video = request.Videos[state.PlaylistIndex];
             foreach (var feature in _features) feature.UpdatePlayback(state, video.Id);
         }
@@ -647,14 +519,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnSessionVideoChanged(VideoSummary video, int playlistIndex)
     {
         _infoPanel.SetVideo(video);
-        _titleLabel.SetText(video.Title);
-        _channelLabel.SetText(video.ChannelName);
+        player_title_label.SetText(video.Title);
+        player_channel_label.SetText(video.ChannelName);
         if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
         {
             foreach (var feature in _features) feature.Load(video);
             _commentsVideoId = video.Id;
             _commentsView.SetVideo(video.Id);
-            if (_commentsButton.Active)
+            if (player_comments_button.Active)
                 _commentsView.EnsureLoaded();
         }
     }
@@ -668,18 +540,18 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
         _infoPanel.Close();
-        _titleLabel.SetText("Playback failed");
+        player_title_label.SetText("Playback failed");
         SetLoading(false);
-        _channelLabel.SetText($"Embedded playback failed: {detail}");
+        player_channel_label.SetText($"Embedded playback failed: {detail}");
         _timelineController.Reset();
-        _playPauseButton.SetIconName("media-playback-start-symbolic");
+        player_play_pause_button.SetIconName("media-playback-start-symbolic");
         foreach (var feature in _features) feature.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
-        _queueControls.SetVisible(false);
-        _queueButton.Active = false;
+        player_queue_controls.SetVisible(false);
+        player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _player.Stop();
     }
@@ -694,28 +566,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _timelineController.Reset();
         _infoPanel.Close();
-        _queueControls.SetVisible(false);
-        _queueButton.Active = false;
+        player_queue_controls.SetVisible(false);
+        player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
         foreach (var feature in _features) feature.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
-        _commentsButton.Active = false;
+        player_comments_button.Active = false;
         SetLoading(false);
-    }
-
-    private void ResetTransport()
-    {
-        _timelineController.Reset();
-        _playPauseButton.SetIconName("media-playback-start-symbolic");
     }
 
     private void SetLoading(bool loading)
     {
-        _loadingIndicator.SetVisible(loading);
-        _centerControls.SetVisible(!loading);
+        player_loading_indicator.SetVisible(loading);
+        player_center_controls.SetVisible(!loading);
     }
 
     private void SetControls(double volume, double speed, string quality)
@@ -723,12 +589,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _updatingControls = true;
         try
         {
-            _volumeScale.SetValue(volume);
-            _volumeButton.SetIconName(VolumeIcon(volume, false));
+            player_volume_scale.SetValue(volume);
+            player_volume_button.SetIconName(VolumeIcon(volume, false));
             var normalizedSpeed = SnapPlaybackSpeed(speed);
-            _speedScale.SetValue(normalizedSpeed);
+            player_speed_scale.SetValue(normalizedSpeed);
             SetSpeedLabel(normalizedSpeed);
-            _qualityDropdown.SetSelected(
+            player_quality_dropdown.SetSelected(
                 (uint)Array.IndexOf(["Best", "1080p", "720p", "480p", "360p"], quality));
         }
         finally
@@ -758,7 +624,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void SetSpeedLabel(double speed)
     {
-        _speedLabel.SetText($"{speed:0.##}×");
+        player_speed_label.SetText($"{speed:0.##}×");
     }
 
     private static string VolumeIcon(double volume, bool muted)
@@ -823,14 +689,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             }
 
             _session.UpdateQueue(newVideos);
-            _queueControls.SetVisible(newVideos.Length > 1);
-            _previousQueueButton.Sensitive = _session.CurrentPlaylistIndex > 0;
-            _nextQueueButton.Sensitive = _session.CurrentPlaylistIndex < newVideos.Length - 1;
+            player_queue_controls.SetVisible(newVideos.Length > 1);
+            player_previous_queue_button.Sensitive = _session.CurrentPlaylistIndex > 0;
+            player_next_queue_button.Sensitive = _session.CurrentPlaylistIndex < newVideos.Length - 1;
             return false;
         });
     }
-
-
 
 
     private sealed class EmbeddedPlayerPlaybackService(EmbeddedPlayerView player) : IPlaybackService

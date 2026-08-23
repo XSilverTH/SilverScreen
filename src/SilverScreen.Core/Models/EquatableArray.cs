@@ -46,7 +46,10 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
         }
     }
 
-    public ReadOnlySpan<T> AsSpan() => _items.AsSpan();
+    public ReadOnlySpan<T> AsSpan()
+    {
+        return _items.AsSpan();
+    }
 
     public bool Equals(EquatableArray<T> other)
     {
@@ -62,17 +65,21 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
     {
         var hash = new HashCode();
         if (_items is not null)
-        {
             foreach (var item in _items)
-            {
                 hash.Add(item);
-            }
-        }
+
         return hash.ToHashCode();
     }
 
-    public static bool operator ==(EquatableArray<T> left, EquatableArray<T> right) => left.Equals(right);
-    public static bool operator !=(EquatableArray<T> left, EquatableArray<T> right) => !left.Equals(right);
+    public static bool operator ==(EquatableArray<T> left, EquatableArray<T> right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(EquatableArray<T> left, EquatableArray<T> right)
+    {
+        return !left.Equals(right);
+    }
 
     public IEnumerator<T> GetEnumerator()
     {
@@ -80,15 +87,28 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
         return items.GetEnumerator();
     }
 
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
 
-    public static implicit operator EquatableArray<T>(T[]? array) => new(array);
-    public static implicit operator EquatableArray<T>(List<T>? list) => new(list);
+    public static implicit operator EquatableArray<T>(T[]? array)
+    {
+        return new EquatableArray<T>(array);
+    }
+
+    public static implicit operator EquatableArray<T>(List<T>? list)
+    {
+        return new EquatableArray<T>(list);
+    }
 }
 
 public static class EquatableArray
 {
-    public static EquatableArray<T> Create<T>(ReadOnlySpan<T> items) => new(items);
+    public static EquatableArray<T> Create<T>(ReadOnlySpan<T> items)
+    {
+        return new EquatableArray<T>(items);
+    }
 }
 
 public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
@@ -127,13 +147,9 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
 
             T? element;
             if (elementConverter is not null)
-            {
                 element = elementConverter.Read(ref reader, typeof(T), options);
-            }
             else
-            {
                 element = JsonSerializer.Deserialize<T>(ref reader, options);
-            }
 
             if (element is not null)
                 list.Add(element);
@@ -148,16 +164,10 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
         var elementConverter = (JsonConverter<T>?)options.GetConverter(typeof(T));
 
         foreach (var item in value)
-        {
             if (elementConverter is not null)
-            {
                 elementConverter.Write(writer, item, options);
-            }
             else
-            {
                 JsonSerializer.Serialize(writer, item, options);
-            }
-        }
 
         writer.WriteEndArray();
     }

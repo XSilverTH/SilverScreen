@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
@@ -22,63 +21,21 @@ public partial class ChannelView : ViewBase<Box>
     private const double TopRevealThreshold = 1.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
-    [BlueprintWidget("channel_avatar_overlay")]
-    private Overlay _avatarOverlay = null!;
 
-    [BlueprintWidget("channel_avatar_placeholder")]
-    private Widget _avatarPlaceholder = null!;
     private readonly Action? _backCallback;
-    [BlueprintWidget("channel_bar_title")]
-    private Label _barTitle = null!;
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    [BlueprintWidget("channel_handle")]
-    private Label _channelHandle = null!;
 
-    [BlueprintWidget("channel_name")]
-    private Label _channelName = null!;
     private readonly GestureClick _clueClickGesture;
     private readonly EventControllerMotion _clueMotionController;
-    [BlueprintWidget("channel_clue_revealer")]
-    private Revealer _clueRevealer = null!;
 
-    [BlueprintWidget("channel_description")]
-    private Label _descriptionLabel = null!;
 
-    [BlueprintWidget("channel_empty_page")]
-    private StatusPage _emptyPage = null!;
-
-    [BlueprintWidget("channel_error_page")]
-    private StatusPage _errorPage = null!;
-
-    [BlueprintWidget("channel_header_revealer")]
-    private Revealer _headerRevealer = null!;
-
-    [BlueprintWidget("channel_meta_dot1")]
-    private Label _metaDot1 = null!;
-
-    [BlueprintWidget("channel_pagination_loading_revealer")]
-    private Revealer _paginationLoadingRevealer = null!;
-
-    [BlueprintWidget("channel_reveal_clue")]
-    private Box _revealClue = null!;
     private readonly EventControllerScroll _scrollController;
-    [BlueprintWidget("channel_scrolled_window")]
-    private ScrolledWindow _scrolledWindow = null!;
 
-    [BlueprintWidget("channel_sort_dropdown")]
-    private DropDown _sortDropdown = null!;
 
-    [BlueprintWidget("channel_stack")]
-    private Stack _stack = null!;
-
-    [BlueprintWidget("channel_subscribers")]
-    private Label _subscribersLabel = null!;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
-    [BlueprintWidget("channel_video_grid")]
-    private GridView _videoGrid = null!;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -114,23 +71,23 @@ public partial class ChannelView : ViewBase<Box>
         _backCallback = backCallback;
 
 
-        _vadjustment = _scrolledWindow.Vadjustment;
+        _vadjustment = channel_scrolled_window.Vadjustment;
         if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;
         _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         _scrollController.SetPropagationPhase(PropagationPhase.Capture);
         _scrollController.OnScroll += OnScrollEvent;
-        _scrolledWindow.AddController(_scrollController);
+        channel_scrolled_window.AddController(_scrollController);
 
 
         _clueMotionController = EventControllerMotion.New();
         _clueMotionController.OnEnter += OnCluePointerEnter;
         _clueMotionController.OnMotion += OnCluePointerMotion;
-        _revealClue.AddController(_clueMotionController);
+        channel_reveal_clue.AddController(_clueMotionController);
 
         _clueClickGesture = GestureClick.New();
         _clueClickGesture.Button = 1;
         _clueClickGesture.OnPressed += OnClueClicked;
-        _revealClue.AddController(_clueClickGesture);
+        channel_reveal_clue.AddController(_clueClickGesture);
 
         _videoIds = StringList.New([]);
         _videoSelection = NoSelection.New(_videoIds);
@@ -139,8 +96,8 @@ public partial class ChannelView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        _videoGrid.Model = _videoSelection;
-        _videoGrid.Factory = _videoFactory;
+        channel_video_grid.Model = _videoSelection;
+        channel_video_grid.Factory = _videoFactory;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -237,8 +194,8 @@ public partial class ChannelView : ViewBase<Box>
     private void SetHeaderCollapsed(bool collapsed)
     {
         _isHeaderCollapsed = collapsed;
-        _headerRevealer.RevealChild = !collapsed;
-        _clueRevealer.RevealChild = collapsed;
+        channel_header_revealer.RevealChild = !collapsed;
+        channel_clue_revealer.RevealChild = collapsed;
         _lastHeaderStateChangeTicks = Environment.TickCount64;
         if (_vadjustment is not null) _lastScrollY = _vadjustment.Value;
     }
@@ -258,39 +215,39 @@ public partial class ChannelView : ViewBase<Box>
     private void Render(ChannelViewState state)
     {
         // 1. Metadata & Avatar
-        _channelName.SetText(state.Name);
-        _barTitle.SetText(string.IsNullOrWhiteSpace(state.Name) ? "Channel" : state.Name);
+        channel_name.SetText(state.Name);
+        channel_bar_title.SetText(string.IsNullOrWhiteSpace(state.Name) ? "Channel" : state.Name);
 
         if (!string.IsNullOrWhiteSpace(state.Url))
         {
-            _channelHandle.SetText(state.Url);
-            _channelHandle.Visible = true;
+            channel_handle.SetText(state.Url);
+            channel_handle.Visible = true;
         }
         else
         {
-            _channelHandle.Visible = false;
+            channel_handle.Visible = false;
         }
 
         if (state.SubscriberCount is { } subsCount)
         {
-            _subscribersLabel.SetText(FormatSubscriberCount(subsCount));
-            _subscribersLabel.Visible = true;
+            channel_subscribers.SetText(FormatSubscriberCount(subsCount));
+            channel_subscribers.Visible = true;
         }
         else
         {
-            _subscribersLabel.Visible = false;
+            channel_subscribers.Visible = false;
         }
 
-        _metaDot1.Visible = _channelHandle.Visible && _subscribersLabel.Visible;
+        channel_meta_dot1.Visible = channel_handle.Visible && channel_subscribers.Visible;
 
         if (!string.IsNullOrWhiteSpace(state.Description))
         {
-            _descriptionLabel.SetText(state.Description);
-            _descriptionLabel.Visible = true;
+            channel_description.SetText(state.Description);
+            channel_description.Visible = true;
         }
         else
         {
-            _descriptionLabel.Visible = false;
+            channel_description.Visible = false;
         }
 
         if (!string.Equals(_currentAvatarUrl, state.AvatarUrl, StringComparison.Ordinal))
@@ -320,7 +277,7 @@ public partial class ChannelView : ViewBase<Box>
                 ChannelVideoSort.Popular => 2u,
                 _ => 0u
             };
-            if (_sortDropdown.Selected != sortIndex) _sortDropdown.Selected = sortIndex;
+            if (channel_sort_dropdown.Selected != sortIndex) channel_sort_dropdown.Selected = sortIndex;
         }
         finally
         {
@@ -330,27 +287,27 @@ public partial class ChannelView : ViewBase<Box>
         // 3. State page & Grid rendering
         if (state.IsLoading)
         {
-            _stack.VisibleChildName = "loading";
+            channel_stack.VisibleChildName = "loading";
         }
         else if (!state.IsSuccess)
         {
-            _errorPage.Description = string.IsNullOrWhiteSpace(state.Summary)
+            channel_error_page.Description = string.IsNullOrWhiteSpace(state.Summary)
                 ? "Failed to load channel details."
                 : state.Summary;
-            _stack.VisibleChildName = "error";
+            channel_stack.VisibleChildName = "error";
         }
         else if (state.Videos.Count == 0)
         {
-            _emptyPage.Description = string.IsNullOrWhiteSpace(state.Summary)
+            channel_empty_page.Description = string.IsNullOrWhiteSpace(state.Summary)
                 ? "This channel has no public videos available right now."
                 : state.Summary;
-            _stack.VisibleChildName = "empty";
+            channel_stack.VisibleChildName = "empty";
         }
         else
         {
             ApplyVideos(state.Videos);
-            _paginationLoadingRevealer.RevealChild = state.IsLoadingMore;
-            _stack.VisibleChildName = "content";
+            channel_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+            channel_stack.VisibleChildName = "content";
         }
     }
 
@@ -370,7 +327,7 @@ public partial class ChannelView : ViewBase<Box>
         {
             if (_updatingSortDropdown || _disposed) return;
 
-            var selected = _sortDropdown.Selected;
+            var selected = channel_sort_dropdown.Selected;
             await _viewModel.SetSortSelection(selected);
         }
         catch (OperationCanceledException)
@@ -442,7 +399,7 @@ public partial class ChannelView : ViewBase<Box>
             try
             {
                 if (_disposed || cancellationToken.IsCancellationRequested || _avatarBindingGeneration != generation ||
-                    _avatarOverlay.GetRoot() is null)
+                    channel_avatar_overlay.GetRoot() is null)
                     return false;
 
                 Texture? texture = null;
@@ -457,13 +414,13 @@ public partial class ChannelView : ViewBase<Box>
                     decodedPixbuf = null;
 
                     picture = Picture.NewForPaintable(texture);
-                    picture.AlternativeText = $"{_channelName.GetText()} avatar";
+                    picture.AlternativeText = $"{channel_name.GetText()} avatar";
                     picture.ContentFit = ContentFit.Cover;
                     picture.WidthRequest = AvatarSize;
                     picture.HeightRequest = AvatarSize;
 
                     ClearAvatar();
-                    _avatarOverlay.Child = picture;
+                    channel_avatar_overlay.Child = picture;
                     _boundAvatarTexture = texture;
                     _boundAvatarPicture = picture;
                     texture = null;
@@ -495,7 +452,7 @@ public partial class ChannelView : ViewBase<Box>
         var texture = _boundAvatarTexture;
         _boundAvatarPicture = null;
         _boundAvatarTexture = null;
-        _avatarOverlay.Child = _avatarPlaceholder;
+        channel_avatar_overlay.Child = channel_avatar_placeholder;
         if (picture is not null)
         {
             picture.Paintable = null!;
@@ -552,17 +509,17 @@ public partial class ChannelView : ViewBase<Box>
 
         if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
         _scrollController.OnScroll -= OnScrollEvent;
-        _scrolledWindow.RemoveController(_scrollController);
+        channel_scrolled_window.RemoveController(_scrollController);
         _scrollController.Dispose();
 
 
         _clueMotionController.OnEnter -= OnCluePointerEnter;
         _clueMotionController.OnMotion -= OnCluePointerMotion;
-        _revealClue.RemoveController(_clueMotionController);
+        channel_reveal_clue.RemoveController(_clueMotionController);
         _clueMotionController.Dispose();
 
         _clueClickGesture.OnPressed -= OnClueClicked;
-        _revealClue.RemoveController(_clueClickGesture);
+        channel_reveal_clue.RemoveController(_clueClickGesture);
         _clueClickGesture.Dispose();
 
         _viewModel.StateChanged -= OnStateChanged;
@@ -572,7 +529,7 @@ public partial class ChannelView : ViewBase<Box>
         _avatarCancellation = null;
         ClearAvatar();
 
-        _videoGrid.Factory = null;
+        channel_video_grid.Factory = null;
         foreach (var association in _cardsByListItem)
             DisposeVideoCardCell(association.Key, association.Value);
         _cardsByListItem.Clear();
@@ -582,7 +539,7 @@ public partial class ChannelView : ViewBase<Box>
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
 
-        _videoGrid.Dispose();
+        channel_video_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
         _videoIds.Dispose();

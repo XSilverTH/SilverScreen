@@ -12,49 +12,17 @@ namespace SilverScreen.Views.Player;
 public partial class VideoInfoPanelView : ViewBase<Overlay>
 {
     private static readonly ILogger Logger = Log.ForContext<VideoInfoPanelView>();
-
-    [BlueprintWidget]
-    private Button _infoBackdrop = null!;
-
-    [BlueprintWidget]
-    private Button _infoCueButton = null!;
-
-    [BlueprintWidget]
-    private Revealer _infoRevealer = null!;
-
-    [BlueprintWidget]
-    private Label _infoTitleLabel = null!;
-
-    [BlueprintWidget]
-    private Label _infoChannelLabel = null!;
-
-    [BlueprintWidget]
-    private Button _infoCloseButton = null!;
-
-    [BlueprintWidget]
-    private Label _infoStatsLabel = null!;
-
-    [BlueprintWidget]
-    private Label _infoStatusLabel = null!;
-
-    [BlueprintWidget]
-    private ScrolledWindow _infoDescriptionScroller = null!;
-
-    [BlueprintWidget]
-    private TextView _infoDescription = null!;
-
-    private readonly IYouTubeVideoDetailsService _videoDetails;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly Action? _closed;
 
-    private VideoSummary? _currentVideo;
-    private bool _infoOpen;
-    private bool _bottomEdgeActive;
-    private int _infoLoadGeneration;
-    private CancellationTokenSource? _infoLoadCancellation;
-    private bool _disposed;
 
-    public bool IsOpen => _infoOpen;
+    private readonly IYouTubeVideoDetailsService _videoDetails;
+    private bool _bottomEdgeActive;
+
+    private VideoSummary? _currentVideo;
+    private bool _disposed;
+    private CancellationTokenSource? _infoLoadCancellation;
+    private int _infoLoadGeneration;
 
     public VideoInfoPanelView(
         IYouTubeVideoDetailsService videoDetails,
@@ -68,21 +36,23 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
         SetInfoContent(null);
     }
 
+    public bool IsOpen { get; private set; }
+
     public void Show(VideoSummary video)
     {
         if (_disposed) return;
         _currentVideo = video;
-        _infoOpen = true;
+        IsOpen = true;
         _bottomEdgeActive = false;
-        _infoCueButton.SetVisible(false);
-        _infoBackdrop.SetVisible(true);
-        _infoRevealer.RevealChild = true;
-        _infoTitleLabel.SetText(video.Title);
-        _infoChannelLabel.SetText(video.ChannelName);
-        _infoCloseButton.GrabFocus();
-        _infoStatusLabel.SetText("Loading video details…");
-        _infoStatusLabel.SetVisible(true);
-        _infoDescriptionScroller.SetVisible(false);
+        info_cue_button.SetVisible(false);
+        info_backdrop.SetVisible(true);
+        info_revealer.RevealChild = true;
+        info_title_label.SetText(video.Title);
+        info_channel_label.SetText(video.ChannelName);
+        info_close_button.GrabFocus();
+        info_status_label.SetText("Loading video details…");
+        info_status_label.SetVisible(true);
+        info_description_scroller.SetVisible(false);
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
@@ -93,51 +63,40 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     public void Close()
     {
-        if (!_infoOpen && !_infoRevealer.RevealChild) return;
-        _infoOpen = false;
+        if (!IsOpen && !info_revealer.RevealChild) return;
+        IsOpen = false;
         ++_infoLoadGeneration;
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
-        _infoRevealer.RevealChild = false;
-        _infoBackdrop.SetVisible(false);
-        _infoCueButton.SetVisible(false);
+        info_revealer.RevealChild = false;
+        info_backdrop.SetVisible(false);
+        info_cue_button.SetVisible(false);
         SetInfoContent(null);
         _closed?.Invoke();
     }
 
     public void Toggle(VideoSummary? video)
     {
-        if (_infoOpen)
-        {
+        if (IsOpen)
             Close();
-        }
-        else if (video is not null)
-        {
-            Show(video);
-        }
+        else if (video is not null) Show(video);
     }
 
     public void SetVideo(VideoSummary? video)
     {
-        if (_currentVideo?.Id != video?.Id && _infoOpen)
-        {
-            Close();
-        }
+        if (_currentVideo?.Id != video?.Id && IsOpen) Close();
 
         _currentVideo = video;
-        if (!_infoOpen)
-        {
-            SetInfoContent(null);
-        }
+        if (!IsOpen) SetInfoContent(null);
     }
 
     public void UpdatePointer(double y, double height, bool hasMedia)
     {
-        var atBottomEdge = hasMedia && !_infoOpen && height > 0 && y >= height - 28;
+        var atBottomEdge = hasMedia && !IsOpen && height > 0 && y >= height - 28;
         if (_bottomEdgeActive == atBottomEdge) return;
         _bottomEdgeActive = atBottomEdge;
-        _infoCueButton.SetVisible(atBottomEdge);
+        info_cue_button.SetVisible(atBottomEdge);
     }
 
     public void Reset()
@@ -153,10 +112,7 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     private void OnCueButtonClicked(object? sender, EventArgs args)
     {
-        if (_currentVideo is { } video)
-        {
-            Show(video);
-        }
+        if (_currentVideo is { } video) Show(video);
     }
 
     private void OnChannelButtonClicked(object? sender, EventArgs args)
@@ -192,7 +148,7 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || !_infoOpen || generation != _infoLoadGeneration ||
+            if (_disposed || !IsOpen || generation != _infoLoadGeneration ||
                 _currentVideo?.Id != videoId)
                 return false;
 
@@ -202,9 +158,9 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
             }
             else
             {
-                _infoStatusLabel.SetText(result.StatusMessage);
-                _infoStatusLabel.SetVisible(true);
-                _infoDescriptionScroller.SetVisible(false);
+                info_status_label.SetText(result.StatusMessage);
+                info_status_label.SetVisible(true);
+                info_description_scroller.SetVisible(false);
             }
 
             return false;
@@ -215,22 +171,22 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
     {
         if (details is null)
         {
-            _infoTitleLabel.SetText(_currentVideo?.Title ?? "Video details");
-            _infoChannelLabel.SetText(_currentVideo?.ChannelName ?? string.Empty);
-            _infoStatsLabel.SetText(string.Empty);
-            _infoStatusLabel.SetText("Move to the bottom edge to reveal video details.");
-            _infoStatusLabel.SetVisible(true);
-            _infoDescriptionScroller.SetVisible(false);
+            info_title_label.SetText(_currentVideo?.Title ?? "Video details");
+            info_channel_label.SetText(_currentVideo?.ChannelName ?? string.Empty);
+            info_stats_label.SetText(string.Empty);
+            info_status_label.SetText("Move to the bottom edge to reveal video details.");
+            info_status_label.SetVisible(true);
+            info_description_scroller.SetVisible(false);
             return;
         }
 
-        _infoTitleLabel.SetText(details.Title);
-        _infoChannelLabel.SetText(details.ChannelName);
-        _infoStatsLabel.SetText(BuildInfoStats(details));
-        _infoStatusLabel.SetVisible(string.IsNullOrWhiteSpace(details.Description));
-        _infoStatusLabel.SetText("This video has no description.");
-        _infoDescriptionScroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
-        if (_infoDescription.Buffer is { } buffer)
+        info_title_label.SetText(details.Title);
+        info_channel_label.SetText(details.ChannelName);
+        info_stats_label.SetText(BuildInfoStats(details));
+        info_status_label.SetVisible(string.IsNullOrWhiteSpace(details.Description));
+        info_status_label.SetText("This video has no description.");
+        info_description_scroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
+        if (info_description.Buffer is { } buffer)
             buffer.Text = details.Description ?? string.Empty;
     }
 

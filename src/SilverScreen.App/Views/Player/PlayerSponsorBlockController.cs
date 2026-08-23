@@ -106,6 +106,16 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
         UpdateManualPrompt(state, videoId);
     }
 
+    public void Clear()
+    {
+        if (_disposed) return;
+        CancelLoad();
+        ClearState();
+        _video = null;
+        _videoId = null;
+        _configurationKey = string.Empty;
+    }
+
     public bool TrySkipManualSegment()
     {
         if (_lastPlaybackState is not { } state || !ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
@@ -115,16 +125,6 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
         _seekAbsolute(segment.End.TotalSeconds);
         HideManualPrompt();
         return true;
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        CancelLoad();
-        ClearState();
-        _video = null;
-        _videoId = null;
-        _configurationKey = string.Empty;
     }
 
     private async Task LoadAsync(string videoId, IReadOnlyCollection<string> categories, long loadVersion,

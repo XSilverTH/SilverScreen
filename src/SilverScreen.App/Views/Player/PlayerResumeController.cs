@@ -74,6 +74,16 @@ internal sealed class PlayerResumeController : IPlayerFeature
         }
     }
 
+    public void Clear()
+    {
+        if (_disposed) return;
+        HidePrompt();
+        _videoId = null;
+        _resumeFraction = null;
+        _handledCurrentVideo = false;
+        _lastKnownDuration = TimeSpan.Zero;
+    }
+
     public bool TryResume()
     {
         if (_disposed || !_resumeButton.GetVisible() || _resumeFraction is not { } fraction ||
@@ -91,16 +101,6 @@ internal sealed class PlayerResumeController : IPlayerFeature
         _seekAbsolute(0);
         HidePrompt();
         return true;
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        HidePrompt();
-        _videoId = null;
-        _resumeFraction = null;
-        _handledCurrentVideo = false;
-        _lastKnownDuration = TimeSpan.Zero;
     }
 
     private static bool TryGetResumePosition(double? fraction, TimeSpan duration, out TimeSpan position)
@@ -162,5 +162,4 @@ internal sealed class PlayerResumeController : IPlayerFeature
             return false;
         });
     }
-
 }

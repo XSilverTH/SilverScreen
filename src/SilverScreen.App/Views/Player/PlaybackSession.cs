@@ -14,18 +14,24 @@ internal sealed class PlaybackSession(
     : IDisposable
 {
     private CookieFileLease? _cookieFile;
-    private int _currentPlaylistIndex = -1;
-    private VideoSummary? _currentVideo;
     private bool _disposed;
-    private bool _hasMedia;
     private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
-    private PlaybackRequest? _request;
 
-    public PlaybackRequest? Request => _request;
-    public VideoSummary? CurrentVideo => _currentVideo;
-    public int CurrentPlaylistIndex => _currentPlaylistIndex;
+    public PlaybackRequest? Request { get; private set; }
+
+    public VideoSummary? CurrentVideo { get; private set; }
+
+    public int CurrentPlaylistIndex { get; private set; } = -1;
+
     public string? CookieFilePath => _cookieFile?.Path;
-    public bool HasMedia => _hasMedia;
+    public bool HasMedia { get; private set; }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Reset();
+    }
 
     public event Action<VideoSummary, int>? VideoChanged;
     public event Action? SessionEnded;
@@ -35,25 +41,22 @@ internal sealed class PlaybackSession(
     {
         if (_disposed) return;
         ReleaseResources();
-        _request = request;
-        _currentPlaylistIndex = 0;
-        _currentVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
-        _hasMedia = false;
+        Request = request;
+        CurrentPlaylistIndex = 0;
+        CurrentVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
+        HasMedia = false;
         _playbackTelemetrySession = playbackTelemetry.Start(request);
         _cookieFile = cookieFiles.CreateCookieFile();
 
-        if (_currentVideo is not null)
-        {
-            VideoChanged?.Invoke(_currentVideo, 0);
-        }
+        if (CurrentVideo is not null) VideoChanged?.Invoke(CurrentVideo, 0);
     }
 
     public void UpdatePlayback(LibMpvPlaybackState state)
     {
         if (_disposed) return;
-        _hasMedia = state.HasMedia;
+        HasMedia = state.HasMedia;
 
-        if (_request is { } playbackRequest && state.HasMedia)
+        if (Request is { } playbackRequest && state.HasMedia)
         {
             var playbackState = new PlaybackPresenceState(
                 state.PlaylistIndex,
@@ -68,31 +71,28 @@ internal sealed class PlaybackSession(
             watchProgress.Update(playbackRequest, playbackState);
         }
 
-        desktopMedia.UpdatePlayback(_request, state);
+        desktopMedia.UpdatePlayback(Request, state);
 
-        if (_request is { } request &&
+        if (Request is { } request &&
             state.PlaylistIndex >= 0 &&
             state.PlaylistIndex < int.MaxValue &&
             state.PlaylistIndex < request.Videos.Length)
         {
             var newIndex = state.PlaylistIndex;
             var video = request.Videos[newIndex];
-            var videoChanged = _currentPlaylistIndex != newIndex || _currentVideo?.Id != video.Id;
+            var videoChanged = CurrentPlaylistIndex != newIndex || CurrentVideo?.Id != video.Id;
 
-            _currentPlaylistIndex = newIndex;
-            _currentVideo = video;
+            CurrentPlaylistIndex = newIndex;
+            CurrentVideo = video;
 
-            if (videoChanged)
-            {
-                VideoChanged?.Invoke(video, newIndex);
-            }
+            if (videoChanged) VideoChanged?.Invoke(video, newIndex);
         }
     }
 
     public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
-        if (_disposed || _request is null) return;
-        _request = new PlaybackRequest(newVideos);
+        if (_disposed || Request is null) return;
+        Request = new PlaybackRequest(newVideos);
     }
 
     public void EndSession()
@@ -112,10 +112,10 @@ internal sealed class PlaybackSession(
     public void Reset()
     {
         ReleaseResources();
-        _request = null;
-        _currentVideo = null;
-        _currentPlaylistIndex = -1;
-        _hasMedia = false;
+        Request = null;
+        CurrentVideo = null;
+        CurrentPlaylistIndex = -1;
+        HasMedia = false;
     }
 
     private void ReleaseResources()
@@ -126,12 +126,5 @@ internal sealed class PlaybackSession(
         _cookieFile?.Dispose();
         _cookieFile = null;
         desktopMedia.ClearPlayback();
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        Reset();
     }
 }
