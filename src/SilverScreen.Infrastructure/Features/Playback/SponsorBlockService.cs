@@ -81,12 +81,12 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
             var segments = payload
                 .Where(segment => segment is
-                                  {
-                                      Id.Length: > 0,
-                                      Category: not null,
-                                      ActionType: "skip",
-                                      Segment: [var start, var end]
-                                  } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
+                {
+                    Id.Length: > 0,
+                    Category: not null,
+                    ActionType: "skip",
+                    Segment: [var start, var end]
+                } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
                                   IsValidTimeRange(start, end))
                 .Select(segment => new SponsorBlockSegment(segment.Id!, TimeSpan.FromSeconds(segment.Segment![0]),
                     TimeSpan.FromSeconds(segment.Segment[1]), segment.Category!))

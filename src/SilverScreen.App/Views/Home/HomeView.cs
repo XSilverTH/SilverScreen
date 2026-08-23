@@ -88,7 +88,7 @@ public partial class HomeView : ViewBase<Box>
     public Task RefreshAsync()
     {
         return _viewModel.State is
-            { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
+        { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
             : Task.CompletedTask;
     }
