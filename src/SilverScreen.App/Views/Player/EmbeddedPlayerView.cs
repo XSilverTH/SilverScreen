@@ -40,7 +40,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerChapterOverlay _chapterOverlay;
     private readonly ToggleButton _commentsButton;
     private readonly CommentsView _commentsView;
-    private readonly ICookieFileProvider _cookieFiles;
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly Label _durationLabel;
     private readonly PlayerEngagementController _engagement;
@@ -59,8 +58,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly Box _loadingIndicator;
     private readonly Button _nextQueueButton;
     private readonly Button _playPauseButton;
-    private readonly IPlaybackPresenceService _playbackPresence;
-    private readonly IYouTubePlaybackTelemetryService _playbackTelemetry;
+    private readonly PlaybackSession _session;
     private readonly LibMpvPlayer _player;
     private readonly Widget _playerControls;
     private readonly GLArea _playerSurface;
@@ -95,17 +93,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly MenuButton _volumeButton;
     private readonly Popover _volumePopover;
     private readonly Scale _volumeScale;
-    private readonly IWatchProgressService _watchProgress;
     private bool _bottomEdgeActive;
     private IReadOnlyList<LibMpvChapter> _chapters = [];
     private string? _commentsVideoId;
     private bool _controlsVisible = true;
-    private CookieFileLease? _cookieFile;
     private TimeSpan _currentDuration;
-    private int _currentPlaylistIndex = -1;
-    private VideoSummary? _currentVideo;
     private bool _disposed;
-    private bool _hasMedia;
 
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
@@ -119,10 +112,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private long _lastThrottledSeekTime;
     private double _latestScrubPosition;
     private double _pendingSeekTarget = -1;
-    private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
     private long _reconciliationLatchExpiry;
     private bool _rendererReady;
-    private PlaybackRequest? _request;
     private TimeSpan _scrubStartPosition;
     private PlayerShortcutBindings _shortcuts = new();
     private double _speed = 1;
@@ -138,10 +129,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _backRequested = backRequested;
         _channelRequested = channelRequested;
         _preferences = dependencies.Preferences;
-        _cookieFiles = dependencies.CookieFiles;
-        _playbackPresence = dependencies.PlaybackPresence;
-        _playbackTelemetry = dependencies.PlaybackTelemetry;
-        _watchProgress = dependencies.WatchProgress;
         _videoDetails = dependencies.VideoDetails;
         _playerSurface = GetRequiredObject<GLArea>("player_surface");
         _headerBar = GetRequiredObject<Widget>("player_header_bar");
@@ -228,7 +215,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             () => _timelinePlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
         _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences, _timeline,
             _timelineOverlay, sponsorBlockSkipButton, pos => SeekAbsolute(pos));
-        _resumeController = new PlayerResumeController(_preferences, _watchProgress, resumeButton, restartButton,
+        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, resumeButton, restartButton,
             pos => SeekAbsolute(pos));
         _features = [_engagement, _sponsorBlockController, _resumeController];
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
@@ -237,6 +224,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             return false;
         }));
         _desktopMedia = new DesktopMediaIntegration(_player, _presentRequested);
+        _session = new PlaybackSession(dependencies.CookieFiles, dependencies.PlaybackPresence,
+            dependencies.PlaybackTelemetry, dependencies.WatchProgress, _desktopMedia);
+        _session.VideoChanged += OnSessionVideoChanged;
+        _session.SessionEnded += OnSessionEnded;
+        _session.Failed += OnSessionFailed;
         _subtitleController = new PlayerSubtitleController(_preferences, subtitleDropdown, subtitleModel,
             subtitleButton, trackId => _player.SelectSubtitleTrack(trackId));
         _player.RenderRequested += OnRenderRequested;
@@ -294,11 +286,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.RenderRequested -= OnRenderRequested;
         _player.StateChanged -= OnStateChanged;
         _player.PlaybackFailed -= OnPlaybackFailed;
+        _session.VideoChanged -= OnSessionVideoChanged;
+        _session.SessionEnded -= OnSessionEnded;
+        _session.Failed -= OnSessionFailed;
+        _session.Dispose();
         _player.Dispose();
         _desktopMedia.Dispose();
-        ReleaseSession();
     }
-
     public Task<string> PresentAsync(PlaybackRequest request)
     {
         try
@@ -313,11 +307,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         if (!_player.IsAvailable)
             return Task.FromResult(_player.AvailabilityError ?? RuntimeDependencyGuidance.LibMpvUnavailable);
-
         Functions.IdleAdd(0, () =>
         {
             EndSession(true);
-            _request = request;
+            _session.Start(request);
             _syncingQueue = true;
             try
             {
@@ -328,19 +321,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 _syncingQueue = false;
             }
 
-            _currentPlaylistIndex = 0;
             _queueViewModel.SetCurrentPlayingIndex(0);
-            _playbackTelemetrySession = _playbackTelemetry.Start(request);
-            _cookieFile = _cookieFiles.CreateCookieFile();
             var preferences = _preferences.GetPreferences();
             var firstVideo = request.Videos[0];
-            _currentVideo = firstVideo;
-            _titleLabel.SetText(firstVideo.Title);
-            _channelLabel.SetText(firstVideo.ChannelName);
             _durationLabel.SetText(FormatTime(firstVideo.Duration));
-            foreach (var feature in _features) feature.Load(firstVideo);
-            _commentsVideoId = firstVideo.Id;
-            _commentsView.SetVideo(firstVideo.Id);
             RegisterActivity();
             _chapterOverlay.Update([], TimeSpan.Zero);
 
@@ -349,11 +333,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _queueControls.SetVisible(request.Videos.Length > 1);
             _previousQueueButton.Sensitive = false;
             _nextQueueButton.Sensitive = request.Videos.Length > 1;
-            _hasMedia = false;
             _presentRequested();
             AttachKeyboardShortcuts();
             Widget.GrabFocus();
-            if (_rendererReady) _player.Load(request, preferences, _cookieFile?.Path);
+            if (_rendererReady) _player.Load(request, preferences, _session.CookieFilePath);
             return false;
         });
 
@@ -416,8 +399,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _rendererReady = true;
         AttachKeyboardShortcuts();
 
-        if (_request is not null)
-            _player.Load(_request, _preferences.GetPreferences(), _cookieFile?.Path);
+        if (_session.Request is not null)
+            _player.Load(_session.Request, _preferences.GetPreferences(), _session.CookieFilePath);
     }
 
     private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
@@ -481,7 +464,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool HandleKeyboardShortcut(uint keyval)
     {
         keyval = Gdk.Functions.KeyvalToLower(keyval);
-        if (!_hasMedia || !_shortcutMap.TryGetValue(keyval, out var action)) return false;
+        if (!_session.HasMedia || !_shortcutMap.TryGetValue(keyval, out var action)) return false;
 
         if (action == PlayerShortcutAction.ResumeOrSkip)
         {
@@ -601,7 +584,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void UpdateInfoCue(double y)
     {
         var height = Widget.GetAllocatedHeight();
-        var atBottomEdge = _hasMedia && !_infoOpen && height > 0 && y >= height - 28;
+        var atBottomEdge = _session.HasMedia && !_infoOpen && height > 0 && y >= height - 28;
         if (_bottomEdgeActive == atBottomEdge) return;
         _bottomEdgeActive = atBottomEdge;
         _infoCueButton.SetVisible(atBottomEdge);
@@ -637,7 +620,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OpenVideoInfo()
     {
-        if (!_hasMedia || _currentVideo is not { } video) return;
+        if (!_session.HasMedia || _session.CurrentVideo is not { } video) return;
 
         _infoOpen = true;
         _bottomEdgeActive = false;
@@ -678,7 +661,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Functions.IdleAdd(0, () =>
         {
             if (_disposed || !_infoOpen || generation != _infoLoadGeneration ||
-                _currentVideo?.Id != videoId)
+                _session.CurrentVideo?.Id != videoId)
                 return false;
 
             if (result is { IsSuccess: true, Details: { } details })
@@ -708,15 +691,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _infoBackdrop.SetVisible(false);
         _infoCueButton.SetVisible(false);
         SetInfoContent(null);
-        if (_hasMedia) _playerSurface.GrabFocus();
+        if (_session.HasMedia) _playerSurface.GrabFocus();
     }
 
     private void SetInfoContent(YouTubeVideoDetails? details)
     {
         if (details is null)
         {
-            _infoTitleLabel.SetText(_currentVideo?.Title ?? "Video details");
-            _infoChannelLabel.SetText(_currentVideo?.ChannelName ?? string.Empty);
+            _infoTitleLabel.SetText(_session.CurrentVideo?.Title ?? "Video details");
+            _infoChannelLabel.SetText(_session.CurrentVideo?.ChannelName ?? string.Empty);
             _infoStatsLabel.SetText(string.Empty);
             _infoStatusLabel.SetText("Move to the bottom edge to reveal video details.");
             _infoStatusLabel.SetVisible(true);
@@ -802,7 +785,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnTrackJumpRequested(int index)
     {
-        if (_request is null || index < 0 || index >= _request.Videos.Length)
+        if (_session.Request is null || index < 0 || index >= _session.Request.Videos.Length)
             return;
 
         _player.PlayPlaylistIndex(index);
@@ -846,7 +829,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OpenCurrentChannel()
     {
-        if (_currentVideo is { } video)
+        if (_session.CurrentVideo is { } video)
             _channelRequested(video);
     }
 
@@ -931,7 +914,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
     {
-        if (_disposed || !_hasMedia || _currentDuration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        if (_disposed || !_session.HasMedia || _currentDuration <= TimeSpan.Zero || !_timeline.GetSensitive())
         {
             _scrubCue.SetVisible(false);
             return;
@@ -991,7 +974,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
     {
-        if (_disposed || !_hasMedia || !_timeline.GetSensitive() || _currentDuration <= TimeSpan.Zero)
+        if (_disposed || !_session.HasMedia || !_timeline.GetSensitive() || _currentDuration <= TimeSpan.Zero)
             return;
 
         _isScrubbing = true;
@@ -1124,18 +1107,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnStateChanged(object? sender, LibMpvPlaybackState state)
     {
         if (_disposed) return;
-        _hasMedia = state.HasMedia;
         _speed = state.Speed;
-        if (_request is { } playbackRequest && state.HasMedia)
-        {
-            var playbackState = new PlaybackPresenceState(state.PlaylistIndex, state.Position,
-                state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow);
-            _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
-            _playbackTelemetrySession?.UpdateState(playbackState);
-            _watchProgress.Update(playbackRequest, playbackState);
-        }
+        _session.UpdatePlayback(state);
 
-        _desktopMedia.UpdatePlayback(_request, state);
         SetLoading(state.IsLoading);
         _updatingControls = true;
         _subtitleController.UpdateTracks(state.SubtitleTracks, _updatingControls);
@@ -1172,31 +1146,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             var speed = SnapPlaybackSpeed(state.Speed);
             _speedScale.SetValue(speed);
             SetSpeedLabel(speed);
-            if (_request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
+            if (_session.Request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
                 state.PlaylistIndex >= request.Videos.Length) return;
-            _currentPlaylistIndex = state.PlaylistIndex;
             _queueViewModel.SetCurrentPlayingIndex(state.PlaylistIndex);
             _previousQueueButton.Sensitive = state.PlaylistIndex > 0;
             _nextQueueButton.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
             var video = request.Videos[state.PlaylistIndex];
-            if (_currentVideo?.Id != video.Id && _infoOpen)
-                CloseVideoInfo();
-            _currentVideo = video;
-            _titleLabel.SetText(video.Title);
-            _channelLabel.SetText(video.ChannelName);
-            if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
-            {
-                foreach (var feature in _features) feature.Load(video);
-            }
-
             foreach (var feature in _features) feature.UpdatePlayback(state, video.Id);
-
-
-            if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
-            _commentsVideoId = video.Id;
-            _commentsView.SetVideo(video.Id);
-            if (_commentsButton.Active)
-                _commentsView.EnsureLoaded();
         }
         finally
         {
@@ -1204,8 +1160,28 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
     }
 
+    private void OnSessionVideoChanged(VideoSummary video, int playlistIndex)
+    {
+        if (_infoOpen)
+            CloseVideoInfo();
+        _titleLabel.SetText(video.Title);
+        _channelLabel.SetText(video.ChannelName);
+        if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
+        {
+            foreach (var feature in _features) feature.Load(video);
+            _commentsVideoId = video.Id;
+            _commentsView.SetVideo(video.Id);
+            if (_commentsButton.Active)
+                _commentsView.EnsureLoaded();
+        }
+    }
 
     private void OnPlaybackFailed(object? sender, string detail)
+    {
+        _session.Fail(detail);
+    }
+
+    private void OnSessionFailed(string detail)
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
         CloseVideoInfo();
@@ -1222,33 +1198,28 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
-        _request = null;
-        _currentVideo = null;
         _queueControls.SetVisible(false);
         _queueButton.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
-        _currentPlaylistIndex = -1;
-        _hasMedia = false;
         _player.Stop();
-        ReleaseSession();
     }
 
     private void EndSession(bool stop)
     {
         if (stop) _player.Stop();
+        _session.EndSession();
+    }
+
+    private void OnSessionEnded()
+    {
         CancelScrubbing();
         _currentDuration = TimeSpan.Zero;
         _chapters = [];
         _scrubCue.SetVisible(false);
         CloseVideoInfo();
-        ReleaseSession();
-        _request = null;
-        _currentVideo = null;
-        _hasMedia = false;
         _queueControls.SetVisible(false);
         _queueButton.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
-        _currentPlaylistIndex = -1;
         foreach (var feature in _features) feature.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
@@ -1256,16 +1227,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsVideoId = null;
         _commentsButton.Active = false;
         SetLoading(false);
-    }
-
-    private void ReleaseSession()
-    {
-        _playbackPresence.Clear();
-        _playbackTelemetrySession?.Dispose();
-        _playbackTelemetrySession = null;
-        _cookieFile?.Dispose();
-        _cookieFile = null;
-        _desktopMedia.ClearPlayback();
     }
 
     private void ResetTransport()
@@ -1349,10 +1310,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || _syncingQueue || _request is null)
+            if (_disposed || _syncingQueue || _session.Request is null)
                 return false;
 
-            var currentVideos = _request.Videos;
+            var currentVideos = _session.Request.Videos;
             var newItems = _queueService.Items;
             var newVideos = newItems.Select(i => i.Video).ToImmutableArray();
 
@@ -1400,10 +1361,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 if (fromIndex >= 0 && toIndex >= 0) _player.MovePlaylistItem(fromIndex, toIndex);
             }
 
-            _request = new PlaybackRequest(newVideos);
-            _queueControls.SetVisible(_request.Videos.Length > 1);
-            _previousQueueButton.Sensitive = _currentPlaylistIndex > 0;
-            _nextQueueButton.Sensitive = _currentPlaylistIndex < _request.Videos.Length - 1;
+            _session.UpdateQueue(newVideos);
+            _queueControls.SetVisible(newVideos.Length > 1);
+            _previousQueueButton.Sensitive = _session.CurrentPlaylistIndex > 0;
+            _nextQueueButton.Sensitive = _session.CurrentPlaylistIndex < newVideos.Length - 1;
             return false;
         });
     }
