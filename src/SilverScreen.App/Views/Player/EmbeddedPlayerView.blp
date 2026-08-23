@@ -399,7 +399,6 @@ Adw.OverlaySplitView EmbeddedPlayerView {
 
     Gtk.Overlay player_timeline_overlay {
       child: Gtk.Scale player_timeline {
-        value-changed => $OnTimelineValueChanged();
         draw-value: false;
         hexpand: true;
         sensitive: false;
