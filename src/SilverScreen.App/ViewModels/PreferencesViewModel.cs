@@ -126,7 +126,7 @@ public sealed class PreferencesViewModel
             SponsorBlockSegmentDisplayEnabled = preferences.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = preferences.ResumePlaybackOnDemand,
-            Shortcuts = preferences.Shortcuts.Clone(),
+            Shortcuts = preferences.Shortcuts,
 
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
             PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage
@@ -154,7 +154,7 @@ public sealed class PreferencesViewModel
             SponsorBlockSegmentDisplayEnabled = state.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = state.ResumePlaybackOnDemand,
-            Shortcuts = state.Shortcuts.Clone(),
+            Shortcuts = state.Shortcuts,
 
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = current.PreferredSubtitleLanguage

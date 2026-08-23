@@ -25,8 +25,7 @@ public sealed class PreferencesViewModelTests
     {
         var service = new FakePreferencesService(new AppPreferences());
         var viewModel = new PreferencesViewModel(service);
-        var shortcuts = viewModel.EditorState.Shortcuts.Clone();
-        shortcuts.TogglePause = ["Pause"];
+        var shortcuts = viewModel.EditorState.Shortcuts with { TogglePause = ["Pause"] };
 
         var result = viewModel.Save(viewModel.EditorState with { Shortcuts = shortcuts });
 

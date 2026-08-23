@@ -106,10 +106,10 @@ internal sealed class PlayerSubtitleController(
             return;
         }
 
-        preferences1.PreferredSubtitleLanguage = language;
+        var updated = preferences1 with { PreferredSubtitleLanguage = language };
         try
         {
-            preferences.SavePreferences(preferences1);
+            preferences.SavePreferences(updated);
             UpdateButton();
         }
         catch (PreferencesPersistenceException exception)

@@ -1,6 +1,6 @@
 namespace SilverScreen.Core.Models;
 
-public sealed class AppPreferences
+public sealed record AppPreferences
 {
     public string Theme { get; set; } = "System"; // "System", "Light", "Dark"
     public string PlaybackBackend { get; set; } = PlaybackBackends.ExternalMpv;
@@ -20,6 +20,6 @@ public sealed class AppPreferences
     public bool ResumePlaybackOnDemand { get; set; }
     public PlayerShortcutBindings Shortcuts { get; set; } = new();
 
-    public string[] SponsorBlockCategories { get; set; } =
+    public EquatableArray<string> SponsorBlockCategories { get; set; } =
         [.. Models.SponsorBlockCategories.All];
 }

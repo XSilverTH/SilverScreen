@@ -28,7 +28,6 @@ public sealed class FilePreferencesService : IPreferencesService
     {
         lock (_lock)
         {
-            // Return a copy to avoid external modification bypassing SavePreferences/PreferencesChanged
             return Clone(_current);
         }
     }
@@ -40,7 +39,7 @@ public sealed class FilePreferencesService : IPreferencesService
         var cloned = Clone(preferences);
         lock (_lock)
         {
-            if (AreEquivalent(cloned, _current))
+            if (cloned == _current)
                 return;
             try
             {
@@ -56,6 +55,11 @@ public sealed class FilePreferencesService : IPreferencesService
         }
 
         PreferencesChanged?.Invoke(this, Clone(cloned));
+    }
+
+    private static AppPreferences Clone(AppPreferences preferences)
+    {
+        return preferences with { Shortcuts = preferences.Shortcuts with { } };
     }
 
     private void WriteAtomically(AppPreferences preferences)
@@ -106,55 +110,6 @@ public sealed class FilePreferencesService : IPreferencesService
         }
 
         return new AppPreferences();
-    }
-
-    private static AppPreferences Clone(AppPreferences source)
-    {
-        return new AppPreferences
-        {
-            Theme = source.Theme,
-            MpvExecutablePath = source.MpvExecutablePath,
-            PlaybackBackend = source.PlaybackBackend,
-            OpenInFullscreen = source.OpenInFullscreen,
-            AutoAdvanceNextVideo = source.AutoAdvanceNextVideo,
-            VideoQuality = source.VideoQuality,
-            PreferredSubtitleLanguage = source.PreferredSubtitleLanguage,
-            YtDlpExecutablePath = source.YtDlpExecutablePath,
-            MaxResults = source.MaxResults,
-            MarkWatchedVideos = source.MarkWatchedVideos,
-            YouTubePlaybackTelemetryEnabled = source.YouTubePlaybackTelemetryEnabled,
-            DiscordRichPresenceEnabled = source.DiscordRichPresenceEnabled,
-            SponsorBlockAutoSkipEnabled = source.SponsorBlockAutoSkipEnabled,
-            SponsorBlockSegmentDisplayEnabled = source.SponsorBlockSegmentDisplayEnabled,
-            ResumePlaybackAutomatically = source.ResumePlaybackAutomatically,
-            ResumePlaybackOnDemand = source.ResumePlaybackOnDemand,
-
-            SponsorBlockCategories = [.. source.SponsorBlockCategories],
-            Shortcuts = source.Shortcuts.Clone()
-        };
-    }
-
-    private static bool AreEquivalent(AppPreferences left, AppPreferences right)
-    {
-        return left.Theme == right.Theme &&
-               left.MpvExecutablePath == right.MpvExecutablePath &&
-               left.PlaybackBackend == right.PlaybackBackend &&
-               left.OpenInFullscreen == right.OpenInFullscreen &&
-               left.AutoAdvanceNextVideo == right.AutoAdvanceNextVideo &&
-               left.VideoQuality == right.VideoQuality &&
-               left.PreferredSubtitleLanguage == right.PreferredSubtitleLanguage &&
-               left.YtDlpExecutablePath == right.YtDlpExecutablePath &&
-               left.MaxResults == right.MaxResults &&
-               left.MarkWatchedVideos == right.MarkWatchedVideos &&
-               left.YouTubePlaybackTelemetryEnabled == right.YouTubePlaybackTelemetryEnabled &&
-               left.DiscordRichPresenceEnabled == right.DiscordRichPresenceEnabled &&
-               left.SponsorBlockAutoSkipEnabled == right.SponsorBlockAutoSkipEnabled &&
-               left.SponsorBlockSegmentDisplayEnabled == right.SponsorBlockSegmentDisplayEnabled &&
-               left.ResumePlaybackAutomatically == right.ResumePlaybackAutomatically &&
-               left.ResumePlaybackOnDemand == right.ResumePlaybackOnDemand &&
-               left.SponsorBlockCategories.SequenceEqual(right.SponsorBlockCategories,
-                   StringComparer.Ordinal) &&
-               left.Shortcuts.Equals(right.Shortcuts);
     }
 
     private static string GetDefaultPreferencesFilePath()
