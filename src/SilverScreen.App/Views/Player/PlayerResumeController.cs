@@ -6,7 +6,7 @@ using static GLib.Functions;
 
 namespace SilverScreen.Views.Player;
 
-internal sealed class PlayerResumeController : IDisposable
+internal sealed class PlayerResumeController : IPlayerFeature
 {
     private const uint PromptDurationMilliseconds = 6_000;
     private const double MinimumResumeSeconds = 5;

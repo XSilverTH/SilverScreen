@@ -44,6 +44,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly Label _durationLabel;
     private readonly PlayerEngagementController _engagement;
+    private readonly ImmutableArray<IPlayerFeature> _features;
     private readonly Widget _headerBar;
     private readonly Button _infoBackdrop;
     private readonly Label _infoChannelLabel;
@@ -229,6 +230,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _timelineOverlay, sponsorBlockSkipButton, pos => SeekAbsolute(pos));
         _resumeController = new PlayerResumeController(_preferences, _watchProgress, resumeButton, restartButton,
             pos => SeekAbsolute(pos));
+        _features = [_engagement, _sponsorBlockController, _resumeController];
         _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
             if (!_disposed) action();
@@ -267,9 +269,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
         _subtitleController.Dispose();
-        _engagement.Dispose();
-        _sponsorBlockController.Dispose();
-        _resumeController.Dispose();
+        foreach (var feature in _features) feature.Dispose();
 
         _chapterOverlay.Dispose();
         _preferences.PreferencesChanged -= OnPreferencesChanged;
@@ -338,13 +338,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _titleLabel.SetText(firstVideo.Title);
             _channelLabel.SetText(firstVideo.ChannelName);
             _durationLabel.SetText(FormatTime(firstVideo.Duration));
-            _engagement.Load(firstVideo);
+            foreach (var feature in _features) feature.Load(firstVideo);
             _commentsVideoId = firstVideo.Id;
             _commentsView.SetVideo(firstVideo.Id);
             RegisterActivity();
             _chapterOverlay.Update([], TimeSpan.Zero);
-            _sponsorBlockController.Load(firstVideo);
-            _resumeController.Load(firstVideo);
 
             SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
             SetLoading(true);
@@ -1130,9 +1128,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _speed = state.Speed;
         if (_request is { } playbackRequest && state.HasMedia)
         {
-            if (state.PlaylistIndex is >= 0 and < int.MaxValue &&
-                state.PlaylistIndex < playbackRequest.Videos.Length)
-                _resumeController.Load(playbackRequest.Videos[state.PlaylistIndex]);
             var playbackState = new PlaybackPresenceState(state.PlaylistIndex, state.Position,
                 state.Duration, state.IsPaused, state.Speed, DateTimeOffset.UtcNow);
             _playbackPresence.SetPlaybackState(playbackRequest, playbackState);
@@ -1191,13 +1186,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _channelLabel.SetText(video.ChannelName);
             if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
             {
-                _engagement.Load(video);
-                _sponsorBlockController.Load(video);
-                _resumeController.Load(video);
+                foreach (var feature in _features) feature.Load(video);
             }
 
-            _sponsorBlockController.UpdatePlayback(state, video.Id);
-            _resumeController.UpdatePlayback(state, video.Id);
+            foreach (var feature in _features) feature.UpdatePlayback(state, video.Id);
 
 
             if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
@@ -1225,9 +1217,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _chapters = [];
         _scrubCue.SetVisible(false);
         ResetTransport();
-        _engagement.Clear();
-        _sponsorBlockController.Clear();
-        _resumeController.Clear();
+        foreach (var feature in _features) feature.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
@@ -1259,9 +1249,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _queueButton.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _currentPlaylistIndex = -1;
-        _engagement.Clear();
-        _sponsorBlockController.Clear();
-        _resumeController.Clear();
+        foreach (var feature in _features) feature.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);

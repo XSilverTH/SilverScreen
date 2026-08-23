@@ -9,7 +9,7 @@ using static GLib.Functions;
 
 namespace SilverScreen.Views.Player;
 
-internal sealed class PlayerSponsorBlockController : IDisposable
+internal sealed class PlayerSponsorBlockController : IPlayerFeature
 {
     private const uint SkipPromptDurationMilliseconds = 3_000;
     private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
