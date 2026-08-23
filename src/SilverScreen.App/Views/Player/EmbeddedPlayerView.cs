@@ -429,7 +429,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _rendererReady = false;
     }
 
-    private bool OnPlayerSurfaceRender(object? sender, GLArea.RenderSignalArgs args)
+    private bool OnPlayerSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
     {
         if (_disposed || !_rendererReady) return false;
         _player.Render(_playerSurface.GetAllocatedWidth() * _playerSurface.GetScaleFactor(),
