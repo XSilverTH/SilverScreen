@@ -115,8 +115,8 @@ internal sealed class PlayerResumeController : IPlayerFeature
 
     private void ShowResumePrompt(TimeSpan resumePosition)
     {
-        _resumeButton.SetLabel($"Resume from {FormatTime(resumePosition)}");
-        _resumeButton.SetTooltipText($"Resume playback at {FormatTime(resumePosition)} (Enter)");
+        _resumeButton.SetLabel($"Resume from {PlayerTimeFormatter.FormatTime(resumePosition)}");
+        _resumeButton.SetTooltipText($"Resume playback at {PlayerTimeFormatter.FormatTime(resumePosition)} (Enter)");
         _resumeButton.SetVisible(true);
         _restartButton.SetVisible(false);
         SchedulePromptHide();
@@ -163,12 +163,4 @@ internal sealed class PlayerResumeController : IPlayerFeature
         });
     }
 
-    private static string FormatTime(TimeSpan value)
-    {
-        var seconds = Math.Max(0, (long)Math.Floor(value.TotalSeconds));
-        var duration = TimeSpan.FromSeconds(seconds);
-        return duration.TotalHours >= 1
-            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
-            : $"{duration.Minutes}:{duration.Seconds:D2}";
-    }
 }

@@ -90,7 +90,7 @@ internal sealed class PlayerTimelineController : IDisposable
         _updatingControls = true;
         try
         {
-            _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : FormatTime(state.Duration));
+            _durationLabel.SetText(state.Duration == TimeSpan.Zero ? "Live" : PlayerTimeFormatter.FormatTime(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
 
@@ -103,7 +103,7 @@ internal sealed class PlayerTimelineController : IDisposable
                 {
                     if (isCloseToPending) _reconciliationLatchExpiry = 0;
                     _timelinePlaybackPosition = state.Position;
-                    _positionLabel.SetText(FormatTime(state.Position));
+                    _positionLabel.SetText(PlayerTimeFormatter.FormatTime(state.Position));
                     _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0,
                         Math.Max(0, state.Duration.TotalSeconds)));
                 }
@@ -135,7 +135,7 @@ internal sealed class PlayerTimelineController : IDisposable
         {
             _timeline.SetValue(_scrubStartPosition.TotalSeconds);
             _timelinePlaybackPosition = _scrubStartPosition;
-            _positionLabel.SetText(FormatTime(_scrubStartPosition));
+            _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_scrubStartPosition));
         }
         finally
         {
@@ -168,7 +168,7 @@ internal sealed class PlayerTimelineController : IDisposable
     public void SetDuration(TimeSpan duration)
     {
         _currentDuration = duration;
-        _durationLabel.SetText(FormatTime(duration));
+        _durationLabel.SetText(PlayerTimeFormatter.FormatTime(duration));
     }
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
@@ -204,7 +204,7 @@ internal sealed class PlayerTimelineController : IDisposable
         var badgeX = Math.Clamp(pointerX - cueWidth / 2d, 8, Math.Max(8, hostWidth - cueWidth - 8));
         _scrubCue.MarginStart = (int)Math.Round(badgeX);
 
-        _scrubTimeLabel.SetText(FormatTime(targetTime));
+        _scrubTimeLabel.SetText(PlayerTimeFormatter.FormatTime(targetTime));
 
         if (_isScrubbing)
         {
@@ -265,7 +265,7 @@ internal sealed class PlayerTimelineController : IDisposable
         var finalPosition = _timeline.GetValue();
         SeekAbsolute(finalPosition);
         _timelinePlaybackPosition = TimeSpan.FromSeconds(finalPosition);
-        _positionLabel.SetText(FormatTime(_timelinePlaybackPosition));
+        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_timelinePlaybackPosition));
         _registerActivity();
     }
 
@@ -275,7 +275,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
         var targetSeconds = _timeline.GetValue();
         _timelinePlaybackPosition = TimeSpan.FromSeconds(targetSeconds);
-        _positionLabel.SetText(FormatTime(_timelinePlaybackPosition));
+        _positionLabel.SetText(PlayerTimeFormatter.FormatTime(_timelinePlaybackPosition));
 
         if (_isScrubbing)
         {
@@ -337,14 +337,6 @@ internal sealed class PlayerTimelineController : IDisposable
             : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
     }
 
-    private static string FormatTime(TimeSpan value)
-    {
-        var seconds = Math.Max(0, (long)Math.Floor(value.TotalSeconds));
-        var duration = TimeSpan.FromSeconds(seconds);
-        return duration.TotalHours >= 1
-            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
-            : $"{duration.Minutes}:{duration.Seconds:D2}";
-    }
 
     public void Dispose()
     {

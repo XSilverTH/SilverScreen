@@ -28,8 +28,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double MaximumPlaybackSpeed = 5;
     private const double PlaybackSpeedIncrement = 0.25;
 
-    private const uint SeekThrottleIntervalMilliseconds = 120;
-    private const long ReconciliationLatchMilliseconds = 400;
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     [BlueprintWidget("player_surface")]
     private GLArea _playerSurface = null!;
@@ -470,9 +468,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.MovePlaylist(true);
     }
 
-    private void OnQueueButtonToggled(object? sender, EventArgs args)
-    {
-    }
 
     private void CloseQueue()
     {
@@ -836,14 +831,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     }
 
 
-    private static string FormatTime(TimeSpan value)
-    {
-        var seconds = Math.Max(0, (long)Math.Floor(value.TotalSeconds));
-        var duration = TimeSpan.FromSeconds(seconds);
-        return duration.TotalHours >= 1
-            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
-            : $"{duration.Minutes}:{duration.Seconds:D2}";
-    }
 
 
     private sealed class EmbeddedPlayerPlaybackService(EmbeddedPlayerView player) : IPlaybackService
