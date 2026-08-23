@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Versioning;
 using GObject;
 using Serilog;
 using SilverScreen.Features.Session;
@@ -11,7 +11,8 @@ using Window = Adw.Window;
 
 namespace SilverScreen.Views.Account;
 
-[SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+[SupportedOSPlatform("linux")]
+// [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 public sealed partial class WebLoginWindow : WindowBase<Window>
 {
     private const string LoginUri =

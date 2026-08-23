@@ -9,7 +9,7 @@ internal sealed class PlayerChromeController : IDisposable
     private const uint ControlsVisibilityCheckMilliseconds = 100;
     private readonly Box _centerControls;
     private readonly GestureClick _clickGesture;
-    private readonly Func<bool> _hasOpenPopover;
+
     private readonly Widget _headerBar;
 
     private readonly EventControllerMotion _motionController;
@@ -38,7 +38,7 @@ internal sealed class PlayerChromeController : IDisposable
         _headerBar = headerBar;
         _centerControls = centerControls;
         _playerControls = playerControls;
-        _hasOpenPopover = hasOpenPopover;
+
         _onActivity = onActivity;
         _onPointerMoved = onPointerMoved;
 
@@ -59,7 +59,7 @@ internal sealed class PlayerChromeController : IDisposable
         {
             if (_disposed) return false;
             if (ControlsVisible &&
-                !_hasOpenPopover() &&
+                !hasOpenPopover() &&
                 Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
                 SetControlsVisible(false);
 
@@ -67,7 +67,7 @@ internal sealed class PlayerChromeController : IDisposable
         });
     }
 
-    public bool ControlsVisible { get; private set; } = true;
+    private bool ControlsVisible { get; set; } = true;
 
     public void Dispose()
     {
@@ -97,7 +97,7 @@ internal sealed class PlayerChromeController : IDisposable
         SetControlsVisible(true);
     }
 
-    public void RegisterPointerActivity(double x, double y)
+    private void RegisterPointerActivity(double x, double y)
     {
         if (_disposed) return;
         if (Math.Abs(x - _lastPointerX) < 0.2 && Math.Abs(y - _lastPointerY) < 0.2) return;
@@ -107,7 +107,7 @@ internal sealed class PlayerChromeController : IDisposable
         _onPointerMoved?.Invoke(y);
     }
 
-    public void SetControlsVisible(bool visible)
+    private void SetControlsVisible(bool visible)
     {
         if (ControlsVisible == visible) return;
         ControlsVisible = visible;

@@ -33,18 +33,16 @@ public sealed class YtDlpChannelService(
                 YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, cookieFile?.Path),
                 options.Timeout,
                 cancellationToken).ConfigureAwait(false);
-            if (result.ExitCode != 0)
-            {
-                var error = string.IsNullOrWhiteSpace(result.StandardError)
-                    ? $"yt-dlp exited with code {result.ExitCode}."
-                    : result.StandardError.Trim();
-                Logger.Warning("yt-dlp channel request exited with code {ExitCode}", result.ExitCode);
-                return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                    $"Could not load channel: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
-            }
+            if (result.ExitCode == 0)
+                return ParsePage(result.StandardOutput, channelUrl, fallbackName, sort,
+                    startIndex, Math.Max(options.MaxResults, 1));
 
-            return ParsePage(result.StandardOutput, channelUrl, fallbackName, sort,
-                startIndex, Math.Max(options.MaxResults, 1));
+            var error = string.IsNullOrWhiteSpace(result.StandardError)
+                ? $"yt-dlp exited with code {result.ExitCode}."
+                : result.StandardError.Trim();
+            Logger.Warning("yt-dlp channel request exited with code {ExitCode}", result.ExitCode);
+            return ChannelPage.Failed(channelUrl, fallbackName, sort,
+                $"Could not load channel: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
         }
         catch (Win32Exception exception)
         {

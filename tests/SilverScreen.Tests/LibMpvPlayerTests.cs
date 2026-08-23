@@ -10,7 +10,7 @@ public sealed class LibMpvPlayerTests
     [Fact]
     public void LoadAssumesPlaybackStartsUnpausedUntilMpvReportsOtherwise()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
         var states = new ConcurrentQueue<LibMpvPlaybackState>();
         player.StateChanged += (_, state) => states.Enqueue(state);
@@ -18,14 +18,14 @@ public sealed class LibMpvPlayerTests
         player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), new AppPreferences(), null);
 
         Assert.True(SpinWait.SpinUntil(
-            () => states.Any(state => state.IsLoading && !state.IsPaused), TimeSpan.FromSeconds(2)));
+            () => states.Any(state => state is { IsLoading: true, IsPaused: false }), TimeSpan.FromSeconds(2)));
     }
 
 
     [Fact]
     public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
 
         player.SelectSubtitleTrack(42);
@@ -40,7 +40,7 @@ public sealed class LibMpvPlayerTests
     [Fact]
     public void FileLoadedPublishesNamedChaptersFromMpv()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         native.ReadProperties["chapter-list/count"] = "3";
         native.ReadProperties["chapter-list/0/time"] = "0";
         native.ReadProperties["chapter-list/0/title"] = "Introduction";
@@ -78,7 +78,7 @@ public sealed class LibMpvPlayerTests
     [Fact]
     public void SeekAbsoluteDispatchesExactAndKeyframeCommands()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
 
         player.SeekAbsolute(42.5);
@@ -92,19 +92,19 @@ public sealed class LibMpvPlayerTests
     [Fact]
     public void SeekRelativeDispatchesRelativeExactCommand()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
 
         player.SeekRelative(-10);
 
-        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 1, TimeSpan.FromSeconds(2)));
+        Assert.True(SpinWait.SpinUntil(() => !native.Commands.IsEmpty, TimeSpan.FromSeconds(2)));
         Assert.Contains("seek|-10|relative+exact", native.Commands);
     }
 
     [Fact]
     public void PlaylistCommandsDispatchCorrectMpvArguments()
     {
-        using var native = new RecordingNative();
+        var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
 
         player.PlayPlaylistIndex(3);
@@ -129,7 +129,6 @@ public sealed class LibMpvPlayerTests
     private sealed class RecordingNative : ILibMpvNativeApi
     {
         public ConcurrentBag<string> Commands { get; } = [];
-        public ConcurrentBag<(string Name, double Value)> DoubleProperties { get; } = [];
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
         public Dictionary<string, string> ReadProperties { get; } = [];
         public bool IsAvailable => true;
@@ -163,7 +162,6 @@ public sealed class LibMpvPlayerTests
 
         public int SetPropertyDouble(nint handle, string name, double value)
         {
-            DoubleProperties.Add((name, value));
             return 0;
         }
 

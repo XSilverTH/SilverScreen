@@ -142,7 +142,7 @@ public sealed class HomeFeedCoordinator : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, failureLogMessage);
+            Logger.Warning(ex, "{FailureReason}", failureLogMessage);
             HomeFeedState errorState;
             long errVersion;
             lock (_lock)

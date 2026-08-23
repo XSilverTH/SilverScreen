@@ -16,12 +16,9 @@ public partial class QueueView : ViewBase<Box>
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
-
-
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
     private readonly IThumbnailService _thumbnails;
-
     private readonly Action<int>? _trackJumpRequested;
     private readonly QueueViewModel _viewModel;
     private readonly IWatchProgressService _watchProgress;

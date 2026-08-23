@@ -77,7 +77,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public TimeSpan PlaybackPosition { get; private set; }
 
-    public TimeSpan CurrentDuration { get; private set; }
+    private TimeSpan CurrentDuration { get; set; }
 
 
     public void Dispose()
@@ -115,20 +115,18 @@ internal sealed class PlayerTimelineController : IDisposable
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
 
-            if (!IsScrubbing)
-            {
-                var withinLatch = Environment.TickCount64 < _reconciliationLatchExpiry;
-                var isCloseToPending = Math.Abs(state.Position.TotalSeconds - _pendingSeekTarget) <= 1.5;
+            if (IsScrubbing) return;
 
-                if (!withinLatch || isCloseToPending)
-                {
-                    if (isCloseToPending) _reconciliationLatchExpiry = 0;
-                    PlaybackPosition = state.Position;
-                    _positionLabel.SetText(PlayerTimeFormatter.FormatTime(state.Position));
-                    _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0,
-                        Math.Max(0, state.Duration.TotalSeconds)));
-                }
-            }
+            var withinLatch = Environment.TickCount64 < _reconciliationLatchExpiry;
+            var isCloseToPending = Math.Abs(state.Position.TotalSeconds - _pendingSeekTarget) <= 1.5;
+
+            if (withinLatch && !isCloseToPending) return;
+
+            if (isCloseToPending) _reconciliationLatchExpiry = 0;
+            PlaybackPosition = state.Position;
+            _positionLabel.SetText(PlayerTimeFormatter.FormatTime(state.Position));
+            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0,
+                Math.Max(0, state.Duration.TotalSeconds)));
         }
         finally
         {

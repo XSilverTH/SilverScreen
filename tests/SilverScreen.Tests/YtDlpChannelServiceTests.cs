@@ -49,12 +49,9 @@ public sealed class YtDlpChannelServiceTests
 
     private sealed class CapturingRunner(ProcessResult result) : IYtDlpRunner
     {
-        public ProcessStartInfo? StartInfo { get; private set; }
-
         public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
             CancellationToken cancellationToken)
         {
-            StartInfo = startInfo;
             return Task.FromResult(result);
         }
     }

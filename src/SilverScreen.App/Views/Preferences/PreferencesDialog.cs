@@ -12,15 +12,12 @@ namespace SilverScreen.Views.Preferences;
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
-
-
     private readonly Action<string> _reportStatus;
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
-
     private bool _loading;
 
     public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)

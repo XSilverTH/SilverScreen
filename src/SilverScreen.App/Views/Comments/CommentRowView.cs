@@ -4,16 +4,10 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Views.Comments;
 
-public partial class CommentRowView : ViewBase<Box>
+public partial class CommentRowView(Action<string> repliesToggleRequested) : ViewBase<Box>
 {
-    private readonly Action<string> _repliesToggleRequested;
+    private readonly Action<string> _repliesToggleRequested = repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
     private string? _boundCommentId;
-
-    public CommentRowView(Action<string> repliesToggleRequested)
-    {
-        _repliesToggleRequested =
-            repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
-    }
 
     private void OnRepliesButtonClicked(object? sender, EventArgs args)
     {

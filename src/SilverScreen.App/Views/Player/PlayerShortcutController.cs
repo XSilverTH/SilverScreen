@@ -106,13 +106,12 @@ internal sealed class PlayerShortcutController : IDisposable
         _keyboardRoot = root;
     }
 
-    public void Detach()
+    private void Detach()
     {
-        if (_keyboardRoot is not null && _keyboardController is not null)
-        {
-            _keyboardRoot.RemoveController(_keyboardController);
-            _keyboardRoot = null;
-        }
+        if (_keyboardRoot is null || _keyboardController is null) return;
+
+        _keyboardRoot.RemoveController(_keyboardController);
+        _keyboardRoot = null;
     }
 
     private void Bind(string actionName, IEnumerable<string> keyNames)

@@ -64,7 +64,7 @@ public sealed class SessionValidationCoordinatorTests
     public void SafeFormatter_ExcludesStatusMessage_HighLevelStatusMapping()
     {
         // Arrange
-        var secretCookieLeak = "COOKIE: SID=fake_secret_cookie_content";
+        const string secretCookieLeak = "COOKIE: SID=fake_secret_cookie_content";
         var resultTemplate = new HomeSessionValidationResult(
             true,
             5,

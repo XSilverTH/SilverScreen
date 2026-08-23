@@ -9,7 +9,7 @@ namespace SilverScreen.Tests;
 public sealed class YtDlpCommentServiceTests
 {
     private const string VideoId = "dQw4w9WgXcQ";
-    private const string WatchUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
 
 
     [Fact]
@@ -54,20 +54,11 @@ public sealed class YtDlpCommentServiceTests
     {
         return new ProcessResult(0, output, "");
     }
-
     private sealed class CapturingRunner(Func<ProcessStartInfo, Task<ProcessResult>> run) : IYtDlpRunner
     {
-        public ProcessStartInfo? StartInfo { get; private set; }
-        public int RunCalls { get; private set; }
-        public TimeSpan? Timeout { get; private set; }
-
-
         public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
             CancellationToken cancellationToken)
         {
-            RunCalls++;
-            StartInfo = startInfo;
-            Timeout = timeout;
             return run(startInfo);
         }
     }
@@ -91,11 +82,8 @@ public sealed class YtDlpCommentServiceTests
 
     private sealed class FakeCookieFileProvider(Func<CookieFileLease?> create) : ICookieFileProvider
     {
-        public int CreateCalls { get; private set; }
-
         public CookieFileLease? CreateCookieFile()
         {
-            CreateCalls++;
             return create();
         }
     }

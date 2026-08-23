@@ -31,7 +31,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
 
-
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly ChannelView _channel;
@@ -41,19 +40,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly HistoryView _history;
     private readonly HistoryViewModel _historyViewModel;
     private readonly HomeView _home;
-
-
     private readonly PlaybackModeRoutingService _playback;
-
-
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
-
     private readonly SearchPopoverView _searchPopover;
     private readonly SearchView _searchView;
     private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
     private readonly ShellViewModel _shell = new();
+    
     private bool _closed;
     private WebLoginWindow? _webLogin;
 

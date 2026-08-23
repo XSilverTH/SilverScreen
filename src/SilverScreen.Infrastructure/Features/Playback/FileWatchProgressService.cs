@@ -77,7 +77,7 @@ public sealed class FileWatchProgressService : IWatchProgressService
                               Math.Abs(Math.Floor(fraction * 100) - Math.Floor(existing.Highest * 100)) > 0.2;
             var highest = cardChanged ? fraction : existing.Highest;
             double? resume = completed ? null : fraction;
-            if (highest == existing.Highest && resume == existing.Resume)
+            if (!cardChanged && Nullable.Equals(resume, existing.Resume))
                 return;
 
             _progress[video.Id] = new WatchProgressEntry(highest, resume);

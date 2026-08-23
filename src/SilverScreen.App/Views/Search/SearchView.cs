@@ -16,20 +16,15 @@ public partial class SearchView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<SearchView>();
 
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-
-
     private readonly IThumbnailService _thumbnails;
-
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
-
     private readonly SearchViewModel _viewModel;
     private readonly IWatchProgressService _watchProgress;
-
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 

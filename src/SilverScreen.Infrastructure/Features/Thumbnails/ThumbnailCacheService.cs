@@ -101,11 +101,13 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         if (!TryCreateHttpUri(thumbnailUrl, out var uri))
             return null;
 
+        Exception? initException;
         lock (_lock)
         {
-            if (!_initialized)
-                EnsureInitializedLocked();
+            initException = !_initialized ? EnsureInitializedLocked() : null;
         }
+        if (initException is not null)
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
 
         var cachePath = GetCachePath(uri);
         if (File.Exists(cachePath))
@@ -254,16 +256,15 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
     }
 
-    private void EnsureInitializedLocked()
+    private Exception? EnsureInitializedLocked()
     {
         if (_initialized)
-            return;
+            return null;
 
         _initialized = true;
 
         if (!Directory.Exists(CacheDirectory))
-            return;
-
+            return null;
         try
         {
             var entries = new List<(string Path, DateTime LastWriteTimeUtc)>();
@@ -313,17 +314,19 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
-            Logger.Warning(ex, "Failed to initialize thumbnail cache index from disk.");
+            return ex;
         }
+
+        return null;
     }
 
     private void RecordHit(string cachePath)
     {
         List<string>? filesToDelete = null;
+        Exception? initException;
         lock (_lock)
         {
-            EnsureInitializedLocked();
-
+            initException = EnsureInitializedLocked();
             if (_entryLookup.TryGetValue(cachePath, out var node))
             {
                 if (node != _lruEntries.Last)
@@ -347,6 +350,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
         }
 
+        if (initException is not null)
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
+
         if (filesToDelete is null) return;
         foreach (var file in filesToDelete)
             DeleteFileIfExists(file);
@@ -355,10 +361,10 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private void RecordAddAndEvict(string cachePath)
     {
         List<string>? filesToDelete = null;
+        Exception? initException;
         lock (_lock)
         {
-            EnsureInitializedLocked();
-
+            initException = EnsureInitializedLocked();
             if (_entryLookup.TryGetValue(cachePath, out var node))
             {
                 if (node != _lruEntries.Last)
@@ -381,6 +387,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 filesToDelete.Add(oldest.Value);
             }
         }
+
+        if (initException is not null)
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
 
         if (filesToDelete is null) return;
         foreach (var file in filesToDelete)

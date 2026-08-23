@@ -38,7 +38,7 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     public bool IsOpen { get; private set; }
 
-    public void Show(VideoSummary video)
+    private void Show(VideoSummary video)
     {
         if (_disposed) return;
         _currentVideo = video;
@@ -117,11 +117,9 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     private void OnChannelButtonClicked(object? sender, EventArgs args)
     {
-        if (_currentVideo is { } video)
-        {
-            Close();
-            _channelRequested(video);
-        }
+        if (_currentVideo is not { } video) return;
+        Close();
+        _channelRequested(video);
     }
 
     private void OnCloseButtonClicked(object? sender, EventArgs args)

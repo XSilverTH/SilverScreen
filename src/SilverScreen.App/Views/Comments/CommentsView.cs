@@ -1,5 +1,5 @@
 using Gtk;
-using Serilog;
+
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
@@ -8,14 +8,12 @@ namespace SilverScreen.Views.Comments;
 
 public partial class CommentsView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<CommentsView>();
-    private readonly Action _closeRequested;
 
+    private readonly Action _closeRequested;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
-
     private readonly CommentsViewModel _viewModel;
     private bool _disposed;
     private CommentsViewState _state;

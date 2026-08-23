@@ -13,8 +13,6 @@ namespace SilverScreen.Views.Popovers;
 public partial class AccountPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
-
-
     private readonly Action _openWebLogin;
     private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
     private readonly IThumbnailService _thumbnails;

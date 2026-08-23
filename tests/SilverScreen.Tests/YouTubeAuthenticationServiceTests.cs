@@ -83,10 +83,10 @@ public sealed class YouTubeAuthenticationServiceTests
     {
         var builder = new StringBuilder("# Netscape HTTP Cookie File\n");
         builder.AppendLine($"youtube.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\t{sapisid}");
-        builder.AppendLine($"youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\t{sapsidForSid(sapisid)}");
+        builder.AppendLine($"youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\t{SapsidForSid(sapisid)}");
         return builder.ToString();
 
-        static string sapsidForSid(string value)
+        static string SapsidForSid(string value)
         {
             return $"sid-{value}";
         }
@@ -102,7 +102,7 @@ public sealed class YouTubeAuthenticationServiceTests
             return new AccountSession(true, HasManualSession: true);
         }
 
-        public ManualSessionCookies? GetManualSessionCookies()
+        public ManualSessionCookies GetManualSessionCookies()
         {
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, _cookies);
         }

@@ -73,20 +73,17 @@ internal sealed class PlaybackSession(
 
         desktopMedia.UpdatePlayback(Request, state);
 
-        if (Request is { } request &&
-            state.PlaylistIndex >= 0 &&
-            state.PlaylistIndex < int.MaxValue &&
-            state.PlaylistIndex < request.Videos.Length)
-        {
-            var newIndex = state.PlaylistIndex;
-            var video = request.Videos[newIndex];
-            var videoChanged = CurrentPlaylistIndex != newIndex || CurrentVideo?.Id != video.Id;
+        if (Request is not { } request ||
+            state.PlaylistIndex is < 0 or >= int.MaxValue ||
+            state.PlaylistIndex >= request.Videos.Length) return;
+        var newIndex = state.PlaylistIndex;
+        var video = request.Videos[newIndex];
+        var videoChanged = CurrentPlaylistIndex != newIndex || CurrentVideo?.Id != video.Id;
 
-            CurrentPlaylistIndex = newIndex;
-            CurrentVideo = video;
+        CurrentPlaylistIndex = newIndex;
+        CurrentVideo = video;
 
-            if (videoChanged) VideoChanged?.Invoke(video, newIndex);
-        }
+        if (videoChanged) VideoChanged?.Invoke(video, newIndex);
     }
 
     public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
@@ -109,7 +106,7 @@ internal sealed class PlaybackSession(
         Failed?.Invoke(detail);
     }
 
-    public void Reset()
+    private void Reset()
     {
         ReleaseResources();
         Request = null;

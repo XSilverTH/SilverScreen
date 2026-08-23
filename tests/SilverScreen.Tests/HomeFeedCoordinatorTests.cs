@@ -13,7 +13,7 @@ public sealed class HomeFeedCoordinatorTests
         TimeSpan timeout)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        EventHandler<HomeFeedState> handler = (s, state) =>
+        EventHandler<HomeFeedState> handler = (_, state) =>
         {
             if (predicate(state)) tcs.TrySetResult();
         };
@@ -91,7 +91,7 @@ public sealed class HomeFeedCoordinatorTests
 
         // Assert - Unique IDs appended
         Assert.Equal(3, coordinator.State.Videos.Length);
-        Assert.Equal(new[] { "1", "2", "3" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
+        Assert.Equal(["1", "2", "3"], coordinator.State.Videos.Select(v => v.Id));
         Assert.True(coordinator.State.HasContinuation);
         Assert.Equal(1, fakeFeed.LoadNextPageCallCount);
 
@@ -114,7 +114,7 @@ public sealed class HomeFeedCoordinatorTests
 
         // Assert - End of continuation hides continuation
         Assert.Equal(4, coordinator.State.Videos.Length);
-        Assert.Equal(new[] { "1", "2", "3", "4" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
+        Assert.Equal(["1", "2", "3", "4"], coordinator.State.Videos.Select(v => v.Id));
         Assert.False(coordinator.State.HasContinuation);
         Assert.Equal(2, fakeFeed.LoadNextPageCallCount);
 
@@ -176,7 +176,7 @@ public sealed class HomeFeedCoordinatorTests
         var fakeFeed = new FakeAuthenticatedHomeFeedService();
 
         // Expect load first page but block it
-        var firstPageTcs = fakeFeed.ExpectLoadFirstPage();
+        fakeFeed.ExpectLoadFirstPage();
 
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
@@ -289,7 +289,7 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Equal("Could not load YouTube recommendations.", coordinator.State.Message);
         // Existing video cards must be preserved!
         Assert.Equal(2, coordinator.State.Videos.Length);
-        Assert.Equal(new[] { "1", "2" }, coordinator.State.Videos.Select(v => v.Id).ToArray());
+        Assert.Equal(["1", "2"], coordinator.State.Videos.Select(v => v.Id));
     }
 
     private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
@@ -308,7 +308,7 @@ public sealed class HomeFeedCoordinatorTests
         public int LoadNextPageCallCount { get; private set; }
 
         public List<CancellationToken> FirstPageTokens { get; } = [];
-        private List<CancellationToken> NextPageTokens { get; } = [];
+
 
         public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
         public Task NextPageCalledTask => _nextPageCalledTcs.Task;
@@ -319,48 +319,37 @@ public sealed class HomeFeedCoordinatorTests
             FirstPageTokens.Add(cancellationToken);
             _firstPageCalledTcs.TrySetResult();
 
-            if (_firstPageTcsQueue.Count > 0)
-            {
-                var (tcs, ignoreCancellation) = _firstPageTcsQueue.Dequeue();
-                if (!ignoreCancellation)
-                {
-                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
-                }
+            if (_firstPageTcsQueue.Count == 0)
+                return Task.FromResult(new AuthenticatedHomeFeedResult(
+                    AuthenticatedHomeFeedStatus.Success,
+                    FeedPage.Empty,
+                    "Success"
+                ));
 
-                return tcs.Task;
-            }
-
-            return Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                FeedPage.Empty,
-                "Success"
-            ));
+            var (tcs, ignoreCancellation) = _firstPageTcsQueue.Dequeue();
+            if (ignoreCancellation) return tcs.Task;
+            var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+            tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+            return tcs.Task;
         }
 
         public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
         {
             LoadNextPageCallCount++;
-            NextPageTokens.Add(cancellationToken);
             _nextPageCalledTcs.TrySetResult();
 
-            if (_nextPageTcsQueue.Count > 0)
-            {
-                var (tcs, ignoreCancellation) = _nextPageTcsQueue.Dequeue();
-                if (!ignoreCancellation)
-                {
-                    var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-                    tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
-                }
+            if (_nextPageTcsQueue.Count == 0)
+                return Task.FromResult(new AuthenticatedHomeFeedResult(
+                    AuthenticatedHomeFeedStatus.Success,
+                    FeedPage.Empty,
+                    "Success"
+                ));
 
-                return tcs.Task;
-            }
-
-            return Task.FromResult(new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.Success,
-                FeedPage.Empty,
-                "Success"
-            ));
+            var (tcs, ignoreCancellation) = _nextPageTcsQueue.Dequeue();
+            if (ignoreCancellation) return tcs.Task;
+            var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+            tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+            return tcs.Task;
         }
 
         public FeedPage GetHomeFeed()

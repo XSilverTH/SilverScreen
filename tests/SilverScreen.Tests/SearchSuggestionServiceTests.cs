@@ -36,12 +36,10 @@ public sealed class SearchSuggestionServiceTests
     [Fact]
     public async Task GetSuggestionsAsync_ParsesJsonpFormat_Correctly()
     {
-        var handler = new FakeHttpMessageHandler((request, _) =>
-        {
-            return Task.FromResult(JsonResponse("""
-                                                window.google.ac.h(["test", [["test match", 0, [512]], ["test cricket", 0, [512]]], {"k": 1}])
-                                                """));
-        });
+        var handler = new FakeHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse("""
+                                         window.google.ac.h(["test", [["test match", 0, [512]], ["test cricket", 0, [512]]], {"k": 1}])
+                                         """)));
         using var client = new HttpClient(handler);
         using var service = new YouTubeSearchSuggestionService(client);
 

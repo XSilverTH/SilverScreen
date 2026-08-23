@@ -15,8 +15,6 @@ public partial class HomeView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HomeView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-
-
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;

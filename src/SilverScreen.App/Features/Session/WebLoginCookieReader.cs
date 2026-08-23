@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Versioning;
 using System.Runtime.InteropServices;
 using System.Text;
 using Gio.Internal;
@@ -20,7 +20,8 @@ internal sealed record WebCookieSnapshot(
     bool HttpOnly,
     long ExpiresUnix);
 
-[SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+[SupportedOSPlatform("linux")]
+// [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 internal static partial class WebLoginCookieReader
 {
     private const string NetscapeHeader = "# Netscape HTTP Cookie File\n";

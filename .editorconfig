@@ -11,3 +11,9 @@ build_metadata.AdditionalFiles.DBusGeneratorMode = Handler
 [*org.freedesktop.portal.xml]
 build_metadata.AdditionalFiles.Namespace = SilverScreen.DBus
 build_metadata.AdditionalFiles.DBusGeneratorMode = Proxy
+
+[tests/**.cs]
+resharper_parameter_only_used_for_precondition_check_local_highlighting = none
+
+[*.cs]
+dotnet_diagnostic.CA1416.severity = none

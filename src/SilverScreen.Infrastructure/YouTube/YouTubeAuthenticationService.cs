@@ -23,7 +23,7 @@ public sealed class YouTubeAuthenticationService : IDisposable
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
-    internal Func<long> TimeSource { get; init; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    internal Func<long> TimeSource { get; set; } = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     internal int? AuthUser => _options.AuthUser;
 
     public void Dispose()

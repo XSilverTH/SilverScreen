@@ -20,7 +20,7 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
 
     public EquatableArray(ReadOnlySpan<T> items)
     {
-        _items = items.IsEmpty ? [] : items.ToArray();
+        _items = [.. items];
     }
 
     public EquatableArray(IEnumerable<T>? items)
@@ -29,7 +29,7 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
         {
             null => null,
             T[] array => array.Length == 0 ? [] : (T[])array.Clone(),
-            _ => items.ToArray()
+            _ => [.. items]
         };
     }
 
@@ -64,9 +64,11 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
     public override int GetHashCode()
     {
         var hash = new HashCode();
-        if (_items is not null)
-            foreach (var item in _items)
-                hash.Add(item);
+        if (_items is null)
+            return hash.ToHashCode();
+
+        foreach (var item in _items)
+            hash.Add(item);
 
         return hash.ToHashCode();
     }
@@ -83,8 +85,8 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
 
     public IEnumerator<T> GetEnumerator()
     {
-        IEnumerable<T> items = _items ?? Array.Empty<T>();
-        return items.GetEnumerator();
+        var items = _items ?? [];
+        return ((IEnumerable<T>)items).GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator()
@@ -99,7 +101,7 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
 
     public static implicit operator EquatableArray<T>(List<T>? list)
     {
-        return new EquatableArray<T>(list);
+        return list is null ? default : [.. list];
     }
 }
 
@@ -145,12 +147,9 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
             if (reader.TokenType == JsonTokenType.EndArray)
                 return new EquatableArray<T>(list.ToArray());
 
-            T? element;
-            if (elementConverter is not null)
-                element = elementConverter.Read(ref reader, typeof(T), options);
-            else
-                element = JsonSerializer.Deserialize<T>(ref reader, options);
-
+            var element = elementConverter is not null
+                ? elementConverter.Read(ref reader, typeof(T), options)
+                : JsonSerializer.Deserialize<T>(ref reader, options);
             if (element is not null)
                 list.Add(element);
         }

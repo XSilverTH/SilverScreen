@@ -210,7 +210,7 @@ public sealed class PreferencesTests : IDisposable
     public void EveryAppPreferenceProperty_ParticipatesInEquality_SaveNotification_AndPersistence()
     {
         var properties = typeof(AppPreferences).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite)
+            .Where(p => p is { CanRead: true, CanWrite: true })
             .ToArray();
 
         Assert.NotEmpty(properties);
@@ -264,7 +264,7 @@ public sealed class PreferencesTests : IDisposable
     public void EveryPlayerShortcutProperty_ParticipatesInEquality_AndPersistence()
     {
         var properties = typeof(PlayerShortcutBindings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite)
+            .Where(p => p is { CanRead: true, CanWrite: true })
             .ToArray();
 
         Assert.NotEmpty(properties);
@@ -444,9 +444,8 @@ public sealed class PreferencesTests : IDisposable
             return (int)(currentValue ?? 0) + 42;
         if (type == typeof(EquatableArray<string>))
             return new EquatableArray<string>(["custom_cat_1", "custom_cat_2"]);
-        if (type == typeof(PlayerShortcutBindings))
-            return new PlayerShortcutBindings { TogglePause = ["CustomTestKey"] };
-
-        throw new NotSupportedException($"Add test support for type {type.Name}");
+        return type == typeof(PlayerShortcutBindings)
+            ? new PlayerShortcutBindings { TogglePause = ["CustomTestKey"] }
+            : throw new NotSupportedException($"Add test support for type {type.Name}");
     }
 }

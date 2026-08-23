@@ -183,8 +183,9 @@ public sealed class DiscordPresenceTests
         public bool Initialize()
         {
             InitializeCount++;
-            if (ThrowOnInitialize) throw new InvalidOperationException("initialize");
-            return InitializeResult;
+            return ThrowOnInitialize
+                ? throw new InvalidOperationException("initialize")
+                : InitializeResult;
         }
 
         public void SetPresence(RichPresence presence)

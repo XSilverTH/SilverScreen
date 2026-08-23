@@ -27,7 +27,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-
+    
     private readonly Action _backRequested;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
@@ -63,7 +63,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _channelRequested = channelRequested;
         _preferences = dependencies.Preferences;
         _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments);
-        comments_sidebar_host!.Append(_commentsView.Widget);
+        comments_sidebar_host.Append(_commentsView.Widget);
         player_comments_button.BindProperty("active", Widget, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
 
@@ -192,6 +192,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.Dispose();
         _player.Dispose();
         _desktopMedia.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public Task<string> PresentAsync(PlaybackRequest request)
@@ -288,10 +289,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timelineController.SeekAbsolute(position, exact);
     }
 
-    private void CancelScrubbing()
-    {
-        _timelineController.CancelScrubbing();
-    }
+
 
     private void SeekRelative(double offset)
     {
@@ -521,14 +519,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _infoPanel.SetVideo(video);
         player_title_label.SetText(video.Title);
         player_channel_label.SetText(video.ChannelName);
-        if (!string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal))
-        {
-            foreach (var feature in _features) feature.Load(video);
-            _commentsVideoId = video.Id;
-            _commentsView.SetVideo(video.Id);
-            if (player_comments_button.Active)
-                _commentsView.EnsureLoaded();
-        }
+        if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
+        foreach (var feature in _features) feature.Load(video);
+        _commentsVideoId = video.Id;
+        _commentsView.SetVideo(video.Id);
+        if (player_comments_button.Active)
+            _commentsView.EnsureLoaded();
     }
 
     private void OnPlaybackFailed(object? sender, string detail)

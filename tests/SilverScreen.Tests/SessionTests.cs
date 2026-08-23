@@ -153,14 +153,12 @@ public sealed class SessionTests
         Assert.StartsWith(tempRoot.Path, lease.Path, StringComparison.Ordinal);
         Assert.Equal(FakeCookieContent, File.ReadAllText(lease.Path));
 
-        if (OperatingSystem.IsLinux())
-        {
-            var directoryPath = Directory.GetParent(lease.Path)?.FullName;
-            Assert.NotNull(directoryPath);
-            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
-                File.GetUnixFileMode(directoryPath));
-            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(lease.Path));
-        }
+        if (!OperatingSystem.IsLinux()) return;
+        var directoryPath = Directory.GetParent(lease.Path)?.FullName;
+        Assert.NotNull(directoryPath);
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+            File.GetUnixFileMode(directoryPath));
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(lease.Path));
     }
 
 
@@ -195,16 +193,16 @@ public sealed class SessionTests
 
         public byte[]? Load()
         {
-            if (FailLoad) throw new SessionPersistenceException();
-
-            return _stored?.ToArray();
+            return FailLoad
+                ? throw new SessionPersistenceException()
+                : _stored?.ToArray();
         }
 
         public void Save(byte[] secret)
         {
             if (FailSave) throw new SessionPersistenceException();
 
-            _stored = secret.ToArray();
+            _stored = [.. secret];
         }
 
         public void Delete()

@@ -27,9 +27,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         try
         {
             _manualCookies = LoadStoredCookies();
-            Logger.Information(_manualCookies is not null
-                ? "Restored YouTube session from Secret Service"
-                : "No stored YouTube session found in Secret Service");
+            Logger.Information("YouTube session state in Secret Service: {SessionState}",
+                _manualCookies is not null ? "Restored" : "Not found");
         }
         catch (SessionPersistenceException exception)
         {

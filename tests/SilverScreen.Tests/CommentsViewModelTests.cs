@@ -86,12 +86,6 @@ public sealed class CommentsViewModelTests
 
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        void OnStateChanged(object? sender, CommentsViewState state)
-        {
-            if (predicate(state))
-                completion.TrySetResult();
-        }
-
         viewModel.StateChanged += OnStateChanged;
         try
         {
@@ -102,6 +96,14 @@ public sealed class CommentsViewModelTests
         {
             viewModel.StateChanged -= OnStateChanged;
         }
+
+        return;
+
+        void OnStateChanged(object? sender, CommentsViewState state)
+        {
+            if (predicate(state))
+                completion.TrySetResult();
+        }
     }
 
     private sealed class ControlledCommentService : IYouTubeCommentService
@@ -111,17 +113,15 @@ public sealed class CommentsViewModelTests
         public Task<YouTubeCommentsResult> GetCommentsAsync(string videoId, YouTubeCommentSort sort,
             CancellationToken cancellationToken = default)
         {
-            var pending = new Pending(videoId, sort, cancellationToken);
+            var pending = new Pending(sort, cancellationToken);
             Requests.Add(pending);
             return pending.Completion.Task;
         }
 
-        public sealed class Pending(string videoId, YouTubeCommentSort sort, CancellationToken token)
+        public sealed class Pending(YouTubeCommentSort sort, CancellationToken token)
         {
-            public string VideoId { get; } = videoId;
             public YouTubeCommentSort Sort { get; } = sort;
             public CancellationToken Token { get; } = token;
-
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
         }

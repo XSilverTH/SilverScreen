@@ -47,8 +47,8 @@ public sealed class YouTubeAccountProfileServiceTests
         try
         {
             using var httpClient = new HttpClient(handler);
-            using var authentication = new YouTubeAuthenticationService(session)
-                { TimeSource = () => 1700000000L };
+            using var authentication = new YouTubeAuthenticationService(session);
+            authentication.TimeSource = () => 1700000000L;
             using var service = new YouTubeAccountProfileService(httpClient, session, authentication, cachePath);
 
             var profile = await service.GetCurrentProfileAsync();
@@ -165,7 +165,7 @@ public sealed class YouTubeAccountProfileServiceTests
     private sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> response)
         : HttpMessageHandler
     {
-        public int CallCount { get; private set; }
+        private int CallCount { get; set; }
         public string? PostAuthorizationScheme { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,

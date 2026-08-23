@@ -17,12 +17,10 @@ namespace SilverScreen.Views.Queue;
 
 public partial class QueueItemRowView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
-    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
-
-
     private readonly WidgetPaintable _dragPaintable;
     private readonly DragSource _dragSource;
     private readonly Action<Guid, int> _dropRequested;

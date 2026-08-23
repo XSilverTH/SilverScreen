@@ -98,14 +98,12 @@ public sealed class AuthenticatedHomeFeedServiceTests
 
     private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
     {
-        public int CallCount { get; private set; }
         public string? LastContinuationToken { get; private set; }
         public Func<string?, CancellationToken, Task<HomeFeedResult>>? ResponseFactory { get; set; }
 
         public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
             CancellationToken cancellationToken = default)
         {
-            CallCount++;
             LastContinuationToken = continuationToken;
             return ResponseFactory?.Invoke(continuationToken, cancellationToken)
                    ?? Task.FromResult(new HomeFeedResult([], null, true, "OK", false));

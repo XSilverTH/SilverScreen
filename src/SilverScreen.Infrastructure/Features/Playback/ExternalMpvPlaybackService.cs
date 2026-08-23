@@ -345,7 +345,7 @@ public sealed class ExternalMpvPlaybackService(
         public long Id { get; } = id;
         public PlaybackRequest Request { get; } = request;
         public IYouTubePlaybackTelemetrySession? Telemetry { get; } = telemetry;
-        public IDisposable? Observer { get; set; }
+        public MpvIpcPlaybackObserver? Observer { get; set; }
         public PlaybackPresenceState? State { get; set; }
     }
 }

@@ -56,9 +56,9 @@ public sealed class TaskExtensionsTests
         var task = Task.Run(async () => { await Task.Delay(10, cts.Token); }, cts.Token);
 
         task.FireAndForget(logger);
-        cts.Cancel();
+        await cts.CancelAsync();
 
-        await Task.Delay(50);
+        await Task.Delay(50, CancellationToken.None);
         Assert.Empty(sink.Events);
     }
 
@@ -69,20 +69,21 @@ public sealed class TaskExtensionsTests
         var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
         var expectedException = new InvalidOperationException("ValueTask fault");
 
+        ThrowingValueTask().FireAndForget(logger);
+
+        for (var i = 0; i < 50 && sink.Events.Count == 0; i++)
+            await Task.Delay(10, CancellationToken.None);
+
+        Assert.Single(sink.Events);
+        Assert.Equal(LogEventLevel.Error, sink.Events[0].Level);
+        Assert.Same(expectedException, sink.Events[0].Exception);
+        return;
+
         async ValueTask ThrowingValueTask()
         {
             await Task.Yield();
             throw expectedException;
         }
-
-        ThrowingValueTask().FireAndForget(logger);
-
-        for (var i = 0; i < 50 && sink.Events.Count == 0; i++)
-            await Task.Delay(10);
-
-        Assert.Single(sink.Events);
-        Assert.Equal(LogEventLevel.Error, sink.Events[0].Level);
-        Assert.Same(expectedException, sink.Events[0].Exception);
     }
 
     private sealed class CapturingSink : ILogEventSink

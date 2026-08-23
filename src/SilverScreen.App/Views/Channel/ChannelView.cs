@@ -27,11 +27,9 @@ public partial class ChannelView : ViewBase<Box>
 
     private readonly GestureClick _clueClickGesture;
     private readonly EventControllerMotion _clueMotionController;
-
-
+    
     private readonly EventControllerScroll _scrollController;
-
-
+    
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;

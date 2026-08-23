@@ -43,8 +43,8 @@ public class PlayerTimelineGeometryTests
     public void GetTrackPositionMapsTimeSpanToPixels()
     {
         var duration = TimeSpan.FromSeconds(100);
-        var trackStart = 10;
-        var trackWidth = 500;
+        const int trackStart = 10;
+        const int trackWidth = 500;
 
         Assert.Equal(10, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.Zero, duration, trackStart, trackWidth));
         Assert.Equal(260,
@@ -60,8 +60,8 @@ public class PlayerTimelineGeometryTests
     public void GetPositionAtCoordinateMapsPixelsToTimeSpan()
     {
         var duration = TimeSpan.FromSeconds(100);
-        var trackStart = 10;
-        var trackWidth = 500;
+        const int trackStart = 10;
+        const int trackWidth = 500;
 
         // Before start -> clamped to 0
         Assert.Equal(TimeSpan.Zero,

@@ -51,8 +51,7 @@ public sealed class ThumbnailCacheServiceTests
     public async Task GetThumbnailAsync_WebPDownloadIsCachedAndReturned()
     {
         using var directory = new TemporaryDirectory();
-        var webp = new byte[]
-            { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var webp = "RIFF\0\0\0\0WEBP"u8.ToArray();
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(webp)
@@ -78,8 +77,7 @@ public sealed class ThumbnailCacheServiceTests
     public async Task GetThumbnailAsync_YouTubeAvatarWithoutExtension_IsCachedAndReturned()
     {
         using var directory = new TemporaryDirectory();
-        var webp = new byte[]
-            { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var webp = "RIFF\0\0\0\0WEBP"u8.ToArray();
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(webp)
@@ -87,7 +85,7 @@ public sealed class ThumbnailCacheServiceTests
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path);
 
-        var avatarUrl = "https://yt3.ggpht.com/ytc/AIdro_abc123=s176-c-k-c0x00ffffff-no-rj";
+        const string avatarUrl = "https://yt3.ggpht.com/ytc/AIdro_abc123=s176-c-k-c0x00ffffff-no-rj";
         var downloaded = await service.GetThumbnailAsync(avatarUrl);
         var cached = await service.GetThumbnailAsync(avatarUrl);
 
@@ -111,7 +109,7 @@ public sealed class ThumbnailCacheServiceTests
             capturedRequest = request;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent("image"u8.ToArray())
+                Content = new ByteArrayContent([.. "image"u8])
             });
         });
         using var client = new HttpClient(handler);
@@ -129,8 +127,7 @@ public sealed class ThumbnailCacheServiceTests
     public async Task GetThumbnailAsync_VideoSummary_WebPThumbnail_IsCachedAndReturned()
     {
         using var directory = new TemporaryDirectory();
-        var webp = new byte[]
-            { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var webp = "RIFF\0\0\0\0WEBP"u8.ToArray();
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(webp)
@@ -158,11 +155,10 @@ public sealed class ThumbnailCacheServiceTests
         using var service = new ThumbnailCacheService(client, directory.Path);
 
         // Pre-populate cache with a webp file
-        var url = "https://example.com/image.webp";
+        const string url = "https://example.com/image.webp";
         var cachePath = Path.Combine(directory.Path,
             $"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(url)))}.webp");
-        var webp = new byte[]
-            { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
+        var webp = "RIFF\0\0\0\0WEBP"u8.ToArray();
         await File.WriteAllBytesAsync(cachePath, webp);
 
         var result = await service.GetThumbnailAsync(url);
@@ -179,7 +175,7 @@ public sealed class ThumbnailCacheServiceTests
         using var directory = new TemporaryDirectory();
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent("image"u8.ToArray())
+            Content = new ByteArrayContent([.. "image"u8])
         }));
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
@@ -213,7 +209,7 @@ public sealed class ThumbnailCacheServiceTests
         using var directory = new TemporaryDirectory();
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent("image"u8.ToArray())
+            Content = new ByteArrayContent([.. "image"u8])
         }));
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
@@ -242,12 +238,12 @@ public sealed class ThumbnailCacheServiceTests
     public async Task GetThumbnailAsync_ConcurrentDownloads_RespectsMaxFileCount()
     {
         using var directory = new TemporaryDirectory();
-        var handler = new FakeHttpMessageHandler(async (req, ct) =>
+        var handler = new FakeHttpMessageHandler(async (_, _) =>
         {
             await Task.Yield();
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent("image"u8.ToArray())
+                Content = new ByteArrayContent([.. "image"u8])
             };
         });
         using var client = new HttpClient(handler);
@@ -273,16 +269,16 @@ public sealed class ThumbnailCacheServiceTests
         using var directory = new TemporaryDirectory();
         var handler = new FakeHttpMessageHandler(async (_, _) =>
         {
-            await Task.Delay(10);
+            await Task.Delay(10, CancellationToken.None);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent("image"u8.ToArray())
+                Content = new ByteArrayContent([.. "image"u8])
             };
         });
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 10);
 
-        var url = "https://example.com/same_image.jpg";
+        const string url = "https://example.com/same_image.jpg";
         var tasks = Enumerable.Range(0, 20)
             .Select(_ => service.GetThumbnailAsync(url))
             .ToArray();
@@ -305,14 +301,14 @@ public sealed class ThumbnailCacheServiceTests
         for (var i = 0; i < 5; i++)
         {
             var path = Path.Combine(directory.Path, $"pre_existing_{i}.img");
-            await File.WriteAllBytesAsync(path, "old_image"u8.ToArray());
+            await File.WriteAllBytesAsync(path, [.. "old_image"u8]);
             File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(i - 10));
             filePaths.Add(path);
         }
 
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent("new_image"u8.ToArray())
+            Content = new ByteArrayContent([.. "new_image"u8])
         }));
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 3);
@@ -341,11 +337,11 @@ public sealed class ThumbnailCacheServiceTests
     {
         using var directory = new TemporaryDirectory();
         var staleTmpFile = Path.Combine(directory.Path, "orphaned.12345.tmp");
-        await File.WriteAllBytesAsync(staleTmpFile, "junk"u8.ToArray());
+        await File.WriteAllBytesAsync(staleTmpFile, [.. "junk"u8]);
         File.SetLastWriteTimeUtc(staleTmpFile, DateTime.UtcNow.AddMinutes(-10));
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new ByteArrayContent("image"u8.ToArray())
+            Content = new ByteArrayContent([.. "image"u8])
         }));
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path, maxFileCount: 5);

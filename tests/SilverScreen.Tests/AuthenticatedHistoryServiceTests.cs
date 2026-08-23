@@ -44,14 +44,12 @@ public sealed class AuthenticatedHistoryServiceTests
 
     private sealed class FakeYouTubeHistoryClient : IYouTubeHistoryClient
     {
-        public int CallCount { get; private set; }
         public string? LastContinuationToken { get; private set; }
         public Func<string?, CancellationToken, Task<HistoryFeedResult>>? ResponseFactory { get; set; }
 
         public Task<HistoryFeedResult> GetHistoryAsync(string? continuationToken = null,
             CancellationToken cancellationToken = default)
         {
-            CallCount++;
             LastContinuationToken = continuationToken;
             return ResponseFactory?.Invoke(continuationToken, cancellationToken)
                    ?? Task.FromResult(new HistoryFeedResult([], null, true, "OK", false));

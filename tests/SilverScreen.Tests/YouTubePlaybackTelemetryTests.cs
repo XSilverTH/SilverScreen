@@ -99,7 +99,7 @@ public sealed class YouTubePlaybackTelemetryTests
             return new AccountSession(true, HasManualSession: true);
         }
 
-        public ManualSessionCookies? GetManualSessionCookies()
+        public ManualSessionCookies GetManualSessionCookies()
         {
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText,
                 ".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
@@ -123,32 +123,8 @@ public sealed class YouTubePlaybackTelemetryTests
                                               """;
 
         private readonly List<Uri> _beacons = [];
-
         private readonly TaskCompletionSource<IReadOnlyList<Uri>> _beaconsReceived = new();
         private readonly Lock _lock = new();
-        private readonly List<Uri> _requests = [];
-
-        public IReadOnlyList<Uri> Requests
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _requests.ToArray();
-                }
-            }
-        }
-
-        public IReadOnlyList<Uri> Beacons
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _beacons.ToArray();
-                }
-            }
-        }
 
         public Task<IReadOnlyList<Uri>> WaitForBeaconsAsync()
         {
@@ -161,15 +137,14 @@ public sealed class YouTubePlaybackTelemetryTests
             var uri = request.RequestUri!;
             lock (_lock)
             {
-                _requests.Add(uri);
-                if (uri.Host == "www.youtube.com" && uri.AbsolutePath == "/watch")
+                if (uri is { Host: "www.youtube.com", AbsolutePath: "/watch" })
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new StringContent(PlayerResponse)
                     });
 
                 _beacons.Add(uri);
-                if (_beacons.Count == 3) _beaconsReceived.TrySetResult(_beacons.ToArray());
+                if (_beacons.Count == 3) _beaconsReceived.TrySetResult([.. _beacons]);
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));

@@ -60,11 +60,8 @@ public sealed class HistoryViewModelTests
 
     private sealed class FakeStatusReporter : IStatusReporter
     {
-        public string? LastStatus { get; private set; }
-
         public void ReportStatus(string status)
         {
-            LastStatus = status;
         }
     }
 }

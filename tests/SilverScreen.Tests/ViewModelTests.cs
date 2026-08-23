@@ -28,7 +28,7 @@ public sealed class ViewModelTests
         Assert.Equal("home", shell.SelectedPage);
         Assert.Equal("Search complete.", shell.Status);
         Assert.False(viewModel.State.IsLoading);
-        Assert.Equal(new[] { video }, viewModel.State.Videos);
+        Assert.Equal([video], viewModel.State.Videos);
         firstRequest.Completion.TrySetCanceled();
         await first;
     }
@@ -175,8 +175,8 @@ public sealed class ViewModelTests
     public void QueueViewModelTracksCurrentPlayingIndex()
     {
         var queue = new QueueService();
-        var video1 = queue.Add(new VideoSummary("vid1", "First", "Channel", TimeSpan.FromMinutes(3), "", false));
-        var video2 = queue.Add(new VideoSummary("vid2", "Second", "Channel", TimeSpan.FromMinutes(4), "", false));
+        queue.Add(new VideoSummary("vid1", "First", "Channel", TimeSpan.FromMinutes(3), "", false));
+        queue.Add(new VideoSummary("vid2", "Second", "Channel", TimeSpan.FromMinutes(4), "", false));
 
         using var viewModel = new QueueViewModel(queue, new FakePlaybackService());
         Assert.Equal(-1, viewModel.State.CurrentPlayingIndex);
@@ -218,7 +218,7 @@ public sealed class ViewModelTests
 
         Assert.Equal(1, changes);
         Assert.Equal(3, queue.Items.Count);
-        Assert.Equal(new[] { "new1", "new2", "new3" }, queue.Items.Select(item => item.Video.Id));
+        Assert.Equal(["new1", "new2", "new3"], queue.Items.Select(item => item.Video.Id));
         Assert.Equal(TimeSpan.FromMinutes(30), queue.TotalDuration);
     }
 
@@ -276,10 +276,7 @@ public sealed class ViewModelTests
             return completion.Task;
         }
 
-        public bool IsLikelyYouTubeUrl(string text)
-        {
-            return false;
-        }
+
     }
 
     private sealed class FakePlaybackService : IPlaybackService

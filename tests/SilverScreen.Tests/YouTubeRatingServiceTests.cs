@@ -11,7 +11,7 @@ public sealed class YouTubeRatingServiceTests
     [Fact]
     public async Task SubmitVoteAsync_WithAuthenticatedSession_BootstrapsAndPostsNativeLike()
     {
-        var handler = new FakeHttpMessageHandler(async (request, _) =>
+        var handler = new FakeHttpMessageHandler(async (request, ct) =>
         {
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/watch")
                 return HtmlResponse(""" { "likeStatus": "INDIFFERENT", "likeParams": "like-token" } """);
@@ -30,15 +30,15 @@ public sealed class YouTubeRatingServiceTests
             Assert.StartsWith("SAPISIDHASH ", request.Headers.Authorization!.ToString());
             Assert.Contains("SAPISID=sapisid", request.Headers.GetValues("Cookie").Single());
             Assert.Contains("true", request.Headers.GetValues("X-Youtube-Bootstrap-Logged-In"));
-            var body = await request.Content!.ReadAsStringAsync();
+            var body = await request.Content!.ReadAsStringAsync(ct);
             Assert.Contains("\"target\":{\"videoId\":\"dQw4w9WgXcQ\"}", body);
             Assert.Contains("\"clientName\":\"WEB\"", body);
             Assert.Contains("\"params\":\"like-token\"", body);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         using var session = new SignedInSessionService();
-        using var authentication = new YouTubeAuthenticationService(session)
-            { TimeSource = () => 1700000000L };
+        using var authentication = new YouTubeAuthenticationService(session);
+        authentication.TimeSource = () => 1700000000L;
         using var client = new HttpClient(handler);
         using var service = new YouTubeRatingService(client, authentication);
 
@@ -72,7 +72,7 @@ public sealed class YouTubeRatingServiceTests
     [Fact]
     public async Task SessionChange_ClearsCachedRatingMetadata()
     {
-        var handler = new FakeHttpMessageHandler((request, _) =>
+        var handler = new FakeHttpMessageHandler((_, _) =>
             Task.FromResult(HtmlResponse(""" { "likeStatus": "LIKE" } """)));
         using var session = new SignedInSessionService();
         using var authentication = new YouTubeAuthenticationService(session);
@@ -89,20 +89,19 @@ public sealed class YouTubeRatingServiceTests
     [Fact]
     public async Task RemoveVoteAsync_WithAuthenticatedSession_PostsTheNativeRemovalAction()
     {
-        var handler = new FakeHttpMessageHandler((request, _) =>
+        var handler = new FakeHttpMessageHandler(async (request, ct) =>
         {
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/watch")
-                return Task.FromResult(
-                    HtmlResponse(""" { "likeStatus": "LIKE", "removeLikeParams": "remove-token" } """));
+                return HtmlResponse(""" { "likeStatus": "LIKE", "removeLikeParams": "remove-token" } """);
 
             if (request.Method == HttpMethod.Get)
-                return Task.FromResult(HtmlResponse(
-                    """ { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00" } """));
-
+                return HtmlResponse(
+                    """ { "INNERTUBE_API_KEY": "test-key", "INNERTUBE_CLIENT_VERSION": "2.20260724.01.00" } """);
             Assert.Equal("https://www.youtube.com/youtubei/v1/like/removelike?key=test-key&prettyPrint=false",
                 request.RequestUri!.AbsoluteUri);
-            Assert.Contains("\"params\":\"remove-token\"", request.Content!.ReadAsStringAsync().Result);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            var body = await request.Content!.ReadAsStringAsync(ct);
+            Assert.Contains("\"params\":\"remove-token\"", body);
+            return new HttpResponseMessage(HttpStatusCode.OK);
         });
         using var session = new SignedInSessionService();
         using var authentication = new YouTubeAuthenticationService(session);
@@ -135,7 +134,7 @@ public sealed class YouTubeRatingServiceTests
             return new AccountSession(true, HasManualSession: true);
         }
 
-        public ManualSessionCookies? GetManualSessionCookies()
+        public ManualSessionCookies GetManualSessionCookies()
         {
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, Cookies);
         }

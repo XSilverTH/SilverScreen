@@ -13,8 +13,6 @@ public partial class SearchPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
     private readonly Action _popdownAction;
-
-
     private readonly EventControllerKey _searchKeyController;
     private readonly Action<string> _submitCallback;
     private readonly SearchViewModel _viewModel;
@@ -22,7 +20,6 @@ public partial class SearchPopoverView : ViewBase<Box>
     private bool _disposed;
     private string _originalTypedQuery = string.Empty;
     private int _selectedSuggestionIndex = -1;
-
     private CancellationTokenSource? _suggestionDebounceCts;
     private bool _suppressSearchChanged;
 
