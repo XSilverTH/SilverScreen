@@ -17,7 +17,8 @@ public sealed class YtDlpChannelService(
     public async Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
         int startIndex, CancellationToken cancellationToken)
     {
-        Logger.Information("Loading channel page for {ChannelUrl} (Sort: {Sort}, StartIndex: {StartIndex})", channelUrl, sort, startIndex);
+        Logger.Information("Loading channel page for {ChannelUrl} (Sort: {Sort}, StartIndex: {StartIndex})", channelUrl,
+            sort, startIndex);
         var preferences = preferencesService.GetPreferences();
         var options = new YtDlpOptions
         {
@@ -29,7 +30,8 @@ public sealed class YtDlpChannelService(
         {
             using var cookieFile = cookieFileProvider.CreateCookieFile();
             var result = await runner.RunAsync(
-                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, cookieFile?.Path), options.Timeout,
+                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, cookieFile?.Path),
+                options.Timeout,
                 cancellationToken).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {

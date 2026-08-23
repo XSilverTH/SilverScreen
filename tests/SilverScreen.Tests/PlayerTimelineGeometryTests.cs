@@ -8,12 +8,12 @@ public class PlayerTimelineGeometryTests
     public void GetTrackBoundsReturnsCenterWhenDurationIsZero()
     {
         var (start, width) = PlayerTimelineGeometry.GetTrackBounds(
-            troughStart: 10,
-            troughWidth: 500,
-            sliderStart: 10,
-            sliderEnd: 30,
-            playbackPosition: TimeSpan.Zero,
-            duration: TimeSpan.Zero);
+            10,
+            500,
+            10,
+            30,
+            TimeSpan.Zero,
+            TimeSpan.Zero);
 
         Assert.Equal(20, start);
         Assert.Equal(480, width);
@@ -27,12 +27,12 @@ public class PlayerTimelineGeometryTests
 
         // Trough from 0 to 500, slider is 20px wide centered at 250 (from 240 to 260)
         var (start, width) = PlayerTimelineGeometry.GetTrackBounds(
-            troughStart: 0,
-            troughWidth: 500,
-            sliderStart: 240,
-            sliderEnd: 260,
-            playbackPosition: position,
-            duration: duration);
+            0,
+            500,
+            240,
+            260,
+            position,
+            duration);
 
         Assert.Equal(480, width);
         // Slider center is 250, current fraction is 0.5, track width is 480 -> 250 - 0.5 * 480 = 10
@@ -47,9 +47,13 @@ public class PlayerTimelineGeometryTests
         var trackWidth = 500;
 
         Assert.Equal(10, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.Zero, duration, trackStart, trackWidth));
-        Assert.Equal(260, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(50), duration, trackStart, trackWidth));
-        Assert.Equal(510, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(100), duration, trackStart, trackWidth));
-        Assert.Equal(510, PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(150), duration, trackStart, trackWidth)); // Clamped
+        Assert.Equal(260,
+            PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(50), duration, trackStart, trackWidth));
+        Assert.Equal(510,
+            PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(100), duration, trackStart, trackWidth));
+        Assert.Equal(510,
+            PlayerTimelineGeometry.GetTrackPosition(TimeSpan.FromSeconds(150), duration, trackStart,
+                trackWidth)); // Clamped
     }
 
     [Fact]
@@ -60,23 +64,29 @@ public class PlayerTimelineGeometryTests
         var trackWidth = 500;
 
         // Before start -> clamped to 0
-        Assert.Equal(TimeSpan.Zero, PlayerTimelineGeometry.GetPositionAtCoordinate(5, trackStart, trackWidth, duration));
-        Assert.Equal(TimeSpan.Zero, PlayerTimelineGeometry.GetPositionAtCoordinate(10, trackStart, trackWidth, duration));
+        Assert.Equal(TimeSpan.Zero,
+            PlayerTimelineGeometry.GetPositionAtCoordinate(5, trackStart, trackWidth, duration));
+        Assert.Equal(TimeSpan.Zero,
+            PlayerTimelineGeometry.GetPositionAtCoordinate(10, trackStart, trackWidth, duration));
 
         // Midpoint
-        Assert.Equal(TimeSpan.FromSeconds(50), PlayerTimelineGeometry.GetPositionAtCoordinate(260, trackStart, trackWidth, duration));
+        Assert.Equal(TimeSpan.FromSeconds(50),
+            PlayerTimelineGeometry.GetPositionAtCoordinate(260, trackStart, trackWidth, duration));
 
         // End
-        Assert.Equal(TimeSpan.FromSeconds(100), PlayerTimelineGeometry.GetPositionAtCoordinate(510, trackStart, trackWidth, duration));
+        Assert.Equal(TimeSpan.FromSeconds(100),
+            PlayerTimelineGeometry.GetPositionAtCoordinate(510, trackStart, trackWidth, duration));
 
         // Past end -> clamped to duration
-        Assert.Equal(TimeSpan.FromSeconds(100), PlayerTimelineGeometry.GetPositionAtCoordinate(600, trackStart, trackWidth, duration));
+        Assert.Equal(TimeSpan.FromSeconds(100),
+            PlayerTimelineGeometry.GetPositionAtCoordinate(600, trackStart, trackWidth, duration));
     }
 
     [Fact]
     public void GetPositionAtCoordinateHandlesZeroDurationOrZeroWidth()
     {
-        Assert.Equal(TimeSpan.Zero, PlayerTimelineGeometry.GetPositionAtCoordinate(100, 10, 0, TimeSpan.FromSeconds(100)));
+        Assert.Equal(TimeSpan.Zero,
+            PlayerTimelineGeometry.GetPositionAtCoordinate(100, 10, 0, TimeSpan.FromSeconds(100)));
         Assert.Equal(TimeSpan.Zero, PlayerTimelineGeometry.GetPositionAtCoordinate(100, 10, 500, TimeSpan.Zero));
     }
 }

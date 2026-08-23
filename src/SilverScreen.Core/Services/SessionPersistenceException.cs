@@ -7,11 +7,6 @@ public sealed class SessionPersistenceException : Exception
     {
     }
 
-    public SessionPersistenceException(string? message)
-        : base(message ?? RuntimeDependencyGuidance.SecretServiceUnavailable)
-    {
-    }
-
     public SessionPersistenceException(string? message, Exception? innerException)
         : base(message ?? RuntimeDependencyGuidance.SecretServiceUnavailable, innerException)
     {

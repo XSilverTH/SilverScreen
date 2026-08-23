@@ -4,34 +4,35 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.History;
+
 public partial class HistoryView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly Stack _stack;
-    private readonly ScrolledWindow _scrolledWindow;
-    private readonly Adjustment? _vadjustment;
-    private readonly GridView _videoGrid;
-    private readonly StatusPage _signedOutPage;
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;
-    private readonly Button _retryButton;
-    private readonly Revealer _paginationLoadingRevealer;
     private readonly Label _paginationLoadingLabel;
+    private readonly Revealer _paginationLoadingRevealer;
+    private readonly ScrolledWindow _scrolledWindow;
+    private readonly StatusPage _signedOutPage;
+    private readonly Stack _stack;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
+    private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
+    private readonly GridView _videoGrid;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private readonly HistoryViewModel _viewModel;
+    private readonly IWatchProgressService _watchProgress;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 
@@ -52,7 +53,7 @@ public partial class HistoryView : ViewBase<Box>
         _signedOutPage = GetRequiredObject<StatusPage>("history_signed_out_page");
         _emptyPage = GetRequiredObject<StatusPage>("history_empty_page");
         _errorPage = GetRequiredObject<StatusPage>("history_error_page");
-        _retryButton = GetRequiredObject<Button>("history_retry_button");
+        GetRequiredObject<Button>("history_retry_button");
         _paginationLoadingRevealer = GetRequiredObject<Revealer>("history_pagination_loading_revealer");
         _paginationLoadingLabel = GetRequiredObject<Label>("history_pagination_loading_label");
 
@@ -133,28 +134,25 @@ public partial class HistoryView : ViewBase<Box>
         {
             case AuthenticatedHistoryStatus.AuthenticationRequired:
             case AuthenticatedHistoryStatus.AuthenticationRejected:
-                if (!string.IsNullOrWhiteSpace(state.Summary))
-                    _signedOutPage.Description = state.Summary;
-                else
-                    _signedOutPage.Description = "Watch history requires an active YouTube session.";
+                _signedOutPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                    ? state.Summary
+                    : "Watch history requires an active YouTube session.";
                 _stack.VisibleChildName = "signed_out";
                 break;
 
             case AuthenticatedHistoryStatus.TemporaryBackendFailure:
-                if (!string.IsNullOrWhiteSpace(state.Summary))
-                    _errorPage.Description = state.Summary;
-                else
-                    _errorPage.Description = "Failed to load your watch history. Check your network connection and try again.";
+                _errorPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                    ? state.Summary
+                    : "Failed to load your watch history. Check your network connection and try again.";
                 _stack.VisibleChildName = "error";
                 break;
 
             case AuthenticatedHistoryStatus.Empty:
             case AuthenticatedHistoryStatus.Success:
             default:
-                if (!string.IsNullOrWhiteSpace(state.Summary))
-                    _emptyPage.Description = state.Summary;
-                else
-                    _emptyPage.Description = "Videos you watch on YouTube will appear here.";
+                _emptyPage.Description = !string.IsNullOrWhiteSpace(state.Summary)
+                    ? state.Summary
+                    : "Videos you watch on YouTube will appear here.";
                 _stack.VisibleChildName = "empty";
                 break;
         }

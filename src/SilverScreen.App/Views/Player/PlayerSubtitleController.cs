@@ -83,7 +83,7 @@ internal sealed class PlayerSubtitleController(
         if (track is not null) selectTrack(track.IsSelected ? 0 : track.Id);
     }
 
-    internal static bool SubtitleLanguageMatches(string language, string preferredLanguage)
+    private static bool SubtitleLanguageMatches(string language, string preferredLanguage)
     {
         if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(preferredLanguage)) return false;
         if (string.Equals(language, preferredLanguage, StringComparison.OrdinalIgnoreCase)) return true;

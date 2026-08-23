@@ -2,7 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
-[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(Dictionary<string, WatchProgressEntry>), TypeInfoPropertyName = "WatchProgressEntries")]
 [JsonSerializable(typeof(Dictionary<string, double>), TypeInfoPropertyName = "LegacyWatchProgressMap")]
 internal sealed partial class WatchProgressJsonContext : JsonSerializerContext;

@@ -135,7 +135,8 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
                 CryptographicOperations.ZeroMemory(secret);
             }
 
-            if (secretValue == IntPtr.Zero) throw new InvalidOperationException("Failed to allocate secret value in libsecret.");
+            if (secretValue == IntPtr.Zero)
+                throw new InvalidOperationException("Failed to allocate secret value in libsecret.");
 
             var stored = SecretPasswordStorevBinarySync(IntPtr.Zero, attributes, IntPtr.Zero, Label, secretValue,
                 IntPtr.Zero, out error);
@@ -177,7 +178,8 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
     {
         var functions = GetGlibFunctions();
         var attributes = GHashTableNewFull(functions.StringHash, functions.StringEqual, functions.Free, functions.Free);
-        if (attributes == IntPtr.Zero) throw new InvalidOperationException("Failed to allocate GLib hash table for secret attributes.");
+        if (attributes == IntPtr.Zero)
+            throw new InvalidOperationException("Failed to allocate GLib hash table for secret attributes.");
 
         try
         {
@@ -195,7 +197,8 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
     private static void InsertAttribute(IntPtr attributes, string key, string value)
     {
         var duplicatedKey = GStrdup(key);
-        if (duplicatedKey == IntPtr.Zero) throw new InvalidOperationException("Failed to allocate attribute key string in GLib.");
+        if (duplicatedKey == IntPtr.Zero)
+            throw new InvalidOperationException("Failed to allocate attribute key string in GLib.");
 
         var duplicatedValue = GStrdup(value);
         if (duplicatedValue == IntPtr.Zero)

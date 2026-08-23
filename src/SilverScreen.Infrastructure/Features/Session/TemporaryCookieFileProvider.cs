@@ -42,6 +42,7 @@ public sealed class TemporaryCookieFileProvider(ISessionService sessionService, 
             {
                 writer.Write(cookies.Content);
             }
+
             Logger.Debug("Created temporary cookie lease at {CookieFilePath}", cookieFilePath);
             return new CookieFileLease(cookieFilePath, directoryPath);
         }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -60,12 +61,14 @@ public sealed class YtDlpHomeClient(
                 true);
 
         var (firstResult, firstVideos) =
-            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken).ConfigureAwait(false);
+            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken)
+                .ConfigureAwait(false);
 
         if (!firstResult.IsSuccess || firstVideos.Count > 0)
             return firstResult;
 
-        Logger.Information("Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
+        Logger.Information(
+            "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
         var (retryResult, retryVideos) =
             await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken).ConfigureAwait(false);
         if (!retryResult.IsSuccess)
@@ -128,7 +131,7 @@ public sealed class YtDlpHomeClient(
                 .ToArray();
             return (new HomeFeedResult(
                 videos,
-                GetNextContinuationToken(startIndex, pageEntries.Length, pageSize: 20),
+                GetNextContinuationToken(startIndex, pageEntries.Length, 20),
                 true,
                 "Recommendations loaded successfully.",
                 false), videos);
@@ -143,9 +146,10 @@ public sealed class YtDlpHomeClient(
     private static string? GetNextContinuationToken(int startIndex, int resultCount, int pageSize)
     {
         return resultCount == pageSize
-            ? (startIndex + pageSize).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ? (startIndex + pageSize).ToString(CultureInfo.InvariantCulture)
             : null;
     }
+
     private static (HomeFeedResult Result, IReadOnlyList<VideoSummary> Videos) Failure(string message)
     {
         return (new HomeFeedResult([], null, false, message, false), []);

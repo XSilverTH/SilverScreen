@@ -23,10 +23,11 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
     private readonly IStatusReporter? _shell;
+    private int _currentPlayingIndex = -1;
     private bool _disposed;
     private bool _isLaunching;
-    private int _currentPlayingIndex = -1;
     private QueuePresentationState _state;
+
     public QueueViewModel(IQueueService queue, IPlaybackService playback, IStatusReporter? shell = null)
     {
         _queue = queue;
@@ -84,6 +85,7 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
         _currentPlayingIndex = index;
         State = Snapshot();
     }
+
     public async Task PlayAllAsync()
     {
         if (_disposed || _isLaunching || _queue.Items.Count == 0)

@@ -11,7 +11,6 @@ public sealed class AuthenticatedHistoryServiceTests
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession\n";
 
 
-
     [Fact]
     public async Task LoadNextPageAsync_UsesContinuationAndOnlyReturnsNewPage()
     {

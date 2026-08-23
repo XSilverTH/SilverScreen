@@ -5,7 +5,8 @@ namespace SilverScreen.Tests;
 
 public sealed class FileWatchProgressServiceTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"silverscreen-watch-progress-{Guid.NewGuid():N}");
+    private readonly string _directory =
+        Path.Combine(Path.GetTempPath(), $"silverscreen-watch-progress-{Guid.NewGuid():N}");
 
     public void Dispose()
     {

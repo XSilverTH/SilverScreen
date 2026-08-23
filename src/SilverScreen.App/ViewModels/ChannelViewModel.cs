@@ -28,8 +28,8 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
 {
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private bool _disposed;
-    private CancellationTokenSource? _requestCancellation;
     private int? _nextStartIndex;
+    private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
 
     public ChannelViewState State
@@ -42,6 +42,19 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             StateChanged?.Invoke(this, value);
         }
     } = ChannelViewState.Empty;
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        ++_requestGeneration;
+        _requestCancellation?.Cancel();
+        _requestCancellation?.Dispose();
+        _requestCancellation = null;
+        _nextStartIndex = null;
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<ChannelViewState>? StateChanged;
@@ -65,12 +78,9 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         return SetSortAsync(sort);
     }
 
-    public Task SetSortAsync(ChannelVideoSort sort)
+    private Task SetSortAsync(ChannelVideoSort sort)
     {
-        if (State.Url is null)
-            return Task.CompletedTask;
-
-        return LoadAsync(State.Url, State.Name, sort);
+        return State.Url is null ? Task.CompletedTask : LoadAsync(State.Url, State.Name, sort);
     }
 
     public Task RefreshAsync()
@@ -107,7 +117,8 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             var summary = page.StatusMessage ??
                           $"Showing {videos.Length} video{(videos.Length == 1 ? string.Empty : "s")} from {page.Name}.";
             State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
-                videos, page.Sort, summary, false, page.IsSuccess, false, page.IsSuccess && _nextStartIndex is not null);
+                videos, page.Sort, summary, false, page.IsSuccess, false,
+                page.IsSuccess && _nextStartIndex is not null);
             shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -134,19 +145,6 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         _requestCancellation = null;
         _nextStartIndex = null;
         State = ChannelViewState.Empty;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-        _nextStartIndex = null;
     }
 
     private async Task LoadAsync(string channelUrl, string fallbackName, ChannelVideoSort sort)
@@ -177,12 +175,14 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
 
         try
         {
-            var page = await channelService.GetChannelAsync(channelUrl, fallbackName, sort, 1, token).ConfigureAwait(false);
+            var page = await channelService.GetChannelAsync(channelUrl, fallbackName, sort, 1, token)
+                .ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
 
             _nextStartIndex = page.IsSuccess ? page.NextStartIndex : null;
-            var summary = page.StatusMessage ?? $"Showing {page.Videos.Count} video{(page.Videos.Count == 1 ? string.Empty : "s")} from {page.Name}.";
+            var summary = page.StatusMessage ??
+                          $"Showing {page.Videos.Count} video{(page.Videos.Count == 1 ? string.Empty : "s")} from {page.Name}.";
             State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
                 page.Videos, page.Sort, summary, false, page.IsSuccess, false,
                 page.IsSuccess && _nextStartIndex is not null);

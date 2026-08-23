@@ -6,7 +6,6 @@ namespace SilverScreen.Tests;
 
 public sealed class HistoryViewModelTests
 {
-
     [Fact]
     public async Task LoadMoreAsync_AppendsTheNextServerPageWithoutDuplicatingVideos()
     {
@@ -18,7 +17,7 @@ public sealed class HistoryViewModelTests
                 "Watch history loaded."),
             NextPage = new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.Success,
-                new FeedPage([CreateVideo("v1"), CreateVideo("v2")], null),
+                new FeedPage([CreateVideo("v1"), CreateVideo("v2")]),
                 "Watch history loaded.")
         };
         using var viewModel = new HistoryViewModel(service, new FakeStatusReporter());
@@ -41,8 +40,10 @@ public sealed class HistoryViewModelTests
     {
         public AuthenticatedHistoryResult FirstPage { get; init; } = new(
             AuthenticatedHistoryStatus.Empty, FeedPage.Empty, "No watch history was returned.");
+
         public AuthenticatedHistoryResult NextPage { get; init; } = new(
             AuthenticatedHistoryStatus.Empty, FeedPage.Empty, "No additional watch history is available.");
+
         public int NextPageCallCount { get; private set; }
 
         public Task<AuthenticatedHistoryResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)

@@ -70,12 +70,14 @@ public sealed class ViewModelTests
         request.Completion.TrySetCanceled();
         await search;
     }
+
     [Fact]
     public async Task FetchSuggestionsAsync_ReturnsSuggestionsFromService()
     {
         var searchService = new ControlledSearchService();
         var suggestionService = new FakeSearchSuggestionService(["suggestion 1", "suggestion 2"]);
-        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter(), suggestionService);
+        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(),
+            new CapturingStatusReporter(), suggestionService);
 
         var suggestions = await viewModel.FetchSuggestionsAsync("query");
 
@@ -88,13 +90,15 @@ public sealed class ViewModelTests
     public async Task FetchSuggestionsAsync_ReturnsEmptyWhenNoServiceOrEmptyQuery()
     {
         var searchService = new ControlledSearchService();
-        using var viewModelWithoutService = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter());
+        using var viewModelWithoutService =
+            new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter());
 
         var withoutService = await viewModelWithoutService.FetchSuggestionsAsync("query");
         Assert.Empty(withoutService);
 
         var suggestionService = new FakeSearchSuggestionService(["suggestion 1"]);
-        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter(), suggestionService);
+        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(),
+            new CapturingStatusReporter(), suggestionService);
 
         var emptyQuery = await viewModelWithService.FetchSuggestionsAsync("   ");
         Assert.Empty(emptyQuery);
@@ -260,9 +264,9 @@ public sealed class ViewModelTests
 
     private sealed class ControlledSearchService : ISearchService
     {
-        public List<(string Query, int StartIndex, CancellationToken Token, TaskCompletionSource<SearchResultPage> Completion)>
-            Requests
-        { get; } = [];
+        public List<(string Query, int StartIndex, CancellationToken Token, TaskCompletionSource<SearchResultPage>
+                Completion)>
+            Requests { get; } = [];
 
         public Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
         {
@@ -312,7 +316,8 @@ public sealed class ViewModelTests
 
     private sealed class FakeSearchSuggestionService(IReadOnlyList<string> suggestions) : ISearchSuggestionService
     {
-        public Task<IReadOnlyList<string>> GetSuggestionsAsync(string query, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<string>> GetSuggestionsAsync(string query,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(suggestions);
         }

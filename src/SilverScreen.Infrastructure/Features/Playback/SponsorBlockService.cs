@@ -52,6 +52,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             Logger.Debug("SponsorBlock cache hit for video {VideoId}", videoId);
             return cached;
         }
+
         var query = $"videoID={Uri.EscapeDataString(videoId)}&actionType=skip&" +
                     string.Join('&',
                         selectedCategories.Select(category => $"category={Uri.EscapeDataString(category)}"));
@@ -59,15 +60,18 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
         try
         {
-            Logger.Information("Fetching SponsorBlock segments for video {VideoId} with categories {Categories}", videoId, selectedCategories);
+            Logger.Information("Fetching SponsorBlock segments for video {VideoId} with categories {Categories}",
+                videoId, selectedCategories);
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
-                Logger.Warning("SponsorBlock request for video {VideoId} returned HTTP status {StatusCode}", videoId, response.StatusCode);
+                Logger.Warning("SponsorBlock request for video {VideoId} returned HTTP status {StatusCode}", videoId,
+                    response.StatusCode);
                 return [];
             }
+
             await using var responseStream =
                 await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var payload = await JsonSerializer.DeserializeAsync(responseStream,
@@ -77,12 +81,12 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
             var segments = payload
                 .Where(segment => segment is
-                {
-                    Id.Length: > 0,
-                    Category: not null,
-                    ActionType: "skip",
-                    Segment: [var start, var end]
-                } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
+                                  {
+                                      Id.Length: > 0,
+                                      Category: not null,
+                                      ActionType: "skip",
+                                      Segment: [var start, var end]
+                                  } && selectedCategories.Contains(segment.Category, StringComparer.Ordinal) &&
                                   IsValidTimeRange(start, end))
                 .Select(segment => new SponsorBlockSegment(segment.Id!, TimeSpan.FromSeconds(segment.Segment![0]),
                     TimeSpan.FromSeconds(segment.Segment[1]), segment.Category!))
@@ -116,9 +120,9 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
     }
 }
 
-internal sealed record SponsorBlockSkipSegment(double[]? Segment, string? UUID, string? Category, string? ActionType)
+internal sealed record SponsorBlockSkipSegment(double[]? Segment, string? Uuid, string? Category, string? ActionType)
 {
-    public string? Id => UUID;
+    public string? Id => Uuid;
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]

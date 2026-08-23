@@ -4,6 +4,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
@@ -11,20 +12,19 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Home;
 
-public partial class HomeView : ViewBase<Box>
+public class HomeView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<HomeView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly ScrolledWindow _scrolledWindow;
     private readonly Overlay _contentOverlay;
-    private readonly Adjustment? _vadjustment;
+    private readonly Label _paginationLoadingLabel;
+    private readonly Revealer _paginationLoadingRevealer;
+    private readonly ScrolledWindow _scrolledWindow;
     private readonly Box _statusHost;
     private readonly Box _statusLoadingPage;
     private readonly StatusPage _statusPage;
-    private readonly Revealer _paginationLoadingRevealer;
-    private readonly Label _paginationLoadingLabel;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
+    private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly GridView _videoGrid;
@@ -32,6 +32,7 @@ public partial class HomeView : ViewBase<Box>
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private readonly HomeViewModel _viewModel;
+    private readonly IWatchProgressService _watchProgress;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 
@@ -79,7 +80,7 @@ public partial class HomeView : ViewBase<Box>
     public Task RefreshAsync()
     {
         return _viewModel.State is
-        { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
+            { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
             ? _viewModel.RefreshAsync()
             : Task.CompletedTask;
     }
@@ -97,11 +98,9 @@ public partial class HomeView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed)
-            {
-                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
-                Render(state);
-            }
+            if (_disposed) return false;
+            RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
+            Render(state);
 
             return false;
         });

@@ -2,6 +2,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using static GLib.Functions;
 
 namespace SilverScreen.Views.Player;

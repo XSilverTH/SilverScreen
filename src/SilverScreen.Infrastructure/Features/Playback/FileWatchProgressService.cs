@@ -2,6 +2,7 @@ using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+
 namespace SilverScreen.Infrastructure.Features.Playback;
 
 internal sealed record WatchProgressEntry(double Highest, double? Resume);
@@ -9,10 +10,10 @@ internal sealed record WatchProgressEntry(double Highest, double? Resume);
 /// <summary>Persists per-video watch progress locally so cards can reflect playback across launches.</summary>
 public sealed class FileWatchProgressService : IWatchProgressService
 {
-    private static readonly ILogger Logger = Log.ForContext<FileWatchProgressService>();
     private const double CompletionThreshold = 0.9;
     private const double MinimumVisibleFraction = 0.01;
     private const double MinimumVisibleSeconds = 2;
+    private static readonly ILogger Logger = Log.ForContext<FileWatchProgressService>();
     private readonly string _filePath;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, WatchProgressEntry> _progress;
@@ -73,10 +74,10 @@ public sealed class FileWatchProgressService : IWatchProgressService
         {
             var existing = _progress.GetValueOrDefault(video.Id) ?? new WatchProgressEntry(0, null);
             var cardChanged = fraction > existing.Highest &&
-                              Math.Floor(fraction * 100) != Math.Floor(existing.Highest * 100);
+                              Math.Abs(Math.Floor(fraction * 100) - Math.Floor(existing.Highest * 100)) > 0.2;
             var highest = cardChanged ? fraction : existing.Highest;
             double? resume = completed ? null : fraction;
-            if (highest == existing.Highest && resume == existing.Resume)
+            if (Math.Abs(highest - existing.Highest) < 0.2 && Math.Abs((double)(resume - existing.Resume)!) < 0.2)
                 return;
 
             _progress[video.Id] = new WatchProgressEntry(highest, resume);
@@ -139,7 +140,8 @@ public sealed class FileWatchProgressService : IWatchProgressService
             var migrated = legacy.ToDictionary(
                 static pair => pair.Key,
                 static pair => new WatchProgressEntry(pair.Value, pair.Value));
-            Logger.Information("Loaded legacy watch progress for {Count} videos from {FilePath}", migrated.Count, filePath);
+            Logger.Information("Loaded legacy watch progress for {Count} videos from {FilePath}", migrated.Count,
+                filePath);
             return migrated;
         }
         catch (JsonException ex)
@@ -171,6 +173,7 @@ public sealed class FileWatchProgressService : IWatchProgressService
             if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
         }
     }
+
     private static string GetDefaultFilePath()
     {
         var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
@@ -178,7 +181,8 @@ public sealed class FileWatchProgressService : IWatchProgressService
             return Path.Combine(configHome, "SilverScreen", "watch-progress.json");
 
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var configDirectory = string.IsNullOrWhiteSpace(userHome) ? Path.GetTempPath() : Path.Combine(userHome, ".config");
+        var configDirectory =
+            string.IsNullOrWhiteSpace(userHome) ? Path.GetTempPath() : Path.Combine(userHome, ".config");
         return Path.Combine(configDirectory, "SilverScreen", "watch-progress.json");
     }
 }

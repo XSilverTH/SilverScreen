@@ -1,5 +1,6 @@
 using System.Net;
 using SilverScreen.Infrastructure.Features.Search;
+using SilverScreen.Views.Popovers;
 
 namespace SilverScreen.Tests;
 
@@ -15,8 +16,8 @@ public sealed class SearchSuggestionServiceTests
             Assert.Contains("ds=yt", request.RequestUri!.Query);
             Assert.Contains("q=test%20query", request.RequestUri!.Query);
             return Task.FromResult(JsonResponse("""
-                ["test query", ["test query 1", "test query 2", "test query 3"]]
-                """));
+                                                ["test query", ["test query 1", "test query 2", "test query 3"]]
+                                                """));
         });
         using var client = new HttpClient(handler);
         using var service = new YouTubeSearchSuggestionService(client);
@@ -38,8 +39,8 @@ public sealed class SearchSuggestionServiceTests
         var handler = new FakeHttpMessageHandler((request, _) =>
         {
             return Task.FromResult(JsonResponse("""
-                window.google.ac.h(["test", [["test match", 0, [512]], ["test cricket", 0, [512]]], {"k": 1}])
-                """));
+                                                window.google.ac.h(["test", [["test match", 0, [512]], ["test cricket", 0, [512]]], {"k": 1}])
+                                                """));
         });
         using var client = new HttpClient(handler);
         using var service = new YouTubeSearchSuggestionService(client);
@@ -122,7 +123,7 @@ public sealed class SearchSuggestionServiceTests
     [InlineData("   ", "test suggestion", "test suggestion")]
     public void FormatSuggestionMarkup_FormatsPrefixAndBoldsSuffix(string query, string suggestion, string expected)
     {
-        var formatted = SilverScreen.Views.Popovers.SearchPopoverView.FormatSuggestionMarkup(query, suggestion);
+        var formatted = SearchPopoverView.FormatSuggestionMarkup(query, suggestion);
         Assert.Equal(expected, formatted);
     }
 

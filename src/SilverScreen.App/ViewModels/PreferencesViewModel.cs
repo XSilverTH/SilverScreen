@@ -45,8 +45,8 @@ public enum PreferencesMutuallyExclusiveOption
 
 public sealed class PreferencesViewModel
 {
-    private static readonly ILogger Logger = Log.ForContext<PreferencesViewModel>();
     public const string PersistenceErrorMessage = "Unable to save preferences. Your changes were not applied.";
+    private static readonly ILogger Logger = Log.ForContext<PreferencesViewModel>();
 
     private readonly IPreferencesService _preferencesService;
     private AppPreferences _preferences;
@@ -102,7 +102,7 @@ public sealed class PreferencesViewModel
             _ => state with
             {
                 MarkWatchedVideos = state is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
-                ResumePlaybackOnDemand = state.ResumePlaybackAutomatically ? false : state.ResumePlaybackOnDemand
+                ResumePlaybackOnDemand = state is { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: true }
             }
         };
     }

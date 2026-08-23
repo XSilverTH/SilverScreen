@@ -6,6 +6,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using Functions = GLib.Functions;
@@ -16,9 +17,9 @@ namespace SilverScreen.Views.Queue;
 
 public partial class QueueItemRowView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
+    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
     private readonly Label _channel;
     private readonly WidgetPaintable _dragPaintable;
@@ -40,17 +41,16 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Stack _stateStack;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
     private readonly Label _title;
+    private readonly IWatchProgressService _watchProgress;
     private readonly ProgressBar _watchedProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
     private bool _disposed;
     private int _index;
-    private QueueItem? _item;
-    public QueueItem? Item => _item;
     private CancellationTokenSource? _thumbnailCancellation;
+
     public QueueItemRowView(
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
@@ -81,14 +81,14 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions = SimpleActionGroup.New();
         _playNowAction = CreateAction("play-now", () =>
         {
-            if (_item is { } item)
+            if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         });
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
         _moveDownAction = CreateAction("move-down", () => MoveBy(1));
         _removeAction = CreateAction("remove", () =>
         {
-            if (_item is { } item)
+            if (Item is { } item)
                 _removeRequested(item.Id);
         });
         _actions.AddAction(_playNowAction);
@@ -101,7 +101,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dragSource.Actions = DragAction.Move;
         _dragSource.OnPrepare += (_, _) =>
         {
-            if (_item is not { } item)
+            if (Item is not { } item)
                 return null;
 
             using var value = new Value(item.Id.ToString());
@@ -118,7 +118,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         var detailsClick = GestureClick.New();
         detailsClick.OnReleased += (_, _) =>
         {
-            if (_item is { } item)
+            if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         };
         var details = GetRequiredObject<Box>("details");
@@ -127,16 +127,18 @@ public partial class QueueItemRowView : ViewBase<Box>
         var thumbnailClick = GestureClick.New();
         thumbnailClick.OnReleased += (_, _) =>
         {
-            if (_item is { } item)
+            if (Item is { } item)
                 _playRequested?.Invoke(item.Id, _index);
         };
         _thumbnail.AddController(thumbnailClick);
         _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
+    public QueueItem? Item { get; private set; }
+
     private void OnRemoveButtonClicked(object? sender, EventArgs args)
     {
-        if (_item is { } item)
+        if (Item is { } item)
             _removeRequested(item.Id);
     }
 
@@ -144,7 +146,7 @@ public partial class QueueItemRowView : ViewBase<Box>
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         Unbind();
-        _item = item;
+        Item = item;
         _index = index;
         _position.SetText((index + 1).ToString());
         _title.SetText(item.Video.Title);
@@ -176,6 +178,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             Widget.RemoveCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
+
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = new CancellationTokenSource();
         LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
@@ -183,7 +186,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     public void Unbind()
     {
-        _item = null;
+        Item = null;
         _index = 0;
         _bindingGeneration++;
         _position.SetText(string.Empty);
@@ -207,12 +210,12 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void OnWatchProgressChanged(object? sender, WatchProgress progress)
     {
-        if (_item?.Video.Id != progress.VideoId)
+        if (Item?.Video.Id != progress.VideoId)
             return;
 
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed && _item?.Video.Id == progress.VideoId)
+            if (!_disposed && Item?.Video.Id == progress.VideoId)
                 SetWatchProgress(progress.Fraction);
             return false;
         });
@@ -227,7 +230,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private bool HandleDrop(string? value, double y)
     {
-        if (_item is null || !Guid.TryParse(value, out var itemId))
+        if (Item is null || !Guid.TryParse(value, out var itemId))
             return false;
 
         Widget.RemoveCssClass("queue-drop-before");
@@ -238,7 +241,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void MoveBy(int delta)
     {
-        if (_item is { } item)
+        if (Item is { } item)
             _moveRequested(item.Id, _index + delta);
     }
 

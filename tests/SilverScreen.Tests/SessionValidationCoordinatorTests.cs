@@ -12,7 +12,6 @@ public sealed class SessionValidationCoordinatorTests
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
 
 
-
     [Fact]
     public async Task DuplicateValidation_Prevention()
     {

@@ -21,6 +21,31 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
     public string[] PreferredSubtitle { get; set; } = ["c"];
     public string[] ResumeOrSkip { get; set; } = ["Return", "KP_Enter"];
     public string[] ToggleQueue { get; set; } = ["q"];
+
+    public bool Equals(PlayerShortcutBindings? other)
+    {
+        return other is not null &&
+               TogglePause.SequenceEqual(other.TogglePause, StringComparer.Ordinal) &&
+               SeekBackward.SequenceEqual(other.SeekBackward, StringComparer.Ordinal) &&
+               SeekForward.SequenceEqual(other.SeekForward, StringComparer.Ordinal) &&
+               StepFrameBackward.SequenceEqual(other.StepFrameBackward, StringComparer.Ordinal) &&
+               StepFrameForward.SequenceEqual(other.StepFrameForward, StringComparer.Ordinal) &&
+               ToggleMute.SequenceEqual(other.ToggleMute, StringComparer.Ordinal) &&
+               VolumeUp.SequenceEqual(other.VolumeUp, StringComparer.Ordinal) &&
+               VolumeDown.SequenceEqual(other.VolumeDown, StringComparer.Ordinal) &&
+               SeekToBeginning.SequenceEqual(other.SeekToBeginning, StringComparer.Ordinal) &&
+               ReturnToShell.SequenceEqual(other.ReturnToShell, StringComparer.Ordinal) &&
+               ToggleVideoInfo.SequenceEqual(other.ToggleVideoInfo, StringComparer.Ordinal) &&
+               SpeedDecrease.SequenceEqual(other.SpeedDecrease, StringComparer.Ordinal) &&
+               SpeedIncrease.SequenceEqual(other.SpeedIncrease, StringComparer.Ordinal) &&
+               NextVideo.SequenceEqual(other.NextVideo, StringComparer.Ordinal) &&
+               PreviousVideo.SequenceEqual(other.PreviousVideo, StringComparer.Ordinal) &&
+               ToggleFullscreen.SequenceEqual(other.ToggleFullscreen, StringComparer.Ordinal) &&
+               PreferredSubtitle.SequenceEqual(other.PreferredSubtitle, StringComparer.Ordinal) &&
+               ResumeOrSkip.SequenceEqual(other.ResumeOrSkip, StringComparer.Ordinal) &&
+               ToggleQueue.SequenceEqual(other.ToggleQueue, StringComparer.Ordinal);
+    }
+
     public PlayerShortcutBindings Clone()
     {
         return new PlayerShortcutBindings
@@ -47,31 +72,10 @@ public sealed class PlayerShortcutBindings : IEquatable<PlayerShortcutBindings>
         };
     }
 
-    public bool Equals(PlayerShortcutBindings? other)
+    public override bool Equals(object? obj)
     {
-        return other is not null &&
-               TogglePause.SequenceEqual(other.TogglePause, StringComparer.Ordinal) &&
-               SeekBackward.SequenceEqual(other.SeekBackward, StringComparer.Ordinal) &&
-               SeekForward.SequenceEqual(other.SeekForward, StringComparer.Ordinal) &&
-               StepFrameBackward.SequenceEqual(other.StepFrameBackward, StringComparer.Ordinal) &&
-               StepFrameForward.SequenceEqual(other.StepFrameForward, StringComparer.Ordinal) &&
-               ToggleMute.SequenceEqual(other.ToggleMute, StringComparer.Ordinal) &&
-               VolumeUp.SequenceEqual(other.VolumeUp, StringComparer.Ordinal) &&
-               VolumeDown.SequenceEqual(other.VolumeDown, StringComparer.Ordinal) &&
-               SeekToBeginning.SequenceEqual(other.SeekToBeginning, StringComparer.Ordinal) &&
-               ReturnToShell.SequenceEqual(other.ReturnToShell, StringComparer.Ordinal) &&
-               ToggleVideoInfo.SequenceEqual(other.ToggleVideoInfo, StringComparer.Ordinal) &&
-               SpeedDecrease.SequenceEqual(other.SpeedDecrease, StringComparer.Ordinal) &&
-               SpeedIncrease.SequenceEqual(other.SpeedIncrease, StringComparer.Ordinal) &&
-               NextVideo.SequenceEqual(other.NextVideo, StringComparer.Ordinal) &&
-               PreviousVideo.SequenceEqual(other.PreviousVideo, StringComparer.Ordinal) &&
-               ToggleFullscreen.SequenceEqual(other.ToggleFullscreen, StringComparer.Ordinal) &&
-               PreferredSubtitle.SequenceEqual(other.PreferredSubtitle, StringComparer.Ordinal) &&
-               ResumeOrSkip.SequenceEqual(other.ResumeOrSkip, StringComparer.Ordinal) &&
-               ToggleQueue.SequenceEqual(other.ToggleQueue, StringComparer.Ordinal);
+        return Equals(obj as PlayerShortcutBindings);
     }
-
-    public override bool Equals(object? obj) => Equals(obj as PlayerShortcutBindings);
 
     public override int GetHashCode()
     {

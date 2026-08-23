@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using Serilog;
+using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
 namespace SilverScreen.Infrastructure.Features.Search;
 
 public sealed class YtDlpRunner : IYtDlpRunner
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpRunner>();
+
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
         TimeSpan timeout,
@@ -18,7 +20,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
 
         using var process = new Process();
         process.StartInfo = startInfo;
-        Logger.Debug("Executing yt-dlp binary {FileName} with arguments {Arguments}", startInfo.FileName, startInfo.Arguments);
+        Logger.Debug("Executing yt-dlp binary {FileName} with arguments {Arguments}", startInfo.FileName,
+            startInfo.Arguments);
         if (!process.Start())
         {
             Logger.Error("Failed to start yt-dlp process using executable {FileName}", startInfo.FileName);
@@ -34,7 +37,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
         catch (OperationCanceledException)
         {
-            Logger.Warning("yt-dlp process execution timed out after {TimeoutSeconds}s or was canceled", timeout.TotalSeconds);
+            Logger.Warning("yt-dlp process execution timed out after {TimeoutSeconds}s or was canceled",
+                timeout.TotalSeconds);
             TryKill(process);
             await DrainAndWaitForExitAsync(process, outputTask, errorTask).ConfigureAwait(false);
 
@@ -44,13 +48,9 @@ public sealed class YtDlpRunner : IYtDlpRunner
 
         await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
         if (process.ExitCode != 0)
-        {
             Logger.Warning("yt-dlp process exited with non-zero exit code {ExitCode}", process.ExitCode);
-        }
         else
-        {
             Logger.Debug("yt-dlp process exited successfully (ExitCode 0)");
-        }
 
         return new ProcessResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }

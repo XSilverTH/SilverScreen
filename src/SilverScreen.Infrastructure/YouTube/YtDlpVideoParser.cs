@@ -32,6 +32,7 @@ internal static class YtDlpVideoParser
 
         return videos;
     }
+
     public static YouTubeVideoDetails ParseDetails(string output)
     {
         using var document = JsonDocument.Parse(output);

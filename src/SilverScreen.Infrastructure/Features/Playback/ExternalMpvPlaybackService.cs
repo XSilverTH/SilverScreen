@@ -6,32 +6,23 @@ using SilverScreen.Core.Services;
 
 namespace SilverScreen.Infrastructure.Features.Playback;
 
-public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
+public sealed class ExternalMpvPlaybackService(
+    IPreferencesService preferencesService,
+    ICookieFileProvider? cookieFileProvider = null,
+    IPlaybackPresenceService? playbackPresenceService = null,
+    IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
+    IWatchProgressService? watchProgressService = null)
+    : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
     private readonly Lock _activePlaybackLock = new();
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
-    private readonly ICookieFileProvider? _cookieFileProvider;
-    private readonly IPlaybackPresenceService? _playbackPresenceService;
-    private readonly IYouTubePlaybackTelemetryService? _playbackTelemetryService;
-    private readonly IWatchProgressService? _watchProgressService;
-    private readonly IPreferencesService _preferencesService;
+
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
     private bool _disposed;
     private long _nextPlaybackId;
-
-    public ExternalMpvPlaybackService(
-        IPreferencesService preferencesService,
-        ICookieFileProvider? cookieFileProvider = null,
-        IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-        IWatchProgressService? watchProgressService = null)
-    {
-        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-        _cookieFileProvider = cookieFileProvider;
-        _playbackPresenceService = playbackPresenceService;
-        _playbackTelemetryService = playbackTelemetryService;
-        _watchProgressService = watchProgressService;
-    }
 
     public void Dispose()
     {
@@ -55,7 +46,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
         try
         {
-            cookieFile = _cookieFileProvider?.CreateCookieFile();
+            cookieFile = cookieFileProvider?.CreateCookieFile();
             activeOptions = GetActiveOptions();
             ipcDirectory = Directory.CreateTempSubdirectory("silverscreen-mpv-");
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
@@ -138,7 +129,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
             playback.State = state;
             SetTelemetryQuietly(playback.Telemetry, state);
-            _watchProgressService?.Update(playback.Request, state);
+            watchProgressService?.Update(playback.Request, state);
             if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
         }
     }
@@ -280,11 +271,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
     private void SetPresenceQuietly(PlaybackRequest request, PlaybackPresenceState state)
     {
-        if (_playbackPresenceService is null) return;
+        if (playbackPresenceService is null) return;
 
         try
         {
-            _playbackPresenceService.SetPlaybackState(request, state);
+            playbackPresenceService.SetPlaybackState(request, state);
         }
         catch (Exception ex)
         {
@@ -294,10 +285,10 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
     private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
     {
-        if (_playbackTelemetryService is null) return null;
+        if (playbackTelemetryService is null) return null;
         try
         {
-            return _playbackTelemetryService.Start(request);
+            return playbackTelemetryService.Start(request);
         }
         catch (Exception ex)
         {
@@ -322,11 +313,11 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
     private void ClearPresenceQuietly()
     {
-        if (_playbackPresenceService is null) return;
+        if (playbackPresenceService is null) return;
 
         try
         {
-            _playbackPresenceService.Clear();
+            playbackPresenceService.Clear();
         }
         catch (Exception ex)
         {

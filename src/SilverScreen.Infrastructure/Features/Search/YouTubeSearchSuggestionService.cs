@@ -13,13 +13,13 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
     private static readonly ILogger Logger = Log.ForContext<YouTubeSearchSuggestionService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SuggestEndpoint = new("https://suggestqueries.google.com/complete/search");
+    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly bool _disposeHttpClient;
-    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _httpClient;
 
     public YouTubeSearchSuggestionService()
-        : this(CreateDefaultHttpClient(), disposeHttpClient: true)
+        : this(CreateDefaultHttpClient(), true)
     {
     }
 
@@ -32,13 +32,11 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
 
     public void Dispose()
     {
-        if (_disposeHttpClient)
-        {
-            _httpClient.Dispose();
-        }
+        if (_disposeHttpClient) _httpClient.Dispose();
     }
 
-    public async Task<IReadOnlyList<string>> GetSuggestionsAsync(string query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> GetSuggestionsAsync(string query,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query))
             return [];
@@ -49,9 +47,7 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
         if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
             YouTubeUrlParser.Parse(trimmed).Kind != YouTubeUrlKind.NotYouTube)
-        {
             return [];
-        }
 
         if (_cache.TryGetValue(trimmed, out var cached))
         {
@@ -72,7 +68,8 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
-                Logger.Warning("YouTube search suggestions returned HTTP status {StatusCode} for query {Query}", response.StatusCode, trimmed);
+                Logger.Warning("YouTube search suggestions returned HTTP status {StatusCode} for query {Query}",
+                    response.StatusCode, trimmed);
                 return [];
             }
 
@@ -94,22 +91,19 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
         }
     }
 
-    internal static IReadOnlyList<string> ParseSuggestions(string responseText)
+    private static List<string> ParseSuggestions(string responseText)
     {
         if (string.IsNullOrWhiteSpace(responseText))
             return [];
 
         var text = responseText.Trim();
 
-        // Handle JSONP callback if present (e.g. window.google.ac.h([...]))
+        // Handle JSONP callback if present (e.g., window.google.ac.h([...]))
         if (text.StartsWith("window.google.ac.h(", StringComparison.OrdinalIgnoreCase))
         {
             var startIndex = text.IndexOf('(') + 1;
             var endIndex = text.LastIndexOf(')');
-            if (startIndex > 0 && endIndex > startIndex)
-            {
-                text = text[startIndex..endIndex].Trim();
-            }
+            if (startIndex > 0 && endIndex > startIndex) text = text[startIndex..endIndex].Trim();
         }
 
         try
@@ -124,24 +118,16 @@ public sealed class YouTubeSearchSuggestionService : ISearchSuggestionService, I
                 return [];
 
             var results = new List<string>();
-            foreach (var item in suggestionsElement.EnumerateArray())
-            {
-                string? suggestion = null;
-                if (item.ValueKind == JsonValueKind.String)
-                {
-                    suggestion = item.GetString();
-                }
-                else if (item.ValueKind == JsonValueKind.Array && item.GetArrayLength() > 0 &&
-                         item[0].ValueKind == JsonValueKind.String)
-                {
-                    suggestion = item[0].GetString();
-                }
-
-                if (!string.IsNullOrWhiteSpace(suggestion) && !results.Contains(suggestion, StringComparer.OrdinalIgnoreCase))
-                {
-                    results.Add(suggestion.Trim());
-                }
-            }
+            foreach (var suggestion in suggestionsElement.EnumerateArray().Select(item => item.ValueKind switch
+                     {
+                         JsonValueKind.String => item.GetString(),
+                         JsonValueKind.Array when item.GetArrayLength() > 0 &&
+                                                  item[0].ValueKind == JsonValueKind.String =>
+                             item[0].GetString(),
+                         _ => null
+                     }).Where(suggestion => !string.IsNullOrWhiteSpace(suggestion) &&
+                                            !results.Contains(suggestion, StringComparer.OrdinalIgnoreCase)))
+                results.Add(suggestion!.Trim());
 
             return results;
         }

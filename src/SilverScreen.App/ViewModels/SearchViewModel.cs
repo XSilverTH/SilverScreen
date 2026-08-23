@@ -21,11 +21,10 @@ public sealed class SearchViewModel(
     : INotifyPropertyChanged, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
+    private string? _continuationToken;
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
-    private string? _continuationToken;
-    private string? _query;
 
     public SearchViewState State
     {
@@ -45,7 +44,7 @@ public sealed class SearchViewModel(
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
-    public string? CurrentQuery => _query;
+    public string? CurrentQuery { get; private set; }
 
 
     public void Dispose()
@@ -70,11 +69,12 @@ public sealed class SearchViewModel(
         _requestCancellation?.Dispose();
         _requestCancellation = null;
         _continuationToken = null;
-        _query = null;
+        CurrentQuery = null;
         State = new SearchViewState([], "Search results will appear here.", false);
     }
 
-    public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text,
+        CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         var query = text.Trim();
@@ -107,6 +107,7 @@ public sealed class SearchViewModel(
             shell.ReportStatus("Empty search ignored.");
             return;
         }
+
         try
         {
             var parsedUrl = YouTubeUrlParser.Parse(query);
@@ -147,13 +148,13 @@ public sealed class SearchViewModel(
 
     public Task RefreshAsync()
     {
-        return _query is null ? Task.CompletedTask : SearchPlainTextAsync(_query);
+        return CurrentQuery is null ? Task.CompletedTask : SearchPlainTextAsync(CurrentQuery);
     }
 
     public async Task LoadMoreAsync()
     {
         ThrowIfDisposed();
-        if (State is { IsLoading: true } or { IsLoadingMore: true } || _query is null ||
+        if (State is { IsLoading: true } or { IsLoadingMore: true } || CurrentQuery is null ||
             !int.TryParse(_continuationToken, out var startIndex) || startIndex < 1)
             return;
 
@@ -167,14 +168,16 @@ public sealed class SearchViewModel(
 
         try
         {
-            var result = await searchService.SearchAsync(new SearchRequest(_query, startIndex), token).ConfigureAwait(false);
+            var result = await searchService.SearchAsync(new SearchRequest(CurrentQuery, startIndex), token)
+                .ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
 
             var videos = State.Videos.Concat(NormalizeVideos(result.Videos)).DistinctBy(video => video.Id).ToArray();
             _continuationToken = result.IsSuccess ? result.ContinuationToken : _continuationToken;
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
-            State = new SearchViewState(videos, summary, false, false, result.IsSuccess && _continuationToken is not null);
+            State = new SearchViewState(videos, summary, false, false,
+                result.IsSuccess && _continuationToken is not null);
             shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -185,7 +188,7 @@ public sealed class SearchViewModel(
             if (generation != _requestGeneration || _disposed)
                 return;
 
-            Logger.Warning(exception, "Failed to load more search results for query {Query}", _query);
+            Logger.Warning(exception, "Failed to load more search results for query {Query}", CurrentQuery);
             const string message = "Search could not be completed.";
             State = State with { Summary = message, IsLoadingMore = false };
             shell.ReportStatus(message);
@@ -203,7 +206,7 @@ public sealed class SearchViewModel(
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
 
-        _query = query;
+        CurrentQuery = query;
         _continuationToken = null;
         var searching = $"Searching YouTube for “{query}”…";
         State = new SearchViewState([], searching, true);

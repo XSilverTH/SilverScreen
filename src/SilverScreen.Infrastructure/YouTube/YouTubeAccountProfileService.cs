@@ -1,6 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -53,6 +53,7 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             Logger.Warning("Cannot fetch account profile: YouTube authenticated session is unavailable");
             return null;
         }
+
         var configuration = authenticatedSession.Configuration;
         var payload = new BrowseRequestPayload
         {
@@ -83,6 +84,7 @@ public sealed class YouTubeAccountProfileService : IAccountProfileService, IDisp
             Logger.Warning("Failed to fetch account profile menu: HTTP {StatusCode}", response.StatusCode);
             return null;
         }
+
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
             .ConfigureAwait(false);

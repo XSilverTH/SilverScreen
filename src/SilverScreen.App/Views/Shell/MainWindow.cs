@@ -4,13 +4,15 @@ using Gdk;
 using Gio;
 using GObject;
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Models;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
-using SilverScreen.Views.Components;
 using SilverScreen.Views.Channel;
-using SilverScreen.Views.Home;
+using SilverScreen.Views.Components;
 using SilverScreen.Views.History;
+using SilverScreen.Views.Home;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
@@ -23,8 +25,8 @@ using Functions = GLib.Functions;
 using License = Gtk.License;
 using Spinner = Gtk.Spinner;
 using PreferencesDialog = SilverScreen.Views.Preferences.PreferencesDialog;
+using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
-using Serilog;
 
 namespace SilverScreen.Views.Shell;
 
@@ -35,17 +37,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly MenuButton _accountButton;
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
-    private readonly Action _disposeApplicationServices;
     private readonly ChannelView _channel;
     private readonly ChannelViewModel _channelViewModel;
+    private readonly Action _disposeApplicationServices;
     private readonly EmbeddedPlayerView _embeddedPlayer;
     private readonly HistoryView _history;
     private readonly HistoryViewModel _historyViewModel;
     private readonly HomeView _home;
     private readonly Button _homeRefreshButton;
     private readonly Spinner _homeRefreshSpinner;
-    private readonly Stack _mainStack;
     private readonly Stack _homeRefreshStack;
+    private readonly Stack _mainStack;
     private readonly Button _navigationBackButton;
     private readonly PlaybackModeRoutingService _playback;
     private readonly ToggleButton _queueButton;
@@ -94,7 +96,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         playerHost.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels, _shell);
-        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions, CloseChannel);
+        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions,
+            CloseChannel);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _home = new HomeView(
             new HomeViewModel(services.HomeFeed),
@@ -112,7 +115,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         UpdateHomeRefreshButton(_home.IsLoading);
 
         _searchViewModel = new SearchViewModel(services.Search, _playback, _shell, services.SearchSuggestions);
-        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, () => searchPopover.Popdown());
+        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, searchPopover.Popdown);
         searchPopover.Child = _searchPopover.Widget;
         searchPopover.OnClosed += (_, _) => _searchPopover.OnClosed();
         searchPopover.OnNotify += (_, e) =>
@@ -170,7 +173,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         };
     }
 
-    private async System.Threading.Tasks.Task OpenInAlternatePlayerAsync(VideoSummary video)
+    private async Task OpenInAlternatePlayerAsync(VideoSummary video)
     {
         var request = new PlaybackRequest([video]);
         var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
@@ -178,7 +181,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             ? await _services.Playback.PlayAsync(request).ConfigureAwait(false)
             : await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
     }
-    private async System.Threading.Tasks.Task OpenChannelAsync(VideoSummary video)
+
+    private async Task OpenChannelAsync(VideoSummary video)
     {
         if (string.IsNullOrWhiteSpace(video.ChannelUrl))
         {
@@ -198,6 +202,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _navigationBackButton.Visible = false;
         UpdateHomeRefreshButton(_home.IsLoading);
     }
+
     private void OnSearchSubmitted(string query)
     {
         _stack.VisibleChildName = "search";
@@ -216,16 +221,21 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        if (_stack.VisibleChildName == "search")
-            CloseSearch();
-        else if (_stack.VisibleChildName == "channel")
-            CloseChannel();
-        else
+        switch (_stack.VisibleChildName)
         {
-            _stack.VisibleChildName = "home";
-            _navigationBackButton.Visible = false;
+            case "search":
+                CloseSearch();
+                break;
+            case "channel":
+                CloseChannel();
+                break;
+            default:
+                _stack.VisibleChildName = "home";
+                _navigationBackButton.Visible = false;
+                break;
         }
     }
+
     private void OpenEmbeddedPlayer()
     {
         _mainStack.VisibleChildName = "player";
@@ -250,19 +260,27 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
-        if (_stack.VisibleChildName == "channel")
-            _channel.RefreshAsync().FireAndForget(Logger);
-        else if (_stack.VisibleChildName == "history")
-            _history.RefreshAsync().FireAndForget(Logger);
-        else if (_stack.VisibleChildName == "search")
-            _searchView.RefreshAsync().FireAndForget(Logger);
-        else
-            _home.RefreshAsync().FireAndForget(Logger);
+        switch (_stack.VisibleChildName)
+        {
+            case "channel":
+                _channel.RefreshAsync().FireAndForget(Logger);
+                break;
+            case "history":
+                _history.RefreshAsync().FireAndForget(Logger);
+                break;
+            case "search":
+                _searchView.RefreshAsync().FireAndForget(Logger);
+                break;
+            default:
+                _home.RefreshAsync().FireAndForget(Logger);
+                break;
+        }
     }
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history" && _stack.VisibleChildName != "search")
+        if (!_closed && _stack.VisibleChildName != "channel" && _stack.VisibleChildName != "history" &&
+            _stack.VisibleChildName != "search")
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
@@ -289,24 +307,24 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_closed) return;
         _navigationBackButton.Visible = _stack.VisibleChildName is "search" or "channel";
 
-        if (_stack.VisibleChildName == "channel")
+        switch (_stack.VisibleChildName)
         {
-            UpdateHomeRefreshButton(_channel.IsLoading);
-        }
-        else if (_stack.VisibleChildName == "history")
-        {
-            UpdateHomeRefreshButton(_history.IsLoading);
-            _historyViewModel.LoadAsync().FireAndForget(Logger);
-        }
-        else if (_stack.VisibleChildName == "search")
-        {
-            UpdateHomeRefreshButton(_searchView.IsLoading);
-        }
-        else
-        {
-            UpdateHomeRefreshButton(_home.IsLoading);
+            case "channel":
+                UpdateHomeRefreshButton(_channel.IsLoading);
+                break;
+            case "history":
+                UpdateHomeRefreshButton(_history.IsLoading);
+                _historyViewModel.LoadAsync().FireAndForget(Logger);
+                break;
+            case "search":
+                UpdateHomeRefreshButton(_searchView.IsLoading);
+                break;
+            default:
+                UpdateHomeRefreshButton(_home.IsLoading);
+                break;
         }
     }
+
     private void UpdateHomeRefreshButton(bool isLoading)
     {
         _homeRefreshButton.Sensitive = !isLoading;

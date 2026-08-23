@@ -27,14 +27,9 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         try
         {
             _manualCookies = LoadStoredCookies();
-            if (_manualCookies is not null)
-            {
-                Logger.Information("Restored YouTube session from Secret Service");
-            }
-            else
-            {
-                Logger.Information("No stored YouTube session found in Secret Service");
-            }
+            Logger.Information(_manualCookies is not null
+                ? "Restored YouTube session from Secret Service"
+                : "No stored YouTube session found in Secret Service");
         }
         catch (SessionPersistenceException exception)
         {
@@ -92,7 +87,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 _store.Save(encodedCookies);
                 _isAvailable = true;
                 _manualCookies = new ManualSessionCookies(format, cookieContent);
-                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format})", format);
+                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format})",
+                    format);
             }
         }
         catch (SessionPersistenceException ex)
@@ -137,6 +133,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
             throw;
         }
+
         if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
     }
 

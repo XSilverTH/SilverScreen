@@ -5,6 +5,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using XSTH.Blueprint.Helpers;
 using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;
@@ -22,9 +23,9 @@ public sealed class VideoCardActions
 
 public class VideoCardView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;
+    private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
     private readonly Box _card;
     private readonly Label _channel;
@@ -32,7 +33,6 @@ public class VideoCardView : ViewBase<Box>
     private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
     private readonly Label _duration;
-    private readonly ProgressBar _watchedProgress;
     private readonly MenuButton _menu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
@@ -40,9 +40,10 @@ public class VideoCardView : ViewBase<Box>
     private readonly GestureClick _rightClick;
     private readonly Overlay _thumbnail;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
     private readonly Label _title;
     private readonly Label _uploadDate;
+    private readonly IWatchProgressService _watchProgress;
+    private readonly ProgressBar _watchedProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -307,6 +308,7 @@ public class VideoCardView : ViewBase<Box>
         _contextMenu.SetPointingTo(rect);
         _contextMenu.Popup();
     }
+
     private void OnMenuActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
     {
         if (ReferenceEquals(sender, _menuActionItems[0]))
@@ -326,17 +328,11 @@ public class VideoCardView : ViewBase<Box>
         }
         else if (ReferenceEquals(sender, _menuActionItems[3]))
         {
-            if (_video is { } video)
-            {
-                if (_actions.OpenChannelAsync is { } openChannel)
-                {
-                    openChannel(video).FireAndForget(Logger);
-                }
-                else
-                {
-                    _actions.ReportStatus("Opening channels is not implemented.");
-                }
-            }
+            if (_video is not { } video) return;
+            if (_actions.OpenChannelAsync is { } openChannel)
+                openChannel(video).FireAndForget(Logger);
+            else
+                _actions.ReportStatus("Opening channels is not implemented.");
         }
         else if (ReferenceEquals(sender, _menuActionItems[4]))
         {
@@ -369,13 +365,9 @@ public class VideoCardView : ViewBase<Box>
 
         sender.SetState(EventSequenceState.Claimed);
         if (_actions.OpenChannelAsync is { } openChannel)
-        {
             openChannel(video).FireAndForget(Logger);
-        }
         else
-        {
             _actions.ReportStatus("Channel navigation is not available.");
-        }
     }
 
     private static SimpleAction CreateMenuAction(string name)

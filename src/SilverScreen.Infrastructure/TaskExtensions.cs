@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Serilog;
 
-namespace SilverScreen;
+namespace SilverScreen.Infrastructure;
 
 public static class TaskExtensions
 {
@@ -31,7 +31,7 @@ public static class TaskExtensions
         if (task.IsCompletedSuccessfully)
             return;
 
-        FireAndForget(task.AsTask(), logger, message, caller);
+        task.AsTask().FireAndForget(logger, message, caller);
     }
 
     private static async Task HandleFaultAsync(Task task, ILogger logger, string? message, string? caller)
@@ -47,13 +47,9 @@ public static class TaskExtensions
         catch (Exception exception)
         {
             if (string.IsNullOrWhiteSpace(message))
-            {
                 logger.Error(exception, "Unhandled exception in fire-and-forget task ({Caller})", caller);
-            }
             else
-            {
                 logger.Error(exception, "{Message} ({Caller})", message, caller);
-            }
         }
     }
 }

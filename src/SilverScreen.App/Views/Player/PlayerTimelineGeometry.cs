@@ -26,7 +26,8 @@ internal static class PlayerTimelineGeometry
         return trackStart + fraction * trackWidth;
     }
 
-    internal static TimeSpan GetPositionAtCoordinate(double coordinateX, int trackStart, int trackWidth, TimeSpan duration)
+    internal static TimeSpan GetPositionAtCoordinate(double coordinateX, int trackStart, int trackWidth,
+        TimeSpan duration)
     {
         if (duration <= TimeSpan.Zero || trackWidth <= 0) return TimeSpan.Zero;
 

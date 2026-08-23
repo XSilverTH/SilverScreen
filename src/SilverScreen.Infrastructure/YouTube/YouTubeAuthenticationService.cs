@@ -88,9 +88,11 @@ public sealed class YouTubeAuthenticationService : IDisposable
             using var response = await bootstrapClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                Logger.Warning("Failed to bootstrap YouTube session config: HTTP status {StatusCode}", response.StatusCode);
+                Logger.Warning("Failed to bootstrap YouTube session config: HTTP status {StatusCode}",
+                    response.StatusCode);
                 return null;
             }
+
             var html = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var config = YouTubeConfigBootstrap.Extract(html);
             if (config is null || !IsCurrent(snapshot.SessionVersion))
@@ -98,7 +100,9 @@ public sealed class YouTubeAuthenticationService : IDisposable
                 Logger.Warning("Failed to extract YouTube bootstrap config from HTML response");
                 return null;
             }
-            Logger.Information("Successfully bootstrapped YouTube session config (ClientVersion: {ClientVersion})", config.ClientVersion);
+
+            Logger.Information("Successfully bootstrapped YouTube session config (ClientVersion: {ClientVersion})",
+                config.ClientVersion);
             var authenticated = new YouTubeAuthenticatedSession(snapshot, config);
             lock (_gate)
             {

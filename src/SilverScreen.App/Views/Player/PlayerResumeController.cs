@@ -17,6 +17,8 @@ internal sealed class PlayerResumeController : IDisposable
     private readonly IWatchProgressService _watchProgress;
     private bool _disposed;
     private bool _handledCurrentVideo;
+
+    private TimeSpan _lastKnownDuration;
     private uint _promptHideSource;
     private double? _resumeFraction;
     private string? _videoId;
@@ -74,7 +76,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     public bool TryResume()
     {
-        if (_disposed || _resumeButton.GetVisible() is false || _resumeFraction is not { } fraction ||
+        if (_disposed || !_resumeButton.GetVisible() || _resumeFraction is not { } fraction ||
             !TryGetResumePosition(fraction, _lastKnownDuration, out var resumePosition))
             return false;
 
@@ -101,7 +103,7 @@ internal sealed class PlayerResumeController : IDisposable
         _lastKnownDuration = TimeSpan.Zero;
     }
 
-    internal static bool TryGetResumePosition(double? fraction, TimeSpan duration, out TimeSpan position)
+    private static bool TryGetResumePosition(double? fraction, TimeSpan duration, out TimeSpan position)
     {
         position = TimeSpan.Zero;
         if (fraction is not > 0 or >= 1 || duration <= TimeSpan.Zero) return false;
@@ -110,8 +112,6 @@ internal sealed class PlayerResumeController : IDisposable
         position = candidate;
         return true;
     }
-
-    private TimeSpan _lastKnownDuration;
 
     private void ShowResumePrompt(TimeSpan resumePosition)
     {

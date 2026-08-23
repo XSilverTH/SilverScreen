@@ -1,11 +1,13 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using SilverScreen.Core.Models;
 using SilverScreen.Infrastructure.Features.Thumbnails;
 
 namespace SilverScreen.Tests;
 
 public sealed class ThumbnailCacheServiceTests
 {
-
     [Fact]
     public async Task GetThumbnailAsync_DownloadsAndReusesCachedFile()
     {
@@ -122,6 +124,7 @@ public sealed class ThumbnailCacheServiceTests
         var acceptHeader = string.Join(", ", values);
         Assert.Contains("image/webp", acceptHeader);
     }
+
     [Fact]
     public async Task GetThumbnailAsync_VideoSummary_WebPThumbnail_IsCachedAndReturned()
     {
@@ -135,7 +138,7 @@ public sealed class ThumbnailCacheServiceTests
         using var client = new HttpClient(handler);
         using var service = new ThumbnailCacheService(client, directory.Path);
 
-        var video = new Core.Models.VideoSummary("testVid123", "Test Title", "Test Channel", TimeSpan.FromMinutes(5),
+        var video = new VideoSummary("testVid123", "Test Title", "Test Channel", TimeSpan.FromMinutes(5),
             "https://i.ytimg.com/vi_webp/testVid123/maxresdefault.webp", false);
 
         var result = await service.GetThumbnailAsync(video);
@@ -157,7 +160,7 @@ public sealed class ThumbnailCacheServiceTests
         // Pre-populate cache with a webp file
         var url = "https://example.com/image.webp";
         var cachePath = Path.Combine(directory.Path,
-            $"{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))}.webp");
+            $"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(url)))}.webp");
         var webp = new byte[]
             { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' };
         await File.WriteAllBytesAsync(cachePath, webp);

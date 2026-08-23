@@ -85,6 +85,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.False(loaded.ResumePlaybackOnDemand);
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
+
     [Fact]
     public void SavePreferences_PersistsConflictingFlags_WithoutSilentlyMutatingThem()
     {
@@ -154,7 +155,6 @@ public sealed class PreferencesTests : IDisposable
 
         Assert.Equal(["Pause"], service.GetPreferences().Shortcuts.TogglePause);
     }
-
 
 
     [Fact]

@@ -1,4 +1,3 @@
-using SilverScreen.Views.Player;
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Feed;
@@ -13,6 +12,7 @@ using SilverScreen.Infrastructure.Features.Search;
 using SilverScreen.Infrastructure.Features.Session;
 using SilverScreen.Infrastructure.Features.Thumbnails;
 using SilverScreen.Infrastructure.YouTube;
+using SilverScreen.Views.Player;
 
 namespace SilverScreen;
 

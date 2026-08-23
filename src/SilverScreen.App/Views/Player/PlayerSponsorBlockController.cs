@@ -3,6 +3,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.Infrastructure.Features.Playback;
 using static GLib.Functions;
 
@@ -10,8 +11,8 @@ namespace SilverScreen.Views.Player;
 
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
     private const uint SkipPromptDurationMilliseconds = 3_000;
+    private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
     private readonly IPreferencesService _preferences;
     private readonly Action<double> _seekAbsolute;
@@ -149,6 +150,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
             Logger.Warning(exception, "Failed to load SponsorBlock segments for video {VideoId}", videoId);
         }
     }
+
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
         IdleAdd(0, () =>
@@ -222,11 +224,11 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         if (state.IsPaused || !_preferences.GetPreferences().SponsorBlockAutoSkipEnabled ||
             !string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
         var segment = FindSponsorBlockSegmentAtPosition(_segments, state.Position);
-        if (segment is not null && _autoSkippedSegmentIds.Add(segment.Id))
-        {
-            Logger.Information("Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s", segment.Id, segment.Category, videoId, segment.End.TotalSeconds);
-            _seekAbsolute(segment.End.TotalSeconds);
-        }
+        if (segment is null || !_autoSkippedSegmentIds.Add(segment.Id)) return;
+        Logger.Information(
+            "Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s",
+            segment.Id, segment.Category, videoId, segment.End.TotalSeconds);
+        _seekAbsolute(segment.End.TotalSeconds);
     }
 
     private void UpdateManualPrompt(LibMpvPlaybackState state, string videoId)
@@ -313,13 +315,13 @@ internal sealed class PlayerSponsorBlockController : IDisposable
                string.Join(',', categories);
     }
 
-    internal static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(IReadOnlyList<SponsorBlockSegment> segments,
+    private static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(IReadOnlyList<SponsorBlockSegment> segments,
         TimeSpan position)
     {
         return segments.FirstOrDefault(segment => position >= segment.Start && position < segment.End);
     }
 
-    internal static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
+    private static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
     {
         return preferences is { SponsorBlockSegmentDisplayEnabled: true, SponsorBlockAutoSkipEnabled: false };
     }

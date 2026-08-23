@@ -44,6 +44,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
             Logger.Debug("ReturnYouTubeDislike cache hit for video {VideoId}", videoId);
             return cached;
         }
+
         var requestUri = new UriBuilder(VotesEndpoint)
         {
             Query = $"videoId={Uri.EscapeDataString(videoId)}"
@@ -56,7 +57,8 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
-                Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode} for video {VideoId}", response.StatusCode, videoId);
+                Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode} for video {VideoId}",
+                    response.StatusCode, videoId);
                 return null;
             }
 
@@ -71,7 +73,8 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
             var engagement = new VideoEngagement(payload.Likes, payload.Dislikes);
             _engagementByVideoId.TryAdd(videoId, engagement);
-            Logger.Information("Fetched engagement stats for video {VideoId}: {Likes} likes, {Dislikes} dislikes", videoId, payload.Likes, payload.Dislikes);
+            Logger.Information("Fetched engagement stats for video {VideoId}: {Likes} likes, {Dislikes} dislikes",
+                videoId, payload.Likes, payload.Dislikes);
             return engagement;
         }
         catch (OperationCanceledException)

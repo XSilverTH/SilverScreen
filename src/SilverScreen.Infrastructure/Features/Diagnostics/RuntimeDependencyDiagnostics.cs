@@ -57,7 +57,7 @@ public sealed class RuntimeDependencyDiagnostics
                 warnings.Add(mpvMsg);
                 break;
             case PlaybackBackends.EmbeddedPlayer when !_isLibMpvAvailable():
-                var libMpvMsg = RuntimeDependencyGuidance.LibMpvUnavailable;
+                const string libMpvMsg = RuntimeDependencyGuidance.LibMpvUnavailable;
                 Logger.Warning("Startup dependency warning: {Warning}", libMpvMsg);
                 warnings.Add(libMpvMsg);
                 break;
@@ -65,15 +65,12 @@ public sealed class RuntimeDependencyDiagnostics
 
         if (!_secretServiceAvailability.IsAvailable)
         {
-            var secretMsg = RuntimeDependencyGuidance.SecretServiceUnavailable;
+            const string secretMsg = RuntimeDependencyGuidance.SecretServiceUnavailable;
             Logger.Warning("Startup dependency warning: {Warning}", secretMsg);
             warnings.Add(secretMsg);
         }
 
-        if (warnings.Count == 0)
-        {
-            Logger.Information("All runtime dependencies are verified and available");
-        }
+        if (warnings.Count == 0) Logger.Information("All runtime dependencies are verified and available");
 
         return warnings;
     }

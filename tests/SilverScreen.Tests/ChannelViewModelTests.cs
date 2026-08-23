@@ -54,7 +54,11 @@ public sealed class ChannelViewModelTests
 
     private sealed class FakeChannelService : IChannelService
     {
-        public (string Url, string FallbackName, ChannelVideoSort Sort, int StartIndex)? LastRequest { get; private set; }
+        public (string Url, string FallbackName, ChannelVideoSort Sort, int StartIndex)? LastRequest
+        {
+            get;
+            private set;
+        }
 
         public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
             int startIndex, CancellationToken cancellationToken)

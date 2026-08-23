@@ -6,6 +6,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
@@ -13,65 +14,63 @@ using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 
 namespace SilverScreen.Views.Channel;
+
 public partial class ChannelView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<ChannelView>();
     private const int AvatarSize = 80;
-
-    private readonly Action? _backCallback;
-    private readonly Button _backButton;
-    private readonly Label _barTitle;
-    private readonly Overlay _avatarOverlay;
-    private readonly Widget _avatarPlaceholder;
-    private readonly Label _channelName;
-    private readonly Label _channelHandle;
-    private readonly Label _subscribersLabel;
-    private readonly Label _metaDot1;
-    private readonly Label _descriptionLabel;
-    private readonly DropDown _sortDropdown;
-    private readonly Stack _stack;
-    private readonly GridView _videoGrid;
-    private readonly StatusPage _errorPage;
-    private readonly StatusPage _emptyPage;
-    private readonly Revealer _headerRevealer;
-    private readonly Revealer _clueRevealer;
-    private readonly Box _revealClue;
-    private readonly ScrolledWindow _scrolledWindow;
-    private readonly Adjustment? _vadjustment;
-    private readonly EventControllerScroll _scrollController;
-    private readonly EventControllerMotion _clueMotionController;
-    private readonly GestureClick _clueClickGesture;
-    private readonly Revealer _paginationLoadingRevealer;
-
-    private bool _isHeaderCollapsed;
-    private double _lastScrollY;
-    private bool _isUserScrollingUp;
-    private long _lastUserScrollTicks;
-    private long _lastHeaderStateChangeTicks;
     private const double CollapseThreshold = 50.0;
     private const double TopRevealThreshold = 1.0;
     private const long LayoutStabilizationMs = 350;
-    private readonly ChannelViewModel _viewModel;
-    private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
-    private readonly VideoCardActions _videoActions;
+    private static readonly ILogger Logger = Log.ForContext<ChannelView>();
+    private readonly Overlay _avatarOverlay;
+    private readonly Widget _avatarPlaceholder;
+
+    private readonly Action? _backCallback;
+    private readonly Label _barTitle;
 
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
+    private readonly Label _channelHandle;
+    private readonly Label _channelName;
+    private readonly GestureClick _clueClickGesture;
+    private readonly EventControllerMotion _clueMotionController;
+    private readonly Revealer _clueRevealer;
+    private readonly Label _descriptionLabel;
+    private readonly StatusPage _emptyPage;
+    private readonly StatusPage _errorPage;
+    private readonly Revealer _headerRevealer;
+    private readonly Label _metaDot1;
+    private readonly Revealer _paginationLoadingRevealer;
+    private readonly Box _revealClue;
+    private readonly EventControllerScroll _scrollController;
+    private readonly ScrolledWindow _scrolledWindow;
+    private readonly DropDown _sortDropdown;
+    private readonly Stack _stack;
+    private readonly Label _subscribersLabel;
+    private readonly IThumbnailService _thumbnails;
+    private readonly Adjustment? _vadjustment;
+    private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
+    private readonly GridView _videoGrid;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
-
-    private VideoSummary[] _displayedVideos = [];
-    private bool _disposed;
-    private bool _updatingSortDropdown;
-    private string? _currentAvatarUrl;
+    private readonly ChannelViewModel _viewModel;
+    private readonly IWatchProgressService _watchProgress;
     private int _avatarBindingGeneration;
     private CancellationTokenSource? _avatarCancellation;
     private Picture? _boundAvatarPicture;
     private Texture? _boundAvatarTexture;
+    private string? _currentAvatarUrl;
 
-    public event EventHandler? BackRequested;
+    private VideoSummary[] _displayedVideos = [];
+    private bool _disposed;
+
+    private bool _isHeaderCollapsed;
+    private bool _isUserScrollingUp;
+    private long _lastHeaderStateChangeTicks;
+    private double _lastScrollY;
+    private long _lastUserScrollTicks;
+    private bool _updatingSortDropdown;
 
     public ChannelView(
         ChannelViewModel viewModel,
@@ -86,7 +85,7 @@ public partial class ChannelView : ViewBase<Box>
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
         _backCallback = backCallback;
 
-        _backButton = GetRequiredObject<Button>("channel_back_button");
+        GetRequiredObject<Button>("channel_back_button");
         _barTitle = GetRequiredObject<Label>("channel_bar_title");
         _avatarOverlay = GetRequiredObject<Overlay>("channel_avatar_overlay");
         _avatarPlaceholder = GetRequiredObject<Widget>("channel_avatar_placeholder");
@@ -107,10 +106,7 @@ public partial class ChannelView : ViewBase<Box>
         _paginationLoadingRevealer = GetRequiredObject<Revealer>("channel_pagination_loading_revealer");
 
         _vadjustment = _scrolledWindow.Vadjustment;
-        if (_vadjustment is not null)
-        {
-            _vadjustment.OnValueChanged += OnScrollValueChanged;
-        }
+        if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;
         _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         _scrollController.SetPropagationPhase(PropagationPhase.Capture);
         _scrollController.OnScroll += OnScrollEvent;
@@ -143,6 +139,8 @@ public partial class ChannelView : ViewBase<Box>
 
     public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
 
+    public event EventHandler? BackRequested;
+
     public event EventHandler<bool>? RefreshLoadingChanged;
 
     public Task RefreshAsync()
@@ -155,19 +153,21 @@ public partial class ChannelView : ViewBase<Box>
         _backCallback?.Invoke();
         BackRequested?.Invoke(this, EventArgs.Empty);
     }
+
     private bool OnScrollEvent(EventControllerScroll sender, EventControllerScroll.ScrollSignalArgs args)
     {
         if (_disposed) return false;
 
-        if (args.Dy < -0.01)
+        switch (args.Dy)
         {
-            _isUserScrollingUp = true;
-            _lastUserScrollTicks = Environment.TickCount64;
-        }
-        else if (args.Dy > 0.01)
-        {
-            _isUserScrollingUp = false;
-            _lastUserScrollTicks = Environment.TickCount64;
+            case < -0.01:
+                _isUserScrollingUp = true;
+                _lastUserScrollTicks = Environment.TickCount64;
+                break;
+            case > 0.01:
+                _isUserScrollingUp = false;
+                _lastUserScrollTicks = Environment.TickCount64;
+                break;
         }
 
         return false;
@@ -177,12 +177,12 @@ public partial class ChannelView : ViewBase<Box>
     {
         if (_disposed || _vadjustment is null) return;
 
-        double currentY = _vadjustment.Value;
+        var currentY = _vadjustment.Value;
         if (currentY + _vadjustment.PageSize >= _vadjustment.Upper - 240)
             _viewModel.LoadMoreAsync().FireAndForget(Logger);
-        long now = Environment.TickCount64;
+        var now = Environment.TickCount64;
 
-        if ((now - _lastHeaderStateChangeTicks) < LayoutStabilizationMs)
+        if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs)
         {
             _lastScrollY = currentY;
             return;
@@ -190,20 +190,14 @@ public partial class ChannelView : ViewBase<Box>
 
         if (!_isHeaderCollapsed)
         {
-            if (currentY > CollapseThreshold && currentY > _lastScrollY)
-            {
-                SetHeaderCollapsed(true);
-            }
+            if (currentY > CollapseThreshold && currentY > _lastScrollY) SetHeaderCollapsed(true);
         }
         else
         {
-            bool reachesTop = currentY <= TopRevealThreshold;
-            bool userMovingUp = currentY < _lastScrollY || (_isUserScrollingUp && (now - _lastUserScrollTicks) < 500);
+            var reachesTop = currentY <= TopRevealThreshold;
+            var userMovingUp = currentY < _lastScrollY || (_isUserScrollingUp && now - _lastUserScrollTicks < 500);
 
-            if (reachesTop && userMovingUp)
-            {
-                SetHeaderCollapsed(false);
-            }
+            if (reachesTop && userMovingUp) SetHeaderCollapsed(false);
         }
 
         _lastScrollY = currentY;
@@ -237,21 +231,17 @@ public partial class ChannelView : ViewBase<Box>
         _headerRevealer.RevealChild = !collapsed;
         _clueRevealer.RevealChild = collapsed;
         _lastHeaderStateChangeTicks = Environment.TickCount64;
-        if (_vadjustment is not null)
-        {
-            _lastScrollY = _vadjustment.Value;
-        }
+        if (_vadjustment is not null) _lastScrollY = _vadjustment.Value;
     }
 
     private void OnStateChanged(object? sender, ChannelViewState state)
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed)
-            {
-                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
-                Render(state);
-            }
+            if (_disposed) return false;
+            RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
+            Render(state);
+
             return false;
         });
     }
@@ -321,10 +311,7 @@ public partial class ChannelView : ViewBase<Box>
                 ChannelVideoSort.Popular => 2u,
                 _ => 0u
             };
-            if (_sortDropdown.Selected != sortIndex)
-            {
-                _sortDropdown.Selected = sortIndex;
-            }
+            if (_sortDropdown.Selected != sortIndex) _sortDropdown.Selected = sortIndex;
         }
         finally
         {
@@ -360,20 +347,21 @@ public partial class ChannelView : ViewBase<Box>
 
     private static string FormatSubscriberCount(long count)
     {
-        if (count >= 1_000_000)
-            return $"{count / 1_000_000.0:0.#}M subscribers";
-        if (count >= 1_000)
-            return $"{count / 1_000.0:0.#}K subscribers";
-        return count == 1 ? "1 subscriber" : $"{count:N0} subscribers";
+        return count switch
+        {
+            >= 1_000_000 => $"{count / 1_000_000.0:0.#}M subscribers",
+            >= 1_000 => $"{count / 1_000.0:0.#}K subscribers",
+            _ => count == 1 ? "1 subscriber" : $"{count:N0} subscribers"
+        };
     }
 
     private async void OnSortDropdownNotify(object? sender = null, EventArgs? args = null)
     {
-        if (_updatingSortDropdown || _disposed) return;
-
-        var selected = _sortDropdown.Selected;
         try
         {
+            if (_updatingSortDropdown || _disposed) return;
+
+            var selected = _sortDropdown.Selected;
             await _viewModel.SetSortSelection(selected);
         }
         catch (OperationCanceledException)
@@ -384,12 +372,6 @@ public partial class ChannelView : ViewBase<Box>
         {
             Logger.Warning(exception, "Failed to update channel sort selection");
         }
-    }
-
-    private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
-    {
-        if (_viewModel.State.Url is { } url)
-            _viewModel.OpenChannelAsync(url, _viewModel.State.Name).FireAndForget(Logger);
     }
 
 
@@ -459,7 +441,8 @@ public partial class ChannelView : ViewBase<Box>
                 try
                 {
                     var pixbufForTexture = decodedPixbuf ??
-                                           throw new InvalidOperationException("Avatar decode was released before texture creation.");
+                                           throw new InvalidOperationException(
+                                               "Avatar decode was released before texture creation.");
                     texture = Texture.NewForPixbuf(pixbufForTexture);
                     pixbufForTexture.Dispose();
                     decodedPixbuf = null;
@@ -509,6 +492,7 @@ public partial class ChannelView : ViewBase<Box>
             picture.Paintable = null!;
             picture.Dispose();
         }
+
         texture?.Dispose();
     }
 
@@ -557,10 +541,7 @@ public partial class ChannelView : ViewBase<Box>
         if (_disposed) return;
         _disposed = true;
 
-        if (_vadjustment is not null)
-        {
-            _vadjustment.OnValueChanged -= OnScrollValueChanged;
-        }
+        if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
         _scrollController.OnScroll -= OnScrollEvent;
         _scrolledWindow.RemoveController(_scrollController);
         _scrollController.Dispose();

@@ -71,25 +71,27 @@ public sealed class PlaybackTests
         var video3 = CreateVideo("vid3");
         var request = new PlaybackRequest([video1, video2, video3]);
 
-        var firstState = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var firstState = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false,
+            100, 1, true, true, false, [], []);
         var firstSnapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, firstState);
         Assert.True(firstSnapshot.CanGoNext);
         Assert.False(firstSnapshot.CanGoPrevious);
         Assert.Equal("Video vid1", firstSnapshot.Metadata["xesam:title"].GetString());
 
-        var middleState = new LibMpvPlaybackState(1, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var middleState = new LibMpvPlaybackState(1, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(3), false, false,
+            100, 1, true, true, false, [], []);
         var middleSnapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, middleState);
         Assert.True(middleSnapshot.CanGoNext);
         Assert.True(middleSnapshot.CanGoPrevious);
         Assert.Equal("Video vid2", middleSnapshot.Metadata["xesam:title"].GetString());
 
-        var lastState = new LibMpvPlaybackState(2, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var lastState = new LibMpvPlaybackState(2, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(3), false, false, 100,
+            1, true, true, false, [], []);
         var lastSnapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, lastState);
         Assert.False(lastSnapshot.CanGoNext);
         Assert.True(lastSnapshot.CanGoPrevious);
         Assert.Equal("Video vid3", lastSnapshot.Metadata["xesam:title"].GetString());
     }
-
 
 
     private static PlaybackPresenceState PlayingState(DateTimeOffset observedAt)
@@ -125,8 +127,19 @@ public sealed class PlaybackTests
 
     private sealed class TestPreferences : IPreferencesService
     {
-        public event EventHandler<AppPreferences>? PreferencesChanged { add { } remove { } }
-        public AppPreferences GetPreferences() => new();
-        public void SavePreferences(AppPreferences preferences) { }
+        public event EventHandler<AppPreferences>? PreferencesChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public AppPreferences GetPreferences()
+        {
+            return new AppPreferences();
+        }
+
+        public void SavePreferences(AppPreferences preferences)
+        {
+        }
     }
 }

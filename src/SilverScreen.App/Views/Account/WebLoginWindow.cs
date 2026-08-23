@@ -3,6 +3,7 @@ using GObject;
 using Gtk;
 using Serilog;
 using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure;
 using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.ViewModels;
 using WebKit;
@@ -14,7 +15,6 @@ namespace SilverScreen.Views.Account;
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 internal sealed class WebLoginWindow : WindowBase<Window>
 {
-    private static readonly ILogger Logger = Log.ForContext<WebLoginWindow>();
     private const string LoginUri =
         "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
 
@@ -22,6 +22,8 @@ internal sealed class WebLoginWindow : WindowBase<Window>
 
     private const string BrowserUserAgent =
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+
+    private static readonly ILogger Logger = Log.ForContext<WebLoginWindow>();
 
     private readonly AccountViewModel _account;
     private readonly WebLoginCaptureCoordinator _capture;

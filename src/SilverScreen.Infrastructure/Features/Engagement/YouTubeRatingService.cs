@@ -1,9 +1,9 @@
-using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
@@ -14,6 +14,7 @@ namespace SilverScreen.Infrastructure.Features.Engagement;
 public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YouTubeRatingService>();
+
     private static readonly Regex LikeStatusRegex = new(
         """\\?"likeStatus\\?"\s*:\s*\\?"(LIKE|DISLIKE|INDIFFERENT)\\?""",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
@@ -67,7 +68,8 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
         if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId) || vote is not (VideoVote.Like or VideoVote.Dislike))
             return false;
 
-        Logger.Information("Submitting rating action '{Action}' (Vote: {Vote}) for video {VideoId}", action, vote, videoId);
+        Logger.Information("Submitting rating action '{Action}' (Vote: {Vote}) for video {VideoId}", action, vote,
+            videoId);
         var metadata = _ratingMetadataByVideoId.TryGetValue(videoId, out var cached)
             ? cached
             : await LoadRatingMetadataAsync(videoId, cancellationToken).ConfigureAwait(false);
@@ -99,12 +101,15 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
             if (response.IsSuccessStatusCode)
             {
                 _ratingMetadataByVideoId.TryRemove(videoId, out _);
-                Logger.Information("Successfully submitted rating action '{Action}' for video {VideoId}", action, videoId);
+                Logger.Information("Successfully submitted rating action '{Action}' for video {VideoId}", action,
+                    videoId);
             }
             else
             {
-                Logger.Warning("Failed rating action '{Action}' for video {VideoId}: HTTP status {StatusCode}", action, videoId, response.StatusCode);
+                Logger.Warning("Failed rating action '{Action}' for video {VideoId}: HTTP status {StatusCode}", action,
+                    videoId, response.StatusCode);
             }
+
             return response.IsSuccessStatusCode;
         }
         catch (OperationCanceledException)
@@ -114,7 +119,8 @@ public sealed class YouTubeRatingService : IYouTubeRatingService, IDisposable
         catch (Exception exception) when (exception is HttpRequestException or JsonException
                                               or InvalidOperationException)
         {
-            Logger.Warning(exception, "Exception submitting rating action '{Action}' for video {VideoId}", action, videoId);
+            Logger.Warning(exception, "Exception submitting rating action '{Action}' for video {VideoId}", action,
+                videoId);
             return false;
         }
     }

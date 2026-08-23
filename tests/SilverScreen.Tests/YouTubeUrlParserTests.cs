@@ -18,5 +18,4 @@ public sealed class YouTubeUrlParserTests
         Assert.Equal(expectedKind, result.Kind);
         Assert.Equal(expectedVideoId, result.VideoId);
     }
-
 }

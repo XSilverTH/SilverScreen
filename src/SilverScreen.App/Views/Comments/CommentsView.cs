@@ -6,6 +6,7 @@ using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Comments;
+
 public partial class CommentsView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();

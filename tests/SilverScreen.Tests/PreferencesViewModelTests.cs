@@ -6,7 +6,6 @@ namespace SilverScreen.Tests;
 
 public sealed class PreferencesViewModelTests
 {
-
     [Fact]
     public void Save_InvalidMaxResults_UsesTwenty_AndPreservesCurrentSubtitleLanguage()
     {
@@ -53,6 +52,7 @@ public sealed class PreferencesViewModelTests
         Assert.True(service.Saved!.MarkWatchedVideos);
         Assert.False(service.Saved.YouTubePlaybackTelemetryEnabled);
     }
+
     [Fact]
     public void Save_WhenTelemetryIsEnabled_DisablesMarkWatched()
     {
@@ -125,7 +125,6 @@ public sealed class PreferencesViewModelTests
         Assert.True(service.Saved.ResumePlaybackAutomatically);
         Assert.False(service.Saved.ResumePlaybackOnDemand);
     }
-
 
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Security;
 using Gtk;
+using Pango;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.ViewModels;
@@ -11,21 +12,21 @@ namespace SilverScreen.Views.Popovers;
 public partial class SearchPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
-
-    private readonly SearchEntry _searchEntry;
-    private readonly Revealer _suggestionsRevealer;
-    private readonly ListBox _suggestionsList;
-    private readonly EventControllerKey _searchKeyController;
-    private readonly SearchViewModel _viewModel;
-    private readonly Action<string> _submitCallback;
     private readonly Action _popdownAction;
 
-    private CancellationTokenSource? _suggestionDebounceCts;
+    private readonly SearchEntry _searchEntry;
+    private readonly EventControllerKey _searchKeyController;
+    private readonly Action<string> _submitCallback;
+    private readonly ListBox _suggestionsList;
+    private readonly Revealer _suggestionsRevealer;
+    private readonly SearchViewModel _viewModel;
     private string[] _currentSuggestions = [];
-    private int _selectedSuggestionIndex = -1;
-    private string _originalTypedQuery = string.Empty;
-    private bool _suppressSearchChanged;
     private bool _disposed;
+    private string _originalTypedQuery = string.Empty;
+    private int _selectedSuggestionIndex = -1;
+
+    private CancellationTokenSource? _suggestionDebounceCts;
+    private bool _suppressSearchChanged;
 
     public SearchPopoverView(
         SearchViewModel viewModel,
@@ -61,11 +62,10 @@ public partial class SearchPopoverView : ViewBase<Box>
 
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed)
-            {
-                _searchEntry.GrabFocus();
-                _searchEntry.SelectRegion(0, -1);
-            }
+            if (_disposed) return false;
+            _searchEntry.GrabFocus();
+            _searchEntry.SelectRegion(0, -1);
+
             return false;
         });
     }
@@ -89,11 +89,9 @@ public partial class SearchPopoverView : ViewBase<Box>
         _popdownAction();
 
         var trimmed = query.Trim();
-        if (!string.IsNullOrWhiteSpace(trimmed))
-        {
-            Logger.Information("Search submitted from popover: {Query}", trimmed);
-            _submitCallback(trimmed);
-        }
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
+        Logger.Information("Search submitted from popover: {Query}", trimmed);
+        _submitCallback(trimmed);
     }
 
     private bool OnSearchKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
@@ -110,40 +108,33 @@ public partial class SearchPopoverView : ViewBase<Box>
                 if (_currentSuggestions.Length == 0)
                     return false;
 
-                if (!_suggestionsRevealer.RevealChild)
-                {
-                    _suggestionsRevealer.RevealChild = true;
-                }
+                if (!_suggestionsRevealer.RevealChild) _suggestionsRevealer.RevealChild = true;
 
                 _selectedSuggestionIndex = Math.Min(_selectedSuggestionIndex + 1, _currentSuggestions.Length - 1);
-                if (_selectedSuggestionIndex >= 0)
-                {
-                    HighlightSuggestion(_selectedSuggestionIndex);
-                }
+                if (_selectedSuggestionIndex >= 0) HighlightSuggestion(_selectedSuggestionIndex);
                 return true;
 
             case "Up":
                 if (_currentSuggestions.Length == 0)
                     return false;
 
-                if (_selectedSuggestionIndex > 0)
+                switch (_selectedSuggestionIndex)
                 {
-                    _selectedSuggestionIndex--;
-                    HighlightSuggestion(_selectedSuggestionIndex);
-                    return true;
+                    case > 0:
+                        _selectedSuggestionIndex--;
+                        HighlightSuggestion(_selectedSuggestionIndex);
+                        return true;
+                    case 0:
+                        _selectedSuggestionIndex = -1;
+                        _suggestionsList.UnselectAll();
+                        _suppressSearchChanged = true;
+                        _searchEntry.SetText(_originalTypedQuery);
+                        _searchEntry.SetPosition(-1);
+                        _suppressSearchChanged = false;
+                        return true;
+                    default:
+                        return false;
                 }
-
-                if (_selectedSuggestionIndex == 0)
-                {
-                    _selectedSuggestionIndex = -1;
-                    _suggestionsList.UnselectAll();
-                    _suppressSearchChanged = true;
-                    _searchEntry.SetText(_originalTypedQuery);
-                    _searchEntry.SetPosition(-1);
-                    _suppressSearchChanged = false;
-                    return true;
-                }
-                return false;
 
             case "Escape":
                 if (_suggestionsRevealer.RevealChild)
@@ -172,18 +163,16 @@ public partial class SearchPopoverView : ViewBase<Box>
                 return true;
 
             case "Tab":
-                if (_selectedSuggestionIndex >= 0 && _selectedSuggestionIndex < _currentSuggestions.Length)
-                {
-                    var selectedQuery = _currentSuggestions[_selectedSuggestionIndex];
-                    _suppressSearchChanged = true;
-                    _searchEntry.SetText(selectedQuery);
-                    _searchEntry.SetPosition(-1);
-                    _originalTypedQuery = selectedQuery;
-                    _suppressSearchChanged = false;
-                    _searchEntry.GrabFocus();
-                    return true;
-                }
-                return false;
+                if (_selectedSuggestionIndex < 0 || _selectedSuggestionIndex >= _currentSuggestions.Length)
+                    return false;
+                var selectedQuery2 = _currentSuggestions[_selectedSuggestionIndex];
+                _suppressSearchChanged = true;
+                _searchEntry.SetText(selectedQuery2);
+                _searchEntry.SetPosition(-1);
+                _originalTypedQuery = selectedQuery2;
+                _suppressSearchChanged = false;
+                _searchEntry.GrabFocus();
+                return true;
 
             default:
                 return false;
@@ -196,10 +185,7 @@ public partial class SearchPopoverView : ViewBase<Box>
             return;
 
         var row = _suggestionsList.GetRowAtIndex(index);
-        if (row is not null)
-        {
-            _suggestionsList.SelectRow(row);
-        }
+        if (row is not null) _suggestionsList.SelectRow(row);
 
         _suppressSearchChanged = true;
         _searchEntry.SetText(_currentSuggestions[index]);
@@ -239,10 +225,7 @@ public partial class SearchPopoverView : ViewBase<Box>
             var suggestions = await _viewModel.FetchSuggestionsAsync(text, token).ConfigureAwait(false);
             Functions.IdleAdd(0, () =>
             {
-                if (!token.IsCancellationRequested && !_disposed)
-                {
-                    UpdateSuggestions(text, suggestions);
-                }
+                if (!token.IsCancellationRequested && !_disposed) UpdateSuggestions(text, suggestions);
                 return false;
             });
         }, TaskScheduler.Default);
@@ -259,13 +242,10 @@ public partial class SearchPopoverView : ViewBase<Box>
             return;
         }
 
-        _currentSuggestions = suggestions.Take(8).ToArray();
+        _currentSuggestions = [.. suggestions.Take(8)];
         _selectedSuggestionIndex = -1;
 
-        while (_suggestionsList.GetFirstChild() is { } child)
-        {
-            _suggestionsList.Remove(child);
-        }
+        while (_suggestionsList.GetFirstChild() is { } child) _suggestionsList.Remove(child);
 
         foreach (var suggestion in _currentSuggestions)
         {
@@ -293,7 +273,7 @@ public partial class SearchPopoverView : ViewBase<Box>
             label.Hexpand = true;
             label.Xalign = 0;
             label.Valign = Align.Center;
-            label.Ellipsize = Pango.EllipsizeMode.End;
+            label.Ellipsize = EllipsizeMode.End;
             label.UseMarkup = true;
             label.SetMarkup(FormatSuggestionMarkup(query, suggestion));
             label.AddCssClass("suggestion-label");
@@ -309,15 +289,13 @@ public partial class SearchPopoverView : ViewBase<Box>
     private void OnSuggestionRowActivated(ListBox sender, ListBox.RowActivatedSignalArgs args)
     {
         var index = args.Row.GetIndex();
-        if (index >= 0 && index < _currentSuggestions.Length)
-        {
-            var suggestion = _currentSuggestions[index];
-            _suppressSearchChanged = true;
-            _searchEntry.SetText(suggestion);
-            _searchEntry.SetPosition(-1);
-            _suppressSearchChanged = false;
-            Submit(suggestion);
-        }
+        if (index < 0 || index >= _currentSuggestions.Length) return;
+        var suggestion = _currentSuggestions[index];
+        _suppressSearchChanged = true;
+        _searchEntry.SetText(suggestion);
+        _searchEntry.SetPosition(-1);
+        _suppressSearchChanged = false;
+        Submit(suggestion);
     }
 
     private void DismissSuggestions()
@@ -335,17 +313,13 @@ public partial class SearchPopoverView : ViewBase<Box>
         var trimmedQuery = rawQuery.Trim();
         var escapedSuggestion = SecurityElement.Escape(suggestion);
 
-        if (string.IsNullOrWhiteSpace(trimmedQuery))
+        if (string.IsNullOrWhiteSpace(trimmedQuery) ||
+            !suggestion.StartsWith(trimmedQuery, StringComparison.OrdinalIgnoreCase))
             return escapedSuggestion;
 
-        if (suggestion.StartsWith(trimmedQuery, StringComparison.OrdinalIgnoreCase))
-        {
-            var typedPart = SecurityElement.Escape(suggestion[..trimmedQuery.Length]);
-            var completionPart = SecurityElement.Escape(suggestion[trimmedQuery.Length..]);
-            return $"{typedPart}<b>{completionPart}</b>";
-        }
-
-        return escapedSuggestion;
+        var typedPart = SecurityElement.Escape(suggestion[..trimmedQuery.Length]);
+        var completionPart = SecurityElement.Escape(suggestion[trimmedQuery.Length..]);
+        return $"{typedPart}<b>{completionPart}</b>";
     }
 
     public new void Dispose()

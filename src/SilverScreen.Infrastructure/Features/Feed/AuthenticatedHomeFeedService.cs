@@ -7,7 +7,6 @@ namespace SilverScreen.Infrastructure.Features.Feed;
 
 public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService, IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHomeFeedService>();
     private const string AuthenticationRequiredMessage =
         "Sign in to YouTube to load recommendations.";
 
@@ -16,6 +15,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     private const string EmptyFeedMessage = "No usable recommendations were returned.";
     private const string NoContinuationMessage = "No additional recommendations are available.";
     private const string SuccessMessage = "Recommendations loaded.";
+    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHomeFeedService>();
     private readonly IYouTubeHomeClient _homeClient;
 
     // Cumulative cache of loaded videos in the current manual session
@@ -51,6 +51,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
+
         try
         {
             var clientResult = await _homeClient.GetHomeFeedAsync(null, cancellationToken);
@@ -78,6 +79,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
+
         string? currentToken;
         lock (_lock)
         {

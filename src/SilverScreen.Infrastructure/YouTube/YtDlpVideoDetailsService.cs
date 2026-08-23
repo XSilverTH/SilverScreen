@@ -14,10 +14,13 @@ public sealed class YtDlpVideoDetailsService(
     : IYouTubeVideoDetailsService
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpVideoDetailsService>();
+
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
     private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
@@ -74,6 +77,8 @@ public sealed class YtDlpVideoDetailsService(
         }
     }
 
-    private static YouTubeVideoDetailsResult Failure(string statusMessage) =>
-        new(null, false, statusMessage);
+    private static YouTubeVideoDetailsResult Failure(string statusMessage)
+    {
+        return new YouTubeVideoDetailsResult(null, false, statusMessage);
+    }
 }

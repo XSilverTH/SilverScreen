@@ -1,8 +1,9 @@
 using System.Text;
 using GLib;
 using Serilog;
-using SilverScreen.DBus;
 using SilverScreen.Core.Models;
+using SilverScreen.DBus;
+using SilverScreen.Infrastructure;
 using SilverScreen.Infrastructure.Features.Playback;
 using Tmds.DBus.Protocol;
 using TimeSpan = System.TimeSpan;
@@ -253,83 +254,12 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
     private sealed class MprisHandler(DesktopMediaIntegration owner, DBusConnection connection) : DBusHandler(
             connection,
-            MprisObjectPath, handlesChildPaths: false),
+            MprisObjectPath, false),
         IMediaPlayer2Handler, IMediaPlayer2Properties,
         IPlayerHandler, IPlayerProperties, IDisposable
     {
-        bool IMediaPlayer2Properties.CanQuit => false;
-        bool IMediaPlayer2Properties.CanRaise => true;
-        bool IMediaPlayer2Properties.HasTrackList => false;
-        string IMediaPlayer2Properties.Identity => ApplicationMetadata.ApplicationName;
-        string IMediaPlayer2Properties.DesktopEntry => ApplicationMetadata.ApplicationId;
-        string[] IMediaPlayer2Properties.SupportedUriSchemes => ["http", "https"];
-        string[] IMediaPlayer2Properties.SupportedMimeTypes => ["video/mp4", "video/webm"];
-
-        string IPlayerProperties.PlaybackStatus => owner.GetSnapshot().PlaybackStatus;
-        string IPlayerProperties.LoopStatus => "None";
-
-        double IPlayerProperties.Rate
-        {
-            get => owner.GetSnapshot().Rate;
-            set => owner._player.SetSpeed(Math.Clamp(value, 0.25, 4));
-        }
-
-        bool IPlayerProperties.Shuffle => false;
-        Dictionary<string, VariantValue> IPlayerProperties.Metadata => owner.GetSnapshot().Metadata;
-
-        double IPlayerProperties.Volume
-        {
-            get => owner.GetSnapshot().Volume;
-            set => owner._player.SetVolume(Math.Clamp(value, 0, 1) * 100);
-        }
-
-        long IPlayerProperties.Position => owner.GetSnapshot().PositionMicroseconds;
-        double IPlayerProperties.MinimumRate => 0.25;
-        double IPlayerProperties.MaximumRate => 4;
-        bool IPlayerProperties.CanGoNext => owner.GetSnapshot().CanGoNext;
-        bool IPlayerProperties.CanGoPrevious => owner.GetSnapshot().CanGoPrevious;
-        bool IPlayerProperties.CanPlay => owner.GetSnapshot().CanPlay;
-        bool IPlayerProperties.CanPause => owner.GetSnapshot().CanPause;
-        bool IPlayerProperties.CanSeek => owner.GetSnapshot().CanSeek;
-        bool IPlayerProperties.CanControl => true;
-
         public void Dispose()
         {
-        }
-
-        public void PublishInitialState()
-        {
-            var snapshot = owner.GetSnapshot();
-            PublishChanges(DesktopPlaybackSnapshot.Stopped, snapshot);
-        }
-
-        public void PublishChanges(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current)
-        {
-            try
-            {
-                if (!Equals(previous.TrackId, current.TrackId))
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Metadata);
-                if (previous.PlaybackStatus != current.PlaybackStatus)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.PlaybackStatus);
-                if (Math.Abs(previous.Volume - current.Volume) > 0.1)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Volume);
-                if (Math.Abs(previous.Rate - current.Rate) > 0.1)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Rate);
-                if (previous.CanSeek != current.CanSeek)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanSeek);
-                if (previous.CanGoNext != current.CanGoNext)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanGoNext);
-                if (previous.CanGoPrevious != current.CanGoPrevious)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanGoPrevious);
-                if (previous.CanPlay != current.CanPlay)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPlay);
-                if (previous.CanPause != current.CanPause)
-                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPause);
-            }
-            catch (Exception exception)
-            {
-                Logger.Warning(exception, "Failed to publish an MPRIS state update.");
-            }
         }
 
         ValueTask IMediaPlayer2Handler.RaiseAsync()
@@ -342,6 +272,24 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             return default;
         }
+
+        ValueTask IMediaPlayer2Handler.HandleGetPropertyAsync(IMediaPlayer2Handler.GetPropertyContext context)
+        {
+            return context.Handle(this);
+        }
+
+        ValueTask IMediaPlayer2Handler.HandleGetAllPropertiesAsync(IMediaPlayer2Handler.GetAllPropertiesContext context)
+        {
+            return context.Handle(this);
+        }
+
+        bool IMediaPlayer2Properties.CanQuit => false;
+        bool IMediaPlayer2Properties.CanRaise => true;
+        bool IMediaPlayer2Properties.HasTrackList => false;
+        string IMediaPlayer2Properties.Identity => ApplicationMetadata.ApplicationName;
+        string IMediaPlayer2Properties.DesktopEntry => ApplicationMetadata.ApplicationId;
+        string[] IMediaPlayer2Properties.SupportedUriSchemes => ["http", "https"];
+        string[] IMediaPlayer2Properties.SupportedMimeTypes => ["video/mp4", "video/webm"];
 
         ValueTask IPlayerHandler.NextAsync()
         {
@@ -393,16 +341,6 @@ internal sealed class DesktopMediaIntegration : IDisposable
             return default;
         }
 
-        ValueTask IMediaPlayer2Handler.HandleGetPropertyAsync(IMediaPlayer2Handler.GetPropertyContext context)
-        {
-            return context.Handle(this);
-        }
-
-        ValueTask IMediaPlayer2Handler.HandleGetAllPropertiesAsync(IMediaPlayer2Handler.GetAllPropertiesContext context)
-        {
-            return context.Handle(this);
-        }
-
 
         ValueTask IPlayerHandler.HandleGetPropertyAsync(IPlayerHandler.GetPropertyContext context)
         {
@@ -417,6 +355,69 @@ internal sealed class DesktopMediaIntegration : IDisposable
         ValueTask IPlayerHandler.HandleSetPropertyAsync(IPlayerHandler.SetPropertyContext context)
         {
             return context.Handle(this);
+        }
+
+        string IPlayerProperties.PlaybackStatus => owner.GetSnapshot().PlaybackStatus;
+        string IPlayerProperties.LoopStatus => "None";
+
+        double IPlayerProperties.Rate
+        {
+            get => owner.GetSnapshot().Rate;
+            set => owner._player.SetSpeed(Math.Clamp(value, 0.25, 4));
+        }
+
+        bool IPlayerProperties.Shuffle => false;
+        Dictionary<string, VariantValue> IPlayerProperties.Metadata => owner.GetSnapshot().Metadata;
+
+        double IPlayerProperties.Volume
+        {
+            get => owner.GetSnapshot().Volume;
+            set => owner._player.SetVolume(Math.Clamp(value, 0, 1) * 100);
+        }
+
+        long IPlayerProperties.Position => owner.GetSnapshot().PositionMicroseconds;
+        double IPlayerProperties.MinimumRate => 0.25;
+        double IPlayerProperties.MaximumRate => 4;
+        bool IPlayerProperties.CanGoNext => owner.GetSnapshot().CanGoNext;
+        bool IPlayerProperties.CanGoPrevious => owner.GetSnapshot().CanGoPrevious;
+        bool IPlayerProperties.CanPlay => owner.GetSnapshot().CanPlay;
+        bool IPlayerProperties.CanPause => owner.GetSnapshot().CanPause;
+        bool IPlayerProperties.CanSeek => owner.GetSnapshot().CanSeek;
+        bool IPlayerProperties.CanControl => true;
+
+        public void PublishInitialState()
+        {
+            var snapshot = owner.GetSnapshot();
+            PublishChanges(DesktopPlaybackSnapshot.Stopped, snapshot);
+        }
+
+        public void PublishChanges(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current)
+        {
+            try
+            {
+                if (!Equals(previous.TrackId, current.TrackId))
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Metadata);
+                if (previous.PlaybackStatus != current.PlaybackStatus)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.PlaybackStatus);
+                if (Math.Abs(previous.Volume - current.Volume) > 0.1)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Volume);
+                if (Math.Abs(previous.Rate - current.Rate) > 0.1)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Rate);
+                if (previous.CanSeek != current.CanSeek)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanSeek);
+                if (previous.CanGoNext != current.CanGoNext)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanGoNext);
+                if (previous.CanGoPrevious != current.CanGoPrevious)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanGoPrevious);
+                if (previous.CanPlay != current.CanPlay)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPlay);
+                if (previous.CanPause != current.CanPause)
+                    Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPause);
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "Failed to publish an MPRIS state update.");
+            }
         }
     }
 

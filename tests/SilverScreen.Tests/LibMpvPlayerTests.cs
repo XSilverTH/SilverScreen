@@ -7,8 +7,6 @@ namespace SilverScreen.Tests;
 
 public sealed class LibMpvPlayerTests
 {
-
-
     [Fact]
     public void LoadAssumesPlaybackStartsUnpausedUntilMpvReportsOtherwise()
     {
@@ -22,9 +20,6 @@ public sealed class LibMpvPlayerTests
         Assert.True(SpinWait.SpinUntil(
             () => states.Any(state => state.IsLoading && !state.IsPaused), TimeSpan.FromSeconds(2)));
     }
-
-
-
 
 
     [Fact]
@@ -79,14 +74,15 @@ public sealed class LibMpvPlayerTests
                 Assert.Equal("Chapter 3", chapter.Title);
             });
     }
+
     [Fact]
     public void SeekAbsoluteDispatchesExactAndKeyframeCommands()
     {
         using var native = new RecordingNative();
         using var player = new LibMpvPlayer(native, action => action());
 
-        player.SeekAbsolute(42.5, exact: true);
-        player.SeekAbsolute(100.25, exact: false);
+        player.SeekAbsolute(42.5);
+        player.SeekAbsolute(100.25, false);
 
         Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 2, TimeSpan.FromSeconds(2)));
         Assert.Contains("seek|42.5|absolute+exact", native.Commands);
@@ -124,6 +120,7 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("playlist-move|4|1", native.Commands);
         Assert.Contains("loadfile|https://www.youtube.com/watch?v=dQw4w9WgXcQ|append-play", native.Commands);
     }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);

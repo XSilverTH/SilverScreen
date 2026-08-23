@@ -1,5 +1,5 @@
 using SilverScreen.Core.Services;
-using SilverScreen.ViewModels;
+
 namespace SilverScreen.Views.Player;
 
 /// <summary>Services and dependencies required for embedded playback and player sub-controllers.</summary>

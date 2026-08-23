@@ -11,8 +11,6 @@ public interface IQueueService
 
     QueueItem Add(VideoSummary video);
 
-    void AddNext(VideoSummary video);
-
     void Move(Guid itemId, int destinationIndex);
 
     void Remove(Guid itemId);

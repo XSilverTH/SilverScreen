@@ -4,6 +4,7 @@ using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Features.Session;
+using SilverScreen.Infrastructure;
 
 namespace SilverScreen.ViewModels;
 

@@ -30,7 +30,6 @@ public sealed class ReturnYouTubeDislikeServiceTests
     }
 
 
-
     private static HttpResponseMessage JsonResponse(string json)
     {
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };

@@ -3,12 +3,14 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Spinner = Gtk.Spinner;
 
 namespace SilverScreen.Views.Queue;
+
 public partial class QueueView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<QueueView>();
@@ -27,12 +29,12 @@ public partial class QueueView : ViewBase<Box>
     private readonly NoSelection _selection;
     private readonly Label _summary;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
-    private readonly QueueViewModel _viewModel;
-    private QueueItem[] _displayedItems = [];
-    private bool _disposed;
 
     private readonly Action<int>? _trackJumpRequested;
+    private readonly QueueViewModel _viewModel;
+    private readonly IWatchProgressService _watchProgress;
+    private QueueItem[] _displayedItems = [];
+    private bool _disposed;
 
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, IWatchProgressService watchProgress,
         Action closeRequested, Action<int>? trackJumpRequested = null)
@@ -100,12 +102,14 @@ public partial class QueueView : ViewBase<Box>
         {
             var remainingTicks = state.Items.Skip(state.CurrentPlayingIndex).Sum(item => item.Video.Duration.Ticks);
             var remainingDuration = TimeSpan.FromTicks(remainingTicks);
-            _summary.SetText($"Playing {state.CurrentPlayingIndex + 1} of {state.Items.Count} · {FormatDuration(remainingDuration)} remaining");
+            _summary.SetText(
+                $"Playing {state.CurrentPlayingIndex + 1} of {state.Items.Count} · {FormatDuration(remainingDuration)} remaining");
         }
         else
         {
             _summary.SetText(FormatSummary(state.Items.Count, state.TotalDuration));
         }
+
         _emptyPage.Visible = !state.IsVisible;
         _scrolledWindow.Visible = state.IsVisible;
         _footer.Visible = state.IsVisible && _trackJumpRequested is null;
@@ -118,12 +122,8 @@ public partial class QueueView : ViewBase<Box>
     private void RefreshVisibleRows()
     {
         foreach (var row in _rowsByCell.Values)
-        {
             if (row.Item is { } item)
-            {
                 row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
-            }
-        }
     }
 
     private void ApplyItems(IReadOnlyList<QueueItem> items)
@@ -160,7 +160,8 @@ public partial class QueueView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove, OnRowPlayRequested);
+        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove,
+            OnRowPlayRequested);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

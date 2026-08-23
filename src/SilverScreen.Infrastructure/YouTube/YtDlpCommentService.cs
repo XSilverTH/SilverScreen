@@ -14,6 +14,7 @@ public sealed class YtDlpCommentService(
     : IYouTubeCommentService
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpCommentService>();
+
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
 
@@ -62,7 +63,8 @@ public sealed class YtDlpCommentService(
 
         if (processResult.ExitCode != 0)
         {
-            Logger.Warning("yt-dlp comment fetch returned exit code {ExitCode} for video {VideoId}", processResult.ExitCode, videoId);
+            Logger.Warning("yt-dlp comment fetch returned exit code {ExitCode} for video {VideoId}",
+                processResult.ExitCode, videoId);
             return Failure(RuntimeDependencyGuidance.YtDlpFailed(
                 $"the process exited with error code {processResult.ExitCode}."));
         }

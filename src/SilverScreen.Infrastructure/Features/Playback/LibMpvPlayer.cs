@@ -69,6 +69,7 @@ public sealed class LibMpvPlayer : IDisposable
             Logger.Warning("libmpv native library is not available: {Error}", AvailabilityError);
             return;
         }
+
         try
         {
             _handle = native.Create();
@@ -102,7 +103,7 @@ public sealed class LibMpvPlayer : IDisposable
     }
 
     public bool IsAvailable { get; }
-    public string? AvailabilityError { get; private set; }
+    public string? AvailabilityError { get; }
 
     private bool IsDisposing { get; set; }
 
@@ -208,7 +209,9 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         var primaryVideo = request.Videos.FirstOrDefault();
-        Logger.Information("Loading playback request for video {VideoId} ({Title}) with {Count} item(s) at quality {Quality}", primaryVideo?.Id, primaryVideo?.Title, request.Videos.Length, _quality);
+        Logger.Information(
+            "Loading playback request for video {VideoId} ({Title}) with {Count} item(s) at quality {Quality}",
+            primaryVideo?.Id, primaryVideo?.Title, request.Videos.Length, _quality);
         PublishState();
 
         Enqueue(LoadCurrentRequest);
@@ -247,7 +250,8 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void PlayPlaylistIndex(int index)
     {
-        Enqueue(() => Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
+        Enqueue(() =>
+            Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
     }
 
     public void RemovePlaylistItem(int index)

@@ -1,24 +1,12 @@
 using Serilog;
-using Serilog.Events;
 using Serilog.Core;
+using Serilog.Events;
+using SilverScreen.Infrastructure;
 
 namespace SilverScreen.Tests;
 
 public sealed class TaskExtensionsTests
 {
-    private sealed class CapturingSink : ILogEventSink
-    {
-        public List<LogEvent> Events { get; } = [];
-
-        public void Emit(LogEvent logEvent)
-        {
-            lock (Events)
-            {
-                Events.Add(logEvent);
-            }
-        }
-    }
-
     [Fact]
     public void FireAndForget_NullTask_DoesNotThrow()
     {
@@ -65,10 +53,7 @@ public sealed class TaskExtensionsTests
         var sink = new CapturingSink();
         var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
         var cts = new CancellationTokenSource();
-        var task = Task.Run(async () =>
-        {
-            await Task.Delay(10, cts.Token);
-        }, cts.Token);
+        var task = Task.Run(async () => { await Task.Delay(10, cts.Token); }, cts.Token);
 
         task.FireAndForget(logger);
         cts.Cancel();
@@ -98,5 +83,18 @@ public sealed class TaskExtensionsTests
         Assert.Single(sink.Events);
         Assert.Equal(LogEventLevel.Error, sink.Events[0].Level);
         Assert.Same(expectedException, sink.Events[0].Exception);
+    }
+
+    private sealed class CapturingSink : ILogEventSink
+    {
+        public List<LogEvent> Events { get; } = [];
+
+        public void Emit(LogEvent logEvent)
+        {
+            lock (Events)
+            {
+                Events.Add(logEvent);
+            }
+        }
     }
 }

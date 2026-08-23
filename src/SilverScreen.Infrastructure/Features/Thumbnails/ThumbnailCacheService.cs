@@ -9,9 +9,9 @@ namespace SilverScreen.Infrastructure.Features.Thumbnails;
 
 public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<ThumbnailCacheService>();
     private const long DefaultMaxDownloadBytes = 3 * 1024 * 1024;
     private const int DefaultMaxFileCount = 300;
+    private static readonly ILogger Logger = Log.ForContext<ThumbnailCacheService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly HashSet<string> SafeExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -24,16 +24,19 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         ".bmp"
     };
 
-    private readonly Lock _lock = new();
-    private readonly LinkedList<string> _lruEntries = new();
+    private readonly bool _disposeHttpClient;
+
     private readonly Dictionary<string, LinkedListNode<string>> _entryLookup =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-    private bool _initialized;
 
-    private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
+
+    private readonly Lock _lock = new();
+    private readonly LinkedList<string> _lruEntries = new();
     private readonly long _maxDownloadBytes;
     private readonly int _maxFileCount;
+    private bool _initialized;
+
     public ThumbnailCacheService()
         : this(CreateDefaultHttpClient(), GetDefaultCacheDirectory(), disposeHttpClient: true)
     {
@@ -77,6 +80,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
         }
     }
+
     public void Dispose()
     {
         if (_disposeHttpClient) _httpClient.Dispose();
@@ -97,12 +101,10 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         if (!TryCreateHttpUri(thumbnailUrl, out var uri))
             return null;
 
-        if (!_initialized)
+        lock (_lock)
         {
-            lock (_lock)
-            {
+            if (!_initialized)
                 EnsureInitializedLocked();
-            }
         }
 
         var cachePath = GetCachePath(uri);
@@ -113,14 +115,14 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             Logger.Debug("Thumbnail cache hit for {Url}", thumbnailUrl);
             return new ThumbnailResult(cachePath, true);
         }
+
         Directory.CreateDirectory(CacheDirectory);
         var temporaryPath = Path.Combine(CacheDirectory, $"{Path.GetFileName(cachePath)}.{Guid.NewGuid():N}.tmp");
-        var downloadUri = uri;
 
         var downloadCompleted = false;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.TryAddWithoutValidation("Accept", "image/webp,image/png,image/jpeg,*/*;q=0.8");
             using var response = await _httpClient
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
@@ -146,7 +148,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
                                        or InvalidOperationException)
         {
-            Logger.Warning(ex, "Failed to download thumbnail from {DownloadUri}", downloadUri);
+            Logger.Warning(ex, "Failed to download thumbnail from {DownloadUri}", uri);
             return null;
         }
         finally
@@ -251,6 +253,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             await target.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
         }
     }
+
     private void EnsureInitializedLocked()
     {
         if (_initialized)
@@ -276,8 +279,10 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
                     }
+
                     continue;
                 }
+
                 try
                 {
                     var lastWrite = File.GetLastWriteTimeUtc(file);
@@ -300,11 +305,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 }
                 else
                 {
-                    if (!_entryLookup.ContainsKey(entry.Path))
-                    {
-                        var node = _lruEntries.AddLast(entry.Path);
-                        _entryLookup[entry.Path] = node;
-                    }
+                    if (_entryLookup.ContainsKey(entry.Path)) continue;
+                    var node = _lruEntries.AddLast(entry.Path);
+                    _entryLookup[entry.Path] = node;
                 }
             }
         }
@@ -344,11 +347,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
         }
 
-        if (filesToDelete is not null)
-        {
-            foreach (var file in filesToDelete)
-                DeleteFileIfExists(file);
-        }
+        if (filesToDelete is null) return;
+        foreach (var file in filesToDelete)
+            DeleteFileIfExists(file);
     }
 
     private void RecordAddAndEvict(string cachePath)
@@ -381,11 +382,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             }
         }
 
-        if (filesToDelete is not null)
-        {
-            foreach (var file in filesToDelete)
-                DeleteFileIfExists(file);
-        }
+        if (filesToDelete is null) return;
+        foreach (var file in filesToDelete)
+            DeleteFileIfExists(file);
     }
 
     private static void TouchCacheFile(string path)

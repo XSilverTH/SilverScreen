@@ -8,13 +8,13 @@ namespace SilverScreen.Infrastructure.Features.Feed;
 /// <summary>Keeps the current server-backed watch-history page sequence for the active session.</summary>
 public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHistoryService>();
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string BackendFailureMessage = "Watch history is temporarily unavailable.";
     private const string EmptyHistoryMessage = "No watch history was returned.";
     private const string NoContinuationMessage = "No additional watch history is available.";
     private const string SuccessMessage = "Watch history loaded.";
+    private static readonly ILogger Logger = Log.ForContext<AuthenticatedHistoryService>();
     private readonly IYouTubeHistoryClient _historyClient;
     private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
@@ -41,7 +41,8 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
 
         try
         {
-            return ProcessClientResult(await _historyClient.GetHistoryAsync(null, cancellationToken).ConfigureAwait(false), true);
+            return ProcessClientResult(
+                await _historyClient.GetHistoryAsync(null, cancellationToken).ConfigureAwait(false), true);
         }
         catch (OperationCanceledException)
         {
@@ -65,6 +66,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
                 AuthenticationRequiredMessage);
         }
+
         string? continuationToken;
         lock (_lock)
         {
@@ -72,12 +74,14 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
         }
 
         if (string.IsNullOrEmpty(continuationToken))
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(), NoContinuationMessage);
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
+                NoContinuationMessage);
 
         try
         {
             return ProcessClientResult(
-                await _historyClient.GetHistoryAsync(continuationToken, cancellationToken).ConfigureAwait(false), false);
+                await _historyClient.GetHistoryAsync(continuationToken, cancellationToken).ConfigureAwait(false),
+                false);
         }
         catch (OperationCanceledException)
         {
@@ -126,14 +130,16 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
             var message = clientResult.StatusMessage?.StartsWith("yt-dlp ", StringComparison.OrdinalIgnoreCase) == true
                 ? clientResult.StatusMessage
                 : BackendFailureMessage;
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty, message);
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
+                message);
         }
 
         var usableVideos = clientResult.Videos.Where(video => !video.IsShort).ToArray();
         if (usableVideos.Length == 0 && isFirstPage)
         {
             ClearCachedResults();
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty, EmptyHistoryMessage);
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
+                EmptyHistoryMessage);
         }
 
         lock (_lock)

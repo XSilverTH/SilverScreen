@@ -39,14 +39,6 @@ public sealed class QueueService : IQueueService
         return item;
     }
 
-    public void AddNext(VideoSummary video)
-    {
-        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
-        _items.Insert(0, item);
-        Logger.Information("Enqueued video {VideoId} ({Title}) as next in playback queue", video.Id, video.Title);
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
-
     public void Move(Guid itemId, int destinationIndex)
     {
         var currentIndex = _items.FindIndex(item => item.Id == itemId);
@@ -89,6 +81,14 @@ public sealed class QueueService : IQueueService
         foreach (var video in videos)
             _items.Add(new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now));
         Logger.Information("Replaced playback queue with {Count} items", _items.Count);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void AddNext(VideoSummary video)
+    {
+        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
+        _items.Insert(0, item);
+        Logger.Information("Enqueued video {VideoId} ({Title}) as next in playback queue", video.Id, video.Title);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }

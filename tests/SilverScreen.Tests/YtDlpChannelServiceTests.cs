@@ -11,22 +11,22 @@ public sealed class YtDlpChannelServiceTests
     public async Task GetChannelAsync_MapsMetadataVideosAndRequestedSort()
     {
         var runner = new CapturingRunner(new ProcessResult(0, """
-            {
-              "channel": "Example Channel",
-              "description": "Videos about examples.",
-              "thumbnail": "https://img.example/avatar.jpg",
-              "channel_follower_count": 1234,
-              "entries": [
-                {
-                  "id": "dQw4w9WgXcQ",
-                  "title": "Example video",
-                  "channel": "Example Channel",
-                  "channel_url": "https://www.youtube.com/@example",
-                  "duration": 42
-                }
-              ]
-            }
-            """, ""));
+                                                              {
+                                                                "channel": "Example Channel",
+                                                                "description": "Videos about examples.",
+                                                                "thumbnail": "https://img.example/avatar.jpg",
+                                                                "channel_follower_count": 1234,
+                                                                "entries": [
+                                                                  {
+                                                                    "id": "dQw4w9WgXcQ",
+                                                                    "title": "Example video",
+                                                                    "channel": "Example Channel",
+                                                                    "channel_url": "https://www.youtube.com/@example",
+                                                                    "duration": 42
+                                                                  }
+                                                                ]
+                                                              }
+                                                              """, ""));
         var service = CreateService(runner);
 
         var page = await service.GetChannelAsync("https://www.youtube.com/@example", "Fallback",

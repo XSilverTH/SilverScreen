@@ -5,6 +5,7 @@ using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
+using Functions = Gdk.Functions;
 
 namespace SilverScreen.Views.Preferences;
 
@@ -22,22 +23,22 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly StringList _qualityModel;
     private readonly ComboRow _qualityRow;
     private readonly Action<string> _reportStatus;
+    private readonly SwitchRow _resumePlaybackAutomaticallyRow;
+    private readonly SwitchRow _resumePlaybackOnDemandRow;
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
+    private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly SwitchRow _sponsorBlockAutoSkipRow;
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly SwitchRow _sponsorBlockDisplayRow;
-    private readonly SwitchRow _resumePlaybackAutomaticallyRow;
-    private readonly SwitchRow _resumePlaybackOnDemandRow;
 
     private readonly StringList _themeModel;
     private readonly ComboRow _themeRow;
     private readonly PreferencesViewModel _viewModel;
     private readonly SwitchRow _youTubePlaybackTelemetryRow;
     private readonly EntryRow _ytdlpPathRow;
+    private string? _capturingShortcut;
 
     private bool _loading;
-    private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
-    private string? _capturingShortcut;
 
     public PreferencesDialog(IPreferencesService preferencesService, Action<string> reportStatus)
     {
@@ -144,6 +145,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             _loading = false;
         }
     }
+
     private void ApplyShortcuts(PlayerShortcutBindings shortcuts)
     {
         SetShortcut("TogglePause", shortcuts.TogglePause);
@@ -206,8 +208,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     private static string? CanonicalKeyName(uint keyval)
     {
-        var normalized = Gdk.Functions.KeyvalToLower(keyval);
-        return normalized == 0 ? null : Gdk.Functions.KeyvalName(normalized);
+        var normalized = Functions.KeyvalToLower(keyval);
+        return normalized == 0 ? null : Functions.KeyvalName(normalized);
     }
 
     private static string GetShortcutLabel(string keyName)
@@ -313,6 +315,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ]
         };
     }
+
     private PlayerShortcutBindings CreateShortcutBindings()
     {
         return new PlayerShortcutBindings

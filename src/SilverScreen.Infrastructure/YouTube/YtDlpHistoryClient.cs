@@ -1,3 +1,4 @@
+using System.Globalization;
 using Serilog;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure.Features.Search;
@@ -14,13 +15,18 @@ public sealed class YtDlpHistoryClient(
 {
     private const int PageSize = 20;
     private static readonly ILogger Logger = Log.ForContext<YtDlpHistoryClient>();
+
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
     private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
     public async Task<HistoryFeedResult> GetHistoryAsync(string? continuationToken = null,
@@ -80,7 +86,7 @@ public sealed class YtDlpHistoryClient(
             var pageEntries = YtDlpVideoParser.Parse(processResult.StandardOutput).ToArray();
             var videos = pageEntries.Where(video => !video.IsShort).ToArray();
             var nextToken = pageEntries.Length == PageSize
-                ? (startIndex + PageSize).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ? (startIndex + PageSize).ToString(CultureInfo.InvariantCulture)
                 : null;
             return new HistoryFeedResult(videos, nextToken, true, "Watch history loaded.", false);
         }

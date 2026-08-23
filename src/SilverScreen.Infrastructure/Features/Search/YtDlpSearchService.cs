@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Models;
@@ -28,7 +29,8 @@ public sealed class YtDlpSearchService : ISearchService
     {
         if (string.IsNullOrWhiteSpace(request.Query)) return SearchResultPage.Empty;
 
-        Logger.Information("Searching videos for query {Query} (StartIndex: {StartIndex})", request.Query, request.StartIndex);
+        Logger.Information("Searching videos for query {Query} (StartIndex: {StartIndex})", request.Query,
+            request.StartIndex);
         var activeOptions = GetActiveOptions();
         try
         {
@@ -55,7 +57,7 @@ public sealed class YtDlpSearchService : ISearchService
                 .Take(pageSize)
                 .ToList();
             var continuationToken = pageEntries.Length == pageSize
-                ? (request.StartIndex + pageSize).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ? (request.StartIndex + pageSize).ToString(CultureInfo.InvariantCulture)
                 : null;
 
             return videos.Count == 0

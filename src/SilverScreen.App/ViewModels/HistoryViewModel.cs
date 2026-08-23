@@ -37,6 +37,18 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         }
     } = HistoryViewState.Empty;
 
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        ++_requestGeneration;
+        _requestCancellation?.Cancel();
+        _requestCancellation?.Dispose();
+        _requestCancellation = null;
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<HistoryViewState>? StateChanged;
 
@@ -67,7 +79,7 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
                 result.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty,
                 result.Status,
                 false,
-                result.Status == AuthenticatedHistoryStatus.Success && result.FeedPage.ContinuationToken is not null);
+                result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
             State = state;
             shell.ReportStatus(state.Summary);
         }
@@ -108,7 +120,7 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
             var videos = State.Videos.Concat(result.FeedPage.Videos).DistinctBy(video => video.Id).ToArray();
             var isSuccess = result.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
             var state = new HistoryViewState(videos, result.StatusMessage, false, isSuccess, result.Status, false,
-                result.Status == AuthenticatedHistoryStatus.Success && result.FeedPage.ContinuationToken is not null);
+                result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
             State = state;
             shell.ReportStatus(state.Summary);
         }
@@ -125,18 +137,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
             State = State with { Summary = message, IsLoadingMore = false };
             shell.ReportStatus(message);
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

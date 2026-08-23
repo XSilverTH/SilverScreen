@@ -155,7 +155,6 @@ public sealed class FilePreferencesService : IPreferencesService
                left.SponsorBlockCategories.SequenceEqual(right.SponsorBlockCategories,
                    StringComparer.Ordinal) &&
                left.Shortcuts.Equals(right.Shortcuts);
-
     }
 
     private static string GetDefaultPreferencesFilePath()

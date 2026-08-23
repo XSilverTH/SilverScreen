@@ -4,6 +4,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
@@ -15,31 +16,28 @@ public partial class SearchView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchView>();
 
-    private readonly Stack _stack;
-    private readonly Label _loadingLabel;
-    private readonly GridView _videoGrid;
+    private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly StatusPage _emptyPage;
     private readonly StatusPage _errorPage;
-
-    private readonly Adjustment? _vadjustment;
+    private readonly Label _loadingLabel;
     private readonly Revealer _paginationLoadingRevealer;
 
-    private readonly SearchViewModel _viewModel;
+    private readonly Stack _stack;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
-    private readonly VideoCardActions _videoActions;
 
-    private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
+    private readonly Adjustment? _vadjustment;
+    private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
+    private readonly GridView _videoGrid;
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
 
+    private readonly SearchViewModel _viewModel;
+    private readonly IWatchProgressService _watchProgress;
+
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
-
-
-    public event EventHandler<bool>? RefreshLoadingChanged;
 
     public SearchView(
         SearchViewModel viewModel,
@@ -61,10 +59,7 @@ public partial class SearchView : ViewBase<Box>
         _errorPage = GetRequiredObject<StatusPage>("search_error_page");
 
         _vadjustment = scrolledWindow.Vadjustment;
-        if (_vadjustment is not null)
-        {
-            _vadjustment.OnValueChanged += OnScrollValueChanged;
-        }
+        if (_vadjustment is not null) _vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _videoIds = StringList.New([]);
         _videoSelection = NoSelection.New(_videoIds);
@@ -82,11 +77,13 @@ public partial class SearchView : ViewBase<Box>
 
     public bool IsLoading => _viewModel.State is { IsLoading: true } or { IsLoadingMore: true };
 
+
+    public event EventHandler<bool>? RefreshLoadingChanged;
+
     public Task RefreshAsync()
     {
         return _viewModel.RefreshAsync();
     }
-
 
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
@@ -101,27 +98,23 @@ public partial class SearchView : ViewBase<Box>
 
         var currentY = _vadjustment.Value;
         if (currentY + _vadjustment.PageSize >= _vadjustment.Upper - 240)
-        {
             _viewModel.LoadMoreAsync().FireAndForget(Logger);
-        }
     }
 
     private void OnStateChanged(object? sender, SearchViewState state)
     {
         Functions.IdleAdd(0, () =>
         {
-            if (!_disposed)
-            {
-                RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
-                Render(state);
-            }
+            if (_disposed) return false;
+            RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
+            Render(state);
+
             return false;
         });
     }
 
     private void Render(SearchViewState state)
     {
-
         if (state.IsLoading)
         {
             _loadingLabel.SetText(string.IsNullOrWhiteSpace(state.Summary) ? "Searching YouTube…" : state.Summary);
@@ -228,10 +221,7 @@ public partial class SearchView : ViewBase<Box>
 
         _disposed = true;
 
-        if (_vadjustment is not null)
-        {
-            _vadjustment.OnValueChanged -= OnScrollValueChanged;
-        }
+        if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
 
         _viewModel.StateChanged -= OnStateChanged;
 

@@ -4,6 +4,7 @@ using GdkPixbuf;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Services;
+using SilverScreen.Infrastructure;
 using SilverScreen.ViewModels;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;

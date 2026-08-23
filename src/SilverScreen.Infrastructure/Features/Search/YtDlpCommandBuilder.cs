@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using SilverScreen.Core.Models;
 
 namespace SilverScreen.Infrastructure.Features.Search;
@@ -13,10 +14,10 @@ public static class YtDlpCommandBuilder
         AddCommonArguments(startInfo, cookieFilePath);
         var pageSize = Math.Max(options.MaxResults, 1);
         startInfo.ArgumentList.Add("--playlist-start");
-        startInfo.ArgumentList.Add(request.StartIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(request.StartIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
         startInfo.ArgumentList.Add((request.StartIndex + pageSize - 1)
-            .ToString(System.Globalization.CultureInfo.InvariantCulture));
+            .ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add($"ytsearch{request.StartIndex + pageSize - 1}:{request.Query}");
         return startInfo;
     }
@@ -27,12 +28,13 @@ public static class YtDlpCommandBuilder
         var startInfo = CreateStartInfo(executablePath);
         AddCommonArguments(startInfo, cookieFilePath);
         startInfo.ArgumentList.Add("--playlist-start");
-        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add((startIndex + 19).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + 19).ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add(":ytrec");
         return startInfo;
     }
+
     public static ProcessStartInfo BuildHistory(string executablePath, int startIndex, string cookieFilePath)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
@@ -40,29 +42,30 @@ public static class YtDlpCommandBuilder
         var startInfo = CreateStartInfo(executablePath);
         AddCommonArguments(startInfo, cookieFilePath);
         startInfo.ArgumentList.Add("--playlist-start");
-        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add((startIndex + 19).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + 19).ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("https://www.youtube.com/feed/history");
         return startInfo;
     }
+
     public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
         int startIndex, string? cookieFilePath = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
         if (!Uri.TryCreate(channelUrl, UriKind.Absolute, out var uri)
-            || !string.Equals(uri.Host, "www.youtube.com", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(uri.Host, "youtube.com", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(uri.Host, "m.youtube.com", StringComparison.OrdinalIgnoreCase))
+            || (!string.Equals(uri.Host, "www.youtube.com", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Host, "youtube.com", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Host, "m.youtube.com", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("A valid YouTube channel URL is required.", nameof(channelUrl));
 
         var startInfo = CreateStartInfo(options.ExecutablePath);
         AddCommonArguments(startInfo, cookieFilePath);
         var pageSize = Math.Max(options.MaxResults, 1);
         startInfo.ArgumentList.Add("--playlist-start");
-        startInfo.ArgumentList.Add(startIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(CultureInfo.InvariantCulture));
 
         var videosUrl = GetVideosUrl(channelUrl);
         startInfo.ArgumentList.Add(sort switch
