@@ -1,0 +1,134 @@
+using Gtk 4.0;
+
+Gtk.Overlay VideoInfoPanelView {
+  hexpand: true;
+  vexpand: true;
+
+  [overlay]
+  Gtk.Button info_backdrop {
+    visible: false;
+    halign: fill;
+    valign: fill;
+    clicked => $OnBackdropClicked();
+    styles ["player-info-backdrop"]
+  }
+
+  [overlay]
+  Gtk.Button info_cue_button {
+    visible: false;
+    halign: center;
+    valign: end;
+    margin-bottom: 8;
+    clicked => $OnCueButtonClicked();
+    tooltip-text: "Show video details (D)";
+    styles ["player-info-cue-button"]
+
+    child: Gtk.Box {
+      spacing: 6;
+
+      Gtk.Image {
+        icon-name: "go-up-symbolic";
+        pixel-size: 12;
+      }
+
+      Gtk.Label {
+        label: "Video details";
+      }
+    };
+  }
+
+  [overlay]
+  Gtk.Revealer info_revealer {
+    halign: fill;
+    valign: end;
+    hexpand: true;
+    reveal-child: false;
+    transition-type: slide_up;
+    transition-duration: 250;
+
+    child: Gtk.Box info_panel {
+      orientation: vertical;
+      spacing: 10;
+      margin-top: 16;
+      margin-bottom: 16;
+      margin-start: 16;
+      margin-end: 16;
+      width-request: 420;
+      height-request: 300;
+      styles ["player-info-panel"]
+
+      Gtk.Box {
+        spacing: 12;
+        valign: center;
+
+        Gtk.Box {
+          orientation: vertical;
+          spacing: 2;
+          hexpand: true;
+
+          Gtk.Label info_title_label {
+            label: "Video details";
+            xalign: 0;
+            ellipsize: end;
+            styles ["title-4"]
+          }
+
+          Gtk.Button info_channel_button {
+            clicked => $OnChannelButtonClicked();
+            tooltip-text: "Open channel";
+            halign: start;
+            styles ["flat", "player-channel-button"]
+
+            child: Gtk.Label info_channel_label {
+              label: "";
+              xalign: 0;
+              ellipsize: end;
+              styles ["caption", "dim-label"]
+            };
+          }
+        }
+
+        Gtk.Button info_close_button {
+          clicked => $OnCloseButtonClicked();
+          icon-name: "window-close-symbolic";
+          tooltip-text: "Close video details (Escape)";
+          styles ["flat", "circular"]
+        }
+      }
+
+      Gtk.Label info_stats_label {
+        label: "";
+        xalign: 0;
+        wrap: true;
+        styles ["caption", "dim-label"]
+      }
+
+      Gtk.Label info_status_label {
+        label: "Move to the bottom edge to reveal video details.";
+        xalign: 0;
+        wrap: true;
+        styles ["dim-label"]
+      }
+
+      Gtk.ScrolledWindow info_description_scroller {
+        hexpand: true;
+        vexpand: true;
+        visible: false;
+        propagate-natural-height: true;
+
+        Gtk.TextView info_description {
+          editable: false;
+          cursor-visible: false;
+          wrap-mode: word;
+          accepts-tab: false;
+          monospace: false;
+          top-margin: 4;
+          bottom-margin: 4;
+          left-margin: 4;
+          right-margin: 4;
+          styles ["player-info-description"]
+        }
+      }
+    };
+  }
+}
