@@ -238,16 +238,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           sensitive: false;
           styles ["flat", "circular", "player-reaction-button"]
         }
-
-        Gtk.ToggleButton player_comments_button {
-          toggled => $OnCommentsButtonToggled();
-          icon-name: "comments-symbolic";
-          tooltip-text: "Comments";
-          styles ["flat", "circular", "player-reaction-button"]
-        }
-
-        
-      }
+    }
 
       Gtk.MenuButton player_volume_button {
         icon-name: "audio-volume-high-symbolic";
@@ -572,21 +563,41 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       visible: false;
       halign: center;
       valign: end;
-      margin-bottom: 8;
+      margin-bottom: 0;
       clicked => $OnInfoCueButtonClicked();
       tooltip-text: "Show video details (D)";
-      styles ["player-info-cue-button"]
+      styles ["player-info-cue-handle"]
 
       child: Gtk.Box {
-        spacing: 6;
+        halign: center;
+        valign: center;
 
         Gtk.Image {
-          icon-name: "go-up-symbolic";
-          pixel-size: 12;
+          icon-name: "info-symbolic";
+          pixel-size: 16;
+          styles ["player-info-cue-icon"]
         }
+      };
+    }
 
-        Gtk.Label {
-          label: "Video details";
+    [overlay]
+    Gtk.Button player_comments_cue_button {
+      visible: false;
+      halign: start;
+      valign: center;
+      margin-start: 0;
+      clicked => $OnCommentsCueButtonClicked();
+      tooltip-text: "Comments";
+      styles ["player-comments-cue-handle"]
+
+      child: Gtk.Box {
+        halign: center;
+        valign: center;
+
+        Gtk.Image {
+          icon-name: "comments-symbolic";
+          pixel-size: 16;
+          styles ["player-comments-cue-icon"]
         }
       };
     }

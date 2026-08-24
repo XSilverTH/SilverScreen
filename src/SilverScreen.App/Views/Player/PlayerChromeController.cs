@@ -14,7 +14,7 @@ internal sealed class PlayerChromeController : IDisposable
 
     private readonly EventControllerMotion _motionController;
     private readonly Action? _onActivity;
-    private readonly Action<double>? _onPointerMoved;
+    private readonly Action<double, double>? _onPointerMoved;
     private readonly Widget _playerControls;
 
     private readonly Widget _viewWidget;
@@ -32,7 +32,7 @@ internal sealed class PlayerChromeController : IDisposable
         Widget playerControls,
         Func<bool> hasOpenPopover,
         Action? onActivity = null,
-        Action<double>? onPointerMoved = null)
+        Action<double, double>? onPointerMoved = null)
     {
         _viewWidget = viewWidget;
         _headerBar = headerBar;
@@ -104,7 +104,7 @@ internal sealed class PlayerChromeController : IDisposable
         _lastPointerX = x;
         _lastPointerY = y;
         RegisterActivity();
-        _onPointerMoved?.Invoke(y);
+        _onPointerMoved?.Invoke(x, y);
     }
 
     private void SetControlsVisible(bool visible)

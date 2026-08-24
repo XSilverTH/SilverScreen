@@ -66,9 +66,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _preferences = dependencies.Preferences;
         _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments);
         comments_sidebar_host.Append(_commentsView.Widget);
-        player_comments_button.BindProperty("active", Widget, "show-sidebar",
-            BindingFlags.Bidirectional | BindingFlags.SyncCreate);
-
         _queueService = dependencies.Queue;
         _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
         _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, dependencies.WatchProgress, CloseQueue,
@@ -125,7 +122,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_controls,
             () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
             () => _chapterOverlay.Layout(),
-            y => _infoPanel.UpdatePointer(y, Widget.GetAllocatedHeight(), _session.HasMedia));
+            (x, y) => UpdatePointer(x, y));
         _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia, RegisterActivity);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () => _player.TogglePause());
         _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () => SeekRelative(-10));
@@ -140,7 +137,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             if (_timelineController.IsScrubbing) _timelineController.CancelScrubbing();
             else if (player_queue_button.Active) player_queue_button.Active = false;
-            else if (player_comments_button.Active) player_comments_button.Active = false;
+            else if (Widget.ShowSidebar) CloseComments();
             else if (_infoPanel.IsOpen) _infoPanel.Close();
             else ReturnToShell();
         });
@@ -443,15 +440,54 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _subtitleController.ShowPreferredSubtitle();
     }
 
-    private void OnCommentsButtonToggled(object? sender, EventArgs args)
+    private void UpdatePointer(double x, double y)
     {
-        if (player_comments_button.Active)
-            _commentsView.EnsureLoaded();
+        var height = Widget.GetAllocatedHeight();
+        var width = Widget.GetAllocatedWidth();
+        _infoPanel.UpdatePointer(y, height, _session.HasMedia);
+        UpdateCommentsCue(x, y, width, height);
     }
 
-    private void CloseComments()
+    private void UpdateCommentsCue(double x, double y, double width, double height)
     {
-        player_comments_button.Active = false;
+        if (!_session.HasMedia || Widget.ShowSidebar || _infoPanel.IsOpen || width <= 0 || height <= 0)
+        {
+            if (player_comments_cue_button.GetVisible())
+                player_comments_cue_button.SetVisible(false);
+            return;
+        }
+
+        var isVisible = player_comments_cue_button.GetVisible();
+        var xThreshold = isVisible ? 72 : 36;
+        var inZone = x <= xThreshold && y >= 80 && y <= height - 80;
+        if (isVisible != inZone)
+            player_comments_cue_button.SetVisible(inZone);
+    }
+
+    private void OnCommentsCueButtonClicked(object? sender, EventArgs args)
+    {
+        OpenComments();
+    }
+
+    public void OpenComments()
+    {
+        if (!_session.HasMedia) return;
+        Widget.ShowSidebar = true;
+        player_comments_cue_button.SetVisible(false);
+        _commentsView.EnsureLoaded();
+    }
+
+    public void CloseComments()
+    {
+        Widget.ShowSidebar = false;
+    }
+
+    public void ToggleComments()
+    {
+        if (Widget.ShowSidebar)
+            CloseComments();
+        else
+            OpenComments();
     }
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
@@ -548,7 +584,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         foreach (var feature in _features) feature.Load(video);
         _commentsVideoId = video.Id;
         _commentsView.SetVideo(video.Id);
-        if (player_comments_button.Active)
+        if (Widget.ShowSidebar)
             _commentsView.EnsureLoaded();
     }
 
@@ -571,6 +607,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
+        CloseComments();
+        player_comments_cue_button.SetVisible(false);
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
@@ -595,7 +633,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
-        player_comments_button.Active = false;
+        CloseComments();
+        player_comments_cue_button.SetVisible(false);
         SetLoading(false);
     }
 

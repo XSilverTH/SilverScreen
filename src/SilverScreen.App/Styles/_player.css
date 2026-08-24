@@ -267,19 +267,86 @@ button.player-chapter-marker:active {
     opacity: 1;
 }
 
-.player-info-cue-button {
-    background-color: alpha(#000000, 0.68);
-    border: 1px solid alpha(#ffffff, 0.25);
-    border-radius: 999px;
-    color: alpha(#ffffff, 0.86);
-    padding: 5px 12px;
-    transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
+/* Edge Drawer Tabs / Cue Handles */
+.player-comments-cue-handle,
+.player-info-cue-handle {
+    background-color: alpha(#000000, 0.72);
+    border: 1px solid alpha(#ffffff, 0.22);
+    color: alpha(#ffffff, 0.88);
+    transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
+                border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+                box-shadow 160ms cubic-bezier(0.2, 0, 0, 1),
+                color 160ms cubic-bezier(0.2, 0, 0, 1),
+                transform 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.player-info-cue-button:hover,
-.player-info-cue-button:focus-visible {
-    background-color: alpha(#ffffff, 0.2);
-    box-shadow: 0 0 18px alpha(#ffffff, 0.18);
+/* Left-Edge Comments Drawer Tab */
+.player-comments-cue-handle {
+    border-left: none;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+    padding: 12px 8px;
+    min-width: 32px;
+    min-height: 56px;
+    box-shadow: 2px 2px 14px alpha(#000000, 0.45);
+}
+
+.player-comments-cue-handle:hover,
+.player-comments-cue-handle:focus-visible {
+    background-color: alpha(#ffffff, 0.22);
+    border-color: alpha(#ffffff, 0.4);
+    color: #ffffff;
+    box-shadow: 0 0 16px alpha(#ffffff, 0.22), 4px 2px 18px alpha(#000000, 0.55);
+    transform: translateX(2px);
+}
+
+.player-comments-cue-handle:active {
+    background-color: alpha(#ffffff, 0.32);
+    border-color: alpha(#ffffff, 0.55);
+    transform: translateX(3px);
+}
+
+/* Bottom-Edge Video Details Drawer Tab */
+.player-info-cue-handle {
+    border-bottom: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    padding: 8px 12px;
+    min-width: 56px;
+    min-height: 32px;
+    box-shadow: 0 -2px 14px alpha(#000000, 0.45);
+}
+
+.player-info-cue-handle:hover,
+.player-info-cue-handle:focus-visible {
+    background-color: alpha(#ffffff, 0.22);
+    border-color: alpha(#ffffff, 0.4);
+    color: #ffffff;
+    box-shadow: 0 0 16px alpha(#ffffff, 0.22), 0 -4px 18px alpha(#000000, 0.55);
+    transform: translateY(-2px);
+}
+
+.player-info-cue-handle:active {
+    background-color: alpha(#ffffff, 0.32);
+    border-color: alpha(#ffffff, 0.55);
+    transform: translateY(-3px);
+}
+
+.player-comments-cue-icon,
+.player-info-cue-icon {
+    opacity: 0.92;
+    transition: opacity 160ms ease-out;
+}
+
+.player-comments-cue-handle:hover .player-comments-cue-icon,
+.player-comments-cue-handle:focus-visible .player-comments-cue-icon,
+.player-info-cue-handle:hover .player-info-cue-icon,
+.player-info-cue-handle:focus-visible .player-info-cue-icon {
+    opacity: 1;
 }
 
 .player-info-panel {
