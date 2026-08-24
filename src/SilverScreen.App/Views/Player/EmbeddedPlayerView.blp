@@ -559,46 +559,60 @@ Adw.OverlaySplitView EmbeddedPlayerView {
     }
 
     [overlay]
-    Gtk.Button player_info_cue_button {
-      visible: false;
+    Gtk.Revealer player_info_cue_revealer {
+      reveal-child: false;
+      transition-type: slide_up;
+      transition-duration: 200;
       halign: center;
       valign: end;
-      margin-bottom: 0;
-      clicked => $OnInfoCueButtonClicked();
-      tooltip-text: "Show video details (D)";
-      styles ["player-info-cue-handle"]
 
-      child: Gtk.Box {
+      child: Gtk.Button player_info_cue_button {
         halign: center;
-        valign: center;
+        valign: end;
+        margin-bottom: 0;
+        clicked => $OnInfoCueButtonClicked();
+        tooltip-text: "Show video details (D)";
+        styles ["player-info-cue-handle"]
 
-        Gtk.Image {
-          icon-name: "info-symbolic";
-          pixel-size: 16;
-          styles ["player-info-cue-icon"]
-        }
+        child: Gtk.Box {
+          halign: center;
+          valign: center;
+
+          Gtk.Image {
+            icon-name: "info-symbolic";
+            pixel-size: 16;
+            styles ["player-info-cue-icon"]
+          }
+        };
       };
     }
 
     [overlay]
-    Gtk.Button player_comments_cue_button {
-      visible: false;
+    Gtk.Revealer player_comments_cue_revealer {
+      reveal-child: false;
+      transition-type: slide_right;
+      transition-duration: 200;
       halign: start;
       valign: center;
-      margin-start: 0;
-      clicked => $OnCommentsCueButtonClicked();
-      tooltip-text: "Comments";
-      styles ["player-comments-cue-handle"]
 
-      child: Gtk.Box {
-        halign: center;
+      child: Gtk.Button player_comments_cue_button {
+        halign: start;
         valign: center;
+        margin-start: 0;
+        clicked => $OnCommentsCueButtonClicked();
+        tooltip-text: "Comments";
+        styles ["player-comments-cue-handle"]
 
-        Gtk.Image {
-          icon-name: "comments-symbolic";
-          pixel-size: 16;
-          styles ["player-comments-cue-icon"]
-        }
+        child: Gtk.Box {
+          halign: center;
+          valign: center;
+
+          Gtk.Image {
+            icon-name: "comments-symbolic";
+            pixel-size: 16;
+            styles ["player-comments-cue-icon"]
+          }
+        };
       };
     }
 

@@ -16,7 +16,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     private readonly IYouTubeVideoDetailsService _videoDetails;
 
     private readonly Button _backdrop;
-    private readonly Button _cueButton;
+    private readonly Revealer _cueRevealer;
     private readonly Revealer _revealer;
     private readonly Label _titleLabel;
     private readonly Label _channelLabel;
@@ -36,7 +36,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         IYouTubeVideoDetailsService videoDetails,
         Action<VideoSummary> channelRequested,
         Button backdrop,
-        Button cueButton,
+        Revealer cueRevealer,
         Revealer revealer,
         Label titleLabel,
         Label channelLabel,
@@ -50,7 +50,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         _videoDetails = videoDetails;
         _channelRequested = channelRequested;
         _backdrop = backdrop;
-        _cueButton = cueButton;
+        _cueRevealer = cueRevealer;
         _revealer = revealer;
         _titleLabel = titleLabel;
         _channelLabel = channelLabel;
@@ -78,7 +78,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         _currentVideo = video;
         IsOpen = true;
         _bottomEdgeActive = false;
-        _cueButton.SetVisible(false);
+        _cueRevealer.RevealChild = false;
         _backdrop.SetVisible(true);
         _revealer.RevealChild = true;
         _titleLabel.SetText(video.Title);
@@ -105,7 +105,8 @@ internal sealed class VideoInfoPanelController : IDisposable
         _infoLoadCancellation = null;
         _revealer.RevealChild = false;
         _backdrop.SetVisible(false);
-        _cueButton.SetVisible(false);
+        _cueRevealer.RevealChild = false;
+        _bottomEdgeActive = false;
         SetInfoContent(null);
         _closed?.Invoke();
     }
@@ -126,12 +127,22 @@ internal sealed class VideoInfoPanelController : IDisposable
         if (!IsOpen) SetInfoContent(null);
     }
 
-    public void UpdatePointer(double y, double height, bool hasMedia)
+    public void UpdatePointer(double x, double y, double width, double height, bool hasMedia)
     {
-        var atBottomEdge = hasMedia && !IsOpen && height > 0 && y >= height - 28;
-        if (_bottomEdgeActive == atBottomEdge) return;
-        _bottomEdgeActive = atBottomEdge;
-        _cueButton.SetVisible(atBottomEdge);
+        if (!hasMedia || IsOpen || width <= 0 || height <= 0)
+        {
+            if (_bottomEdgeActive)
+            {
+                _bottomEdgeActive = false;
+                _cueRevealer.RevealChild = false;
+            }
+            return;
+        }
+
+        var inZone = PlayerCueGeometry.IsInfoCueActive(x, y, width, height, _bottomEdgeActive);
+        if (_bottomEdgeActive == inZone) return;
+        _bottomEdgeActive = inZone;
+        _cueRevealer.RevealChild = inZone;
     }
 
     public void OpenChannel()

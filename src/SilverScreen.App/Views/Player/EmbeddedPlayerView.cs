@@ -102,7 +102,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.SessionEnded += OnSessionEnded;
         _session.Failed += OnSessionFailed;
         _infoPanel = new VideoInfoPanelController(dependencies.VideoDetails, _channelRequested, player_info_backdrop,
-            player_info_cue_button, player_info_revealer, player_info_title_label, player_info_channel_label,
+            player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
             player_info_stats_label, player_info_status_label, player_info_description_scroller,
             player_info_description, player_info_close_button, () =>
         {
@@ -444,7 +444,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         var height = Widget.GetAllocatedHeight();
         var width = Widget.GetAllocatedWidth();
-        _infoPanel.UpdatePointer(y, height, _session.HasMedia);
+        _infoPanel.UpdatePointer(x, y, width, height, _session.HasMedia);
         UpdateCommentsCue(x, y, width, height);
     }
 
@@ -452,16 +452,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (!_session.HasMedia || Widget.ShowSidebar || _infoPanel.IsOpen || width <= 0 || height <= 0)
         {
-            if (player_comments_cue_button.GetVisible())
-                player_comments_cue_button.SetVisible(false);
+            if (player_comments_cue_revealer.RevealChild)
+                player_comments_cue_revealer.RevealChild = false;
             return;
         }
 
-        var isVisible = player_comments_cue_button.GetVisible();
-        var xThreshold = isVisible ? 72 : 36;
-        var inZone = x <= xThreshold && y >= 80 && y <= height - 80;
+        var isVisible = player_comments_cue_revealer.RevealChild;
+        var inZone = PlayerCueGeometry.IsCommentsCueActive(x, y, width, height, isVisible);
         if (isVisible != inZone)
-            player_comments_cue_button.SetVisible(inZone);
+            player_comments_cue_revealer.RevealChild = inZone;
     }
 
     private void OnCommentsCueButtonClicked(object? sender, EventArgs args)
@@ -473,7 +472,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (!_session.HasMedia) return;
         Widget.ShowSidebar = true;
-        player_comments_cue_button.SetVisible(false);
+        player_comments_cue_revealer.RevealChild = false;
         _commentsView.EnsureLoaded();
     }
 
@@ -608,7 +607,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
         CloseComments();
-        player_comments_cue_button.SetVisible(false);
+        player_comments_cue_revealer.RevealChild = false;
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
@@ -634,7 +633,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(null);
         _commentsVideoId = null;
         CloseComments();
-        player_comments_cue_button.SetVisible(false);
+        player_comments_cue_revealer.RevealChild = false;
         SetLoading(false);
     }
 
