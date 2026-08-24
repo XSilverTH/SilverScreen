@@ -11,8 +11,6 @@ using Window = Adw.Window;
 
 namespace SilverScreen.Views.Account;
 
-[SupportedOSPlatform("linux")]
-// [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 public sealed partial class WebLoginWindow : WindowBase<Window>
 {
     private const string LoginUri =

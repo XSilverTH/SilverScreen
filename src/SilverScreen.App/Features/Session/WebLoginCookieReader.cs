@@ -20,8 +20,6 @@ internal sealed record WebCookieSnapshot(
     bool HttpOnly,
     long ExpiresUnix);
 
-[SupportedOSPlatform("linux")]
-// [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 internal static partial class WebLoginCookieReader
 {
     private const string NetscapeHeader = "# Netscape HTTP Cookie File\n";

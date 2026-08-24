@@ -93,6 +93,40 @@ public sealed class PlaybackTests
         Assert.Equal("Video vid3", lastSnapshot.Metadata["xesam:title"].GetString());
     }
 
+    [Fact]
+    public async Task PlaybackModeRoutingServiceRoutesToEmbeddedPlayerPresenterWhenConfigured()
+    {
+        var embedded = new TrackingEmbeddedPresenter();
+        var external = new TrackingPlaybackService();
+        var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.EmbeddedPlayer });
+        var routing = new SilverScreen.Views.Player.PlaybackModeRoutingService(preferences, external, embedded);
+        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+
+        var result = await routing.PlayAsync(request);
+
+        Assert.Equal("Embedded presenter called.", result);
+        Assert.Single(embedded.Requests);
+        Assert.Equal(request, embedded.Requests[0]);
+        Assert.Empty(external.Requests);
+    }
+
+    [Fact]
+    public async Task PlaybackModeRoutingServiceRoutesToExternalMpvWhenConfigured()
+    {
+        var embedded = new TrackingEmbeddedPresenter();
+        var external = new TrackingPlaybackService();
+        var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.ExternalMpv });
+        var routing = new SilverScreen.Views.Player.PlaybackModeRoutingService(preferences, external, embedded);
+        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
+
+        var result = await routing.PlayAsync(request);
+
+        Assert.Equal("External playback called.", result);
+        Assert.Empty(embedded.Requests);
+        Assert.Single(external.Requests);
+        Assert.Equal(request, external.Requests[0]);
+    }
+
 
     private static PlaybackPresenceState PlayingState(DateTimeOffset observedAt)
     {
@@ -125,8 +159,10 @@ public sealed class PlaybackTests
         }
     }
 
-    private sealed class TestPreferences : IPreferencesService
+    private sealed class TestPreferences(AppPreferences? preferences = null) : IPreferencesService
     {
+        private readonly AppPreferences _preferences = preferences ?? new AppPreferences();
+
         public event EventHandler<AppPreferences>? PreferencesChanged
         {
             add { }
@@ -135,11 +171,33 @@ public sealed class PlaybackTests
 
         public AppPreferences GetPreferences()
         {
-            return new AppPreferences();
+            return _preferences;
         }
 
         public void SavePreferences(AppPreferences preferences)
         {
+        }
+    }
+
+    private sealed class TrackingEmbeddedPresenter : SilverScreen.Views.Player.IEmbeddedPlayerPresenter
+    {
+        public List<PlaybackRequest> Requests { get; } = [];
+
+        public Task<string> PresentAsync(PlaybackRequest request)
+        {
+            Requests.Add(request);
+            return Task.FromResult("Embedded presenter called.");
+        }
+    }
+
+    private sealed class TrackingPlaybackService : IPlaybackService
+    {
+        public List<PlaybackRequest> Requests { get; } = [];
+
+        public Task<string> PlayAsync(PlaybackRequest request)
+        {
+            Requests.Add(request);
+            return Task.FromResult("External playback called.");
         }
     }
 }

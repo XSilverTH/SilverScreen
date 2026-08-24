@@ -3,6 +3,7 @@ using Gtk 4.0;
 Gtk.Overlay VideoInfoPanelView {
   hexpand: true;
   vexpand: true;
+  can-target: false;
 
   [overlay]
   Gtk.Button info_backdrop {
@@ -45,9 +46,10 @@ Gtk.Overlay VideoInfoPanelView {
     reveal-child: false;
     transition-type: slide_up;
     transition-duration: 250;
+    can-target: false;
 
     child: Gtk.Box info_panel {
-      orientation: vertical;
+      can-target: true;
       spacing: 10;
       margin-top: 16;
       margin-bottom: 16;

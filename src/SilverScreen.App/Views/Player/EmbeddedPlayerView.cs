@@ -27,7 +27,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-    
+
+    private readonly Action _presentRequested;
     private readonly Action _backRequested;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
@@ -48,7 +49,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerSponsorBlockController _sponsorBlockController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
-    
+
     private string? _commentsVideoId;
     private bool _disposed;
     private bool _rendererReady;
@@ -59,6 +60,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
     {
+        _presentRequested = presentRequested;
         _backRequested = backRequested;
         _channelRequested = channelRequested;
         _preferences = dependencies.Preferences;
@@ -237,6 +239,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_queue_controls.SetVisible(request.Videos.Length > 1);
             player_previous_queue_button.Sensitive = false;
             player_next_queue_button.Sensitive = request.Videos.Length > 1;
+            _presentRequested();
             _shortcutController.Attach();
             Widget.GrabFocus();
             if (_rendererReady) _player.Load(request, preferences, _session.CookieFilePath);

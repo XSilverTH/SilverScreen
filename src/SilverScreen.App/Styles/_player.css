@@ -166,6 +166,7 @@ button.player-queue-toggle.active:hover {
     background-color: #ffffff;
     min-height: 8px;
     min-width: 8px;
+    margin: 0;
     border-radius: 9999px;
     opacity: 0;
     box-shadow: 0 2px 4px alpha(#000000, 0.4);

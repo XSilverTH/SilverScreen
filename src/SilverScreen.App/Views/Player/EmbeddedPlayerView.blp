@@ -467,6 +467,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
     Gtk.Box player_info_host {
       hexpand: true;
       vexpand: true;
+      can-target: false;
     }
     [overlay]
     Gtk.Box player_prompt_stack {
@@ -474,6 +475,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       spacing: 8;
       halign: end;
       valign: end;
+      can-target: false;
       styles ["player-prompt-stack"]
 
       Gtk.Button player_sponsorblock_skip_button {
