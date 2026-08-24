@@ -1,23 +1,13 @@
-using SilverScreen.Infrastructure.Common;
 using Gdk;
 using GdkPixbuf;
 using Gio;
 using GObject;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
+using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using Functions = GLib.Functions;
@@ -28,9 +18,9 @@ namespace SilverScreen.Queue;
 
 public partial class QueueItemRowView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
+    private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
     private readonly WidgetPaintable _dragPaintable;
     private readonly DragSource _dragSource;

@@ -4,7 +4,6 @@ using Gio;
 using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
-using SilverScreen.Shell;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
 

@@ -5,32 +5,21 @@ using SilverScreen.Core.Browsing.Common;
 namespace SilverScreen.Core.Player;
 
 /// <summary>
-/// Headless coordinator that unifies the shared playback lifecycle:
-/// telemetry sessions, presence pulsing, watch progress threshold tracking,
-/// cookie file leasing, and playlist/queue synchronization.
+///     Headless coordinator that unifies the shared playback lifecycle:
+///     telemetry sessions, presence pulsing, watch progress threshold tracking,
+///     cookie file leasing, and playlist/queue synchronization.
 /// </summary>
-public sealed class PlaybackCoordinator : IDisposable
+public sealed class PlaybackCoordinator(
+    ICookieFileProvider? cookieFiles = null,
+    IPlaybackPresenceService? playbackPresence = null,
+    IYouTubePlaybackTelemetryService? playbackTelemetry = null,
+    IWatchProgressService? watchProgress = null)
+    : IDisposable
 {
-    private readonly Lock _lock = new();
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
-    private readonly ICookieFileProvider? _cookieFiles;
-    private readonly IPlaybackPresenceService? _playbackPresence;
-    private readonly IYouTubePlaybackTelemetryService? _playbackTelemetry;
-    private readonly IWatchProgressService? _watchProgress;
+    private readonly Lock _lock = new();
     private bool _disposed;
     private long _nextPlaybackId;
-
-    public PlaybackCoordinator(
-        ICookieFileProvider? cookieFiles = null,
-        IPlaybackPresenceService? playbackPresence = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetry = null,
-        IWatchProgressService? watchProgress = null)
-    {
-        _cookieFiles = cookieFiles;
-        _playbackPresence = playbackPresence;
-        _playbackTelemetry = playbackTelemetry;
-        _watchProgress = watchProgress;
-    }
 
     public void Dispose()
     {
@@ -38,10 +27,7 @@ public sealed class PlaybackCoordinator : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var playback in _activePlaybacks.Values)
-            {
-                playback.Telemetry?.Dispose();
-            }
+            foreach (var playback in _activePlaybacks.Values) playback.Telemetry?.Dispose();
             _activePlaybacks.Clear();
             ClearPresenceQuietly();
         }
@@ -49,7 +35,7 @@ public sealed class PlaybackCoordinator : IDisposable
 
     public CookieFileLease? AcquireCookieFileLease()
     {
-        return _cookieFiles?.CreateCookieFile();
+        return cookieFiles?.CreateCookieFile();
     }
 
     public long RegisterActivePlayback(PlaybackRequest request)
@@ -77,17 +63,14 @@ public sealed class PlaybackCoordinator : IDisposable
             SetTelemetryQuietly(playback.Telemetry, state);
             try
             {
-                _watchProgress?.Update(playback.Request, state);
+                watchProgress?.Update(playback.Request, state);
             }
             catch
             {
                 // Watch progress update failures should not interrupt playback
             }
 
-            if (_activePlaybacks.Keys.Max() == playbackId)
-            {
-                SetPresenceQuietly(playback.Request, state);
-            }
+            if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
         }
     }
 
@@ -104,21 +87,9 @@ public sealed class PlaybackCoordinator : IDisposable
 
             var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id);
             if (currentPlayback?.State is { } state)
-            {
                 SetPresenceQuietly(currentPlayback.Request, state);
-            }
             else
-            {
                 ClearPresenceQuietly();
-            }
-        }
-    }
-
-    public void ClearPresence()
-    {
-        lock (_lock)
-        {
-            ClearPresenceQuietly();
         }
     }
 
@@ -147,17 +118,17 @@ public sealed class PlaybackCoordinator : IDisposable
         return true;
     }
 
-    public static PlaybackRequest UpdateQueue(PlaybackRequest? currentRequest, ImmutableArray<VideoSummary> newVideos)
+    public static PlaybackRequest UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
         return new PlaybackRequest(newVideos);
     }
 
     private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
     {
-        if (_playbackTelemetry is null) return null;
+        if (playbackTelemetry is null) return null;
         try
         {
-            return _playbackTelemetry.Start(request);
+            return playbackTelemetry.Start(request);
         }
         catch
         {
@@ -174,30 +145,33 @@ public sealed class PlaybackCoordinator : IDisposable
         }
         catch
         {
+            // ignored
         }
     }
 
     private void SetPresenceQuietly(PlaybackRequest request, PlaybackPresenceState state)
     {
-        if (_playbackPresence is null) return;
+        if (playbackPresence is null) return;
         try
         {
-            _playbackPresence.SetPlaybackState(request, state);
+            playbackPresence.SetPlaybackState(request, state);
         }
         catch
         {
+            // ignored
         }
     }
 
     private void ClearPresenceQuietly()
     {
-        if (_playbackPresence is null) return;
+        if (playbackPresence is null) return;
         try
         {
-            _playbackPresence.Clear();
+            playbackPresence.Clear();
         }
         catch
         {
+            // ignored
         }
     }
 

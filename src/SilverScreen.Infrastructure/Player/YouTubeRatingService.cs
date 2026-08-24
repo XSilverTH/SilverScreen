@@ -1,6 +1,3 @@
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Account.Session;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -8,18 +5,8 @@ using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.Account.Auth;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Infrastructure.Player;

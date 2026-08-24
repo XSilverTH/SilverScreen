@@ -3,6 +3,7 @@ using Serilog;
 using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
+
 namespace SilverScreen.Player.Comments;
 
 public partial class CommentsView : ViewBase<Box>
@@ -43,6 +44,7 @@ public partial class CommentsView : ViewBase<Box>
         comments_list.Factory = _factory;
         comments_stack.VisibleChildName = "unavailable";
     }
+
     public void SetVideo(string? videoId)
     {
         _viewModel.SetVideo(videoId);
@@ -56,11 +58,6 @@ public partial class CommentsView : ViewBase<Box>
     private void OnCloseButtonClicked(object? sender, EventArgs args)
     {
         _closeRequested();
-    }
-
-    private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
-    {
-        _viewModel.Refresh();
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)

@@ -1,17 +1,10 @@
 using System.Globalization;
 using Serilog;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Queue;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
 
@@ -23,21 +16,20 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
     private const int PageSize = 20;
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
-    private const string BackendFailureMessage = "Watch history is temporarily unavailable.";
     private const string EmptyHistoryMessage = "No watch history was returned.";
     private const string NoContinuationMessage = "No additional watch history is available.";
     private const string SuccessMessage = "Watch history loaded.";
 
     private static readonly ILogger Logger = Log.ForContext<AuthenticatedHistoryService>();
-
-    private readonly ISessionService _sessionService;
     private readonly ICookieFileProvider _cookieFileProvider;
-    private readonly IPreferencesService _preferencesService;
-    private readonly IYtDlpRunner _runner;
-    private readonly TimeSpan _timeout;
 
     private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
+    private readonly IPreferencesService _preferencesService;
+    private readonly IYtDlpRunner _runner;
+
+    private readonly ISessionService _sessionService;
+    private readonly TimeSpan _timeout;
     private string? _continuationToken;
 
     public AuthenticatedHistoryService(
@@ -59,15 +51,12 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
     public async Task<AuthenticatedHistoryResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
     {
         Logger.Information("Loading first page of watch history");
-        if (!IsSessionActive())
-        {
-            Logger.Information("No active YouTube session; returning authentication required for history");
-            ClearCachedResults();
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
-                AuthenticationRequiredMessage);
-        }
-
-        return await FetchPageAsync(startIndex: 1, isFirstPage: true, cancellationToken).ConfigureAwait(false);
+        if (IsSessionActive())
+            return await FetchPageAsync(1, true, cancellationToken).ConfigureAwait(false);
+        Logger.Information("No active YouTube session; returning authentication required for history");
+        ClearCachedResults();
+        return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
+            AuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
@@ -95,7 +84,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
                 "Invalid history continuation.");
 
-        return await FetchPageAsync(startIndex: startIndex, isFirstPage: false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(startIndex, false, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -176,15 +165,12 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
 
         if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
         {
-            if (isFirstPage)
-            {
-                ClearCachedResults();
-                return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
-                    EmptyHistoryMessage);
-            }
-
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
-                NoContinuationMessage);
+            if (!isFirstPage)
+                return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
+                    NoContinuationMessage);
+            ClearCachedResults();
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
+                EmptyHistoryMessage);
         }
 
         try

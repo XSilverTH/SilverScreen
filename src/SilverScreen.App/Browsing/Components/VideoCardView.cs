@@ -1,22 +1,11 @@
-using SilverScreen.Infrastructure.Common;
 using Gdk;
 using GdkPixbuf;
 using Gio;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;
@@ -389,10 +378,8 @@ public partial class VideoCardView : ViewBase<Box>
             return;
 
         var clipboard = Display.GetDefault()?.GetClipboard();
-        if (clipboard is null)
-            return;
 
-        clipboard.SetText(link);
+        clipboard?.SetText(link);
     }
 
     private static string? BuildVideoUrl(VideoSummary video)

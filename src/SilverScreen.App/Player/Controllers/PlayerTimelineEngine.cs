@@ -1,7 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using System.Diagnostics.CodeAnalysis;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -12,34 +12,20 @@ public enum ResumePromptState
     ManualResume
 }
 
-public sealed class PlayerTimelineEngine
+public sealed class PlayerTimelineEngine(
+    uint seekThrottleIntervalMs = PlayerTimelineEngine.DefaultSeekThrottleIntervalMilliseconds,
+    long reconciliationLatchMs = PlayerTimelineEngine.DefaultReconciliationLatchMilliseconds,
+    double seekToleranceSeconds = PlayerTimelineEngine.DefaultSeekReconciliationToleranceSeconds,
+    Func<long>? tickCountProvider = null)
 {
-    public const uint DefaultSeekThrottleIntervalMilliseconds = 120;
-    public const long DefaultReconciliationLatchMilliseconds = 400;
-    public const double DefaultSeekReconciliationToleranceSeconds = 1.5;
-    public const double MinimumResumeSeconds = 5;
+    private const uint DefaultSeekThrottleIntervalMilliseconds = 120;
+    private const long DefaultReconciliationLatchMilliseconds = 400;
+    private const double DefaultSeekReconciliationToleranceSeconds = 1.5;
+    private const double MinimumResumeSeconds = 5;
     public const uint DefaultSkipPromptDurationMilliseconds = 5_000;
     public const uint DefaultResumePromptDurationMilliseconds = 15_000;
 
-    private readonly uint _seekThrottleIntervalMs;
-    private readonly long _reconciliationLatchMs;
-    private readonly double _seekToleranceSeconds;
-    private readonly Func<long> _getTickCount;
-
-    private long _reconciliationLatchExpiry;
-    private long _lastThrottledSeekTime;
-
-    public PlayerTimelineEngine(
-        uint seekThrottleIntervalMs = DefaultSeekThrottleIntervalMilliseconds,
-        long reconciliationLatchMs = DefaultReconciliationLatchMilliseconds,
-        double seekToleranceSeconds = DefaultSeekReconciliationToleranceSeconds,
-        Func<long>? tickCountProvider = null)
-    {
-        _seekThrottleIntervalMs = seekThrottleIntervalMs;
-        _reconciliationLatchMs = reconciliationLatchMs;
-        _seekToleranceSeconds = seekToleranceSeconds;
-        _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
-    }
+    private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
 
     public bool IsScrubbing { get; private set; }
     public TimeSpan PlaybackPosition { get; private set; }
@@ -49,8 +35,9 @@ public sealed class PlayerTimelineEngine
     public TimeSpan ScrubStartPosition { get; private set; }
     public double LatestScrubPositionSeconds { get; private set; }
     public double PendingSeekTargetSeconds { get; private set; } = -1;
-    public long ReconciliationLatchExpiry => _reconciliationLatchExpiry;
-    public long LastThrottledSeekTime => _lastThrottledSeekTime;
+    public long ReconciliationLatchExpiry { get; private set; }
+
+    public long LastThrottledSeekTime { get; private set; }
 
     // --- Timeline State Management & Seeking Reconciliation ---
 
@@ -87,9 +74,9 @@ public sealed class PlayerTimelineEngine
         }
 
         var now = _getTickCount();
-        var withinLatch = now < _reconciliationLatchExpiry;
+        var withinLatch = now < ReconciliationLatchExpiry;
         var isCloseToPending = PendingSeekTargetSeconds >= 0 &&
-                               Math.Abs(position.TotalSeconds - PendingSeekTargetSeconds) <= _seekToleranceSeconds;
+                               Math.Abs(position.TotalSeconds - PendingSeekTargetSeconds) <= seekToleranceSeconds;
 
         if (withinLatch && !isCloseToPending)
         {
@@ -99,7 +86,7 @@ public sealed class PlayerTimelineEngine
 
         if (isCloseToPending)
         {
-            _reconciliationLatchExpiry = 0;
+            ReconciliationLatchExpiry = 0;
             PendingSeekTargetSeconds = -1;
         }
 
@@ -111,13 +98,7 @@ public sealed class PlayerTimelineEngine
     public void RegisterSeek(double targetSeconds)
     {
         PendingSeekTargetSeconds = targetSeconds;
-        _reconciliationLatchExpiry = _getTickCount() + _reconciliationLatchMs;
-    }
-
-    public void ClearPendingSeek()
-    {
-        PendingSeekTargetSeconds = -1;
-        _reconciliationLatchExpiry = 0;
+        ReconciliationLatchExpiry = _getTickCount() + reconciliationLatchMs;
     }
 
     public void Reset()
@@ -130,8 +111,8 @@ public sealed class PlayerTimelineEngine
         ScrubStartPosition = TimeSpan.Zero;
         LatestScrubPositionSeconds = 0;
         PendingSeekTargetSeconds = -1;
-        _reconciliationLatchExpiry = 0;
-        _lastThrottledSeekTime = 0;
+        ReconciliationLatchExpiry = 0;
+        LastThrottledSeekTime = 0;
     }
 
     // --- Scrubbing Lifecycle ---
@@ -172,37 +153,38 @@ public sealed class PlayerTimelineEngine
     public bool ShouldDispatchThrottledSeek(out uint delayMilliseconds)
     {
         var now = _getTickCount();
-        var elapsed = now - _lastThrottledSeekTime;
-        if (elapsed >= _seekThrottleIntervalMs)
+        var elapsed = now - LastThrottledSeekTime;
+        if (elapsed >= seekThrottleIntervalMs)
         {
-            _lastThrottledSeekTime = now;
+            LastThrottledSeekTime = now;
             delayMilliseconds = 0;
             return true;
         }
 
-        delayMilliseconds = Math.Max(10u, (uint)(_seekThrottleIntervalMs - elapsed));
+        delayMilliseconds = Math.Max(10u, (uint)(seekThrottleIntervalMs - elapsed));
         return false;
     }
 
     public void RecordThrottledSeekDispatched()
     {
-        _lastThrottledSeekTime = _getTickCount();
+        LastThrottledSeekTime = _getTickCount();
     }
 
     // --- Chapter Hit-Testing ---
 
-    public LibMpvChapter? GetChapterAt(TimeSpan position) => GetChapterAt(position, Chapters);
+    public LibMpvChapter? GetChapterAt(TimeSpan position)
+    {
+        return GetChapterAt(position, Chapters);
+    }
 
     public static LibMpvChapter? GetChapterAt(TimeSpan position, IReadOnlyList<LibMpvChapter> chapters)
     {
         LibMpvChapter? match = null;
         foreach (var chapter in chapters)
-        {
             if (chapter.Start <= position)
                 match = chapter;
             else
                 break;
-        }
         return match;
     }
 
@@ -257,8 +239,7 @@ public sealed class PlayerTimelineEngine
 
     public static double CalculateProgressFraction(TimeSpan position, TimeSpan duration)
     {
-        if (duration <= TimeSpan.Zero) return 0.0;
-        return Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
+        return duration <= TimeSpan.Zero ? 0.0 : Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
     }
 
     // --- SponsorBlock Evaluation ---
@@ -299,10 +280,13 @@ public sealed class PlayerTimelineEngine
                (isPaused && !wasPaused);
     }
 
-    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences) =>
-        ManualSponsorBlockSkipEnabled(preferences.SponsorBlockSegmentDisplayEnabled, preferences.SponsorBlockAutoSkipEnabled);
+    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
+    {
+        return ManualSponsorBlockSkipEnabled(preferences.SponsorBlockSegmentDisplayEnabled,
+            preferences.SponsorBlockAutoSkipEnabled);
+    }
 
-    public static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
+    private static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
     {
         return segmentDisplayEnabled && !autoSkipEnabled;
     }
@@ -329,11 +313,13 @@ public sealed class PlayerTimelineEngine
         return $"player-sponsorblock-skip-button-{resolved}";
     }
 
-    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences) =>
-        GetSponsorBlockConfigurationKey(
+    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences)
+    {
+        return GetSponsorBlockConfigurationKey(
             preferences.SponsorBlockAutoSkipEnabled,
             preferences.SponsorBlockSegmentDisplayEnabled,
             preferences.SponsorBlockCategories);
+    }
 
     public static string GetSponsorBlockConfigurationKey(
         bool autoSkipEnabled,
@@ -370,20 +356,10 @@ public sealed class PlayerTimelineEngine
         double minimumSeconds = MinimumResumeSeconds)
     {
         if (!TryGetResumePosition(savedFraction, duration, out resumePosition, minimumSeconds))
-        {
             return ResumePromptState.None;
-        }
 
-        if (resumeAutomatically)
-        {
-            return ResumePromptState.AutoResume;
-        }
+        if (resumeAutomatically) return ResumePromptState.AutoResume;
 
-        if (resumeOnDemand)
-        {
-            return ResumePromptState.ManualResume;
-        }
-
-        return ResumePromptState.None;
+        return resumeOnDemand ? ResumePromptState.ManualResume : ResumePromptState.None;
     }
 }

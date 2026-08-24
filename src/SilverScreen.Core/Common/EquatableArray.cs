@@ -124,7 +124,8 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
     }
 
     [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
-        Justification = "EquatableArray is used with statically known element types registered in JsonSerializerContext.")]
+        Justification =
+            "EquatableArray is used with statically known element types registered in JsonSerializerContext.")]
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
@@ -171,10 +172,7 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
         writer.WriteStartArray();
         var typeInfo = GetElementTypeInfo(options);
 
-        foreach (var item in value)
-        {
-            JsonSerializer.Serialize(writer, item, typeInfo);
-        }
+        foreach (var item in value) JsonSerializer.Serialize(writer, item, typeInfo);
 
         writer.WriteEndArray();
     }

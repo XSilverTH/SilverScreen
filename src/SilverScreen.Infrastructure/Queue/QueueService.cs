@@ -1,17 +1,7 @@
 using System.Collections.ObjectModel;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Infrastructure.Queue;
 
@@ -91,14 +81,6 @@ public sealed class QueueService : IQueueService
         foreach (var video in videos)
             _items.Add(new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now));
         Logger.Information("Replaced playback queue with {Count} items", _items.Count);
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    public void AddNext(VideoSummary video)
-    {
-        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
-        _items.Insert(0, item);
-        Logger.Information("Enqueued video {VideoId} ({Title}) as next in playback queue", video.Id, video.Title);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }

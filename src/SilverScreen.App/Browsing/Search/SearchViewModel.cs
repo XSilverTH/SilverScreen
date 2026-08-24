@@ -1,18 +1,10 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Browsing.Search;
 
@@ -112,10 +104,7 @@ public sealed class SearchViewModel(
     {
         Logger.Information("Search submitted: {Text}", text);
         var query = text.Trim();
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(query)) return;
 
         try
         {
@@ -188,6 +177,7 @@ public sealed class SearchViewModel(
             State = State with { Summary = message, IsLoadingMore = false, IsSuccess = false };
         }
     }
+
     private async Task SearchPlainTextAsync(string query)
     {
         ThrowIfDisposed();
@@ -229,6 +219,7 @@ public sealed class SearchViewModel(
             State = new SearchViewState([], message, false, false, false, false);
         }
     }
+
     private static VideoSummary[] NormalizeVideos(IReadOnlyList<VideoSummary> videos)
     {
         return [.. videos.Where(video => !video.IsShort).DistinctBy(video => video.Id)];
@@ -236,10 +227,7 @@ public sealed class SearchViewModel(
 
     private async Task PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
     {
-        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
-        {
-            return;
-        }
+        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null) return;
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);

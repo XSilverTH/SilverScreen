@@ -4,6 +4,11 @@ namespace SilverScreen.Core.Account.Session;
 
 public interface ISessionService : ICookieFileProvider
 {
+    CookieFileLease? ICookieFileProvider.CreateCookieFile()
+    {
+        return AcquireCookieFileLease();
+    }
+
     event EventHandler? SessionChanged;
 
     AccountSession GetCurrentSession();
@@ -15,8 +20,6 @@ public interface ISessionService : ICookieFileProvider
     void ClearSession();
 
     CookieFileLease? AcquireCookieFileLease();
-
-    CookieFileLease? ICookieFileProvider.CreateCookieFile() => AcquireCookieFileLease();
 
     CookieContainer? CreateCookieContainer();
 }

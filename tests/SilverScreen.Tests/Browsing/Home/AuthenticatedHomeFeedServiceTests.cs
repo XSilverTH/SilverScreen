@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Account.Session;
 using SilverScreen.Infrastructure.Browsing.Home;
@@ -120,7 +119,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
         Assert.DoesNotContain("--cookies", calls[1].ArgumentList);
     }
 
-    private static (AuthenticatedHomeFeedService Service, InMemorySessionService Session) CreateService(IYtDlpRunner runner)
+    private static (AuthenticatedHomeFeedService Service, InMemorySessionService Session) CreateService(
+        IYtDlpRunner runner)
     {
         var session = new InMemorySessionService();
         session.SetManualSession(CookieContent, SessionCookieFormat.NetscapeCookiesText);
@@ -135,7 +135,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
         var entries = Enumerable.Range(1, count).Select(i =>
         {
             var id = $"{prefix}_{i}".PadLeft(11, '0');
-            return $$"""{"id": "{{id}}", "webpage_url": "https://www.youtube.com/watch?v={{id}}", "title": "Video {{i}}", "uploader": "Channel", "duration": 180}""";
+            return
+                $$"""{"id": "{{id}}", "webpage_url": "https://www.youtube.com/watch?v={{id}}", "title": "Video {{i}}", "uploader": "Channel", "duration": 180}""";
         });
         return $$"""{"entries": [{{string.Join(",", entries)}}]}""";
     }
@@ -148,9 +149,14 @@ public sealed class AuthenticatedHomeFeedServiceTests
             remove { }
         }
 
-        public AppPreferences GetPreferences() => new();
+        public AppPreferences GetPreferences()
+        {
+            return new AppPreferences();
+        }
 
-        public void SavePreferences(AppPreferences preferences) { }
+        public void SavePreferences(AppPreferences preferences)
+        {
+        }
     }
 
     private sealed class FakeCookieFileProvider : ICookieFileProvider
@@ -163,7 +169,8 @@ public sealed class AuthenticatedHomeFeedServiceTests
 
     private sealed class FakeRunner(Func<ProcessStartInfo, Task<ProcessResult>> handler) : IYtDlpRunner
     {
-        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
+            CancellationToken cancellationToken)
         {
             return handler(startInfo);
         }

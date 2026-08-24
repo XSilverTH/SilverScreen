@@ -5,8 +5,6 @@ namespace SilverScreen.Infrastructure.Account.Session;
 public sealed class TemporaryCookieFileProvider(ISessionService sessionService, string? tempRoot = null)
     : ICookieFileProvider
 {
-    private readonly string? _tempRoot = tempRoot;
-
     public CookieFileLease? CreateCookieFile()
     {
         var cookies = sessionService.GetManualSessionCookies();
@@ -14,6 +12,6 @@ public sealed class TemporaryCookieFileProvider(ISessionService sessionService, 
             string.IsNullOrWhiteSpace(cookies.Content))
             return null;
 
-        return TemporaryCookieFile.CreateLease(cookies.Content, _tempRoot);
+        return TemporaryCookieFile.CreateLease(cookies.Content, tempRoot);
     }
 }

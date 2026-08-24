@@ -38,10 +38,9 @@ public static class NetscapeCookieParser
                     HttpOnly = httpOnly
                 };
 
-                if (long.TryParse(fields[4].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var expiration) && expiration > 0)
-                {
-                    cookie.Expires = DateTimeOffset.FromUnixTimeSeconds(expiration).UtcDateTime;
-                }
+                if (long.TryParse(fields[4].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                        out var expiration) &&
+                    expiration > 0) cookie.Expires = DateTimeOffset.FromUnixTimeSeconds(expiration).UtcDateTime;
 
                 container.Add(cookie);
             }

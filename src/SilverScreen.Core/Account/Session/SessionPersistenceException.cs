@@ -1,4 +1,5 @@
 using SilverScreen.Core.Common;
+
 namespace SilverScreen.Core.Account.Session;
 
 public sealed class SessionPersistenceException : Exception

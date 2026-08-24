@@ -19,14 +19,10 @@ public static class TemporaryCookieFile
         try
         {
             if (OperatingSystem.IsLinux())
-            {
                 Directory.CreateDirectory(directoryPath,
                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
             else
-            {
                 Directory.CreateDirectory(directoryPath);
-            }
             directoryCreated = true;
 
             var cookieFilePath = Path.Combine(directoryPath, "cookies.txt");
@@ -56,15 +52,14 @@ public static class TemporaryCookieFile
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to create temporary cookie file in {TempRoot}", root);
-            if (directoryCreated && Directory.Exists(directoryPath))
+            if (!directoryCreated || !Directory.Exists(directoryPath)) throw;
+            try
             {
-                try
-                {
-                    Directory.Delete(directoryPath, true);
-                }
-                catch
-                {
-                }
+                Directory.Delete(directoryPath, true);
+            }
+            catch
+            {
+                // ignored
             }
 
             throw;

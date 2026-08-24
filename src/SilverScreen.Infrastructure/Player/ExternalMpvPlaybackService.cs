@@ -2,29 +2,29 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Serilog;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 
-public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
+public sealed class ExternalMpvPlaybackService(
+    IPreferencesService preferencesService,
+    PlaybackCoordinator playbackCoordinator)
+    : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
-    private readonly Lock _activeObserversLock = new();
     private readonly Dictionary<long, MpvIpcPlaybackObserver> _activeObservers = [];
-    private readonly PlaybackCoordinator _coordinator;
-    private readonly IPreferencesService _preferencesService;
-    private bool _disposed;
+    private readonly Lock _activeObserversLock = new();
 
-    public ExternalMpvPlaybackService(
-        IPreferencesService preferencesService,
-        PlaybackCoordinator playbackCoordinator)
-    {
-        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-        _coordinator = playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
-    }
+    private readonly PlaybackCoordinator _coordinator =
+        playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
+
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
+    private bool _disposed;
 
     internal ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
@@ -34,7 +34,8 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         IWatchProgressService? watchProgressService = null)
         : this(
             preferencesService,
-            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService, watchProgressService))
+            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService,
+                watchProgressService))
     {
     }
 
@@ -44,12 +45,10 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var observer in _activeObservers.Values)
-            {
-                observer.Dispose();
-            }
+            foreach (var observer in _activeObservers.Values) observer.Dispose();
             _activeObservers.Clear();
         }
+
         _coordinator.Dispose();
     }
 
@@ -157,6 +156,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 
         _coordinator.CompleteActivePlayback(playbackId);
     }
+
     private static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
     {
         try
@@ -270,6 +270,7 @@ public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
         }
         catch
         {
+            // ignored
         }
     }
 }

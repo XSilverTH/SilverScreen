@@ -2,9 +2,9 @@ namespace SilverScreen.Player.Controllers;
 
 internal static class PlayerCueGeometry
 {
-    public const double CueTriggerDistance = 80;
-    public const double CueActiveDistance = 140;
-    public const double CueEdgeMargin = 80;
+    private const double CueTriggerDistance = 80;
+    private const double CueActiveDistance = 140;
+    private const double CueEdgeMargin = 80;
 
     public static bool IsCommentsCueActive(double x, double y, double width, double height, bool isCurrentlyActive)
     {

@@ -1,5 +1,5 @@
-using SilverScreen.Infrastructure.Common;
 using System.Diagnostics;
+using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 

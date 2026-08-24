@@ -1,12 +1,10 @@
-using SilverScreen.Infrastructure.Common;
 using Cairo;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
 
@@ -19,9 +17,9 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
     private readonly IPreferencesService _preferences;
     private readonly Action<double> _seekAbsolute;
-    private readonly Revealer _skipRevealer;
     private readonly Button _skipButton;
     private readonly Label _skipLabel;
+    private readonly Revealer _skipRevealer;
     private readonly ISponsorBlockService _sponsorBlock;
     private readonly Scale _timeline;
     private readonly DrawingArea _timelineDrawingArea;
@@ -132,7 +130,8 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     public bool TrySkipManualSegment()
     {
-        if (_lastPlaybackState is not { } state || !PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
+        if (_lastPlaybackState is not { } state ||
+            !PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
             return false;
         var segment = PlayerTimelineEngine.FindSponsorBlockSegmentAt(_segments, state.Position);
         if (segment is null) return false;
@@ -169,7 +168,8 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed || PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences) == _configurationKey) return false;
+            if (_disposed || PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences) == _configurationKey)
+                return false;
             if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled))
             {
                 Clear();
@@ -237,7 +237,8 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         var preferences = _preferences.GetPreferences();
         if (!string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
-        if (!PlayerTimelineEngine.ShouldAutoSkip(state.Position, _segments, state.IsPaused, preferences.SponsorBlockAutoSkipEnabled, _autoSkippedSegmentIds, out var segment))
+        if (!PlayerTimelineEngine.ShouldAutoSkip(state.Position, _segments, state.IsPaused,
+                preferences.SponsorBlockAutoSkipEnabled, _autoSkippedSegmentIds, out var segment))
             return;
 
         Logger.Information(

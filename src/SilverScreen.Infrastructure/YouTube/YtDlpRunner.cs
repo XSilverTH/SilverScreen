@@ -1,6 +1,6 @@
-using SilverScreen.Infrastructure.Common;
 using System.Diagnostics;
 using Serilog;
+using SilverScreen.Infrastructure.Common;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
 namespace SilverScreen.Infrastructure.YouTube;

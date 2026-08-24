@@ -1,31 +1,13 @@
-using SilverScreen.Infrastructure.Common;
 using System.Runtime.CompilerServices;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.History;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
+using SilverScreen.Browsing.Home;
+using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -38,7 +20,6 @@ public partial class VideoListView : ViewBase<Box>
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly IVideoListSource _source;
     private readonly IThumbnailService _thumbnails;
-    private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
@@ -48,7 +29,7 @@ public partial class VideoListView : ViewBase<Box>
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 
-    public VideoListView(
+    private VideoListView(
         IVideoListSource source,
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
@@ -59,9 +40,9 @@ public partial class VideoListView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        _vadjustment = video_list_scrolled_window.Vadjustment;
-        if (_vadjustment is not null)
-            _vadjustment.OnValueChanged += OnScrollValueChanged;
+        Vadjustment = ScrolledWindow.Vadjustment;
+        if (Vadjustment is not null)
+            Vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _videoIds = StringList.New([]);
         _videoSelection = NoSelection.New(_videoIds);
@@ -113,9 +94,9 @@ public partial class VideoListView : ViewBase<Box>
     {
     }
 
-    public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
+    public static ScrolledWindow ScrolledWindow => null!;
 
-    public Adjustment? Vadjustment => _vadjustment;
+    public Adjustment? Vadjustment { get; }
 
     public bool IsLoading => _source.State.IsLoading || _source.State.IsLoadingMore;
 
@@ -133,8 +114,8 @@ public partial class VideoListView : ViewBase<Box>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (_disposed || _vadjustment is null ||
-            _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 240)
+        if (_disposed || Vadjustment is null ||
+            Vadjustment.Value + Vadjustment.PageSize < Vadjustment.Upper - 240)
             return;
 
         _source.LoadMoreAsync().FireAndForget(Logger);
@@ -266,8 +247,8 @@ public partial class VideoListView : ViewBase<Box>
 
         _disposed = true;
         _source.StateChanged -= OnStateChanged;
-        if (_vadjustment is not null)
-            _vadjustment.OnValueChanged -= OnScrollValueChanged;
+        if (Vadjustment is not null)
+            Vadjustment.OnValueChanged -= OnScrollValueChanged;
 
         video_list_grid.Factory = null;
         foreach (var association in _cardsByListItem)
@@ -279,7 +260,7 @@ public partial class VideoListView : ViewBase<Box>
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
 
-        video_list_scrolled_window.Child = null;
+        ScrolledWindow.Child = null;
         video_list_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();

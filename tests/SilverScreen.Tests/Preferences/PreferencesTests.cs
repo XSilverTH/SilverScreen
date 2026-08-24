@@ -1,46 +1,9 @@
+using System.Reflection;
+using System.Text.Json;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
 using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
-using System.Reflection;
 
 namespace SilverScreen.Tests.Preferences;
 
@@ -51,25 +14,6 @@ public sealed class PreferencesTests : IDisposable
     public PreferencesTests()
     {
         _tempFilePath = Path.Combine(Path.GetTempPath(), $"silverscreen-test-prefs-{Guid.NewGuid()}.json");
-    }
-    [Fact]
-    public void AppPreferences_JsonSerialization_PreservesEquatableArrayProperties()
-    {
-        var prefs = new AppPreferences
-        {
-            SponsorBlockCategories = ["sponsor", "intro"],
-            Shortcuts = new PlayerShortcutBindings
-            {
-                TogglePause = ["space", "p"],
-            },
-        };
-
-        var json = System.Text.Json.JsonSerializer.Serialize(prefs, PreferencesJsonContext.Default.AppPreferences);
-        var deserialized = System.Text.Json.JsonSerializer.Deserialize(json, PreferencesJsonContext.Default.AppPreferences);
-
-        Assert.NotNull(deserialized);
-        Assert.Equal(["sponsor", "intro"], deserialized.SponsorBlockCategories);
-        Assert.Equal(["space", "p"], deserialized.Shortcuts.TogglePause);
     }
 
     public void Dispose()
@@ -85,6 +29,26 @@ public sealed class PreferencesTests : IDisposable
         {
             // Ignore cleanup errors in tests
         }
+    }
+
+    [Fact]
+    public void AppPreferences_JsonSerialization_PreservesEquatableArrayProperties()
+    {
+        var prefs = new AppPreferences
+        {
+            SponsorBlockCategories = ["sponsor", "intro"],
+            Shortcuts = new PlayerShortcutBindings
+            {
+                TogglePause = ["space", "p"]
+            }
+        };
+
+        var json = JsonSerializer.Serialize(prefs, PreferencesJsonContext.Default.AppPreferences);
+        var deserialized = JsonSerializer.Deserialize(json, PreferencesJsonContext.Default.AppPreferences);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(["sponsor", "intro"], deserialized.SponsorBlockCategories);
+        Assert.Equal(["space", "p"], deserialized.Shortcuts.TogglePause);
     }
 
     [Fact]

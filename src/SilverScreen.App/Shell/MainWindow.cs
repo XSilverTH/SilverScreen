@@ -1,36 +1,19 @@
-using SilverScreen.Infrastructure.Common;
-using System.ComponentModel;
 using Gdk;
 using Gio;
 using GObject;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
 using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
+using SilverScreen.Account.Profile;
+using SilverScreen.Browsing.Channel;
+using SilverScreen.Browsing.Components;
+using SilverScreen.Browsing.History;
+using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
+using SilverScreen.Player.Views;
+using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
@@ -139,10 +122,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             PlayAsync = async video =>
                 await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
             OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
-            AddToQueue = video =>
-            {
-                _services.Queue.Add(video);
-            },
+            AddToQueue = video => { _services.Queue.Add(video); },
             OpenChannelAsync = OpenChannelAsync
         };
     }

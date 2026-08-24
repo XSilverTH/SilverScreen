@@ -6,7 +6,6 @@ namespace SilverScreen.Infrastructure.Account.Session;
 public sealed class InMemorySessionService(string? tempRoot = null) : ISessionService
 {
     private readonly Lock _gate = new();
-    private readonly string? _tempRoot = tempRoot;
     private ManualSessionCookies? _manualCookies;
 
     public event EventHandler? SessionChanged;
@@ -41,11 +40,14 @@ public sealed class InMemorySessionService(string? tempRoot = null) : ISessionSe
                 string.IsNullOrWhiteSpace(_manualCookies.Content))
                 return null;
 
-            return TemporaryCookieFile.CreateLease(_manualCookies.Content, _tempRoot);
+            return TemporaryCookieFile.CreateLease(_manualCookies.Content, tempRoot);
         }
     }
 
-    public CookieFileLease? CreateCookieFile() => AcquireCookieFileLease();
+    public CookieFileLease? CreateCookieFile()
+    {
+        return AcquireCookieFileLease();
+    }
 
     public CookieContainer? CreateCookieContainer()
     {

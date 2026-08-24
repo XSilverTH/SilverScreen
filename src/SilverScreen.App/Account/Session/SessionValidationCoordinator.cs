@@ -1,37 +1,27 @@
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
+using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Account.Session;
 
-public sealed class SessionValidationCoordinator(IAuthenticatedHomeFeedService feedService, ISessionService sessionService)
+public sealed class SessionValidationCoordinator(
+    IAuthenticatedHomeFeedService feedService,
+    ISessionService sessionService)
     : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<SessionValidationCoordinator>();
+
+    private readonly IAuthenticatedHomeFeedService _feedService =
+        feedService ?? throw new ArgumentNullException(nameof(feedService));
+
     private readonly Lock _lock = new();
 
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
-    private readonly IAuthenticatedHomeFeedService _feedService =
-        feedService ?? throw new ArgumentNullException(nameof(feedService));
     private CancellationTokenSource? _cts;
     private bool _isValidating;
+
     public bool IsValidating
     {
         get
@@ -120,7 +110,6 @@ public sealed class SessionValidationCoordinator(IAuthenticatedHomeFeedService f
 
 public static class SessionValidationFormatter
 {
-    public const string ValidatingMessage = "Validating YouTube session…";
     private const string CancellationMessage = "Validation canceled.";
     private const string UnexpectedErrorMessage = "Validation failed: An unexpected error occurred.";
     public const string NoActiveSessionMessage = "Validation failed: No YouTube session is active.";

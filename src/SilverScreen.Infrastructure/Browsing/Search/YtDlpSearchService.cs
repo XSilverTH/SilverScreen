@@ -2,38 +2,27 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Search;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Infrastructure.Browsing.Search;
 
-public sealed class YtDlpSearchService : ISearchService
+public sealed class YtDlpSearchService(
+    IPreferencesService preferencesService,
+    IYtDlpRunner runner,
+    ICookieFileProvider? cookieFileProvider = null)
+    : ISearchService
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpSearchService>();
-    private readonly ICookieFileProvider? _cookieFileProvider;
-    private readonly IPreferencesService _preferencesService;
-    private readonly IYtDlpRunner _runner;
 
-    public YtDlpSearchService(
-        IPreferencesService preferencesService,
-        IYtDlpRunner runner,
-        ICookieFileProvider? cookieFileProvider = null)
-    {
-        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _cookieFileProvider = cookieFileProvider;
-    }
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
+    private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     public async Task<SearchResultPage> SearchAsync(SearchRequest request, CancellationToken cancellationToken)
     {
@@ -45,7 +34,7 @@ public sealed class YtDlpSearchService : ISearchService
         try
         {
             activeOptions = GetActiveOptions();
-            using var cookieFile = _cookieFileProvider?.CreateCookieFile();
+            using var cookieFile = cookieFileProvider?.CreateCookieFile();
             var result = await _runner.RunAsync(
                 YtDlpCommandBuilder.BuildSearch(request, activeOptions, cookieFile?.Path),
                 activeOptions.Timeout, cancellationToken).ConfigureAwait(false);

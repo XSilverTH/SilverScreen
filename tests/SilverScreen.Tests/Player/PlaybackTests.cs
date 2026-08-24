@@ -1,45 +1,11 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
 using SilverScreen.Player;
 using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
+using SilverScreen.Shell;
 
 namespace SilverScreen.Tests.Player;
 
@@ -166,18 +132,20 @@ public sealed class PlaybackTests
         Assert.Null(PlaybackCoordinator.GetVideoAt(request, 2));
         Assert.Null(PlaybackCoordinator.GetVideoAt(null, 0));
 
-        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 1, out var resolvedVideo, out var changed));
+        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 1, out var resolvedVideo,
+            out var changed));
         Assert.Equal(v2, resolvedVideo);
         Assert.True(changed);
 
-        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 0, out var sameVideo, out var sameChanged));
+        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 0, out var sameVideo,
+            out var sameChanged));
         Assert.Equal(v1, sameVideo);
         Assert.False(sameChanged);
 
         Assert.False(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 5, out _, out _));
 
         var v3 = CreateVideo("vid3");
-        var updated = PlaybackCoordinator.UpdateQueue(request, [v1, v2, v3]);
+        var updated = PlaybackCoordinator.UpdateQueue([v1, v2, v3]);
         Assert.Equal(3, updated.Videos.Length);
         Assert.Equal("vid3", updated.Videos[2].Id);
     }
@@ -260,7 +228,7 @@ public sealed class PlaybackTests
         var embedded = new TrackingEmbeddedPresenter();
         var external = new TrackingPlaybackService();
         var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.EmbeddedPlayer });
-        var routing = new SilverScreen.Player.PlaybackModeRoutingService(preferences, external, embedded);
+        var routing = new PlaybackModeRoutingService(preferences, external, embedded);
         var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
 
         var result = await routing.PlayAsync(request);
@@ -277,7 +245,7 @@ public sealed class PlaybackTests
         var embedded = new TrackingEmbeddedPresenter();
         var external = new TrackingPlaybackService();
         var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.ExternalMpv });
-        var routing = new SilverScreen.Player.PlaybackModeRoutingService(preferences, external, embedded);
+        var routing = new PlaybackModeRoutingService(preferences, external, embedded);
         var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
 
         var result = await routing.PlayAsync(request);
@@ -363,8 +331,15 @@ public sealed class PlaybackTests
             remove { }
         }
 
-        public double? GetFraction(string videoId) => null;
-        public double? GetResumeFraction(string videoId) => null;
+        public double? GetFraction(string videoId)
+        {
+            return null;
+        }
+
+        public double? GetResumeFraction(string videoId)
+        {
+            return null;
+        }
 
         public void Update(PlaybackRequest request, PlaybackPresenceState state)
         {
@@ -403,7 +378,7 @@ public sealed class PlaybackTests
         }
     }
 
-    private sealed class TrackingEmbeddedPresenter : SilverScreen.Player.Views.IEmbeddedPlayerPresenter
+    private sealed class TrackingEmbeddedPresenter : IEmbeddedPlayerPresenter
     {
         public List<PlaybackRequest> Requests { get; } = [];
 

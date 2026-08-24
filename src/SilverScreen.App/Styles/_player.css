@@ -77,8 +77,8 @@ button.player-seek-button {
     box-shadow: none;
     color: #ffffff;
     transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
-                color 160ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+    color 160ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 button.player-overlay-button,
@@ -186,12 +186,13 @@ button.player-reaction-button:disabled label {
     border-radius: 16px;
     padding: 8px;
 }
+
 .player-controls scale trough {
     background-color: alpha(#ffffff, 0.24);
     min-height: 4px;
     border-radius: 9999px;
     transition: min-height 160ms cubic-bezier(0.2, 0, 0, 1),
-                background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+    background-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .player-controls scale:hover trough {
@@ -222,10 +223,10 @@ button.player-reaction-button:disabled label {
     opacity: 0;
     box-shadow: 0 2px 4px alpha(#000000, 0.4);
     transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1),
-                min-height 160ms cubic-bezier(0.2, 0, 0, 1),
-                min-width 160ms cubic-bezier(0.2, 0, 0, 1),
-                margin 160ms cubic-bezier(0.2, 0, 0, 1),
-                box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
+    min-height 160ms cubic-bezier(0.2, 0, 0, 1),
+    min-width 160ms cubic-bezier(0.2, 0, 0, 1),
+    margin 160ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .player-controls scale:hover slider,
@@ -247,6 +248,7 @@ button.player-reaction-button:disabled label {
     margin: -10px;
     box-shadow: 0 0 0 4px alpha(#ffffff, 0.32), 0 3px 10px alpha(#000000, 0.6);
 }
+
 /* Floating Scrub Cue Badge */
 .player-scrub-cue {
     background-color: alpha(#1e1e1e, 0.92);
@@ -322,10 +324,10 @@ button.player-chapter-marker:active {
     border: 1px solid alpha(#ffffff, 0.22);
     color: alpha(#ffffff, 0.88);
     transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
-                border-color 160ms cubic-bezier(0.2, 0, 0, 1),
-                box-shadow 160ms cubic-bezier(0.2, 0, 0, 1),
-                color 160ms cubic-bezier(0.2, 0, 0, 1),
-                transform 160ms cubic-bezier(0.2, 0, 0, 1);
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0, 0, 1),
+    color 160ms cubic-bezier(0.2, 0, 0, 1),
+    transform 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Left-Edge Comments Drawer Tab */
@@ -417,9 +419,9 @@ button.player-chapter-marker:active {
     font-size: 0.92em;
     font-weight: 700;
     transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
-                border-color 160ms cubic-bezier(0.2, 0, 0, 1),
-                color 160ms cubic-bezier(0.2, 0, 0, 1),
-                transform 160ms cubic-bezier(0.2, 0, 0, 1);
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    color 160ms cubic-bezier(0.2, 0, 0, 1),
+    transform 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .player-edge-prompt-button:hover,
@@ -469,6 +471,7 @@ button.player-chapter-marker:active {
     background-color: #2871cb;
     border-color: #5596e6;
 }
+
 /* Restart Prompt */
 .player-resume-restart-button {
     background-color: alpha(#ffffff, 0.20);

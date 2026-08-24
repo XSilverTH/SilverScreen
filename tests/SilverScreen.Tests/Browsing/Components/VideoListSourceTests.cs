@@ -1,45 +1,11 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
+using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Tests.Browsing.Components;
 
@@ -72,7 +38,8 @@ public sealed class VideoListSourceTests
     [Fact]
     public void HomeVideoListSource_MapsRefreshingState()
     {
-        var video = new VideoSummary("id1", "Title", "Channel", TimeSpan.FromMinutes(1), "https://example.com/thumb.jpg", false);
+        var video = new VideoSummary("id1", "Title", "Channel", TimeSpan.FromMinutes(1),
+            "https://example.com/thumb.jpg", false);
         var state = new HomeFeedState(HomeFeedStateKind.Ready, [video], IsLoading: true);
         var presentation = HomeVideoListSource.MapState(state);
 
@@ -120,7 +87,7 @@ public sealed class VideoListSourceTests
     [Fact]
     public void SearchVideoListSource_MapsSuccessEmptyState()
     {
-        var state = new SearchViewState([], "Search complete.", false, false, false, true);
+        var state = new SearchViewState([], "Search complete.", false);
         var presentation = SearchVideoListSource.MapState(state);
 
         Assert.Equal("No results found", presentation.Status.Title);
@@ -134,7 +101,7 @@ public sealed class VideoListSourceTests
     [Fact]
     public void SearchVideoListSource_MapsCustomEmptySummary()
     {
-        var state = new SearchViewState([], "Custom empty message", false, false, false, true);
+        var state = new SearchViewState([], "Custom empty message", false);
         var presentation = SearchVideoListSource.MapState(state);
 
         Assert.Equal("No results found", presentation.Status.Title);
@@ -170,7 +137,7 @@ public sealed class VideoListSourceTests
     [Fact]
     public void SearchVideoListSource_MapsLoadingState()
     {
-        var state = new SearchViewState([], "Searching YouTube for “dotnet”…", true, false, false, true);
+        var state = new SearchViewState([], "Searching YouTube for “dotnet”…", true);
         var presentation = SearchVideoListSource.MapState(state);
 
         Assert.True(presentation.IsLoading);
@@ -300,7 +267,7 @@ public sealed class VideoListSourceTests
         var video = new VideoSummary("vid1", "Title", "Channel", TimeSpan.FromMinutes(5), "thumb", false);
         var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
             [video], ChannelVideoSort.Newest, "Showing 1 video from Example.", false, true,
-            IsLoadingMore: true);
+            true);
         var presentation = ChannelVideoListSource.MapState(state);
 
         Assert.Single(presentation.Videos);

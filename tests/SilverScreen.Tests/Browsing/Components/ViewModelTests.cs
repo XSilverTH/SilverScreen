@@ -1,45 +1,9 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Search;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Queue;
 using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
 
 namespace SilverScreen.Tests.Browsing.Components;
 
@@ -130,7 +94,8 @@ public sealed class ViewModelTests
         Assert.Empty(withoutService);
 
         var suggestionService = new FakeSearchSuggestionService(["suggestion 1"]);
-        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(), suggestionService);
+        using var viewModelWithService =
+            new SearchViewModel(searchService, new FakePlaybackService(), suggestionService);
         var emptyQuery = await viewModelWithService.FetchSuggestionsAsync("   ");
         Assert.Empty(emptyQuery);
     }
@@ -295,7 +260,7 @@ public sealed class ViewModelTests
         using var viewModel = new SearchViewModel(service, new FakePlaybackService());
 
         var search = viewModel.SubmitAsync("query");
-        service.Requests[0].Completion.SetResult(new SearchResultPage([], "Failed to load results.", false, null));
+        service.Requests[0].Completion.SetResult(new SearchResultPage([], "Failed to load results.", false));
         await search;
 
         Assert.False(viewModel.State.IsSuccess);
@@ -332,8 +297,6 @@ public sealed class ViewModelTests
             Requests.Add((request.Query, request.StartIndex, cancellationToken, completion));
             return completion.Task;
         }
-
-
     }
 
     private sealed class FakePlaybackService : IPlaybackService

@@ -1,6 +1,5 @@
 using Gtk;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Core.Player;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -12,7 +11,6 @@ internal sealed class PlayerChapterOverlay(
     Action registerActivity)
     : IDisposable
 {
-    private const int MarkerHitTargetWidth = 20;
     private readonly List<Button> _markers = [];
     private IReadOnlyList<LibMpvChapter> _chapters = [];
     private bool _disposed;
@@ -87,8 +85,7 @@ internal sealed class PlayerChapterOverlay(
                 duration,
                 trackStart,
                 trackWidth,
-                hostWidth,
-                MarkerHitTargetWidth);
+                hostWidth);
             marker.MarginStart = (int)markerX;
         }
     }

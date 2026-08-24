@@ -1,32 +1,12 @@
-using SilverScreen.Infrastructure.Common;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
+using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
@@ -41,12 +21,12 @@ public partial class ChannelView : ViewBase<Box>
     private const double TopHoverZoneThreshold = 40.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
-
-    private readonly EventControllerMotion _videoMotionController;
     private readonly EventControllerScroll _scrollController;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoListView _videoList;
+
+    private readonly EventControllerMotion _videoMotionController;
     private readonly ChannelViewModel _viewModel;
 
     private int _avatarBindingGeneration;
@@ -59,9 +39,9 @@ public partial class ChannelView : ViewBase<Box>
     private bool _isHeaderCollapsed;
     private bool _isUserScrollingUp;
     private long _lastHeaderStateChangeTicks;
+    private long _lastScrollDownTicks;
     private double _lastScrollY;
     private long _lastUserScrollTicks;
-    private long _lastScrollDownTicks;
     private bool _updatingSortDropdown;
 
     public ChannelView(
@@ -88,13 +68,13 @@ public partial class ChannelView : ViewBase<Box>
         _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         _scrollController.SetPropagationPhase(PropagationPhase.Capture);
         _scrollController.OnScroll += OnScrollEvent;
-        _videoList.ScrolledWindow.AddController(_scrollController);
+        VideoListView.ScrolledWindow.AddController(_scrollController);
 
         _videoMotionController = EventControllerMotion.New();
         _videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
         _videoMotionController.OnEnter += OnVideoPointerEnter;
         _videoMotionController.OnMotion += OnVideoPointerMotion;
-        _videoList.ScrolledWindow.AddController(_videoMotionController);
+        VideoListView.ScrolledWindow.AddController(_videoMotionController);
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -180,10 +160,7 @@ public partial class ChannelView : ViewBase<Box>
         if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs) return;
         if (now - _lastScrollDownTicks < 300) return;
 
-        if (y is >= 0 and <= TopHoverZoneThreshold)
-        {
-            SetHeaderCollapsed(false);
-        }
+        if (y is >= 0 and <= TopHoverZoneThreshold) SetHeaderCollapsed(false);
     }
 
     private void SetHeaderCollapsed(bool collapsed)
@@ -405,12 +382,12 @@ public partial class ChannelView : ViewBase<Box>
 
         if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
         _scrollController.OnScroll -= OnScrollEvent;
-        _videoList.ScrolledWindow.RemoveController(_scrollController);
+        VideoListView.ScrolledWindow.RemoveController(_scrollController);
         _scrollController.Dispose();
 
         _videoMotionController.OnEnter -= OnVideoPointerEnter;
         _videoMotionController.OnMotion -= OnVideoPointerMotion;
-        _videoList.ScrolledWindow.RemoveController(_videoMotionController);
+        VideoListView.ScrolledWindow.RemoveController(_videoMotionController);
         _videoMotionController.Dispose();
         _viewModel.StateChanged -= OnStateChanged;
 

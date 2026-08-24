@@ -1,5 +1,6 @@
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Player.Comments;
+
 namespace SilverScreen.Tests.Player.Comments;
 
 public sealed class CommentsViewModelTests
@@ -96,9 +97,11 @@ public sealed class CommentsViewModelTests
 
         Assert.Equal(2, service.Requests.Count);
         var secondRequest = service.Requests[1];
-        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement, secondRequest.MaxComments);
+        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement,
+            secondRequest.MaxComments);
 
-        var expandedComments = Enumerable.Range(1, CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement)
+        var expandedComments = Enumerable
+            .Range(1, CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement)
             .Select(i => Comment($"c_{i}"))
             .ToArray();
         secondRequest.Completion.SetResult(new YouTubeCommentsResult(expandedComments, true, "Comments loaded."));
@@ -107,7 +110,8 @@ public sealed class CommentsViewModelTests
         await WaitForStateAsync(viewModel, state => !state.IsLoadingMore);
 
         Assert.False(viewModel.State.HasMore);
-        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement, viewModel.State.VisibleComments.Count);
+        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement,
+            viewModel.State.VisibleComments.Count);
     }
 
     [Fact]
@@ -178,6 +182,7 @@ public sealed class CommentsViewModelTests
             public YouTubeCommentSort Sort { get; } = sort;
             public int MaxComments { get; } = maxComments;
             public CancellationToken Token { get; } = token;
+
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
         }

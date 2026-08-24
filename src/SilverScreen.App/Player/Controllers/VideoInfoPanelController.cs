@@ -1,20 +1,8 @@
-using SilverScreen.Infrastructure.Common;
 using System.Globalization;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
+using SilverScreen.Infrastructure.Common;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
@@ -22,20 +10,20 @@ namespace SilverScreen.Player.Controllers;
 internal sealed class VideoInfoPanelController : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<VideoInfoPanelController>();
-    private readonly Action<VideoSummary> _channelRequested;
-    private readonly Action? _closed;
-    private readonly IYouTubeVideoDetailsService _videoDetails;
 
     private readonly Button _backdrop;
-    private readonly Revealer _cueRevealer;
-    private readonly Revealer _revealer;
-    private readonly Label _titleLabel;
     private readonly Label _channelLabel;
+    private readonly Action<VideoSummary> _channelRequested;
+    private readonly Button _closeButton;
+    private readonly Action? _closed;
+    private readonly Revealer _cueRevealer;
+    private readonly TextView _description;
+    private readonly ScrolledWindow _descriptionScroller;
+    private readonly Revealer _revealer;
     private readonly Label _statsLabel;
     private readonly Label _statusLabel;
-    private readonly ScrolledWindow _descriptionScroller;
-    private readonly TextView _description;
-    private readonly Button _closeButton;
+    private readonly Label _titleLabel;
+    private readonly IYouTubeVideoDetailsService _videoDetails;
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
@@ -77,13 +65,22 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     public bool IsOpen { get; private set; }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        _infoLoadCancellation = null;
+    }
+
     public void Show()
     {
         if (_currentVideo is { } video)
             Show(video);
     }
 
-    public void Show(VideoSummary video)
+    private void Show(VideoSummary video)
     {
         if (_disposed) return;
         _currentVideo = video;
@@ -142,11 +139,9 @@ internal sealed class VideoInfoPanelController : IDisposable
     {
         if (!hasMedia || IsOpen || width <= 0 || height <= 0)
         {
-            if (_bottomEdgeActive)
-            {
-                _bottomEdgeActive = false;
-                _cueRevealer.RevealChild = false;
-            }
+            if (!_bottomEdgeActive) return;
+            _bottomEdgeActive = false;
+            _cueRevealer.RevealChild = false;
             return;
         }
 
@@ -161,12 +156,6 @@ internal sealed class VideoInfoPanelController : IDisposable
         if (_currentVideo is not { } video) return;
         Close();
         _channelRequested(video);
-    }
-
-    public void Reset()
-    {
-        Close();
-        _currentVideo = null;
     }
 
     private async Task LoadVideoInfoAsync(string videoId, int generation, CancellationTokenSource cancellation)
@@ -238,14 +227,5 @@ internal sealed class VideoInfoPanelController : IDisposable
         if (details.PublishedAt is { } publishedAt)
             parts.Add($"Published {publishedAt.ToLocalTime():d}");
         return string.Join(" · ", parts);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _infoLoadCancellation?.Cancel();
-        _infoLoadCancellation?.Dispose();
-        _infoLoadCancellation = null;
     }
 }

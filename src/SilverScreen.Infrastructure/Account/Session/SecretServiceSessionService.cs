@@ -41,6 +41,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             _manualCookies = null;
         }
     }
+
     public bool IsAvailable
     {
         get
@@ -75,6 +76,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             return _manualCookies;
         }
     }
+
     public CookieFileLease? AcquireCookieFileLease()
     {
         lock (_gate)
@@ -87,7 +89,10 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
     }
 
-    public CookieFileLease? CreateCookieFile() => AcquireCookieFileLease();
+    public CookieFileLease? CreateCookieFile()
+    {
+        return AcquireCookieFileLease();
+    }
 
     public CookieContainer? CreateCookieContainer()
     {

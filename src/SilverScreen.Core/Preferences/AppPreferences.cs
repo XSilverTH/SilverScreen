@@ -1,10 +1,6 @@
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Player;
+
 namespace SilverScreen.Core.Preferences;
 
 public sealed record AppPreferences
@@ -28,5 +24,5 @@ public sealed record AppPreferences
     public PlayerShortcutBindings Shortcuts { get; set; } = new();
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =
-        [.. SilverScreen.Core.Player.SponsorBlockCategories.All];
+        [.. Player.SponsorBlockCategories.All];
 }

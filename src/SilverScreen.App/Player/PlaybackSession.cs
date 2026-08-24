@@ -7,33 +7,20 @@ using SilverScreen.Shell;
 
 namespace SilverScreen.Player;
 
-internal sealed class PlaybackSession : IDisposable
+internal sealed class PlaybackSession(
+    PlaybackCoordinator coordinator,
+    DesktopMediaIntegration desktopMedia)
+    : IDisposable
 {
-    private readonly PlaybackCoordinator _coordinator;
-    private readonly DesktopMediaIntegration _desktopMedia;
+    private readonly PlaybackCoordinator _coordinator =
+        coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+
+    private readonly DesktopMediaIntegration _desktopMedia =
+        desktopMedia ?? throw new ArgumentNullException(nameof(desktopMedia));
+
     private CookieFileLease? _cookieFile;
     private bool _disposed;
     private long _playbackId;
-
-    public PlaybackSession(
-        PlaybackCoordinator coordinator,
-        DesktopMediaIntegration desktopMedia)
-    {
-        _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
-        _desktopMedia = desktopMedia ?? throw new ArgumentNullException(nameof(desktopMedia));
-    }
-
-    public PlaybackSession(
-        ICookieFileProvider cookieFiles,
-        IPlaybackPresenceService playbackPresence,
-        IYouTubePlaybackTelemetryService playbackTelemetry,
-        IWatchProgressService watchProgress,
-        DesktopMediaIntegration desktopMedia)
-        : this(
-            new PlaybackCoordinator(cookieFiles, playbackPresence, playbackTelemetry, watchProgress),
-            desktopMedia)
-    {
-    }
 
     public PlaybackRequest? Request { get; private set; }
 
@@ -74,7 +61,7 @@ internal sealed class PlaybackSession : IDisposable
         if (_disposed) return;
         HasMedia = state.HasMedia;
 
-        if (Request is { } playbackRequest && state.HasMedia && _playbackId != 0)
+        if (Request is not null && state.HasMedia && _playbackId != 0)
         {
             var playbackState = new PlaybackPresenceState(
                 state.PlaylistIndex,
@@ -89,25 +76,24 @@ internal sealed class PlaybackSession : IDisposable
 
         _desktopMedia.UpdatePlayback(Request, state);
 
-        if (PlaybackCoordinator.TryResolveVideoChange(
+        if (!PlaybackCoordinator.TryResolveVideoChange(
                 Request,
                 CurrentPlaylistIndex,
                 CurrentVideo?.Id,
                 state.PlaylistIndex,
                 out var video,
-                out var videoChanged) && video is not null)
-        {
-            CurrentPlaylistIndex = state.PlaylistIndex;
-            CurrentVideo = video;
+                out var videoChanged) || video is null) return;
+        CurrentPlaylistIndex = state.PlaylistIndex;
+        CurrentVideo = video;
 
-            if (videoChanged) VideoChanged?.Invoke(video, state.PlaylistIndex);
-        }
+        if (!videoChanged) return;
+        VideoChanged?.Invoke(video, state.PlaylistIndex);
     }
 
     public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
         if (_disposed || Request is null) return;
-        Request = PlaybackCoordinator.UpdateQueue(Request, newVideos);
+        Request = PlaybackCoordinator.UpdateQueue(newVideos);
     }
 
     public void EndSession()

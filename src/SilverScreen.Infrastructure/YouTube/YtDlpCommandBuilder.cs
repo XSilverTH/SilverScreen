@@ -4,6 +4,7 @@ using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
+
 namespace SilverScreen.Infrastructure.YouTube;
 
 public static class YtDlpCommandBuilder

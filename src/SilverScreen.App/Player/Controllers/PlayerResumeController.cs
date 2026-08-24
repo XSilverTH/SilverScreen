@@ -1,7 +1,6 @@
 using Gtk;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
@@ -12,12 +11,12 @@ internal sealed class PlayerResumeController : IDisposable
 {
     private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
     private readonly IPreferencesService _preferences;
-    private readonly Revealer _restartRevealer;
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
-    private readonly Revealer _resumeRevealer;
+    private readonly Revealer _restartRevealer;
     private readonly Button _resumeButton;
     private readonly Label _resumeLabel;
+    private readonly Revealer _resumeRevealer;
     private readonly Action<double> _seekAbsolute;
     private readonly IWatchProgressService _watchProgress;
     private bool _disposed;
@@ -94,6 +93,10 @@ internal sealed class PlayerResumeController : IDisposable
             case ResumePromptState.ManualResume:
                 ShowResumePrompt(resumePosition);
                 break;
+            case ResumePromptState.None:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
@@ -162,11 +165,10 @@ internal sealed class PlayerResumeController : IDisposable
             SourceRemove(_promptHideSource);
             _promptHideSource = 0;
         }
-        if (!_disposed)
-        {
-            _resumeRevealer.RevealChild = false;
-            _restartRevealer.RevealChild = false;
-        }
+
+        if (_disposed) return;
+        _resumeRevealer.RevealChild = false;
+        _restartRevealer.RevealChild = false;
     }
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)

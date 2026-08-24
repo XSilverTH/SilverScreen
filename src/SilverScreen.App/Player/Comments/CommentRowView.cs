@@ -1,23 +1,14 @@
 using Gtk;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
 public partial class CommentRowView(Action<string> repliesToggleRequested) : ViewBase<Box>
 {
-    private readonly Action<string> _repliesToggleRequested = repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+    private readonly Action<string> _repliesToggleRequested =
+        repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+
     private string? _boundCommentId;
 
     private void OnRepliesButtonClicked(object? sender, EventArgs args)

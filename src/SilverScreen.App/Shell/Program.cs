@@ -1,6 +1,5 @@
 using Adw;
 using Serilog;
-using SilverScreen;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 

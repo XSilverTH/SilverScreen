@@ -3,6 +3,7 @@ using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Infrastructure.Common;
+
 namespace SilverScreen.Player.Comments;
 
 public enum CommentsViewStatus
@@ -93,14 +94,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         StartLoad();
     }
 
-    public void Refresh()
-    {
-        if (_disposed || _videoId is null)
-            return;
-
-        StartLoad();
-    }
-
     public void SetSortSelection(uint selected)
     {
         SetSort(selected == 1 ? YouTubeCommentSort.Newest : YouTubeCommentSort.Top);
@@ -153,7 +146,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
             sort = _sort;
         }
 
-        Publish(State.Status, State.StatusMessage, isLoadingMore: true);
+        Publish(State.Status, State.StatusMessage, true);
 
         var cancellationToken = cancellation.Token;
         YouTubeCommentsResult result;
@@ -189,11 +182,11 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
                 _currentMaxComments = nextMaxComments;
                 _hasMore = result.HasMore;
                 ApplyComments(result.Comments);
-                Publish(CommentsViewStatus.List, result.StatusMessage, isLoadingMore: false);
+                Publish(CommentsViewStatus.List, result.StatusMessage);
             }
             else
             {
-                Publish(CommentsViewStatus.List, State.StatusMessage, isLoadingMore: false);
+                Publish(CommentsViewStatus.List, State.StatusMessage);
             }
         }
     }

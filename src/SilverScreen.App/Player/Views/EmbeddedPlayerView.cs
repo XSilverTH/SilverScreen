@@ -1,35 +1,18 @@
-using SilverScreen.Player;
-using SilverScreen.Shell;
-using SilverScreen.Player.Controllers;
 using System.Collections.Immutable;
 using Adw;
 using GObject;
 using Gtk;
 using Serilog;
+using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Core.Queue;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
 using SilverScreen.Player.Comments;
+using SilverScreen.Player.Controllers;
 using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
+using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
@@ -48,8 +31,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-
-    private readonly Action _presentRequested;
     private readonly Action _backRequested;
     private readonly Action<VideoSummary> _channelRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
@@ -60,6 +41,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly VideoInfoPanelController _infoPanel;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
+
+    private readonly Action _presentRequested;
     private readonly IQueueService _queueService;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
@@ -125,9 +108,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
             player_info_stats_label, player_info_status_label, player_info_description_scroller,
             player_info_description, player_info_close_button, () =>
-        {
-            if (_session.HasMedia) player_surface.GrabFocus();
-        });
+            {
+                if (_session.HasMedia) player_surface.GrabFocus();
+            });
         _subtitleController = new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
             player_subtitle_model,
             player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId));
@@ -142,7 +125,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_controls,
             () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
             () => _chapterOverlay.Layout(),
-            (x, y) => UpdatePointer(x, y));
+            UpdatePointer);
         _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia, RegisterActivity);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () => _player.TogglePause());
         _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () => SeekRelative(-10));
@@ -312,7 +295,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _timelineController.SeekAbsolute(position, exact);
     }
-
 
 
     private void SeekRelative(double offset)
@@ -490,7 +472,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         OpenComments();
     }
 
-    public void OpenComments()
+    private void OpenComments()
     {
         if (!_session.HasMedia) return;
         Widget.ShowSidebar = true;
@@ -498,17 +480,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.EnsureLoaded();
     }
 
-    public void CloseComments()
+    private void CloseComments()
     {
         Widget.ShowSidebar = false;
-    }
-
-    public void ToggleComments()
-    {
-        if (Widget.ShowSidebar)
-            CloseComments();
-        else
-            OpenComments();
     }
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)

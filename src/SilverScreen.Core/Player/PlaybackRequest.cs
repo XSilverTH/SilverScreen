@@ -1,10 +1,5 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
 using System.Collections.Immutable;
+using SilverScreen.Core.Browsing.Common;
 
 namespace SilverScreen.Core.Player;
 

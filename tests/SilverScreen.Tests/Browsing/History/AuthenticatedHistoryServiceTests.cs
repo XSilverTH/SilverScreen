@@ -76,7 +76,8 @@ public sealed class AuthenticatedHistoryServiceTests
         Assert.Equal("000page2__1", result.FeedPage.Videos[0].Id);
     }
 
-    private static (AuthenticatedHistoryService Service, InMemorySessionService Session) CreateService(IYtDlpRunner runner)
+    private static (AuthenticatedHistoryService Service, InMemorySessionService Session) CreateService(
+        IYtDlpRunner runner)
     {
         var session = new InMemorySessionService();
         session.SetManualSession(CookieContent, SessionCookieFormat.NetscapeCookiesText);
@@ -91,7 +92,8 @@ public sealed class AuthenticatedHistoryServiceTests
         var entries = Enumerable.Range(1, count).Select(i =>
         {
             var id = $"{prefix}_{i}".PadLeft(11, '0');
-            return $$"""{"id": "{{id}}", "webpage_url": "https://www.youtube.com/watch?v={{id}}", "title": "Video {{i}}", "uploader": "Channel", "duration": 180}""";
+            return
+                $$"""{"id": "{{id}}", "webpage_url": "https://www.youtube.com/watch?v={{id}}", "title": "Video {{i}}", "uploader": "Channel", "duration": 180}""";
         });
         return $$"""{"entries": [{{string.Join(",", entries)}}]}""";
     }
@@ -104,9 +106,14 @@ public sealed class AuthenticatedHistoryServiceTests
             remove { }
         }
 
-        public AppPreferences GetPreferences() => new();
+        public AppPreferences GetPreferences()
+        {
+            return new AppPreferences();
+        }
 
-        public void SavePreferences(AppPreferences preferences) { }
+        public void SavePreferences(AppPreferences preferences)
+        {
+        }
     }
 
     private sealed class FakeCookieFileProvider : ICookieFileProvider
@@ -119,7 +126,8 @@ public sealed class AuthenticatedHistoryServiceTests
 
     private sealed class FakeRunner(Func<ProcessStartInfo, Task<ProcessResult>> handler) : IYtDlpRunner
     {
-        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
+            CancellationToken cancellationToken)
         {
             return handler(startInfo);
         }

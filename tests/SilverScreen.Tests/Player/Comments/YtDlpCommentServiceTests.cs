@@ -13,7 +13,6 @@ public sealed class YtDlpCommentServiceTests
     private const string VideoId = "dQw4w9WgXcQ";
 
 
-
     [Fact]
     public async Task GetCommentsAsync_ParsesFiltersRelationshipsAndNormalizesCommentsInOrder()
     {
@@ -54,13 +53,13 @@ public sealed class YtDlpCommentServiceTests
         {
             capturedStartInfo = startInfo;
             return Task.FromResult(Success("""
-                {
-                  "comments": [
-                    { "id": "1", "text": "First" },
-                    { "id": "2", "text": "Second" }
-                  ]
-                }
-                """));
+                                           {
+                                             "comments": [
+                                               { "id": "1", "text": "First" },
+                                               { "id": "2", "text": "Second" }
+                                             ]
+                                           }
+                                           """));
         }));
 
         var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
@@ -74,6 +73,7 @@ public sealed class YtDlpCommentServiceTests
         Assert.Contains("max_comments=20,20,10,25,2", extractorArg);
         Assert.False(result.HasMore);
     }
+
     private static YtDlpCommentService CreateService(CapturingRunner runner, ICookieFileProvider? cookies = null)
     {
         return new YtDlpCommentService(cookies ?? new FakeCookieFileProvider(() => null),
@@ -84,6 +84,7 @@ public sealed class YtDlpCommentServiceTests
     {
         return new ProcessResult(0, output, "");
     }
+
     private sealed class CapturingRunner(Func<ProcessStartInfo, Task<ProcessResult>> run) : IYtDlpRunner
     {
         public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,

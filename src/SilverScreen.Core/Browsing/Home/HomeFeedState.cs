@@ -1,4 +1,5 @@
 using SilverScreen.Core.Browsing.Common;
+
 namespace SilverScreen.Core.Browsing.Home;
 
 public enum HomeFeedStateKind

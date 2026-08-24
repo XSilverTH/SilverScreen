@@ -1,17 +1,10 @@
 using System.Globalization;
 using Serilog;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Queue;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
 
@@ -22,22 +15,21 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     private const int PageSize = 20;
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load recommendations.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
-    private const string BackendFailureMessage = "Recommendations are temporarily unavailable.";
     private const string EmptyFeedMessage = "No usable recommendations were returned.";
     private const string NoContinuationMessage = "No additional recommendations are available.";
     private const string SuccessMessage = "Recommendations loaded.";
     private const string PublicSuccessMessage = "Public recommendations are displayed.";
 
     private static readonly ILogger Logger = Log.ForContext<AuthenticatedHomeFeedService>();
-
-    private readonly ISessionService _sessionService;
     private readonly ICookieFileProvider _cookieFileProvider;
-    private readonly IPreferencesService _preferencesService;
-    private readonly IYtDlpRunner _runner;
-    private readonly TimeSpan _timeout;
 
     private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
+    private readonly IPreferencesService _preferencesService;
+    private readonly IYtDlpRunner _runner;
+
+    private readonly ISessionService _sessionService;
+    private readonly TimeSpan _timeout;
     private FeedPage _cachedFeedPage = FeedPage.Empty;
     private string? _continuationToken;
 
@@ -57,26 +49,15 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
-    public FeedPage GetHomeFeed()
-    {
-        lock (_lock)
-        {
-            return _cachedFeedPage;
-        }
-    }
-
     public async Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
     {
         Logger.Information("Loading first page of authenticated home feed");
-        if (!IsSessionActive())
-        {
-            Logger.Information("No active YouTube session; returning authentication required status");
-            ClearCachedResults();
-            return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
-                AuthenticationRequiredMessage);
-        }
-
-        return await FetchPageAsync(startIndex: 1, isFirstPage: true, cancellationToken).ConfigureAwait(false);
+        if (IsSessionActive())
+            return await FetchPageAsync(1, true, cancellationToken).ConfigureAwait(false);
+        Logger.Information("No active YouTube session; returning authentication required status");
+        ClearCachedResults();
+        return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.AuthenticationRequired, FeedPage.Empty,
+            AuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
@@ -104,12 +85,20 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             return new AuthenticatedHomeFeedResult(AuthenticatedHomeFeedStatus.Empty, GetHomeFeed(),
                 "Invalid recommendation continuation.");
 
-        return await FetchPageAsync(startIndex: startIndex, isFirstPage: false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(startIndex, false, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
     {
         _sessionService.SessionChanged -= OnSessionChanged;
+    }
+
+    public FeedPage GetHomeFeed()
+    {
+        lock (_lock)
+        {
+            return _cachedFeedPage;
+        }
     }
 
     private bool IsSessionActive()
@@ -143,32 +132,42 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
         var (status, videos, pageEntriesLength, statusMessage) =
-            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken).ConfigureAwait(false);
+            await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken)
+                .ConfigureAwait(false);
 
-        if (status == AuthenticatedHomeFeedStatus.TemporaryBackendFailure)
-            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
-
-        if (status == AuthenticatedHomeFeedStatus.Success && videos.Count == 0 && isFirstPage)
+        switch (status)
         {
-            Logger.Information("Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
-            var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken).ConfigureAwait(false);
-            if (retry.Status != AuthenticatedHomeFeedStatus.Success)
-                return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
-
-            if (retry.Videos.Count > 0)
+            case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
+                return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+            case AuthenticatedHomeFeedStatus.Success when videos.Count == 0 && isFirstPage:
             {
-                var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, PageSize);
-                return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
+                Logger.Information(
+                    "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
+                var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken)
+                    .ConfigureAwait(false);
+                if (retry.Status != AuthenticatedHomeFeedStatus.Success)
+                    return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
+
+                if (retry.Videos.Count > 0)
+                {
+                    var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, PageSize);
+                    return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
+                }
+
+                break;
             }
+            case AuthenticatedHomeFeedStatus.AuthenticationRequired:
+            case AuthenticatedHomeFeedStatus.AuthenticationRejected:
+            case AuthenticatedHomeFeedStatus.Empty:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
 
-        if (status == AuthenticatedHomeFeedStatus.Success)
-        {
-            var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, PageSize);
-            return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
-        }
-
-        return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+        if (status != AuthenticatedHomeFeedStatus.Success)
+            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+        var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, PageSize);
+        return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
     }
 
     private AuthenticatedHomeFeedResult CommitVideos(
@@ -217,11 +216,13 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             successMessage);
     }
 
-    private async Task<(AuthenticatedHomeFeedStatus Status, IReadOnlyList<VideoSummary> Videos, int PageEntriesLength, string StatusMessage)> ExecuteYtDlpAsync(
-        string executablePath,
-        string? cookieFilePath,
-        int startIndex,
-        CancellationToken cancellationToken)
+    private async
+        Task<(AuthenticatedHomeFeedStatus Status, IReadOnlyList<VideoSummary> Videos, int PageEntriesLength, string
+            StatusMessage)> ExecuteYtDlpAsync(
+            string executablePath,
+            string? cookieFilePath,
+            int startIndex,
+            CancellationToken cancellationToken)
     {
         ProcessResult processResult;
         try
@@ -239,7 +240,8 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
         catch (TimeoutException exception)
         {
             Logger.Warning(exception, "yt-dlp timed out while loading home recommendations");
-            return (AuthenticatedHomeFeedStatus.TemporaryBackendFailure, [], 0, RuntimeDependencyGuidance.YtDlpTimedOut);
+            return (AuthenticatedHomeFeedStatus.TemporaryBackendFailure, [], 0,
+                RuntimeDependencyGuidance.YtDlpTimedOut);
         }
         catch (Exception exception)
         {

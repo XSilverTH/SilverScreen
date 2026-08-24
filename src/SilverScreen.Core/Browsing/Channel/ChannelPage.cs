@@ -1,4 +1,5 @@
 using SilverScreen.Core.Browsing.Common;
+
 namespace SilverScreen.Core.Browsing.Channel;
 
 public enum ChannelVideoSort

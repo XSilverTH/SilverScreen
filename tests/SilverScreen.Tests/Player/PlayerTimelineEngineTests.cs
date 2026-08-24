@@ -1,8 +1,6 @@
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Controllers;
-using Xunit;
 
 namespace SilverScreen.Tests.Player;
 
@@ -16,7 +14,8 @@ public class PlayerTimelineEngineTests
         Assert.Equal("1:30", PlayerTimelineEngine.FormatTime(TimeSpan.FromSeconds(90)));
         Assert.Equal("10:00", PlayerTimelineEngine.FormatTime(TimeSpan.FromMinutes(10)));
         Assert.Equal("1:00:00", PlayerTimelineEngine.FormatTime(TimeSpan.FromHours(1)));
-        Assert.Equal("2:05:09", PlayerTimelineEngine.FormatTime(TimeSpan.FromHours(2) + TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(9)));
+        Assert.Equal("2:05:09",
+            PlayerTimelineEngine.FormatTime(TimeSpan.FromHours(2) + TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(9)));
     }
 
     [Fact]
@@ -27,8 +26,12 @@ public class PlayerTimelineEngineTests
         Assert.Equal("-0:15", PlayerTimelineEngine.FormatDelta(TimeSpan.FromSeconds(-15)));
         Assert.Equal("+1:30", PlayerTimelineEngine.FormatDelta(TimeSpan.FromSeconds(90)));
         Assert.Equal("-1:30", PlayerTimelineEngine.FormatDelta(TimeSpan.FromSeconds(-90)));
-        Assert.Equal("+1:02:03", PlayerTimelineEngine.FormatDelta(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(3)));
-        Assert.Equal("-1:02:03", PlayerTimelineEngine.FormatDelta(-(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(3))));
+        Assert.Equal("+1:02:03",
+            PlayerTimelineEngine.FormatDelta(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) +
+                                             TimeSpan.FromSeconds(3)));
+        Assert.Equal("-1:02:03",
+            PlayerTimelineEngine.FormatDelta(
+                -(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(3))));
     }
 
     [Fact]
@@ -43,9 +46,12 @@ public class PlayerTimelineEngineTests
     public void CalculateProgressFraction_ClampsCorrectly()
     {
         Assert.Equal(0.0, PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(50), TimeSpan.Zero));
-        Assert.Equal(0.0, PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(-10), TimeSpan.FromSeconds(100)));
-        Assert.Equal(0.5, PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(50), TimeSpan.FromSeconds(100)));
-        Assert.Equal(1.0, PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(100)));
+        Assert.Equal(0.0,
+            PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(-10), TimeSpan.FromSeconds(100)));
+        Assert.Equal(0.5,
+            PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(50), TimeSpan.FromSeconds(100)));
+        Assert.Equal(1.0,
+            PlayerTimelineEngine.CalculateProgressFraction(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(100)));
     }
 
     [Fact]
@@ -96,13 +102,19 @@ public class PlayerTimelineEngineTests
         const int hostWidth = 600;
 
         // At 0% -> trackPos = 10, markerX = 10 - 10 = 0
-        Assert.Equal(0, PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.Zero, duration, trackStart, trackWidth, hostWidth));
+        Assert.Equal(0,
+            PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.Zero, duration, trackStart, trackWidth,
+                hostWidth));
 
         // At 50% -> trackPos = 260, markerX = 260 - 10 = 250
-        Assert.Equal(250, PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.FromSeconds(50), duration, trackStart, trackWidth, hostWidth));
+        Assert.Equal(250,
+            PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.FromSeconds(50), duration, trackStart,
+                trackWidth, hostWidth));
 
         // At 100% -> trackPos = 510, markerX = 510 - 10 = 500
-        Assert.Equal(500, PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.FromSeconds(100), duration, trackStart, trackWidth, hostWidth));
+        Assert.Equal(500,
+            PlayerTimelineEngine.CalculateChapterMarkerPosition(TimeSpan.FromSeconds(100), duration, trackStart,
+                trackWidth, hostWidth));
     }
 
     [Fact]
@@ -152,13 +164,14 @@ public class PlayerTimelineEngineTests
     {
         long currentTime = 1000;
         var engine = new PlayerTimelineEngine(
-            seekThrottleIntervalMs: 120,
-            reconciliationLatchMs: 400,
-            seekToleranceSeconds: 1.5,
-            tickCountProvider: () => currentTime);
+            120,
+            400,
+            1.5,
+            () => currentTime);
 
         // Initial state
-        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(100), [], out var initialAccepted);
+        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(100), [],
+            out var initialAccepted);
         Assert.True(initialAccepted);
         Assert.Equal(TimeSpan.FromSeconds(10), engine.PlaybackPosition);
 
@@ -169,13 +182,15 @@ public class PlayerTimelineEngineTests
 
         // Backend reports stale playback position 11s at t = 1100 (within latch, far from 50s)
         currentTime = 1100;
-        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(11), TimeSpan.FromSeconds(100), [], out var staleAccepted);
+        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(11), TimeSpan.FromSeconds(100), [],
+            out var staleAccepted);
         Assert.False(staleAccepted);
         Assert.Equal(TimeSpan.FromSeconds(10), engine.PlaybackPosition); // Stale position ignored
 
         // Backend reports position 49.2s at t = 1200 (within latch, close to 50s within 1.5s tolerance)
         currentTime = 1200;
-        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(49.2), TimeSpan.FromSeconds(100), [], out var reconciledAccepted);
+        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(49.2), TimeSpan.FromSeconds(100), [],
+            out var reconciledAccepted);
         Assert.True(reconciledAccepted);
         Assert.Equal(TimeSpan.FromSeconds(49.2), engine.PlaybackPosition);
         Assert.Equal(-1, engine.PendingSeekTargetSeconds); // Latch cleared
@@ -187,7 +202,8 @@ public class PlayerTimelineEngineTests
 
         // After latch expires at t = 2500, un-reconciled position 70s is accepted
         currentTime = 2500;
-        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(70), TimeSpan.FromSeconds(100), [], out var expiredAccepted);
+        engine.UpdatePlaybackState(true, TimeSpan.FromSeconds(70), TimeSpan.FromSeconds(100), [],
+            out var expiredAccepted);
         Assert.True(expiredAccepted);
         Assert.Equal(TimeSpan.FromSeconds(70), engine.PlaybackPosition);
     }
@@ -209,9 +225,7 @@ public class PlayerTimelineEngineTests
     public void SeekThrottling_EvaluatesIntervalAndDelays()
     {
         long currentTime = 1000;
-        var engine = new PlayerTimelineEngine(
-            seekThrottleIntervalMs: 120,
-            tickCountProvider: () => currentTime);
+        var engine = new PlayerTimelineEngine(tickCountProvider: () => currentTime);
 
         // First seek after start -> elapsed is infinite / >= 120 -> immediately allowed
         Assert.True(engine.ShouldDispatchThrottledSeek(out var delay1));
@@ -241,29 +255,35 @@ public class PlayerTimelineEngineTests
         var skippedIds = new HashSet<string>(StringComparer.Ordinal);
 
         // Normal playback outside segment -> false
-        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(5), segments, isPaused: false, autoSkipEnabled: true, skippedIds, out var s1));
+        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(5), segments, false, true, skippedIds,
+            out var s1));
         Assert.Null(s1);
 
         // Normal playback inside seg1 -> true and returns seg1
-        Assert.True(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, isPaused: false, autoSkipEnabled: true, skippedIds, out var s2));
+        Assert.True(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
+            out var s2));
         Assert.NotNull(s2);
         Assert.Equal("seg1", s2!.Id);
         Assert.Contains("seg1", skippedIds);
 
         // Already skipped seg1 -> false
-        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, isPaused: false, autoSkipEnabled: true, skippedIds, out var s3));
+        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
+            out var s3));
         Assert.Null(s3);
 
         // Inside seg2 but paused -> false
-        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, isPaused: true, autoSkipEnabled: true, skippedIds, out var s4));
+        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, true, true, skippedIds,
+            out var s4));
         Assert.Null(s4);
 
         // Inside seg2 but auto-skip disabled -> false
-        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, isPaused: false, autoSkipEnabled: false, skippedIds, out var s5));
+        Assert.False(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, false, skippedIds,
+            out var s5));
         Assert.Null(s5);
 
         // Inside seg2, unpaused and enabled -> true
-        Assert.True(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, isPaused: false, autoSkipEnabled: true, skippedIds, out var s6));
+        Assert.True(PlayerTimelineEngine.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, true, skippedIds,
+            out var s6));
         Assert.NotNull(s6);
         Assert.Equal("seg2", s6!.Id);
     }
@@ -271,38 +291,46 @@ public class PlayerTimelineEngineTests
     [Fact]
     public void SponsorBlock_ManualPromptEvaluation()
     {
-        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), SponsorBlockCategories.Sponsor);
+        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30),
+            SponsorBlockCategories.Sponsor);
 
         // Entering new segment -> show
-        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(activeSegment: null, candidateSegment: segment, isPaused: false, wasPaused: false, hadSeek: false));
+        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(null, segment, false, false, false));
 
         // Staying in same segment playing -> do not re-show
-        Assert.False(PlayerTimelineEngine.ShouldShowManualPrompt(activeSegment: segment, candidateSegment: segment, isPaused: false, wasPaused: false, hadSeek: false));
+        Assert.False(PlayerTimelineEngine.ShouldShowManualPrompt(segment, segment, false, false, false));
 
         // Seeking into same segment -> show
-        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(activeSegment: segment, candidateSegment: segment, isPaused: false, wasPaused: false, hadSeek: true));
+        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(segment, segment, false, false, true));
 
         // Pausing inside segment -> show
-        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(activeSegment: segment, candidateSegment: segment, isPaused: true, wasPaused: false, hadSeek: false));
+        Assert.True(PlayerTimelineEngine.ShouldShowManualPrompt(segment, segment, true, false, false));
 
         // Candidate null -> false
-        Assert.False(PlayerTimelineEngine.ShouldShowManualPrompt(activeSegment: segment, candidateSegment: null, isPaused: false, wasPaused: false, hadSeek: false));
+        Assert.False(PlayerTimelineEngine.ShouldShowManualPrompt(segment, null, false, false, false));
     }
 
     [Fact]
     public void SponsorBlock_LabelsAndConfigKeys()
     {
         Assert.Equal("Sponsor", PlayerTimelineEngine.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
-        Assert.Equal("Self-promotion", PlayerTimelineEngine.GetSponsorBlockCategoryLabel(SponsorBlockCategories.SelfPromotion));
+        Assert.Equal("Self-promotion",
+            PlayerTimelineEngine.GetSponsorBlockCategoryLabel(SponsorBlockCategories.SelfPromotion));
         Assert.Equal("Intro", PlayerTimelineEngine.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Intro));
         Assert.Equal("Custom", PlayerTimelineEngine.GetSponsorBlockCategoryLabel("Custom"));
 
-        Assert.Equal("player-sponsorblock-skip-button-sponsor", PlayerTimelineEngine.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Sponsor));
-        Assert.Equal("player-sponsorblock-skip-button-intro", PlayerTimelineEngine.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Intro));
-        Assert.Equal("player-sponsorblock-skip-button-sponsor", PlayerTimelineEngine.GetSponsorBlockButtonColorClass("unknown"));
+        Assert.Equal("player-sponsorblock-skip-button-sponsor",
+            PlayerTimelineEngine.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Sponsor));
+        Assert.Equal("player-sponsorblock-skip-button-intro",
+            PlayerTimelineEngine.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Intro));
+        Assert.Equal("player-sponsorblock-skip-button-sponsor",
+            PlayerTimelineEngine.GetSponsorBlockButtonColorClass("unknown"));
 
-        Assert.Equal("disabled", PlayerTimelineEngine.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
-        Assert.Equal("True:True:sponsor,intro", PlayerTimelineEngine.GetSponsorBlockConfigurationKey(true, true, [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Intro]));
+        Assert.Equal("disabled",
+            PlayerTimelineEngine.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
+        Assert.Equal("True:True:sponsor,intro",
+            PlayerTimelineEngine.GetSponsorBlockConfigurationKey(true, true,
+                [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Intro]));
     }
 
     [Fact]
@@ -325,14 +353,18 @@ public class PlayerTimelineEngineTests
         Assert.Equal(TimeSpan.FromSeconds(300), pos);
 
         // Resume prompt state resolution
-        Assert.Equal(ResumePromptState.None, PlayerTimelineEngine.GetResumePromptState(null, duration, true, true, out _));
-        Assert.Equal(ResumePromptState.AutoResume, PlayerTimelineEngine.GetResumePromptState(0.5, duration, resumeAutomatically: true, resumeOnDemand: false, out var autoPos));
+        Assert.Equal(ResumePromptState.None,
+            PlayerTimelineEngine.GetResumePromptState(null, duration, true, true, out _));
+        Assert.Equal(ResumePromptState.AutoResume,
+            PlayerTimelineEngine.GetResumePromptState(0.5, duration, true, false, out var autoPos));
         Assert.Equal(TimeSpan.FromSeconds(300), autoPos);
 
-        Assert.Equal(ResumePromptState.ManualResume, PlayerTimelineEngine.GetResumePromptState(0.5, duration, resumeAutomatically: false, resumeOnDemand: true, out var manualPos));
+        Assert.Equal(ResumePromptState.ManualResume,
+            PlayerTimelineEngine.GetResumePromptState(0.5, duration, false, true, out var manualPos));
         Assert.Equal(TimeSpan.FromSeconds(300), manualPos);
 
-        Assert.Equal(ResumePromptState.None, PlayerTimelineEngine.GetResumePromptState(0.5, duration, resumeAutomatically: false, resumeOnDemand: false, out _));
+        Assert.Equal(ResumePromptState.None,
+            PlayerTimelineEngine.GetResumePromptState(0.5, duration, false, false, out _));
     }
 
     [Fact]

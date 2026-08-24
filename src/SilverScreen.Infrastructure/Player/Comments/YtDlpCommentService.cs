@@ -7,6 +7,7 @@ using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
+
 namespace SilverScreen.Infrastructure.Player.Comments;
 
 public sealed class YtDlpCommentService(
