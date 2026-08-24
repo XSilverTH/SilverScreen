@@ -1,46 +1,10 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
+using System.Diagnostics;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
 using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
-using System.Diagnostics;
+using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests.Player.Comments;
 
@@ -67,10 +31,11 @@ public sealed class YtDlpCommentServiceTests
             }
             """))));
 
-        var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
+        var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top, 4);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Comments loaded.", result.StatusMessage);
+        Assert.True(result.HasMore);
         Assert.Equal(
             ["first", "second", "third", "fourth"],
             result.Comments.Select(comment => comment.Id));
@@ -81,7 +46,34 @@ public sealed class YtDlpCommentServiceTests
         Assert.Equal(new YouTubeComment("fourth", "Fourth", "Fourth text", "", 0), result.Comments[3]);
     }
 
+    [Fact]
+    public async Task GetCommentsAsync_PassesMaxCommentsArgumentAndComputesHasMore()
+    {
+        ProcessStartInfo? capturedStartInfo = null;
+        var service = CreateService(new CapturingRunner(startInfo =>
+        {
+            capturedStartInfo = startInfo;
+            return Task.FromResult(Success("""
+                {
+                  "comments": [
+                    { "id": "1", "text": "First" },
+                    { "id": "2", "text": "Second" }
+                  ]
+                }
+                """));
+        }));
 
+        var result = await service.GetCommentsAsync(VideoId, YouTubeCommentSort.Top);
+
+        Assert.NotNull(capturedStartInfo);
+        var extractorArg = capturedStartInfo.ArgumentList
+            .SkipWhile(arg => arg != "--extractor-args")
+            .Skip(1)
+            .FirstOrDefault();
+        Assert.NotNull(extractorArg);
+        Assert.Contains("max_comments=20,20,10,25,2", extractorArg);
+        Assert.False(result.HasMore);
+    }
     private static YtDlpCommentService CreateService(CapturingRunner runner, ICookieFileProvider? cookies = null)
     {
         return new YtDlpCommentService(cookies ?? new FakeCookieFileProvider(() => null),

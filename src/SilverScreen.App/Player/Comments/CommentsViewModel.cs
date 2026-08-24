@@ -1,20 +1,8 @@
-using SilverScreen.Infrastructure.Common;
 using System.Collections.ObjectModel;
 using Serilog;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure;
-
+using SilverScreen.Infrastructure.Common;
 namespace SilverScreen.Player.Comments;
 
 public enum CommentsViewStatus
@@ -34,10 +22,15 @@ public sealed record CommentRowState(
 public sealed record CommentsViewState(
     CommentsViewStatus Status,
     IReadOnlyList<CommentRowState> VisibleComments,
-    string StatusMessage);
+    string StatusMessage,
+    bool IsLoadingMore = false,
+    bool HasMore = false,
+    string PaginationLoadingMessage = "Loading more comments…");
 
 public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDisposable
 {
+    public const int InitialPageSize = 20;
+    public const int PageSizeIncrement = 20;
     private const string DefaultErrorMessage = "Comments could not be loaded. Try again shortly.";
     private static readonly ILogger Logger = Log.ForContext<CommentsViewModel>();
     private readonly IYouTubeCommentService _comments = comments ?? throw new ArgumentNullException(nameof(comments));
@@ -46,10 +39,14 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
     private readonly Lock _loadGate = new();
     private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
     private readonly List<string> _topLevelCommentIds = [];
+    private int _currentMaxComments = InitialPageSize;
     private bool _disposed;
     private bool _hasLoadedCurrentVideo;
+    private bool _hasMore;
     private CancellationTokenSource? _loadCancellation;
     private long _loadGeneration;
+    private CancellationTokenSource? _loadMoreCancellation;
+    private long _loadMoreGeneration;
     private YouTubeCommentSort _sort = YouTubeCommentSort.Top;
     private string? _videoId;
 
@@ -82,6 +79,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         CancelLoad();
         _videoId = validVideoId;
         _hasLoadedCurrentVideo = false;
+        _currentMaxComments = InitialPageSize;
+        _hasMore = false;
         ClearComments();
         Publish(CommentsViewStatus.Unavailable, string.Empty);
     }
@@ -89,6 +88,14 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
     public void EnsureLoaded()
     {
         if (_disposed || _videoId is null || _hasLoadedCurrentVideo || _loadCancellation is not null)
+            return;
+
+        StartLoad();
+    }
+
+    public void Refresh()
+    {
+        if (_disposed || _videoId is null)
             return;
 
         StartLoad();
@@ -105,6 +112,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
             throw new ArgumentOutOfRangeException(nameof(sort), sort, null);
 
         _sort = sort;
+        _currentMaxComments = InitialPageSize;
+        _hasMore = false;
         if (_videoId is not null)
             StartLoad();
     }
@@ -120,6 +129,75 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         PublishVisibleState();
     }
 
+    public async Task LoadMoreAsync()
+    {
+        if (_disposed || _videoId is null || !_hasLoadedCurrentVideo || !_hasMore)
+            return;
+
+        CancellationTokenSource cancellation;
+        long generation;
+        int nextMaxComments;
+        string videoId;
+        YouTubeCommentSort sort;
+
+        lock (_loadGate)
+        {
+            if (_loadCancellation is not null || _loadMoreCancellation is not null)
+                return;
+
+            cancellation = new CancellationTokenSource();
+            _loadMoreCancellation = cancellation;
+            generation = ++_loadMoreGeneration;
+            nextMaxComments = _currentMaxComments + PageSizeIncrement;
+            videoId = _videoId;
+            sort = _sort;
+        }
+
+        Publish(State.Status, State.StatusMessage, isLoadingMore: true);
+
+        var cancellationToken = cancellation.Token;
+        YouTubeCommentsResult result;
+        try
+        {
+            result = await _comments.GetCommentsAsync(videoId, sort, nextMaxComments, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to load more comments for video {VideoId}", videoId);
+            result = new YouTubeCommentsResult([], false, "Could not load more comments.");
+        }
+
+        lock (_loadGate)
+        {
+            if (_disposed || cancellationToken.IsCancellationRequested || generation != _loadMoreGeneration ||
+                !string.Equals(_videoId, videoId, StringComparison.Ordinal) || _sort != sort)
+                return;
+
+            if (ReferenceEquals(_loadMoreCancellation, cancellation))
+            {
+                _loadMoreCancellation = null;
+                cancellation.Dispose();
+            }
+
+            if (result.IsSuccess)
+            {
+                _currentMaxComments = nextMaxComments;
+                _hasMore = result.HasMore;
+                ApplyComments(result.Comments);
+                Publish(CommentsViewStatus.List, result.StatusMessage, isLoadingMore: false);
+            }
+            else
+            {
+                Publish(CommentsViewStatus.List, State.StatusMessage, isLoadingMore: false);
+            }
+        }
+    }
+
     private void StartLoad()
     {
         if (_disposed || _videoId is null)
@@ -127,6 +205,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
         CancelLoad();
         _hasLoadedCurrentVideo = false;
+        _currentMaxComments = InitialPageSize;
+        _hasMore = false;
         ClearComments();
         Publish(CommentsViewStatus.Loading, string.Empty);
         var cancellation = new CancellationTokenSource();
@@ -142,7 +222,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         YouTubeCommentsResult result;
         try
         {
-            result = await _comments.GetCommentsAsync(videoId, sort, cancellationToken).ConfigureAwait(false);
+            result = await _comments.GetCommentsAsync(videoId, sort, _currentMaxComments, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -169,12 +250,14 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
             _hasLoadedCurrentVideo = true;
             if (!result.IsSuccess)
             {
+                _hasMore = false;
                 ClearComments();
                 Publish(CommentsViewStatus.Error,
                     string.IsNullOrWhiteSpace(result.StatusMessage) ? DefaultErrorMessage : result.StatusMessage);
                 return;
             }
 
+            _hasMore = result.HasMore;
             ApplyComments(result.Comments);
             Publish(result.Comments.Count == 0 ? CommentsViewStatus.Empty : CommentsViewStatus.List,
                 result.StatusMessage);
@@ -186,7 +269,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         _commentsById.Clear();
         _repliesByParentId.Clear();
         _topLevelCommentIds.Clear();
-        _expandedCommentIds.Clear();
 
         foreach (var comment in comments)
             _commentsById[comment.Id] = comment;
@@ -223,12 +305,12 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         if (status is not CommentsViewStatus.List and not CommentsViewStatus.Empty)
             return;
 
-        Publish(status, State.StatusMessage);
+        Publish(status, State.StatusMessage, State.IsLoadingMore);
     }
 
-    private void Publish(CommentsViewStatus status, string statusMessage)
+    private void Publish(CommentsViewStatus status, string statusMessage, bool isLoadingMore = false)
     {
-        State = new CommentsViewState(status, BuildVisibleComments(), statusMessage);
+        State = new CommentsViewState(status, BuildVisibleComments(), statusMessage, isLoadingMore, _hasMore);
         StateChanged?.Invoke(this, State);
     }
 
@@ -274,9 +356,13 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         lock (_loadGate)
         {
             _loadGeneration++;
+            _loadMoreGeneration++;
             _loadCancellation?.Cancel();
             _loadCancellation?.Dispose();
             _loadCancellation = null;
+            _loadMoreCancellation?.Cancel();
+            _loadMoreCancellation?.Dispose();
+            _loadMoreCancellation = null;
         }
     }
 }

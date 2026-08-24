@@ -1,25 +1,12 @@
 using System.Text.Json;
 using Serilog;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.Infrastructure.Common;
-
+using SilverScreen.Infrastructure.YouTube;
 namespace SilverScreen.Infrastructure.Player.Comments;
 
 public sealed class YtDlpCommentService(
@@ -42,13 +29,14 @@ public sealed class YtDlpCommentService(
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
     public async Task<YouTubeCommentsResult> GetCommentsAsync(string videoId, YouTubeCommentSort sort,
-        CancellationToken cancellationToken = default)
+        int maxComments = 20, CancellationToken cancellationToken = default)
     {
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
         if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
             return Failure("Comments are unavailable for this video.");
 
-        Logger.Information("Fetching comments for video {VideoId} (Sort: {Sort})", videoId, sort);
+        Logger.Information("Fetching comments for video {VideoId} (Sort: {Sort}, MaxComments: {MaxComments})", videoId,
+            sort, maxComments);
 
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         var cookieFilePath = string.IsNullOrWhiteSpace(cookieFile?.Path) ? null : cookieFile.Path;
@@ -57,7 +45,7 @@ public sealed class YtDlpCommentService(
         try
         {
             processResult = await _runner.RunAsync(
-                    YtDlpCommandBuilder.BuildComments(executablePath, videoId, sort, cookieFilePath),
+                    YtDlpCommandBuilder.BuildComments(executablePath, videoId, sort, maxComments, cookieFilePath),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -91,10 +79,12 @@ public sealed class YtDlpCommentService(
         try
         {
             var comments = ParseComments(processResult.StandardOutput);
+            var hasMore = comments.Count >= maxComments;
             return new YouTubeCommentsResult(
                 comments,
                 true,
-                comments.Count == 0 ? "No comments were returned for this video." : "Comments loaded.");
+                comments.Count == 0 ? "No comments were returned for this video." : "Comments loaded.",
+                hasMore);
         }
         catch (JsonException ex)
         {

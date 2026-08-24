@@ -1,18 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-
+using SilverScreen.Core.Player;
+using SilverScreen.Core.Player.Comments;
 namespace SilverScreen.Infrastructure.YouTube;
 
 public static class YtDlpCommandBuilder
@@ -110,20 +101,24 @@ public static class YtDlpCommandBuilder
     }
 
     public static ProcessStartInfo BuildComments(string executablePath, string videoId, YouTubeCommentSort sort,
-        string? cookieFilePath = null)
+        int maxComments = 20, string? cookieFilePath = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxComments, 1);
         var startInfo = CreateStartInfo(executablePath);
         startInfo.ArgumentList.Add("--dump-single-json");
         startInfo.ArgumentList.Add("--skip-download");
         startInfo.ArgumentList.Add("--no-playlist");
         startInfo.ArgumentList.Add("--write-comments");
         startInfo.ArgumentList.Add("--extractor-args");
-        startInfo.ArgumentList.Add(sort switch
+        var sortArg = sort switch
         {
-            YouTubeCommentSort.Top => "youtube:comment_sort=top;max_comments=200,100,100,25,2",
-            YouTubeCommentSort.Newest => "youtube:comment_sort=new;max_comments=200,100,100,25,2",
+            YouTubeCommentSort.Top => "top",
+            YouTubeCommentSort.Newest => "new",
             _ => throw new ArgumentOutOfRangeException(nameof(sort), sort, null)
-        });
+        };
+        var maxReplies = Math.Max(maxComments / 2, 10);
+        startInfo.ArgumentList.Add(
+            $"youtube:comment_sort={sortArg};max_comments={maxComments.ToString(CultureInfo.InvariantCulture)},{maxComments.ToString(CultureInfo.InvariantCulture)},{maxReplies.ToString(CultureInfo.InvariantCulture)},25,2");
 
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {

@@ -1,30 +1,22 @@
 using Gtk;
-
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
+using Serilog;
+using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
-
 namespace SilverScreen.Player.Comments;
 
 public partial class CommentsView : ViewBase<Box>
 {
+    private static readonly ILogger Logger = Log.ForContext<CommentsView>();
 
     private readonly Action _closeRequested;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
+    private readonly Adjustment? _vadjustment;
     private readonly CommentsViewModel _viewModel;
+    private string[] _displayedCommentIds = [];
     private bool _disposed;
     private CommentsViewState _state;
 
@@ -34,6 +26,10 @@ public partial class CommentsView : ViewBase<Box>
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _state = _viewModel.State;
         _viewModel.StateChanged += OnViewModelStateChanged;
+
+        _vadjustment = comments_scrolled_window.Vadjustment;
+        if (_vadjustment is not null)
+            _vadjustment.OnValueChanged += OnScrollValueChanged;
 
         _itemIds = StringList.New([]);
         _selection = NoSelection.New(_itemIds);
@@ -47,7 +43,6 @@ public partial class CommentsView : ViewBase<Box>
         comments_list.Factory = _factory;
         comments_stack.VisibleChildName = "unavailable";
     }
-
     public void SetVideo(string? videoId)
     {
         _viewModel.SetVideo(videoId);
@@ -61,6 +56,20 @@ public partial class CommentsView : ViewBase<Box>
     private void OnCloseButtonClicked(object? sender, EventArgs args)
     {
         _closeRequested();
+    }
+
+    private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
+    {
+        _viewModel.Refresh();
+    }
+
+    private void OnScrollValueChanged(object? sender, EventArgs args)
+    {
+        if (_disposed || _vadjustment is null ||
+            _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 280)
+            return;
+
+        _viewModel.LoadMoreAsync().FireAndForget(Logger);
     }
 
     private void OnSortDropdownNotify(object? sender, EventArgs args)
@@ -83,8 +92,10 @@ public partial class CommentsView : ViewBase<Box>
     private void Render(CommentsViewState state)
     {
         _state = state;
-        var visibleIds = state.VisibleComments.Select(row => row.Comment.Id).ToArray();
-        _itemIds.Splice(0, _itemIds.GetNItems(), visibleIds);
+        ApplyComments(state.VisibleComments);
+
+        comments_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+        comments_pagination_loading_label.SetText(state.PaginationLoadingMessage);
 
         // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
         switch (state.Status)
@@ -107,6 +118,32 @@ public partial class CommentsView : ViewBase<Box>
                 comments_stack.VisibleChildName = "list";
                 break;
         }
+    }
+
+    private void ApplyComments(IReadOnlyList<CommentRowState> visibleComments)
+    {
+        var nextIds = visibleComments.Select(row => row.Comment.Id).ToArray();
+        var prefixLength = 0;
+        while (prefixLength < _displayedCommentIds.Length && prefixLength < nextIds.Length &&
+               string.Equals(_displayedCommentIds[prefixLength], nextIds[prefixLength], StringComparison.Ordinal))
+            prefixLength++;
+
+        var suffixLength = 0;
+        while (_displayedCommentIds.Length - suffixLength > prefixLength &&
+               nextIds.Length - suffixLength > prefixLength &&
+               string.Equals(_displayedCommentIds[_displayedCommentIds.Length - suffixLength - 1],
+                   nextIds[nextIds.Length - suffixLength - 1], StringComparison.Ordinal))
+            suffixLength++;
+
+        var removedMiddleCount = _displayedCommentIds.Length - prefixLength - suffixLength;
+        var addedMiddleCount = nextIds.Length - prefixLength - suffixLength;
+
+        _displayedCommentIds = nextIds;
+        if (removedMiddleCount == 0 && addedMiddleCount == 0)
+            return;
+
+        var addedMiddleIds = nextIds.Skip(prefixLength).Take(addedMiddleCount).ToArray();
+        _itemIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
     }
 
     private void OnRowSetup(object? sender, SignalListItemFactory.SetupSignalArgs args)
@@ -155,6 +192,9 @@ public partial class CommentsView : ViewBase<Box>
 
         _disposed = true;
         _viewModel.StateChanged -= OnViewModelStateChanged;
+        if (_vadjustment is not null)
+            _vadjustment.OnValueChanged -= OnScrollValueChanged;
+
         _viewModel.Dispose();
         _factory.OnSetup -= OnRowSetup;
         _factory.OnBind -= OnRowBind;

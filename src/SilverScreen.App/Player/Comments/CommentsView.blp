@@ -75,16 +75,48 @@ Gtk.Box CommentsView {
 
     Gtk.StackPage {
       name: "list";
-      child: Gtk.ScrolledWindow comments_scrolled_window {
+      child: Gtk.Overlay comments_list_overlay {
         hexpand: true;
         vexpand: true;
 
-        child: Gtk.ListView comments_list {
-          single-click-activate: false;
+        child: Gtk.ScrolledWindow comments_scrolled_window {
+          hexpand: true;
+          vexpand: true;
+
+          child: Gtk.ListView comments_list {
+            single-click-activate: false;
+          };
         };
+
+        [overlay]
+        Gtk.Revealer comments_pagination_loading_revealer {
+          halign: center;
+          valign: end;
+          reveal-child: false;
+          transition-type: crossfade;
+          transition-duration: 200;
+          margin-bottom: 16;
+
+          child: Gtk.Box {
+            halign: center;
+            spacing: 10;
+            can-focus: false;
+            styles ["pagination-loading-pill"]
+
+            Gtk.Spinner {
+              spinning: true;
+              width-request: 16;
+              height-request: 16;
+            }
+
+            Gtk.Label comments_pagination_loading_label {
+              label: "Loading more comments…";
+              styles ["caption", "dim-label"]
+            }
+          };
+        }
       };
     }
-
     Gtk.StackPage {
       name: "empty";
       child: Adw.StatusPage comments_empty_page {

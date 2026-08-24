@@ -1,46 +1,5 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
 using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
-
 namespace SilverScreen.Tests.Player.Comments;
 
 public sealed class CommentsViewModelTests
@@ -112,6 +71,63 @@ public sealed class CommentsViewModelTests
         Assert.Equal(["new"], viewModel.State.VisibleComments.Select(row => row.Comment.Id));
     }
 
+    [Fact]
+    public async Task LoadMoreAsync_WhenHasMore_RequestsNextBatchAndAppendsComments()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+
+        var firstRequest = Assert.Single(service.Requests);
+        Assert.Equal(CommentsViewModel.InitialPageSize, firstRequest.MaxComments);
+        var initialComments = Enumerable.Range(1, CommentsViewModel.InitialPageSize)
+            .Select(i => Comment($"c_{i}"))
+            .ToArray();
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult(initialComments, true, "Comments loaded.", true));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.True(viewModel.State.HasMore);
+        Assert.False(viewModel.State.IsLoadingMore);
+        Assert.Equal(CommentsViewModel.InitialPageSize, viewModel.State.VisibleComments.Count);
+
+        var loadMoreTask = viewModel.LoadMoreAsync();
+        await WaitForStateAsync(viewModel, state => state.IsLoadingMore);
+
+        Assert.Equal(2, service.Requests.Count);
+        var secondRequest = service.Requests[1];
+        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement, secondRequest.MaxComments);
+
+        var expandedComments = Enumerable.Range(1, CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement)
+            .Select(i => Comment($"c_{i}"))
+            .ToArray();
+        secondRequest.Completion.SetResult(new YouTubeCommentsResult(expandedComments, true, "Comments loaded."));
+
+        await loadMoreTask;
+        await WaitForStateAsync(viewModel, state => !state.IsLoadingMore);
+
+        Assert.False(viewModel.State.HasMore);
+        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement, viewModel.State.VisibleComments.Count);
+    }
+
+    [Fact]
+    public async Task LoadMoreAsync_WhenHasMoreIsFalse_DoesNotMakeRequest()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+
+        var firstRequest = Assert.Single(service.Requests);
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult([Comment("c_1")], true, "Comments loaded."));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.False(viewModel.State.HasMore);
+
+        await viewModel.LoadMoreAsync();
+        Assert.Single(service.Requests);
+    }
+
     private static YouTubeComment Comment(string id, string? parentId = null)
     {
         return new YouTubeComment(id, id, id, "", 0, parentId);
@@ -150,16 +166,17 @@ public sealed class CommentsViewModelTests
         public List<Pending> Requests { get; } = [];
 
         public Task<YouTubeCommentsResult> GetCommentsAsync(string videoId, YouTubeCommentSort sort,
-            CancellationToken cancellationToken = default)
+            int maxComments = 20, CancellationToken cancellationToken = default)
         {
-            var pending = new Pending(sort, cancellationToken);
+            var pending = new Pending(sort, maxComments, cancellationToken);
             Requests.Add(pending);
             return pending.Completion.Task;
         }
 
-        public sealed class Pending(YouTubeCommentSort sort, CancellationToken token)
+        public sealed class Pending(YouTubeCommentSort sort, int maxComments, CancellationToken token)
         {
             public YouTubeCommentSort Sort { get; } = sort;
+            public int MaxComments { get; } = maxComments;
             public CancellationToken Token { get; } = token;
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
