@@ -40,7 +40,7 @@ public partial class VideoListView : ViewBase<Box>
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-        Vadjustment = ScrolledWindow.Vadjustment;
+        Vadjustment = video_list_scrolled_window.Vadjustment;
         if (Vadjustment is not null)
             Vadjustment.OnValueChanged += OnScrollValueChanged;
 
@@ -94,7 +94,7 @@ public partial class VideoListView : ViewBase<Box>
     {
     }
 
-    public static ScrolledWindow ScrolledWindow => null!;
+    public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
 
     public Adjustment? Vadjustment { get; }
 
@@ -260,7 +260,7 @@ public partial class VideoListView : ViewBase<Box>
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
 
-        ScrolledWindow.Child = null;
+        video_list_scrolled_window.Child = null;
         video_list_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();

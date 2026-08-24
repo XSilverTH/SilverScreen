@@ -135,39 +135,32 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, cancellationToken)
                 .ConfigureAwait(false);
 
-        switch (status)
+        if (status == AuthenticatedHomeFeedStatus.TemporaryBackendFailure)
+            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+
+        if (status == AuthenticatedHomeFeedStatus.Success && videos.Count == 0 && isFirstPage)
         {
-            case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
-                return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
-            case AuthenticatedHomeFeedStatus.Success when videos.Count == 0 && isFirstPage:
+            Logger.Information(
+                "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
+            var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken)
+                .ConfigureAwait(false);
+            if (retry.Status != AuthenticatedHomeFeedStatus.Success)
+                return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
+
+            if (retry.Videos.Count > 0)
             {
-                Logger.Information(
-                    "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
-                var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, cancellationToken)
-                    .ConfigureAwait(false);
-                if (retry.Status != AuthenticatedHomeFeedStatus.Success)
-                    return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
-
-                if (retry.Videos.Count > 0)
-                {
-                    var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, PageSize);
-                    return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
-                }
-
-                break;
+                var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, PageSize);
+                return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
             }
-            case AuthenticatedHomeFeedStatus.AuthenticationRequired:
-            case AuthenticatedHomeFeedStatus.AuthenticationRejected:
-            case AuthenticatedHomeFeedStatus.Empty:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
         }
 
-        if (status != AuthenticatedHomeFeedStatus.Success)
-            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
-        var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, PageSize);
-        return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
+        if (status == AuthenticatedHomeFeedStatus.Success)
+        {
+            var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, PageSize);
+            return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
+        }
+
+        return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
     }
 
     private AuthenticatedHomeFeedResult CommitVideos(

@@ -68,13 +68,13 @@ public partial class ChannelView : ViewBase<Box>
         _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         _scrollController.SetPropagationPhase(PropagationPhase.Capture);
         _scrollController.OnScroll += OnScrollEvent;
-        VideoListView.ScrolledWindow.AddController(_scrollController);
+        _videoList.ScrolledWindow.AddController(_scrollController);
 
         _videoMotionController = EventControllerMotion.New();
         _videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
         _videoMotionController.OnEnter += OnVideoPointerEnter;
         _videoMotionController.OnMotion += OnVideoPointerMotion;
-        VideoListView.ScrolledWindow.AddController(_videoMotionController);
+        _videoList.ScrolledWindow.AddController(_videoMotionController);
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -382,12 +382,12 @@ public partial class ChannelView : ViewBase<Box>
 
         if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
         _scrollController.OnScroll -= OnScrollEvent;
-        VideoListView.ScrolledWindow.RemoveController(_scrollController);
+        _videoList.ScrolledWindow.RemoveController(_scrollController);
         _scrollController.Dispose();
 
         _videoMotionController.OnEnter -= OnVideoPointerEnter;
         _videoMotionController.OnMotion -= OnVideoPointerMotion;
-        VideoListView.ScrolledWindow.RemoveController(_videoMotionController);
+        _videoList.ScrolledWindow.RemoveController(_videoMotionController);
         _videoMotionController.Dispose();
         _viewModel.StateChanged -= OnStateChanged;
 
