@@ -142,54 +142,63 @@ button.player-queue-toggle.active:hover {
     background-color: alpha(#ffffff, 0.24);
     min-height: 4px;
     border-radius: 9999px;
-    transition: min-height 150ms cubic-bezier(0, 0, 0.2, 1),
-    background-color 150ms cubic-bezier(0, 0, 0.2, 1);
+    transition: min-height 160ms cubic-bezier(0.2, 0, 0, 1),
+                background-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .player-controls scale:hover trough {
-    background-color: alpha(#ffffff, 0.35);
-    min-height: 6px;
+    background-color: alpha(#ffffff, 0.36);
+    min-height: 8px;
 }
 
 .player-controls scale:active trough,
 .player-controls scale.dragging trough {
-    background-color: alpha(#ffffff, 0.45);
-    min-height: 8px;
+    background-color: alpha(#ffffff, 0.48);
+    min-height: 10px;
 }
 
+.player-controls scale > trough > highlight,
 .player-controls scale highlight {
     background-color: #ffffff;
-    border-radius: 9999px;
+    background-image: none;
+    border-radius: 9999px 0 0 9999px;
 }
 
+.player-controls scale > trough > slider,
 .player-controls scale slider {
     background-color: #ffffff;
     min-height: 8px;
     min-width: 8px;
-    margin: 0;
+    margin: -4px;
     border-radius: 9999px;
     opacity: 0;
     box-shadow: 0 2px 4px alpha(#000000, 0.4);
-    transition: opacity 150ms cubic-bezier(0, 0, 0.2, 1),
-    min-height 150ms cubic-bezier(0, 0, 0.2, 1),
-    min-width 150ms cubic-bezier(0, 0, 0.2, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.2, 1);
+    transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1),
+                min-height 160ms cubic-bezier(0.2, 0, 0, 1),
+                min-width 160ms cubic-bezier(0.2, 0, 0, 1),
+                margin 160ms cubic-bezier(0.2, 0, 0, 1),
+                box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.player-controls scale:hover slider {
+.player-controls scale:hover slider,
+.player-controls scale:hover > trough > slider {
     opacity: 1;
-    min-height: 14px;
-    min-width: 14px;
+    min-height: 16px;
+    min-width: 16px;
+    margin: -8px;
+    box-shadow: 0 2px 6px alpha(#000000, 0.45);
 }
 
 .player-controls scale:active slider,
-.player-controls scale.dragging slider {
+.player-controls scale.dragging slider,
+.player-controls scale:active > trough > slider,
+.player-controls scale.dragging > trough > slider {
     opacity: 1;
-    min-height: 18px;
-    min-width: 18px;
-    box-shadow: 0 0 0 4px alpha(#ffffff, 0.28), 0 4px 10px alpha(#000000, 0.6);
+    min-height: 20px;
+    min-width: 20px;
+    margin: -10px;
+    box-shadow: 0 0 0 4px alpha(#ffffff, 0.32), 0 3px 10px alpha(#000000, 0.6);
 }
-
 /* Floating Scrub Cue Badge */
 .player-scrub-cue {
     background-color: alpha(#1e1e1e, 0.92);
