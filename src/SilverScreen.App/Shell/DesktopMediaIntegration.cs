@@ -29,7 +29,9 @@ internal sealed class DesktopMediaIntegration : IDisposable
     private const string MprisServiceName = "org.mpris.MediaPlayer2.SilverScreen";
     private const string PortalObjectPath = "/org/freedesktop/portal/desktop";
     private const string PortalServiceName = "org.freedesktop.portal.Desktop";
-    private const uint PortalIdleInhibitFlag = 4;
+    private const uint PortalSuspendInhibitFlag = 4;
+    private const uint PortalIdleInhibitFlag = 8;
+    private const uint PortalPlaybackInhibitFlags = PortalSuspendInhibitFlag | PortalIdleInhibitFlag;
 
     private static readonly ILogger Logger = Log.ForContext<DesktopMediaIntegration>();
     private readonly Lock _gate = new();
@@ -211,7 +213,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 try
                 {
                     var portal = new DBusService(connection, PortalServiceName).CreateInhibit(PortalObjectPath);
-                    var handle = await portal.InhibitAsync(string.Empty, PortalIdleInhibitFlag,
+                    var handle = await portal.InhibitAsync(string.Empty, PortalPlaybackInhibitFlags,
                         new Dictionary<string, VariantValue> { ["reason"] = "Playing video" }).ConfigureAwait(false);
                     var releaseImmediately = false;
                     lock (_gate)
