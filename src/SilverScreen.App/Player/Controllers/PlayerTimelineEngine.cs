@@ -18,8 +18,8 @@ public sealed class PlayerTimelineEngine
     public const long DefaultReconciliationLatchMilliseconds = 400;
     public const double DefaultSeekReconciliationToleranceSeconds = 1.5;
     public const double MinimumResumeSeconds = 5;
-    public const uint DefaultSkipPromptDurationMilliseconds = 3_000;
-    public const uint DefaultResumePromptDurationMilliseconds = 6_000;
+    public const uint DefaultSkipPromptDurationMilliseconds = 5_000;
+    public const uint DefaultResumePromptDurationMilliseconds = 15_000;
 
     private readonly uint _seekThrottleIntervalMs;
     private readonly long _reconciliationLatchMs;

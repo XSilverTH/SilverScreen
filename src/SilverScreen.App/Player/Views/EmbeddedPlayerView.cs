@@ -44,7 +44,7 @@ internal interface IEmbeddedPlayerPresenter
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
     private const double MinimumPlaybackSpeed = 0.25;
-    private const double MaximumPlaybackSpeed = 5;
+    private const double MaximumPlaybackSpeed = 4;
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
