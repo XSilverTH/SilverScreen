@@ -9,12 +9,10 @@ using SilverScreen.ViewModels;
 using SilverScreen.Views.Account;
 using SilverScreen.Views.Channel;
 using SilverScreen.Views.Components;
-using SilverScreen.Views.History;
-using SilverScreen.Views.Home;
+using SilverScreen.Views.VideoList;
 using SilverScreen.Views.Player;
 using SilverScreen.Views.Popovers;
 using SilverScreen.Views.Queue;
-using SilverScreen.Views.Search;
 using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
@@ -37,14 +35,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ChannelViewModel _channelViewModel;
     private readonly Action _disposeApplicationServices;
     private readonly EmbeddedPlayerView _embeddedPlayer;
-    private readonly HistoryView _history;
+    private readonly VideoListView _history;
     private readonly HistoryViewModel _historyViewModel;
-    private readonly HomeView _home;
+    private readonly VideoListView _home;
     private readonly PlaybackModeRoutingService _playback;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly SearchPopoverView _searchPopover;
-    private readonly SearchView _searchView;
+    private readonly VideoListView _searchView;
     private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
     private bool _closed;
@@ -64,14 +62,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions,
             CloseChannel);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
-        _home = new HomeView(
+        _home = new VideoListView(
             new HomeViewModel(services.HomeFeed),
             services.Thumbnails,
             services.WatchProgress,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
         _historyViewModel = new HistoryViewModel(services.History);
-        _history = new HistoryView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _history = new VideoListView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
@@ -87,7 +85,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 _searchPopover.OnOpened();
         };
 
-        _searchView = new SearchView(_searchViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _searchView = new VideoListView(_searchViewModel, services.Thumbnails, services.WatchProgress, actions);
         _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
 
         _queueViewModel = new QueueViewModel(services.Queue, _playback);

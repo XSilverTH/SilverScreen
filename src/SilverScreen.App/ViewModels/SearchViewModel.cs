@@ -11,7 +11,8 @@ public sealed record SearchViewState(
     string Summary,
     bool IsLoading,
     bool IsLoadingMore = false,
-    bool HasMore = false);
+    bool HasMore = false,
+    bool IsSuccess = true);
 
 public sealed class SearchViewModel(
     ISearchService searchService,
@@ -162,7 +163,7 @@ public sealed class SearchViewModel(
             _continuationToken = result.IsSuccess ? result.ContinuationToken : _continuationToken;
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
             State = new SearchViewState(videos, summary, false, false,
-                result.IsSuccess && _continuationToken is not null);
+                result.IsSuccess && _continuationToken is not null, result.IsSuccess);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -174,7 +175,7 @@ public sealed class SearchViewModel(
 
             Logger.Warning(exception, "Failed to load more search results for query {Query}", CurrentQuery);
             const string message = "Search could not be completed.";
-            State = State with { Summary = message, IsLoadingMore = false };
+            State = State with { Summary = message, IsLoadingMore = false, IsSuccess = false };
         }
     }
     private async Task SearchPlainTextAsync(string query)
@@ -202,7 +203,7 @@ public sealed class SearchViewModel(
             _continuationToken = result.IsSuccess ? result.ContinuationToken : null;
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
             State = new SearchViewState(NormalizeVideos(result.Videos), summary, false, false,
-                result.IsSuccess && _continuationToken is not null);
+                result.IsSuccess && _continuationToken is not null, result.IsSuccess);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -215,7 +216,7 @@ public sealed class SearchViewModel(
             Logger.Warning(exception, "Failed to execute search for query {Query}", query);
             const string message = "Search could not be completed.";
             _continuationToken = null;
-            State = new SearchViewState([], message, false);
+            State = new SearchViewState([], message, false, false, false, false);
         }
     }
     private static VideoSummary[] NormalizeVideos(IReadOnlyList<VideoSummary> videos)

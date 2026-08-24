@@ -250,6 +250,36 @@ public sealed class ViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
 
+    [Fact]
+    public async Task SearchFailure_SetsIsSuccessFalse()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+
+        var search = viewModel.SubmitAsync("query");
+        service.Requests[0].Completion.SetResult(new SearchResultPage([], "Failed to load results.", false, null));
+        await search;
+
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Equal("Failed to load results.", viewModel.State.Summary);
+        Assert.Empty(viewModel.State.Videos);
+    }
+
+    [Fact]
+    public async Task SearchException_SetsIsSuccessFalse()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+
+        var search = viewModel.SubmitAsync("query");
+        service.Requests[0].Completion.SetException(new InvalidOperationException("Network down"));
+        await search;
+
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Equal("Search could not be completed.", viewModel.State.Summary);
+        Assert.Empty(viewModel.State.Videos);
+    }
+
 
     private sealed class ControlledSearchService : ISearchService
     {

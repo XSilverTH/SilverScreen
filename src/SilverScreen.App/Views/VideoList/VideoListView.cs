@@ -9,12 +9,14 @@ using SilverScreen.Views.Components;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
-namespace SilverScreen.Views.History;
+namespace SilverScreen.Views.VideoList;
 
-public partial class HistoryView : ViewBase<Box>
+public partial class VideoListView : ViewBase<Box>
 {
-    private static readonly ILogger Logger = Log.ForContext<HistoryView>();
+    private static readonly ILogger Logger = Log.ForContext<VideoListView>();
+
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
+    private readonly IVideoListSource _source;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoCardActions _videoActions;
@@ -22,24 +24,22 @@ public partial class HistoryView : ViewBase<Box>
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
-    private readonly HistoryViewModel _viewModel;
     private readonly IWatchProgressService _watchProgress;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
 
-    public HistoryView(
-        HistoryViewModel viewModel,
+    public VideoListView(
+        IVideoListSource source,
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _source = source ?? throw new ArgumentNullException(nameof(source));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
-
-        _vadjustment = history_scrolled_window.Vadjustment;
+        _vadjustment = video_list_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged += OnScrollValueChanged;
 
@@ -50,25 +50,65 @@ public partial class HistoryView : ViewBase<Box>
         _videoFactory.OnBind += OnVideoCardBind;
         _videoFactory.OnUnbind += OnVideoCardUnbind;
         _videoFactory.OnTeardown += OnVideoCardTeardown;
-        history_video_grid.Model = _videoSelection;
-        history_video_grid.Factory = _videoFactory;
+        video_list_grid.Model = _videoSelection;
+        video_list_grid.Factory = _videoFactory;
 
-        _viewModel.StateChanged += OnStateChanged;
-        Render(_viewModel.State);
+        _source.StateChanged += OnStateChanged;
+        Render(_source.State);
     }
 
-    public bool IsLoading => _viewModel.State.IsLoading || _viewModel.State.IsLoadingMore;
+    public VideoListView(
+        HomeViewModel viewModel,
+        IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
+        VideoCardActions videoActions)
+        : this(new HomeVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+    {
+    }
+
+    public VideoListView(
+        SearchViewModel viewModel,
+        IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
+        VideoCardActions videoActions)
+        : this(new SearchVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+    {
+    }
+
+    public VideoListView(
+        HistoryViewModel viewModel,
+        IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
+        VideoCardActions videoActions)
+        : this(new HistoryVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+    {
+    }
+
+    public VideoListView(
+        ChannelViewModel viewModel,
+        IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
+        VideoCardActions videoActions)
+        : this(new ChannelVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+    {
+    }
+
+    public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
+
+    public Adjustment? Vadjustment => _vadjustment;
+
+    public bool IsLoading => _source.State.IsLoading || _source.State.IsLoadingMore;
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
     public Task RefreshAsync()
     {
-        return _viewModel.RefreshAsync();
+        return _source.RefreshAsync();
     }
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _viewModel.RefreshAsync().FireAndForget(Logger);
+        _source.RefreshAsync().FireAndForget(Logger);
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
@@ -77,11 +117,10 @@ public partial class HistoryView : ViewBase<Box>
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 240)
             return;
 
-        if (_viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true })
-            _viewModel.LoadMoreAsync().FireAndForget(Logger);
+        _source.LoadMoreAsync().FireAndForget(Logger);
     }
 
-    private void OnStateChanged(object? sender, HistoryViewState state)
+    private void OnStateChanged(object? sender, VideoListPresentationState state)
     {
         Functions.IdleAdd(0, () =>
         {
@@ -90,54 +129,44 @@ public partial class HistoryView : ViewBase<Box>
 
             RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
             Render(state);
+
             return false;
         });
     }
 
-    private void Render(HistoryViewState state)
+    private void Render(VideoListPresentationState state)
     {
         ApplyVideos(state.Videos);
 
         if (state.IsLoading && _displayedVideos.Length == 0)
         {
-            history_stack.VisibleChildName = "loading";
+            if (string.IsNullOrWhiteSpace(state.LoadingMessage))
+            {
+                video_list_loading_label.Visible = false;
+            }
+            else
+            {
+                video_list_loading_label.SetText(state.LoadingMessage);
+                video_list_loading_label.Visible = true;
+            }
+
+            video_list_stack.VisibleChildName = "loading";
             return;
         }
 
         if (_displayedVideos.Length > 0)
         {
-            history_stack.VisibleChildName = "content";
-            history_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
-            history_pagination_loading_label.SetText("Loading more history…");
+            video_list_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
+            video_list_pagination_loading_label.SetText(state.PaginationLoadingMessage);
+            video_list_stack.VisibleChildName = "content";
             return;
         }
 
-        switch (state.Status)
-        {
-            case AuthenticatedHistoryStatus.AuthenticationRequired:
-            case AuthenticatedHistoryStatus.AuthenticationRejected:
-                history_signed_out_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
-                    ? state.Summary
-                    : "Watch history requires an active YouTube session.";
-                history_stack.VisibleChildName = "signed_out";
-                break;
-
-            case AuthenticatedHistoryStatus.TemporaryBackendFailure:
-                history_error_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
-                    ? state.Summary
-                    : "Failed to load your watch history. Check your network connection and try again.";
-                history_stack.VisibleChildName = "error";
-                break;
-
-            case AuthenticatedHistoryStatus.Empty:
-            case AuthenticatedHistoryStatus.Success:
-            default:
-                history_empty_page.Description = !string.IsNullOrWhiteSpace(state.Summary)
-                    ? state.Summary
-                    : "Videos you watch on YouTube will appear here.";
-                history_stack.VisibleChildName = "empty";
-                break;
-        }
+        video_list_status_page.Title = state.Status.Title;
+        video_list_status_page.Description = state.Status.Description;
+        video_list_status_page.IconName = state.Status.IconName;
+        video_list_retry_button.Visible = state.Status.ShowRetry;
+        video_list_stack.VisibleChildName = "status";
     }
 
     private void ApplyVideos(IReadOnlyList<VideoSummary> videos)
@@ -216,12 +245,11 @@ public partial class HistoryView : ViewBase<Box>
             return;
 
         _disposed = true;
-        _viewModel.StateChanged -= OnStateChanged;
-
+        _source.StateChanged -= OnStateChanged;
         if (_vadjustment is not null)
             _vadjustment.OnValueChanged -= OnScrollValueChanged;
 
-        history_video_grid.Factory = null;
+        video_list_grid.Factory = null;
         foreach (var association in _cardsByListItem)
             DisposeVideoCardCell(association.Key, association.Value);
         _cardsByListItem.Clear();
@@ -230,11 +258,14 @@ public partial class HistoryView : ViewBase<Box>
         _videoFactory.OnBind -= OnVideoCardBind;
         _videoFactory.OnUnbind -= OnVideoCardUnbind;
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
-        history_scrolled_window.Child = null;
-        history_video_grid.Dispose();
+
+        video_list_scrolled_window.Child = null;
+        video_list_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();
         _videoIds.Dispose();
+        _source.Dispose();
+
         base.Dispose();
     }
 }

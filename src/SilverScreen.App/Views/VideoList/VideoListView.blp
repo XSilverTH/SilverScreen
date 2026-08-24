@@ -1,33 +1,31 @@
 using Gtk 4.0;
 using Adw 1;
 
-Gtk.Box SearchView {
+Gtk.Box VideoListView {
   orientation: vertical;
   hexpand: true;
   vexpand: true;
-  styles ["search-view"]
 
-  Gtk.Stack search_stack {
+  Gtk.Stack video_list_stack {
     hexpand: true;
     vexpand: true;
 
     Gtk.StackPage {
       name: "loading";
-      child: Gtk.Box search_loading_page {
+      child: Gtk.Box video_list_loading_page {
         orientation: vertical;
         spacing: 12;
         halign: center;
         valign: center;
-        margin-top: 48;
-        margin-bottom: 48;
+        hexpand: true;
+        vexpand: true;
 
-        Gtk.Spinner search_loading_spinner {
+        Gtk.Spinner video_list_loading_spinner {
           spinning: true;
           halign: center;
         }
 
-        Gtk.Label search_loading_label {
-          label: "Searching YouTube…";
+        Gtk.Label video_list_loading_label {
           styles ["dim-label"]
         }
       };
@@ -35,15 +33,15 @@ Gtk.Box SearchView {
 
     Gtk.StackPage {
       name: "content";
-      child: Gtk.Overlay search_content_overlay {
+      child: Gtk.Overlay video_list_content_overlay {
         hexpand: true;
         vexpand: true;
 
-        child: Gtk.ScrolledWindow search_scrolled_window {
+        child: Gtk.ScrolledWindow video_list_scrolled_window {
           hexpand: true;
           vexpand: true;
 
-          child: Gtk.GridView search_video_grid {
+          child: Gtk.GridView video_list_grid {
             min-columns: 1;
             max-columns: 4;
             single-click-activate: false;
@@ -57,7 +55,7 @@ Gtk.Box SearchView {
         };
 
         [overlay]
-        Gtk.Revealer search_pagination_loading_revealer {
+        Gtk.Revealer video_list_pagination_loading_revealer {
           halign: center;
           valign: end;
           reveal-child: false;
@@ -77,8 +75,8 @@ Gtk.Box SearchView {
               height-request: 16;
             }
 
-            Gtk.Label {
-              label: "Loading more results…";
+            Gtk.Label video_list_pagination_loading_label {
+              label: "Loading more videos…";
               styles ["caption", "dim-label"]
             }
           };
@@ -87,22 +85,12 @@ Gtk.Box SearchView {
     }
 
     Gtk.StackPage {
-      name: "empty";
-      child: Adw.StatusPage search_empty_page {
-        icon-name: "system-search-symbolic";
-        title: "No results found";
-        description: "Try different keywords or check spelling.";
-      };
-    }
+      name: "status";
+      child: Adw.StatusPage video_list_status_page {
+        hexpand: true;
+        vexpand: true;
 
-    Gtk.StackPage {
-      name: "error";
-      child: Adw.StatusPage search_error_page {
-        icon-name: "network-error-symbolic";
-        title: "Could not complete search";
-        description: "Failed to load search results. Check your network connection and try again.";
-
-        child: Gtk.Button search_retry_button {
+        child: Gtk.Button video_list_retry_button {
           label: "Retry";
           halign: center;
           clicked => $OnRetryButtonClicked();
