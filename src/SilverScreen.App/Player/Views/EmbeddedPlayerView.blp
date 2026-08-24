@@ -622,24 +622,104 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       spacing: 8;
       halign: end;
       valign: end;
+      margin-end: 0;
+      margin-bottom: 24;
       styles ["player-prompt-stack"]
 
-      Gtk.Button player_sponsorblock_skip_button {
-        clicked => $OnSponsorBlockSkipButtonClicked();
-        visible: false;
-        styles ["player-sponsorblock-skip-button"]
+      Gtk.Revealer player_sponsorblock_revealer {
+        reveal-child: false;
+        transition-type: slide_left;
+        transition-duration: 200;
+        halign: end;
+
+        child: Gtk.Button player_sponsorblock_skip_button {
+          halign: end;
+          margin-end: 0;
+          clicked => $OnSponsorBlockSkipButtonClicked();
+          styles ["player-edge-prompt-button", "player-sponsorblock-skip-button"]
+
+          child: Gtk.Box {
+            orientation: horizontal;
+            spacing: 8;
+            halign: center;
+            valign: center;
+
+            Gtk.Image player_sponsorblock_icon {
+              icon-name: "media-seek-forward-symbolic";
+              pixel-size: 16;
+              styles ["player-prompt-icon"]
+            }
+
+            Gtk.Label player_sponsorblock_label {
+              label: "Skip Sponsor";
+              styles ["player-prompt-label"]
+            }
+          };
+        };
       }
 
-      Gtk.Button player_resume_button {
-        clicked => $OnResumeButtonClicked();
-        visible: false;
-        styles ["player-resume-prompt-button"]
+      Gtk.Revealer player_resume_revealer {
+        reveal-child: false;
+        transition-type: slide_left;
+        transition-duration: 200;
+        halign: end;
+
+        child: Gtk.Button player_resume_button {
+          halign: end;
+          margin-end: 0;
+          clicked => $OnResumeButtonClicked();
+          styles ["player-edge-prompt-button", "player-resume-prompt-button"]
+
+          child: Gtk.Box {
+            orientation: horizontal;
+            spacing: 8;
+            halign: center;
+            valign: center;
+
+            Gtk.Image {
+              icon-name: "media-playback-start-symbolic";
+              pixel-size: 16;
+              styles ["player-prompt-icon"]
+            }
+
+            Gtk.Label player_resume_label {
+              label: "Resume";
+              styles ["player-prompt-label"]
+            }
+          };
+        };
       }
 
-      Gtk.Button player_restart_button {
-        clicked => $OnRestartButtonClicked();
-        visible: false;
-        styles ["player-resume-restart-button"]
+      Gtk.Revealer player_restart_revealer {
+        reveal-child: false;
+        transition-type: slide_left;
+        transition-duration: 200;
+        halign: end;
+
+        child: Gtk.Button player_restart_button {
+          halign: end;
+          margin-end: 0;
+          clicked => $OnRestartButtonClicked();
+          styles ["player-edge-prompt-button", "player-resume-restart-button"]
+
+          child: Gtk.Box {
+            orientation: horizontal;
+            spacing: 8;
+            halign: center;
+            valign: center;
+
+            Gtk.Image {
+              icon-name: "media-skip-backward-symbolic";
+              pixel-size: 16;
+              styles ["player-prompt-icon"]
+            }
+
+            Gtk.Label player_restart_label {
+              label: "Restart from beginning";
+              styles ["player-prompt-label"]
+            }
+          };
+        };
       }
     }
     };

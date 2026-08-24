@@ -12,8 +12,12 @@ internal sealed class PlayerResumeController : IDisposable
 {
     private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
     private readonly IPreferencesService _preferences;
+    private readonly Revealer _restartRevealer;
     private readonly Button _restartButton;
+    private readonly Label _restartLabel;
+    private readonly Revealer _resumeRevealer;
     private readonly Button _resumeButton;
+    private readonly Label _resumeLabel;
     private readonly Action<double> _seekAbsolute;
     private readonly IWatchProgressService _watchProgress;
     private bool _disposed;
@@ -27,14 +31,22 @@ internal sealed class PlayerResumeController : IDisposable
     public PlayerResumeController(
         IPreferencesService preferences,
         IWatchProgressService watchProgress,
+        Revealer resumeRevealer,
         Button resumeButton,
+        Label resumeLabel,
+        Revealer restartRevealer,
         Button restartButton,
+        Label restartLabel,
         Action<double> seekAbsolute)
     {
         _preferences = preferences;
         _watchProgress = watchProgress;
+        _resumeRevealer = resumeRevealer;
         _resumeButton = resumeButton;
+        _resumeLabel = resumeLabel;
+        _restartRevealer = restartRevealer;
         _restartButton = restartButton;
+        _restartLabel = restartLabel;
         _seekAbsolute = seekAbsolute;
         _preferences.PreferencesChanged += OnPreferencesChanged;
     }
@@ -97,7 +109,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     public bool TryResume()
     {
-        if (_disposed || !_resumeButton.GetVisible() ||
+        if (_disposed || !_resumeRevealer.RevealChild ||
             !PlayerTimelineEngine.TryGetResumePosition(_resumeFraction, _lastKnownDuration, out var resumePosition))
             return false;
 
@@ -108,7 +120,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     public bool TryRestart()
     {
-        if (_disposed || !_restartButton.GetVisible()) return false;
+        if (_disposed || !_restartRevealer.RevealChild) return false;
         _seekAbsolute(0);
         HidePrompt();
         return true;
@@ -116,19 +128,19 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void ShowResumePrompt(TimeSpan resumePosition)
     {
-        _resumeButton.SetLabel($"Resume from {PlayerTimelineEngine.FormatTime(resumePosition)}");
+        _resumeLabel.SetText($"Resume from {PlayerTimelineEngine.FormatTime(resumePosition)}");
         _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineEngine.FormatTime(resumePosition)} (Enter)");
-        _resumeButton.SetVisible(true);
-        _restartButton.SetVisible(false);
+        _resumeRevealer.RevealChild = true;
+        _restartRevealer.RevealChild = false;
         SchedulePromptHide();
     }
 
     private void ShowRestartPrompt()
     {
-        _restartButton.SetLabel("Restart from beginning");
+        _restartLabel.SetText("Restart from beginning");
         _restartButton.SetTooltipText("Seek back to 0:00");
-        _restartButton.SetVisible(true);
-        _resumeButton.SetVisible(false);
+        _restartRevealer.RevealChild = true;
+        _resumeRevealer.RevealChild = false;
         SchedulePromptHide();
     }
 
@@ -150,11 +162,10 @@ internal sealed class PlayerResumeController : IDisposable
             SourceRemove(_promptHideSource);
             _promptHideSource = 0;
         }
-
         if (!_disposed)
         {
-            _resumeButton.SetVisible(false);
-            _restartButton.SetVisible(false);
+            _resumeRevealer.RevealChild = false;
+            _restartRevealer.RevealChild = false;
         }
     }
 

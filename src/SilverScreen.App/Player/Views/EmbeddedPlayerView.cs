@@ -110,9 +110,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
         _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences,
             player_timeline,
-            player_timeline_overlay, player_sponsorblock_skip_button, pos => SeekAbsolute(pos));
-        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, player_resume_button,
-            player_restart_button,
+            player_timeline_overlay, player_sponsorblock_revealer, player_sponsorblock_skip_button,
+            player_sponsorblock_label, pos => SeekAbsolute(pos));
+        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress,
+            player_resume_revealer, player_resume_button, player_resume_label,
+            player_restart_revealer, player_restart_button, player_restart_label,
             pos => SeekAbsolute(pos));
         _desktopMedia = new DesktopMediaIntegration(_player, presentRequested);
         _session = new PlaybackSession(dependencies.PlaybackCoordinator, _desktopMedia);

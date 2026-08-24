@@ -19,7 +19,9 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
     private readonly IPreferencesService _preferences;
     private readonly Action<double> _seekAbsolute;
+    private readonly Revealer _skipRevealer;
     private readonly Button _skipButton;
+    private readonly Label _skipLabel;
     private readonly ISponsorBlockService _sponsorBlock;
     private readonly Scale _timeline;
     private readonly DrawingArea _timelineDrawingArea;
@@ -45,14 +47,18 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         IPreferencesService preferences,
         Scale timeline,
         Overlay timelineOverlay,
+        Revealer skipRevealer,
         Button skipButton,
+        Label skipLabel,
         Action<double> seekAbsolute)
     {
         _sponsorBlock = sponsorBlock;
         _preferences = preferences;
         _timeline = timeline;
         _timelineOverlay = timelineOverlay;
+        _skipRevealer = skipRevealer;
         _skipButton = skipButton;
+        _skipLabel = skipLabel;
         _seekAbsolute = seekAbsolute;
         _timelineDrawingArea = DrawingArea.New();
         _timelineDrawingArea.SetCanTarget(false);
@@ -276,15 +282,15 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private void ShowManualPrompt(SponsorBlockSegment segment)
     {
         var category = PlayerTimelineEngine.GetSponsorBlockCategoryLabel(segment.Category);
-        _skipButton.SetLabel($"Skip {category}");
+        _skipLabel.SetText($"Skip {category}");
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
-        _skipButton.SetVisible(true);
+        _skipRevealer.RevealChild = true;
         if (_promptHideSource != 0) SourceRemove(_promptHideSource);
         _promptHideSource = TimeoutAdd(0, SkipPromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (!_disposed) _skipButton.SetVisible(false);
+            if (!_disposed) _skipRevealer.RevealChild = false;
             return false;
         });
     }
@@ -297,7 +303,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
             _promptHideSource = 0;
         }
 
-        if (!_disposed) _skipButton.SetVisible(false);
+        if (!_disposed) _skipRevealer.RevealChild = false;
     }
 
     private void ResetManualPrompt()
