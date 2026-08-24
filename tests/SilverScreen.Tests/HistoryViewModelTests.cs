@@ -20,7 +20,7 @@ public sealed class HistoryViewModelTests
                 new FeedPage([CreateVideo("v1"), CreateVideo("v2")]),
                 "Watch history loaded.")
         };
-        using var viewModel = new HistoryViewModel(service, new FakeStatusReporter());
+        using var viewModel = new HistoryViewModel(service);
         await viewModel.LoadAsync();
 
         await viewModel.LoadMoreAsync();
@@ -55,13 +55,6 @@ public sealed class HistoryViewModelTests
         {
             NextPageCallCount++;
             return Task.FromResult(NextPage);
-        }
-    }
-
-    private sealed class FakeStatusReporter : IStatusReporter
-    {
-        public void ReportStatus(string status)
-        {
         }
     }
 }

@@ -110,58 +110,41 @@ Adw.ApplicationWindow MainWindow {
         }
       }
 
-      content: Box {
+      content: Adw.ViewStack view_stack {
         hexpand: true;
         vexpand: true;
-        orientation: vertical;
-
-        Adw.ViewStack view_stack {
-          hexpand: true;
-          vexpand: true;
-          hhomogeneous: false;
-          vhomogeneous: false;
-          notify => $OnViewStackNotify();
-          Adw.ViewStackPage {
-            name: "home";
-            title: "Home";
-            icon-name: "go-home-symbolic";
-            child: Gtk.Box home_host {
-              hexpand: true;
-              vexpand: true;
-            };
-          }
-
-          Adw.ViewStackPage {
-            name: "subscriptions";
-            title: "Subscriptions";
-            icon-name: "emblem-favorite-symbolic";
-            child: Adw.StatusPage {
-              title: "Subscriptions";
-              description: "Subscription feeds will land after account/session support.";
-              icon-name: "applications-internet-symbolic";
-            };
-          }
-
-          Adw.ViewStackPage {
-            name: "history";
-            title: "History";
-            icon-name: "document-open-recent-symbolic";
-            child: Gtk.Box history_host {
-              hexpand: true;
-              vexpand: true;
-            };
-          }
+        hhomogeneous: false;
+        vhomogeneous: false;
+        notify => $OnViewStackNotify();
+        Adw.ViewStackPage {
+          name: "home";
+          title: "Home";
+          icon-name: "go-home-symbolic";
+          child: Gtk.Box home_host {
+            hexpand: true;
+            vexpand: true;
+          };
         }
 
-        Label status_label {
-          label: "Ready";
-          xalign: 0;
-          margin-start: 18;
-          margin-end: 18;
-          margin-top: 4;
-          margin-bottom: 4;
-          ellipsize: end;
-          styles ["caption", "dim-label"]
+        Adw.ViewStackPage {
+          name: "subscriptions";
+          title: "Subscriptions";
+          icon-name: "emblem-favorite-symbolic";
+          child: Adw.StatusPage {
+            title: "Subscriptions";
+            description: "Subscription feeds will land after account/session support.";
+            icon-name: "applications-internet-symbolic";
+          };
+        }
+
+        Adw.ViewStackPage {
+          name: "history";
+          title: "History";
+          icon-name: "document-open-recent-symbolic";
+          child: Gtk.Box history_host {
+            hexpand: true;
+            vexpand: true;
+          };
         }
       };
     };

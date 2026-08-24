@@ -17,7 +17,6 @@ public sealed class VideoCardActions
     public required Func<VideoSummary, Task> PlayAsync { get; init; }
     public required Func<VideoSummary, Task> OpenInAlternatePlayerAsync { get; init; }
     public required Action<VideoSummary> AddToQueue { get; init; }
-    public required Action<string> ReportStatus { get; init; }
     public Func<VideoSummary, Task>? OpenChannelAsync { get; init; }
 }
 
@@ -313,8 +312,6 @@ public partial class VideoCardView : ViewBase<Box>
             if (_video is not { } video) return;
             if (_actions.OpenChannelAsync is { } openChannel)
                 openChannel(video).FireAndForget(Logger);
-            else
-                _actions.ReportStatus("Opening channels is not implemented.");
         }
         else if (ReferenceEquals(sender, _menuActionItems[4]))
         {
@@ -336,7 +333,6 @@ public partial class VideoCardView : ViewBase<Box>
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to start alternate playback for video {VideoId}", video.Id);
-            _actions.ReportStatus("Playback could not be started.");
         }
     }
 
@@ -348,8 +344,6 @@ public partial class VideoCardView : ViewBase<Box>
         sender.SetState(EventSequenceState.Claimed);
         if (_actions.OpenChannelAsync is { } openChannel)
             openChannel(video).FireAndForget(Logger);
-        else
-            _actions.ReportStatus("Channel navigation is not available.");
     }
 
     private static SimpleAction CreateMenuAction(string name)
@@ -371,7 +365,6 @@ public partial class VideoCardView : ViewBase<Box>
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to start playback for video {VideoId}", video.Id);
-            _actions.ReportStatus("Playback could not be started.");
         }
     }
 
@@ -382,20 +375,13 @@ public partial class VideoCardView : ViewBase<Box>
 
         var link = BuildVideoUrl(video);
         if (link is null)
-        {
-            _actions.ReportStatus("No playable video link is available.");
             return;
-        }
 
         var clipboard = Display.GetDefault()?.GetClipboard();
         if (clipboard is null)
-        {
-            _actions.ReportStatus("Clipboard is unavailable.");
             return;
-        }
 
         clipboard.SetText(link);
-        _actions.ReportStatus("Video link copied to the clipboard.");
     }
 
     private static string? BuildVideoUrl(VideoSummary video)

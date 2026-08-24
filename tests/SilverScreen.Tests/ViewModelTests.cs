@@ -11,8 +11,7 @@ public sealed class ViewModelTests
     public async Task SearchSupersedesPriorRequest_WithoutChangingHomePage()
     {
         var service = new ControlledSearchService();
-        var shell = new ShellViewModel();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), shell);
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
 
         var first = viewModel.SubmitAsync("first query");
         Assert.Single(service.Requests);
@@ -25,8 +24,6 @@ public sealed class ViewModelTests
         service.Requests[1].Completion.SetResult(new SearchResultPage([video]));
         await second;
 
-        Assert.Equal("home", shell.SelectedPage);
-        Assert.Equal("Search complete.", shell.Status);
         Assert.False(viewModel.State.IsLoading);
         Assert.Equal([video], viewModel.State.Videos);
         firstRequest.Completion.TrySetCanceled();
@@ -37,7 +34,7 @@ public sealed class ViewModelTests
     public async Task SearchTracksCurrentQuery_AndClearsOnReset()
     {
         var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
 
         Assert.Null(viewModel.CurrentQuery);
 
@@ -56,7 +53,7 @@ public sealed class ViewModelTests
     public async Task ResetCancelsPendingSearchAndClearsResults()
     {
         var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
 
         var search = viewModel.SubmitAsync("query");
         var request = Assert.Single(service.Requests);
@@ -76,8 +73,7 @@ public sealed class ViewModelTests
     {
         var searchService = new ControlledSearchService();
         var suggestionService = new FakeSearchSuggestionService(["suggestion 1", "suggestion 2"]);
-        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(),
-            new CapturingStatusReporter(), suggestionService);
+        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(), suggestionService);
 
         var suggestions = await viewModel.FetchSuggestionsAsync("query");
 
@@ -91,15 +87,12 @@ public sealed class ViewModelTests
     {
         var searchService = new ControlledSearchService();
         using var viewModelWithoutService =
-            new SearchViewModel(searchService, new FakePlaybackService(), new CapturingStatusReporter());
-
+            new SearchViewModel(searchService, new FakePlaybackService());
         var withoutService = await viewModelWithoutService.FetchSuggestionsAsync("query");
         Assert.Empty(withoutService);
 
         var suggestionService = new FakeSearchSuggestionService(["suggestion 1"]);
-        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(),
-            new CapturingStatusReporter(), suggestionService);
-
+        using var viewModelWithService = new SearchViewModel(searchService, new FakePlaybackService(), suggestionService);
         var emptyQuery = await viewModelWithService.FetchSuggestionsAsync("   ");
         Assert.Empty(emptyQuery);
     }
@@ -109,7 +102,7 @@ public sealed class ViewModelTests
     public void QueuePresentationTracksChanges_AndUnsubscribesOnDispose()
     {
         var queue = new QueueService();
-        var viewModel = new QueueViewModel(queue, new FakePlaybackService(), new CapturingStatusReporter());
+        var viewModel = new QueueViewModel(queue, new FakePlaybackService());
         var changes = 0;
         viewModel.StateChanged += (_, _) => changes++;
         var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
@@ -133,8 +126,7 @@ public sealed class ViewModelTests
         var second =
             queue.Add(new VideoSummary("dQw4w9WgXcQ", "Second", "Channel", TimeSpan.FromMinutes(3), "", false));
         var playback = new ControlledPlaybackService();
-        var statusReporter = new CapturingStatusReporter();
-        using var viewModel = new QueueViewModel(queue, playback, statusReporter);
+        using var viewModel = new QueueViewModel(queue, playback);
 
         var launch = viewModel.PlayAllAsync();
         var duplicateLaunch = viewModel.PlayAllAsync();
@@ -148,7 +140,6 @@ public sealed class ViewModelTests
         playback.Completion.SetResult("MPV opened.");
         await launch;
 
-        Assert.Equal("MPV opened.", statusReporter.Message);
         Assert.False(viewModel.State.IsLaunching);
         Assert.Equal([first.Id, second.Id], queue.Items.Select(item => item.Id));
     }
@@ -159,14 +150,12 @@ public sealed class ViewModelTests
         var queue = new QueueService();
         queue.Add(new VideoSummary("abc123_X-yZ", "First", "Channel", TimeSpan.FromMinutes(2), "", false));
         var playback = new ControlledPlaybackService();
-        var statusReporter = new CapturingStatusReporter();
-        using var viewModel = new QueueViewModel(queue, playback, statusReporter);
+        using var viewModel = new QueueViewModel(queue, playback);
 
         var launch = viewModel.PlayAllAsync();
         playback.Completion.SetException(new InvalidOperationException());
         await launch;
 
-        Assert.Equal("Playback could not be started.", statusReporter.Message);
         Assert.False(viewModel.State.IsLaunching);
         Assert.Single(queue.Items);
     }
@@ -227,7 +216,7 @@ public sealed class ViewModelTests
     public async Task SearchProjectsOnlyUniqueNonShortVideos()
     {
         var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
         var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
         var duplicate = first with { Title = "Duplicate" };
         var shortVideo = new VideoSummary("def456ghi78", "Short", "Channel", TimeSpan.FromMinutes(1), "", true);
@@ -243,7 +232,7 @@ public sealed class ViewModelTests
     public async Task SearchLoadMoreAsync_AppendsUniqueNextPageVideos()
     {
         var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService(), new CapturingStatusReporter());
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
         var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
         var next = new VideoSummary("def456ghi78", "Next", "Channel", TimeSpan.FromMinutes(2), "", false);
 
@@ -298,16 +287,6 @@ public sealed class ViewModelTests
         {
             Requests.Add(request);
             return Completion.Task;
-        }
-    }
-
-    private sealed class CapturingStatusReporter : IStatusReporter
-    {
-        public string? Message { get; private set; }
-
-        public void ReportStatus(string message)
-        {
-            Message = message;
         }
     }
 

@@ -47,8 +47,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly SearchView _searchView;
     private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
-    private readonly ShellViewModel _shell = new();
-    
     private bool _closed;
     private WebLoginWindow? _webLogin;
 
@@ -62,7 +60,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
-        _channelViewModel = new ChannelViewModel(services.Channels, _shell);
+        _channelViewModel = new ChannelViewModel(services.Channels);
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions,
             CloseChannel);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
@@ -72,14 +70,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             services.WatchProgress,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
-        _historyViewModel = new HistoryViewModel(services.History, _shell);
+        _historyViewModel = new HistoryViewModel(services.History);
         _history = new HistoryView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
 
-        _searchViewModel = new SearchViewModel(services.Search, _playback, _shell, services.SearchSuggestions);
+        _searchViewModel = new SearchViewModel(services.Search, _playback, services.SearchSuggestions);
         _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
         search_popover.Child = _searchPopover.Widget;
         search_popover.OnClosed += (_, _) => _searchPopover.OnClosed();
@@ -92,11 +90,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchView = new SearchView(_searchViewModel, services.Thumbnails, services.WatchProgress, actions);
         _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
 
-        _queueViewModel = new QueueViewModel(services.Queue, _playback, _shell);
+        _queueViewModel = new QueueViewModel(services.Queue, _playback);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
         queue_sidebar_host.Append(_queueView.Widget);
-        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation,
-            _shell);
+        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
             services.Thumbnails,
@@ -108,13 +105,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         channelPage.Visible = false;
         var searchPage = view_stack.AddTitled(_searchView.Widget, "search", "Search");
         searchPage.Visible = false;
-        view_stack.VisibleChildName = _shell.SelectedPage;
+        view_stack.VisibleChildName = "home";
 
         account_popover.Child = _accountPopover.Widget;
         queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         RegisterApplicationActions();
-        _shell.PropertyChanged += OnShellPropertyChanged;
         _queueViewModel.StateChanged += OnQueueStateChanged;
         UpdateQueueButton(_queueViewModel.State);
         Widget.OnCloseRequest += OnCloseRequest;
@@ -126,14 +122,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         return new VideoCardActions
         {
             PlayAsync = async video =>
-                _shell.Status = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
+                await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
             OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
             AddToQueue = video =>
             {
                 _services.Queue.Add(video);
-                _shell.Status = "Video added to queue.";
             },
-            ReportStatus = message => _shell.Status = message,
             OpenChannelAsync = OpenChannelAsync
         };
     }
@@ -142,18 +136,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         var request = new PlaybackRequest([video]);
         var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
-        _shell.Status = playbackBackend == PlaybackBackends.EmbeddedPlayer
-            ? await _services.Playback.PlayAsync(request).ConfigureAwait(false)
-            : await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
+        if (playbackBackend == PlaybackBackends.EmbeddedPlayer)
+            await _services.Playback.PlayAsync(request).ConfigureAwait(false);
+        else
+            await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
     }
 
     private async Task OpenChannelAsync(VideoSummary video)
     {
         if (string.IsNullOrWhiteSpace(video.ChannelUrl))
-        {
-            _shell.Status = $"A channel link is not available for {video.ChannelName}.";
             return;
-        }
 
         view_stack.VisibleChildName = "channel";
         UpdateHomeRefreshButton(_channel.IsLoading);
@@ -220,7 +212,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (warnings.Count == 0)
             return;
 
-        _shell.Status = $"Runtime setup needed: {string.Join(" ", warnings)}";
+        Logger.Warning("Runtime setup needed: {Warnings}", string.Join(" ", warnings));
     }
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
@@ -302,8 +294,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var preferencesAction = SimpleAction.New("preferences", null);
         preferencesAction.OnActivate += (_, _) =>
         {
-            var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences,
-                message => _shell.Status = message);
+            var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences);
             preferencesDialogWrapper.Widget.Present(Widget);
         };
         Widget.AddAction(preferencesAction);
@@ -332,27 +323,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         dialog.Present(Widget);
     }
 
-    private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        Functions.IdleAdd(0, () =>
-        {
-            if (_closed)
-                return false;
-
-            switch (args.PropertyName)
-            {
-                case nameof(ShellViewModel.Status):
-                    status_label.SetText(_shell.Status);
-                    status_label.TooltipText = _shell.Status;
-                    break;
-                case nameof(ShellViewModel.SelectedPage):
-                    view_stack.VisibleChildName = _shell.SelectedPage;
-                    break;
-            }
-
-            return false;
-        });
-    }
 
     private void OnQueueStateChanged(object? sender, QueuePresentationState state)
     {
@@ -415,7 +385,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _historyViewModel.Dispose();
         _channel.Dispose();
         _channelViewModel.Dispose();
-        _shell.PropertyChanged -= OnShellPropertyChanged;
+
         _queueViewModel.StateChanged -= OnQueueStateChanged;
         _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged;
         _home.Dispose();

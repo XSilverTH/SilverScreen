@@ -10,8 +10,7 @@ public sealed class ChannelViewModelTests
     public async Task OpenChannelAsync_LoadsTheRequestedChannelAndDefaultsToNewest()
     {
         var service = new FakeChannelService();
-        var reporter = new FakeStatusReporter();
-        using var viewModel = new ChannelViewModel(service, reporter);
+        using var viewModel = new ChannelViewModel(service);
 
         await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
 
@@ -20,14 +19,13 @@ public sealed class ChannelViewModelTests
         Assert.Single(viewModel.State.Videos);
         Assert.False(viewModel.State.IsLoading);
         Assert.True(viewModel.State.IsSuccess);
-        Assert.Equal("Loaded Example Channel.", reporter.LastStatus);
     }
 
     [Fact]
     public async Task SetSortSelection_ReloadsCurrentChannelWithChosenSort()
     {
         var service = new FakeChannelService();
-        using var viewModel = new ChannelViewModel(service, new FakeStatusReporter());
+        using var viewModel = new ChannelViewModel(service);
         await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
 
         await viewModel.SetSortSelection(2);
@@ -41,7 +39,7 @@ public sealed class ChannelViewModelTests
     public async Task LoadMoreAsync_AppendsTheNextChannelPage()
     {
         var service = new FakeChannelService();
-        using var viewModel = new ChannelViewModel(service, new FakeStatusReporter());
+        using var viewModel = new ChannelViewModel(service);
         await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
 
         await viewModel.LoadMoreAsync();
@@ -71,16 +69,6 @@ public sealed class ChannelViewModelTests
                     string.Empty, false, ChannelUrl: channelUrl);
             return Task.FromResult(new ChannelPage(channelUrl, "Example Channel", "Description", null, 1,
                 [video], sort, "Loaded Example Channel.", NextStartIndex: startIndex == 1 ? 21 : null));
-        }
-    }
-
-    private sealed class FakeStatusReporter : IStatusReporter
-    {
-        public string? LastStatus { get; private set; }
-
-        public void ReportStatus(string status)
-        {
-            LastStatus = status;
         }
     }
 }

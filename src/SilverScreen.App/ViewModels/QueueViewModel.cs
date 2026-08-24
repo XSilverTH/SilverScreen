@@ -22,17 +22,15 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     private static readonly ILogger Logger = Log.ForContext<QueueViewModel>();
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
-    private readonly IStatusReporter? _shell;
     private int _currentPlayingIndex = -1;
     private bool _disposed;
     private bool _isLaunching;
     private QueuePresentationState _state;
 
-    public QueueViewModel(IQueueService queue, IPlaybackService playback, IStatusReporter? shell = null)
+    public QueueViewModel(IQueueService queue, IPlaybackService playback)
     {
         _queue = queue;
         _playback = playback;
-        _shell = shell;
         _state = Snapshot();
         _queue.Changed += OnQueueChanged;
     }
@@ -97,13 +95,11 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            var status = await _playback.PlayAsync(new PlaybackRequest(videos));
-            _shell?.ReportStatus(status);
+            await _playback.PlayAsync(new PlaybackRequest(videos));
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to start playback for queue items");
-            _shell?.ReportStatus("Playback could not be started.");
         }
         finally
         {

@@ -13,7 +13,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private static readonly ILogger Logger = Log.ForContext<AccountViewModel>();
     private readonly IAccountProfileService _accountProfileService;
     private readonly ISessionService _sessionService;
-    private readonly IStatusReporter _shell;
     private readonly SessionValidationCoordinator _validation;
     private bool _disposed;
     private AccountProfile? _profile;
@@ -21,12 +20,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private AccountSession _session;
 
     public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService,
-        SessionValidationCoordinator validation, IStatusReporter shell)
+        SessionValidationCoordinator validation)
     {
         _accountProfileService = accountProfileService;
         _sessionService = sessionService;
         _validation = validation;
-        _shell = shell;
         _session = _sessionService.GetCurrentSession();
         if (_session.HasManualSession)
             _profile = _accountProfileService.GetCachedProfile();
@@ -93,39 +91,30 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     {
         Logger.Information("SaveManualSession called");
         if (!string.IsNullOrWhiteSpace(cookieContent))
-            return PersistSession(
-                cookieContent.Trim(),
-                "Manual YouTube session saved securely.");
+            return PersistSession(cookieContent.Trim());
         Logger.Warning("Manual session save aborted: empty cookie content");
-        _shell.ReportStatus("Manual YouTube session was not saved because no cookie content was entered.");
         return false;
     }
 
     public bool SaveWebSession(string cookieContent)
     {
         if (!string.IsNullOrWhiteSpace(cookieContent))
-            return PersistSession(
-                cookieContent.Trim(),
-                "YouTube web session saved securely.");
-        _shell.ReportStatus("YouTube web session was not saved because no cookie content was captured.");
+            return PersistSession(cookieContent.Trim());
         return false;
     }
 
-    private bool PersistSession(string cookieContent, string successMessage)
+    private bool PersistSession(string cookieContent)
     {
         try
         {
             _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
+            return true;
         }
         catch (SessionPersistenceException exception)
         {
             Logger.Warning(exception, "Failed to persist YouTube session");
-            _shell.ReportStatus(exception.Message);
             return false;
         }
-
-        _shell.ReportStatus(successMessage);
-        return true;
     }
 
     public void ClearSession()
@@ -138,11 +127,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         catch (SessionPersistenceException exception)
         {
             Logger.Error(exception, "Failed to clear YouTube session");
-            _shell.ReportStatus(exception.Message);
-            return;
         }
-
-        _shell.ReportStatus("YouTube session cleared.");
     }
 
     public async Task ValidateAsync()
@@ -150,22 +135,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         if (!_validation.IsAvailable || _disposed)
             return;
 
-        // IsValidating = true;
-        _shell.ReportStatus(SessionValidationFormatter.ValidatingMessage);
         try
         {
-            _shell.ReportStatus(await _validation.ValidateAsync().ConfigureAwait(false));
+            await _validation.ValidateAsync().ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to validate YouTube session");
-            _shell.ReportStatus(SessionValidationFormatter.FormatUnexpectedError());
         }
-        // finally
-        // {
-        //     if (!_disposed)
-        //         IsValidating = false;
-        // }
     }
 
     private void OnSessionChanged(object? sender, EventArgs eventArgs)

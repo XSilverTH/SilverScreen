@@ -24,7 +24,7 @@ public sealed record ChannelViewState(
         ChannelVideoSort.Newest, string.Empty, false, true);
 }
 
-public sealed class ChannelViewModel(IChannelService channelService, IStatusReporter shell) : IDisposable
+public sealed class ChannelViewModel(IChannelService channelService) : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private bool _disposed;
@@ -103,7 +103,6 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
         var generation = ++_requestGeneration;
         var loadingState = State with { IsLoadingMore = true, Summary = "Loading more videos…" };
         State = loadingState;
-        shell.ReportStatus(loadingState.Summary);
 
         try
         {
@@ -119,7 +118,6 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
                 videos, page.Sort, summary, false, page.IsSuccess, false,
                 page.IsSuccess && _nextStartIndex is not null);
-            shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -132,10 +130,8 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             Logger.Warning(exception, "Failed to load more channel videos for {ChannelUrl}", State.Url);
             const string message = "Could not load more channel videos.";
             State = State with { Summary = message, IsLoadingMore = false };
-            shell.ReportStatus(message);
         }
     }
-
     public void Clear()
     {
         ThrowIfDisposed();
@@ -171,7 +167,6 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             Videos = []
         };
         State = loadingState;
-        shell.ReportStatus(loadingState.Summary);
 
         try
         {
@@ -186,7 +181,6 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
                 page.Videos, page.Sort, summary, false, page.IsSuccess, false,
                 page.IsSuccess && _nextStartIndex is not null);
-            shell.ReportStatus(summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -200,10 +194,8 @@ public sealed class ChannelViewModel(IChannelService channelService, IStatusRepo
             const string message = "Could not load channel.";
             _nextStartIndex = null;
             State = State with { Summary = message, IsLoading = false, IsSuccess = false, Videos = [] };
-            shell.ReportStatus(message);
         }
     }
-
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

@@ -19,7 +19,7 @@ public sealed record HistoryViewState(
         AuthenticatedHistoryStatus.Success);
 }
 
-public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService, IStatusReporter shell) : IDisposable
+public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService) : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
     private bool _disposed;
@@ -67,8 +67,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
         State = new HistoryViewState([], "Loading watch history…", true, true, AuthenticatedHistoryStatus.Success);
-        shell.ReportStatus(State.Summary);
-
         try
         {
             var result = await historyService.LoadFirstPageAsync(token).ConfigureAwait(false);
@@ -81,7 +79,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
                 false,
                 result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
             State = state;
-            shell.ReportStatus(state.Summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -94,7 +91,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
             Logger.Warning(exception, "Failed to refresh watch history");
             const string message = "Could not load watch history.";
             State = new HistoryViewState([], message, false, false, AuthenticatedHistoryStatus.TemporaryBackendFailure);
-            shell.ReportStatus(message);
         }
     }
 
@@ -109,8 +105,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         var token = _requestCancellation.Token;
         var generation = ++_requestGeneration;
         State = State with { IsLoadingMore = true, Summary = "Loading more watch history…" };
-        shell.ReportStatus(State.Summary);
-
         try
         {
             var result = await historyService.LoadNextPageAsync(token).ConfigureAwait(false);
@@ -122,7 +116,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
             var state = new HistoryViewState(videos, result.StatusMessage, false, isSuccess, result.Status, false,
                 result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
             State = state;
-            shell.ReportStatus(state.Summary);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -135,7 +128,6 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
             Logger.Warning(exception, "Failed to load more watch history");
             const string message = "Could not load more watch history.";
             State = State with { Summary = message, IsLoadingMore = false };
-            shell.ReportStatus(message);
         }
     }
 
