@@ -1,5 +1,9 @@
 /* Video Card and Thumbnail styles */
 
+gridview {
+    background-color: transparent;
+}
+
 gridview > child,
 gridview child,
 gridview tile,
