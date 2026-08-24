@@ -19,11 +19,11 @@ public partial class ChannelView : ViewBase<Box>
     private const int AvatarSize = 80;
     private const double CollapseThreshold = 50.0;
     private const double TopRevealThreshold = 1.0;
+    private const double TopHoverZoneThreshold = 40.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
 
-    private readonly GestureClick _clueClickGesture;
-    private readonly EventControllerMotion _clueMotionController;
+    private readonly EventControllerMotion _videoMotionController;
     private readonly EventControllerScroll _scrollController;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
@@ -42,6 +42,7 @@ public partial class ChannelView : ViewBase<Box>
     private long _lastHeaderStateChangeTicks;
     private double _lastScrollY;
     private long _lastUserScrollTicks;
+    private long _lastScrollDownTicks;
     private bool _updatingSortDropdown;
 
     public ChannelView(
@@ -70,15 +71,11 @@ public partial class ChannelView : ViewBase<Box>
         _scrollController.OnScroll += OnScrollEvent;
         _videoList.ScrolledWindow.AddController(_scrollController);
 
-        _clueMotionController = EventControllerMotion.New();
-        _clueMotionController.OnEnter += OnCluePointerEnter;
-        _clueMotionController.OnMotion += OnCluePointerMotion;
-        channel_reveal_clue.AddController(_clueMotionController);
-
-        _clueClickGesture = GestureClick.New();
-        _clueClickGesture.Button = 1;
-        _clueClickGesture.OnPressed += OnClueClicked;
-        channel_reveal_clue.AddController(_clueClickGesture);
+        _videoMotionController = EventControllerMotion.New();
+        _videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
+        _videoMotionController.OnEnter += OnVideoPointerEnter;
+        _videoMotionController.OnMotion += OnVideoPointerMotion;
+        _videoList.ScrolledWindow.AddController(_videoMotionController);
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -111,6 +108,7 @@ public partial class ChannelView : ViewBase<Box>
             case > 0.01:
                 _isUserScrollingUp = false;
                 _lastUserScrollTicks = Environment.TickCount64;
+                _lastScrollDownTicks = Environment.TickCount64;
                 break;
         }
 
@@ -145,33 +143,34 @@ public partial class ChannelView : ViewBase<Box>
         _lastScrollY = currentY;
     }
 
-    private void OnCluePointerEnter(object? sender, EventControllerMotion.EnterSignalArgs args)
+    private void OnVideoPointerEnter(EventControllerMotion sender, EventControllerMotion.EnterSignalArgs args)
     {
-        RevealHeaderFromClue();
+        CheckHoverReveal(args.Y);
     }
 
-    private void OnCluePointerMotion(object? sender, EventControllerMotion.MotionSignalArgs args)
+    private void OnVideoPointerMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
     {
-        RevealHeaderFromClue();
+        CheckHoverReveal(args.Y);
     }
 
-    private void OnClueClicked(object? sender, GestureClick.PressedSignalArgs args)
-    {
-        RevealHeaderFromClue();
-    }
-
-    private void RevealHeaderFromClue()
+    private void CheckHoverReveal(double y)
     {
         if (_disposed || !_isHeaderCollapsed) return;
 
-        SetHeaderCollapsed(false);
+        var now = Environment.TickCount64;
+        if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs) return;
+        if (now - _lastScrollDownTicks < 300) return;
+
+        if (y is >= 0 and <= TopHoverZoneThreshold)
+        {
+            SetHeaderCollapsed(false);
+        }
     }
 
     private void SetHeaderCollapsed(bool collapsed)
     {
         _isHeaderCollapsed = collapsed;
         channel_header_revealer.RevealChild = !collapsed;
-        channel_clue_revealer.RevealChild = collapsed;
         _lastHeaderStateChangeTicks = Environment.TickCount64;
         if (_vadjustment is not null) _lastScrollY = _vadjustment.Value;
     }
@@ -390,15 +389,10 @@ public partial class ChannelView : ViewBase<Box>
         _videoList.ScrolledWindow.RemoveController(_scrollController);
         _scrollController.Dispose();
 
-        _clueMotionController.OnEnter -= OnCluePointerEnter;
-        _clueMotionController.OnMotion -= OnCluePointerMotion;
-        channel_reveal_clue.RemoveController(_clueMotionController);
-        _clueMotionController.Dispose();
-
-        _clueClickGesture.OnPressed -= OnClueClicked;
-        channel_reveal_clue.RemoveController(_clueClickGesture);
-        _clueClickGesture.Dispose();
-
+        _videoMotionController.OnEnter -= OnVideoPointerEnter;
+        _videoMotionController.OnMotion -= OnVideoPointerMotion;
+        _videoList.ScrolledWindow.RemoveController(_videoMotionController);
+        _videoMotionController.Dispose();
         _viewModel.StateChanged -= OnStateChanged;
 
         _avatarCancellation?.Cancel();

@@ -109,34 +109,6 @@ Gtk.Box ChannelView {
     };
   }
 
-  Gtk.Revealer channel_clue_revealer {
-    reveal-child: false;
-    transition-type: slide_down;
-    transition-duration: 200;
-
-    child: Gtk.Box channel_reveal_clue {
-      orientation: horizontal;
-      halign: center;
-      valign: center;
-      margin-top: 6;
-      margin-bottom: 6;
-      spacing: 8;
-      tooltip-text: "Hover or click to reveal channel details";
-      styles ["channel-reveal-clue"]
-
-      Gtk.Image {
-        icon-name: "pan-down-symbolic";
-        pixel-size: 16;
-        styles ["dim-label"]
-      }
-
-      Gtk.Label {
-        label: "Show channel details";
-        styles ["caption", "dim-label"]
-      }
-    };
-  }
-
   Gtk.Box channel_video_list_host {
     hexpand: true;
     vexpand: true;
