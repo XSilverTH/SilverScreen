@@ -1,7 +1,9 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SilverScreen.Core.Common;
 
@@ -121,6 +123,8 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
                typeToConvert.GetGenericTypeDefinition() == typeof(EquatableArray<>);
     }
 
+    [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
+        Justification = "EquatableArray is used with statically known element types registered in JsonSerializerContext.")]
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
@@ -131,6 +135,13 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
 
 public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArray<T>>
 {
+    private JsonTypeInfo<T>? _elementTypeInfo;
+
+    private JsonTypeInfo<T> GetElementTypeInfo(JsonSerializerOptions options)
+    {
+        return _elementTypeInfo ??= (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+    }
+
     public override EquatableArray<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType == JsonTokenType.Null)
@@ -139,7 +150,7 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
         if (reader.TokenType != JsonTokenType.StartArray)
             throw new JsonException($"Expected StartArray token, got {reader.TokenType}");
 
-        var elementConverter = (JsonConverter<T>?)options.GetConverter(typeof(T));
+        var typeInfo = GetElementTypeInfo(options);
         var list = new List<T>();
 
         while (reader.Read())
@@ -147,9 +158,7 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
             if (reader.TokenType == JsonTokenType.EndArray)
                 return new EquatableArray<T>(list.ToArray());
 
-            var element = elementConverter is not null
-                ? elementConverter.Read(ref reader, typeof(T), options)
-                : JsonSerializer.Deserialize<T>(ref reader, options);
+            var element = JsonSerializer.Deserialize(ref reader, typeInfo);
             if (element is not null)
                 list.Add(element);
         }
@@ -160,13 +169,12 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
     public override void Write(Utf8JsonWriter writer, EquatableArray<T> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        var elementConverter = (JsonConverter<T>?)options.GetConverter(typeof(T));
+        var typeInfo = GetElementTypeInfo(options);
 
         foreach (var item in value)
-            if (elementConverter is not null)
-                elementConverter.Write(writer, item, options);
-            else
-                JsonSerializer.Serialize(writer, item, options);
+        {
+            JsonSerializer.Serialize(writer, item, typeInfo);
+        }
 
         writer.WriteEndArray();
     }

@@ -52,6 +52,25 @@ public sealed class PreferencesTests : IDisposable
     {
         _tempFilePath = Path.Combine(Path.GetTempPath(), $"silverscreen-test-prefs-{Guid.NewGuid()}.json");
     }
+    [Fact]
+    public void AppPreferences_JsonSerialization_PreservesEquatableArrayProperties()
+    {
+        var prefs = new AppPreferences
+        {
+            SponsorBlockCategories = ["sponsor", "intro"],
+            Shortcuts = new PlayerShortcutBindings
+            {
+                TogglePause = ["space", "p"],
+            },
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(prefs, PreferencesJsonContext.Default.AppPreferences);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize(json, PreferencesJsonContext.Default.AppPreferences);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(["sponsor", "intro"], deserialized.SponsorBlockCategories);
+        Assert.Equal(["space", "p"], deserialized.Shortcuts.TogglePause);
+    }
 
     public void Dispose()
     {
