@@ -49,21 +49,95 @@
     color: alpha(#ffffff, 0.72);
 }
 
-.player-overlay-button,
-.player-primary-control,
-.player-headerbar button {
+/* MenuButton container reset to prevent double/nested squircle hover */
+menubutton.player-overlay-button,
+menubutton.player-overlay-button:hover,
+menubutton.player-overlay-button:active,
+menubutton.player-overlay-button:focus,
+menubutton.player-overlay-button:checked {
+    background: transparent;
     background-color: transparent;
-    color: #ffffff;
-    transition: background-color 160ms ease-out;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
 }
 
-.player-overlay-button:hover,
-.player-headerbar button:hover {
-    background-color: alpha(#ffffff, 0.16);
+/* Player buttons base styling - squircle icon buttons with no resting backdrop or border */
+button.player-overlay-button,
+menubutton.player-overlay-button > button,
+button.player-reaction-button,
+button.player-primary-control,
+button.player-seek-button {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 9px;
+    box-shadow: none;
+    color: #ffffff;
+    transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1),
+                color 160ms cubic-bezier(0.2, 0, 0, 1),
+                opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+button.player-overlay-button,
+menubutton.player-overlay-button > button {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 4px;
+}
+
+/* Subtle squircle hover effect */
+button.player-overlay-button:hover,
+menubutton.player-overlay-button > button:hover,
+button.player-reaction-button:hover,
+button.player-primary-control:hover,
+button.player-seek-button:hover {
+    background-color: alpha(#ffffff, 0.12);
+    color: #ffffff;
+}
+
+/* Pressed / Active effect */
+button.player-overlay-button:active,
+menubutton.player-overlay-button > button:active,
+button.player-reaction-button:active,
+button.player-primary-control:active,
+button.player-seek-button:active {
+    background-color: alpha(#ffffff, 0.20);
+    color: #ffffff;
+}
+
+/* Toggle / Checked active state */
+button.player-overlay-button:checked,
+button.player-overlay-button.active,
+menubutton.player-overlay-button > button:checked,
+menubutton.player-overlay-button > button.active,
+button.player-queue-toggle:checked,
+button.player-queue-toggle.active {
+    background-color: alpha(#ffffff, 0.18);
+    border-radius: 9px;
+    color: #ffffff;
+}
+
+button.player-overlay-button:checked:hover,
+button.player-overlay-button.active:hover,
+menubutton.player-overlay-button > button:checked:hover,
+menubutton.player-overlay-button > button.active:hover,
+button.player-queue-toggle:checked:hover,
+button.player-queue-toggle.active:hover {
+    background-color: alpha(#ffffff, 0.24);
+}
+
+/* Disabled state */
+button.player-overlay-button:disabled,
+menubutton.player-overlay-button > button:disabled,
+button.player-reaction-button:disabled {
+    color: alpha(#ffffff, 0.40);
 }
 
 .player-reaction-button {
-    color: #ffffff;
+    border-radius: 9px;
     min-height: 32px;
     padding: 4px 8px;
 }
@@ -89,38 +163,9 @@ button.player-reaction-button:disabled label {
 }
 
 .player-queue-controls {
-    background-color: alpha(#ffffff, 0.14);
-    border-radius: 14px;
-}
-
-button.player-queue-button {
-    border-radius: 0;
-    color: #ffffff;
-    min-height: 28px;
-    min-width: 28px;
-    padding: 4px;
-}
-
-button.player-queue-button:hover {
-    background-color: alpha(#ffffff, 0.16);
-}
-
-button.player-queue-toggle:checked,
-button.player-queue-toggle.active {
-    background-color: alpha(@accent_bg_color, 0.35);
-    color: #ffffff;
-}
-
-button.player-queue-toggle:checked:hover,
-button.player-queue-toggle.active:hover {
-    background-color: alpha(@accent_bg_color, 0.45);
-}
-
-.player-queue-separator {
-    background-color: alpha(#ffffff, 0.2);
-    margin-bottom: 6px;
-    margin-top: 6px;
-    min-width: 1px;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .player-center-controls {
@@ -130,14 +175,17 @@ button.player-queue-toggle.active:hover {
 .player-seek-button {
     min-height: 40px;
     min-width: 40px;
+    border-radius: 10px;
+    padding: 6px;
 }
 
 .player-primary-control {
     min-height: 72px;
     min-width: 72px;
     -gtk-icon-size: 64px;
+    border-radius: 16px;
+    padding: 8px;
 }
-
 .player-controls scale trough {
     background-color: alpha(#ffffff, 0.24);
     min-height: 4px;

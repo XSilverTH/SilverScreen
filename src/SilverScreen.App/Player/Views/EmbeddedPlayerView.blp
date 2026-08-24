@@ -64,7 +64,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       clicked => $OnBackButtonClicked();
       icon-name: "go-previous-symbolic";
       tooltip-text: "Back to SilverScreen";
-      styles ["flat", "circular", "player-overlay-button"]
+      styles ["flat", "player-overlay-button"]
     }
 
     [end]
@@ -72,7 +72,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       clicked => $OnFullscreenButtonClicked();
       icon-name: "view-fullscreen-symbolic";
       tooltip-text: "Toggle fullscreen (F)";
-      styles ["flat", "circular", "player-overlay-button"]
+      styles ["flat", "player-overlay-button"]
     }
   }
 
@@ -88,7 +88,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       clicked => $OnRewindButtonClicked();
       icon-name: "media-seek-backward-symbolic";
       tooltip-text: "Rewind 10 seconds (← or J)";
-      styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
+      styles ["flat", "player-overlay-button", "player-seek-button"]
     }
 
     Gtk.Button player_play_pause_button {
@@ -102,7 +102,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       clicked => $OnForwardButtonClicked();
       icon-name: "media-seek-forward-symbolic";
       tooltip-text: "Forward 10 seconds (→ or L)";
-      styles ["flat", "circular", "player-overlay-button", "player-seek-button"]
+      styles ["flat", "player-overlay-button", "player-seek-button"]
     }
   }
 
@@ -147,7 +147,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       }
 
       Gtk.Box player_queue_controls {
-        spacing: 0;
+        spacing: 2;
         valign: center;
         visible: false;
         styles ["player-queue-controls"]
@@ -156,30 +156,20 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           clicked => $OnPreviousQueueButtonClicked();
           icon-name: "media-skip-backward-symbolic";
           tooltip-text: "Previous video (P)";
-          styles ["flat", "player-queue-button"]
-        }
-
-        Gtk.Separator {
-          orientation: vertical;
-          styles ["player-queue-separator"]
+          styles ["flat", "player-overlay-button"]
         }
 
         Gtk.ToggleButton player_queue_button {
           icon-name: "view-list-symbolic";
           tooltip-text: "Up next (Q)";
-          styles ["flat", "player-queue-button", "player-queue-toggle"]
-        }
-
-        Gtk.Separator {
-          orientation: vertical;
-          styles ["player-queue-separator"]
+          styles ["flat", "player-overlay-button", "player-queue-toggle"]
         }
 
         Gtk.Button player_next_queue_button {
           clicked => $OnNextQueueButtonClicked();
           icon-name: "media-skip-forward-symbolic";
           tooltip-text: "Next video (N)";
-          styles ["flat", "player-queue-button"]
+          styles ["flat", "player-overlay-button"]
         }
       }
 
@@ -236,14 +226,13 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           icon-name: "subtitles-symbolic";
           tooltip-text: "Use preferred subtitles (C)";
           sensitive: false;
-          styles ["flat", "circular", "player-reaction-button"]
+          styles ["flat", "player-overlay-button"]
         }
-    }
 
       Gtk.MenuButton player_volume_button {
         icon-name: "audio-volume-high-symbolic";
         tooltip-text: "Volume (M mutes; ↑/↓ adjust)";
-        styles ["flat", "circular", "player-overlay-button"]
+        styles ["flat", "player-overlay-button"]
 
         popover: Gtk.Popover player_volume_popover {
           child: Gtk.Box {
@@ -278,7 +267,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       Gtk.MenuButton {
         icon-name: "preferences-system-symbolic";
         tooltip-text: "Player settings ([/]: speed)";
-        styles ["flat", "circular", "player-overlay-button"]
+        styles ["flat", "player-overlay-button"]
 
         popover: Gtk.Popover player_settings_popover {
           child: Gtk.Box {
@@ -384,6 +373,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             }
           };
         };
+      }
       }
     }
 
@@ -518,7 +508,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             clicked => $OnInfoCloseButtonClicked();
             icon-name: "window-close-symbolic";
             tooltip-text: "Close video details (Escape)";
-            styles ["flat", "circular"]
+            styles ["flat", "player-overlay-button"]
           }
         }
 
