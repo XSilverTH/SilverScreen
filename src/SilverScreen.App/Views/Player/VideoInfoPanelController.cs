@@ -4,33 +4,61 @@ using Serilog;
 using SilverScreen.Core.Models;
 using SilverScreen.Core.Services;
 using SilverScreen.Infrastructure;
-using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Views.Player;
 
-public partial class VideoInfoPanelView : ViewBase<Overlay>
+internal sealed class VideoInfoPanelController : IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<VideoInfoPanelView>();
+    private static readonly ILogger Logger = Log.ForContext<VideoInfoPanelController>();
     private readonly Action<VideoSummary> _channelRequested;
     private readonly Action? _closed;
-
-
     private readonly IYouTubeVideoDetailsService _videoDetails;
-    private bool _bottomEdgeActive;
 
+    private readonly Button _backdrop;
+    private readonly Button _cueButton;
+    private readonly Revealer _revealer;
+    private readonly Label _titleLabel;
+    private readonly Label _channelLabel;
+    private readonly Label _statsLabel;
+    private readonly Label _statusLabel;
+    private readonly ScrolledWindow _descriptionScroller;
+    private readonly TextView _description;
+    private readonly Button _closeButton;
+
+    private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
     private bool _disposed;
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
 
-    public VideoInfoPanelView(
+    public VideoInfoPanelController(
         IYouTubeVideoDetailsService videoDetails,
         Action<VideoSummary> channelRequested,
+        Button backdrop,
+        Button cueButton,
+        Revealer revealer,
+        Label titleLabel,
+        Label channelLabel,
+        Label statsLabel,
+        Label statusLabel,
+        ScrolledWindow descriptionScroller,
+        TextView description,
+        Button closeButton,
         Action? closed = null)
     {
         _videoDetails = videoDetails;
         _channelRequested = channelRequested;
+        _backdrop = backdrop;
+        _cueButton = cueButton;
+        _revealer = revealer;
+        _titleLabel = titleLabel;
+        _channelLabel = channelLabel;
+        _statsLabel = statsLabel;
+        _statusLabel = statusLabel;
+        _descriptionScroller = descriptionScroller;
+        _description = description;
+        _closeButton = closeButton;
         _closed = closed;
 
         SetInfoContent(null);
@@ -38,21 +66,27 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     public bool IsOpen { get; private set; }
 
-    private void Show(VideoSummary video)
+    public void Show()
+    {
+        if (_currentVideo is { } video)
+            Show(video);
+    }
+
+    public void Show(VideoSummary video)
     {
         if (_disposed) return;
         _currentVideo = video;
         IsOpen = true;
         _bottomEdgeActive = false;
-        info_cue_button.SetVisible(false);
-        info_backdrop.SetVisible(true);
-        info_revealer.RevealChild = true;
-        info_title_label.SetText(video.Title);
-        info_channel_label.SetText(video.ChannelName);
-        info_close_button.GrabFocus();
-        info_status_label.SetText("Loading video details…");
-        info_status_label.SetVisible(true);
-        info_description_scroller.SetVisible(false);
+        _cueButton.SetVisible(false);
+        _backdrop.SetVisible(true);
+        _revealer.RevealChild = true;
+        _titleLabel.SetText(video.Title);
+        _channelLabel.SetText(video.ChannelName);
+        _closeButton.GrabFocus();
+        _statusLabel.SetText("Loading video details…");
+        _statusLabel.SetVisible(true);
+        _descriptionScroller.SetVisible(false);
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
@@ -63,24 +97,25 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
 
     public void Close()
     {
-        if (!IsOpen && !info_revealer.RevealChild) return;
+        if (!IsOpen && !_revealer.RevealChild) return;
         IsOpen = false;
         ++_infoLoadGeneration;
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
-        info_revealer.RevealChild = false;
-        info_backdrop.SetVisible(false);
-        info_cue_button.SetVisible(false);
+        _revealer.RevealChild = false;
+        _backdrop.SetVisible(false);
+        _cueButton.SetVisible(false);
         SetInfoContent(null);
         _closed?.Invoke();
     }
 
-    public void Toggle(VideoSummary? video)
+    public void Toggle(VideoSummary? video = null)
     {
         if (IsOpen)
             Close();
-        else if (video is not null) Show(video);
+        else if ((video ?? _currentVideo) is { } targetVideo)
+            Show(targetVideo);
     }
 
     public void SetVideo(VideoSummary? video)
@@ -96,35 +131,20 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
         var atBottomEdge = hasMedia && !IsOpen && height > 0 && y >= height - 28;
         if (_bottomEdgeActive == atBottomEdge) return;
         _bottomEdgeActive = atBottomEdge;
-        info_cue_button.SetVisible(atBottomEdge);
+        _cueButton.SetVisible(atBottomEdge);
     }
 
-    public void Reset()
-    {
-        Close();
-        _currentVideo = null;
-    }
-
-    private void OnBackdropClicked(object? sender, EventArgs args)
-    {
-        Close();
-    }
-
-    private void OnCueButtonClicked(object? sender, EventArgs args)
-    {
-        if (_currentVideo is { } video) Show(video);
-    }
-
-    private void OnChannelButtonClicked(object? sender, EventArgs args)
+    public void OpenChannel()
     {
         if (_currentVideo is not { } video) return;
         Close();
         _channelRequested(video);
     }
 
-    private void OnCloseButtonClicked(object? sender, EventArgs args)
+    public void Reset()
     {
         Close();
+        _currentVideo = null;
     }
 
     private async Task LoadVideoInfoAsync(string videoId, int generation, CancellationTokenSource cancellation)
@@ -156,9 +176,9 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
             }
             else
             {
-                info_status_label.SetText(result.StatusMessage);
-                info_status_label.SetVisible(true);
-                info_description_scroller.SetVisible(false);
+                _statusLabel.SetText(result.StatusMessage);
+                _statusLabel.SetVisible(true);
+                _descriptionScroller.SetVisible(false);
             }
 
             return false;
@@ -169,22 +189,22 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
     {
         if (details is null)
         {
-            info_title_label.SetText(_currentVideo?.Title ?? "Video details");
-            info_channel_label.SetText(_currentVideo?.ChannelName ?? string.Empty);
-            info_stats_label.SetText(string.Empty);
-            info_status_label.SetText("Move to the bottom edge to reveal video details.");
-            info_status_label.SetVisible(true);
-            info_description_scroller.SetVisible(false);
+            _titleLabel.SetText(_currentVideo?.Title ?? "Video details");
+            _channelLabel.SetText(_currentVideo?.ChannelName ?? string.Empty);
+            _statsLabel.SetText(string.Empty);
+            _statusLabel.SetText("Move to the bottom edge to reveal video details.");
+            _statusLabel.SetVisible(true);
+            _descriptionScroller.SetVisible(false);
             return;
         }
 
-        info_title_label.SetText(details.Title);
-        info_channel_label.SetText(details.ChannelName);
-        info_stats_label.SetText(BuildInfoStats(details));
-        info_status_label.SetVisible(string.IsNullOrWhiteSpace(details.Description));
-        info_status_label.SetText("This video has no description.");
-        info_description_scroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
-        if (info_description.Buffer is { } buffer)
+        _titleLabel.SetText(details.Title);
+        _channelLabel.SetText(details.ChannelName);
+        _statsLabel.SetText(BuildInfoStats(details));
+        _statusLabel.SetVisible(string.IsNullOrWhiteSpace(details.Description));
+        _statusLabel.SetText("This video has no description.");
+        _descriptionScroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
+        if (_description.Buffer is { } buffer)
             buffer.Text = details.Description ?? string.Empty;
     }
 
@@ -198,13 +218,12 @@ public partial class VideoInfoPanelView : ViewBase<Overlay>
         return string.Join(" · ", parts);
     }
 
-    protected override void Dispose(bool disposing)
+    public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
-        base.Dispose(disposing);
     }
 }

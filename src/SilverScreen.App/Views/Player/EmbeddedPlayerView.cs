@@ -37,7 +37,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly PlayerEngagementController _engagement;
     private readonly ImmutableArray<IPlayerFeature> _features;
-    private readonly VideoInfoPanelView _infoPanel;
+    private readonly VideoInfoPanelController _infoPanel;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
     private readonly IQueueService _queueService;
@@ -104,11 +104,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.VideoChanged += OnSessionVideoChanged;
         _session.SessionEnded += OnSessionEnded;
         _session.Failed += OnSessionFailed;
-        _infoPanel = new VideoInfoPanelView(dependencies.VideoDetails, _channelRequested, () =>
+        _infoPanel = new VideoInfoPanelController(dependencies.VideoDetails, _channelRequested, player_info_backdrop,
+            player_info_cue_button, player_info_revealer, player_info_title_label, player_info_channel_label,
+            player_info_stats_label, player_info_status_label, player_info_description_scroller,
+            player_info_description, player_info_close_button, () =>
         {
             if (_session.HasMedia) player_surface.GrabFocus();
         });
-        player_info_host.Append(_infoPanel.Widget);
         _subtitleController = new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
             player_subtitle_model,
             player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId));
@@ -410,6 +412,26 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             RegisterActivity();
     }
 
+
+    private void OnInfoBackdropClicked(object? sender, EventArgs args)
+    {
+        _infoPanel.Close();
+    }
+
+    private void OnInfoCueButtonClicked(object? sender, EventArgs args)
+    {
+        _infoPanel.Show();
+    }
+
+    private void OnInfoCloseButtonClicked(object? sender, EventArgs args)
+    {
+        _infoPanel.Close();
+    }
+
+    private void OnInfoChannelButtonClicked(object? sender, EventArgs args)
+    {
+        _infoPanel.OpenChannel();
+    }
 
     private void OnSubtitleButtonClicked(object? sender, EventArgs args)
     {
