@@ -70,6 +70,17 @@ public sealed class VideoListSourceTests
     }
 
     [Fact]
+    public void HomeVideoListSource_MapsRefreshingState()
+    {
+        var video = new VideoSummary("id1", "Title", "Channel", TimeSpan.FromMinutes(1), "https://example.com/thumb.jpg", false);
+        var state = new HomeFeedState(HomeFeedStateKind.Ready, [video], IsLoading: true);
+        var presentation = HomeVideoListSource.MapState(state);
+
+        Assert.True(presentation.IsLoading);
+        Assert.Single(presentation.Videos);
+    }
+
+    [Fact]
     public void HomeVideoListSource_MapsReadyAndEmptyState()
     {
         var state = new HomeFeedState(HomeFeedStateKind.Ready, []);

@@ -71,11 +71,9 @@ public sealed class HomeVideoListSource : IVideoListSource
             IconName: icon,
             ShowRetry: false);
 
-        var isLoading = state.Kind == HomeFeedStateKind.InitialLoading;
-
         return new VideoListPresentationState(
             Videos: state.Videos,
-            IsLoading: isLoading,
+            IsLoading: state.IsLoading,
             IsLoadingMore: state.IsLoadingMore,
             Status: status,
             LoadingMessage: null,
