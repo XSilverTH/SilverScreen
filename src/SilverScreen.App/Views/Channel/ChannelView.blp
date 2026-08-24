@@ -1,38 +1,10 @@
 using Gtk 4.0;
-using Adw 1;
 
 Gtk.Box ChannelView {
   orientation: vertical;
   hexpand: true;
   vexpand: true;
   styles ["channel-view"]
-
-  Gtk.Box channel_header_bar {
-    orientation: horizontal;
-    spacing: 12;
-    margin-start: 16;
-    margin-end: 16;
-    margin-top: 12;
-    margin-bottom: 12;
-
-    Gtk.Button channel_back_button {
-      icon-name: "go-previous-symbolic";
-      tooltip-text: "Back";
-      clicked => $OnBackButtonClicked();
-      styles ["flat", "circular"]
-    }
-
-    Gtk.Label channel_bar_title {
-      label: "Channel";
-      xalign: 0;
-      hexpand: true;
-      styles ["title-3"]
-    }
-  }
-
-  Gtk.Separator {
-    styles ["spacer"]
-  }
 
   Gtk.Revealer channel_header_revealer {
     reveal-child: true;

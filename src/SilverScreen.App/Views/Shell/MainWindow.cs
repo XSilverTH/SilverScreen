@@ -59,8 +59,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels);
-        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions,
-            CloseChannel);
+        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _home = new VideoListView(
             new HomeViewModel(services.HomeFeed),

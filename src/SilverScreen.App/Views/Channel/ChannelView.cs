@@ -22,7 +22,6 @@ public partial class ChannelView : ViewBase<Box>
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
 
-    private readonly Action? _backCallback;
     private readonly GestureClick _clueClickGesture;
     private readonly EventControllerMotion _clueMotionController;
     private readonly EventControllerScroll _scrollController;
@@ -49,12 +48,10 @@ public partial class ChannelView : ViewBase<Box>
         ChannelViewModel viewModel,
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
-        VideoCardActions videoActions,
-        Action? backCallback = null)
+        VideoCardActions videoActions)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
-        _backCallback = backCallback;
 
         _videoList = new VideoListView(
             viewModel,
@@ -89,8 +86,6 @@ public partial class ChannelView : ViewBase<Box>
 
     public bool IsLoading => _videoList.IsLoading;
 
-    public event EventHandler? BackRequested;
-
     public event EventHandler<bool>? RefreshLoadingChanged;
 
     public Task RefreshAsync()
@@ -101,12 +96,6 @@ public partial class ChannelView : ViewBase<Box>
     private void OnVideoListRefreshLoadingChanged(object? sender, bool isLoading)
     {
         RefreshLoadingChanged?.Invoke(this, isLoading);
-    }
-
-    private void OnBackButtonClicked(object? sender = null, EventArgs? args = null)
-    {
-        _backCallback?.Invoke();
-        BackRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private bool OnScrollEvent(EventControllerScroll sender, EventControllerScroll.ScrollSignalArgs args)
@@ -202,7 +191,6 @@ public partial class ChannelView : ViewBase<Box>
     {
         // 1. Metadata & Avatar
         channel_name.SetText(state.Name);
-        channel_bar_title.SetText(string.IsNullOrWhiteSpace(state.Name) ? "Channel" : state.Name);
 
         if (!string.IsNullOrWhiteSpace(state.Url))
         {
