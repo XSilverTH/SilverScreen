@@ -1,8 +1,27 @@
+using SilverScreen.Infrastructure.Account.Auth;
+using SilverScreen.Infrastructure.Account.Profile;
+using SilverScreen.Infrastructure.Account.Session;
 using System.Globalization;
 using Serilog;
-using SilverScreen.Core.Models;
-using SilverScreen.Core.Services;
-using SilverScreen.Infrastructure.Features.Search;
+using SilverScreen.Core.Common;
+using SilverScreen.Core.Player;
+using SilverScreen.Core.Player.Comments;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Core.Browsing.Search;
+using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Queue;
+using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.Browsing.Common;
+using SilverScreen.Infrastructure.Browsing.Home;
+using SilverScreen.Infrastructure.Browsing.Channel;
+using SilverScreen.Infrastructure.Browsing.Search;
+using SilverScreen.Infrastructure.Browsing.History;
+using SilverScreen.Infrastructure.YouTube;
+using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
