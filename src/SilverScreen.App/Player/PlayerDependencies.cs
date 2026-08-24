@@ -16,6 +16,7 @@ namespace SilverScreen.Player;
 /// <summary>Services and dependencies required for embedded playback and player sub-controllers.</summary>
 public sealed record PlayerDependencies(
     IPreferencesService Preferences,
+    PlaybackCoordinator PlaybackCoordinator,
     ICookieFileProvider CookieFiles,
     IPlaybackPresenceService PlaybackPresence,
     IYouTubePlaybackTelemetryService PlaybackTelemetry,

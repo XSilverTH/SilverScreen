@@ -80,7 +80,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _home = new VideoListView(
-            new HomeViewModel(services.HomeFeed),
+            services.HomeFeed,
             services.Thumbnails,
             services.WatchProgress,
             actions);

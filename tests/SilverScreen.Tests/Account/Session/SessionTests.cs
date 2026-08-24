@@ -219,6 +219,36 @@ public sealed class SessionTests
         Assert.NotNull(directoryPath);
         Assert.False(Directory.Exists(directoryPath));
     }
+    [Fact]
+    public void SessionService_DirectlyAcquiresCookieFileLease()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var service = new InMemorySessionService(tempRoot.Path);
+        service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+
+        using var lease = service.AcquireCookieFileLease();
+
+        Assert.NotNull(lease);
+        Assert.StartsWith(tempRoot.Path, lease.Path, StringComparison.Ordinal);
+        Assert.Equal(FakeCookieContent, File.ReadAllText(lease.Path));
+    }
+
+    [Fact]
+    public void SessionService_CreatesCookieContainerFromManualSession()
+    {
+        var service = new InMemorySessionService();
+        Assert.Null(service.CreateCookieContainer());
+
+        service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        var container = service.CreateCookieContainer();
+
+        Assert.NotNull(container);
+        var uri = new Uri("https://www.youtube.com");
+        var cookies = container.GetCookies(uri);
+        Assert.NotEmpty(cookies);
+        Assert.Equal("fake-session-value", cookies["SID"]?.Value);
+    }
+
 
     private sealed class FakeCookieSecretStore : ICookieSecretStore
     {

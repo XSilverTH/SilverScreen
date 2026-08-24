@@ -79,6 +79,128 @@ public sealed class PlaybackTests
         Assert.Equal(1, presence.ClearCount);
     }
 
+    [Fact]
+    public void PlaybackCoordinator_TracksActivePlaybackTelemetryAndPresence()
+    {
+        var presence = new TrackingPresence();
+        var telemetry = new TrackingTelemetry();
+        var watchProgress = new TrackingWatchProgress();
+        using var coordinator = new PlaybackCoordinator(null, presence, telemetry, watchProgress);
+
+        var request = new PlaybackRequest([CreateVideo("vid1"), CreateVideo("vid2")]);
+        var playbackId = coordinator.RegisterActivePlayback(request);
+        Assert.True(playbackId > 0);
+        Assert.Single(telemetry.Sessions);
+        Assert.Equal(request, telemetry.Sessions[0].Request);
+
+        var state = PlayingState(DateTimeOffset.UtcNow);
+        coordinator.UpdateActivePlayback(playbackId, state);
+
+        Assert.Single(presence.SetCalls);
+        Assert.Equal(request, presence.SetCalls[0].Request);
+        Assert.Equal(state, presence.SetCalls[0].State);
+
+        Assert.Single(telemetry.Sessions[0].Session.Updates);
+        Assert.Equal(state, telemetry.Sessions[0].Session.Updates[0]);
+
+        Assert.Single(watchProgress.Updates);
+        Assert.Equal(request, watchProgress.Updates[0].Request);
+        Assert.Equal(state, watchProgress.Updates[0].State);
+    }
+
+    [Fact]
+    public void PlaybackCoordinator_RestoresMostRecentPlaybackPresenceOnCompletion()
+    {
+        var presence = new TrackingPresence();
+        using var coordinator = new PlaybackCoordinator(null, presence);
+
+        var req1 = new PlaybackRequest([CreateVideo("vid1")]);
+        var req2 = new PlaybackRequest([CreateVideo("vid2")]);
+        var req3 = new PlaybackRequest([CreateVideo("vid3")]);
+
+        var time1 = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var time2 = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var time3 = DateTimeOffset.UtcNow;
+
+        var id1 = coordinator.RegisterActivePlayback(req1);
+        coordinator.UpdateActivePlayback(id1, PlayingState(time1));
+
+        var id2 = coordinator.RegisterActivePlayback(req2);
+        coordinator.UpdateActivePlayback(id2, PlayingState(time2));
+
+        var id3 = coordinator.RegisterActivePlayback(req3);
+        coordinator.UpdateActivePlayback(id3, PlayingState(time3));
+
+        coordinator.CompleteActivePlayback(id2);
+        Assert.Equal(req3, presence.SetCalls[^1].Request);
+
+        coordinator.CompleteActivePlayback(id3);
+        Assert.Equal(req1, presence.SetCalls[^1].Request);
+        Assert.Equal(time1, presence.SetCalls[^1].State.ObservedAt);
+
+        coordinator.CompleteActivePlayback(id1);
+        Assert.Equal(1, presence.ClearCount);
+    }
+
+    [Fact]
+    public void PlaybackCoordinator_AcquiresCookieLeaseFromProvider()
+    {
+        var cookieProvider = new TrackingCookieProvider();
+        using var coordinator = new PlaybackCoordinator(cookieProvider);
+
+        var lease = coordinator.AcquireCookieFileLease();
+        Assert.Null(lease);
+        Assert.Equal(1, cookieProvider.CallCount);
+    }
+
+    [Fact]
+    public void PlaybackCoordinator_PlaylistHelpers_ResolvesVideosAndQueueChanges()
+    {
+        var v1 = CreateVideo("vid1");
+        var v2 = CreateVideo("vid2");
+        var request = new PlaybackRequest([v1, v2]);
+
+        Assert.Equal(v1, PlaybackCoordinator.GetVideoAt(request, 0));
+        Assert.Equal(v2, PlaybackCoordinator.GetVideoAt(request, 1));
+        Assert.Null(PlaybackCoordinator.GetVideoAt(request, -1));
+        Assert.Null(PlaybackCoordinator.GetVideoAt(request, 2));
+        Assert.Null(PlaybackCoordinator.GetVideoAt(null, 0));
+
+        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 1, out var resolvedVideo, out var changed));
+        Assert.Equal(v2, resolvedVideo);
+        Assert.True(changed);
+
+        Assert.True(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 0, out var sameVideo, out var sameChanged));
+        Assert.Equal(v1, sameVideo);
+        Assert.False(sameChanged);
+
+        Assert.False(PlaybackCoordinator.TryResolveVideoChange(request, 0, "vid1", 5, out _, out _));
+
+        var v3 = CreateVideo("vid3");
+        var updated = PlaybackCoordinator.UpdateQueue(request, [v1, v2, v3]);
+        Assert.Equal(3, updated.Videos.Length);
+        Assert.Equal("vid3", updated.Videos[2].Id);
+    }
+
+    [Fact]
+    public void PlaybackCoordinator_Dispose_DisposesActiveTelemetrySessionsAndClearsPresence()
+    {
+        var presence = new TrackingPresence();
+        var telemetry = new TrackingTelemetry();
+        var coordinator = new PlaybackCoordinator(null, presence, telemetry);
+
+        var request = new PlaybackRequest([CreateVideo("vid1")]);
+        coordinator.RegisterActivePlayback(request);
+
+        Assert.Single(telemetry.Sessions);
+        Assert.False(telemetry.Sessions[0].Session.IsDisposed);
+
+        coordinator.Dispose();
+
+        Assert.True(telemetry.Sessions[0].Session.IsDisposed);
+        Assert.Equal(1, presence.ClearCount);
+    }
+
 
     [Fact]
     public void MpvIpcProtocolAppliesObservedPlaybackProperties()
@@ -195,6 +317,69 @@ public sealed class PlaybackTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class TrackingTelemetry : IYouTubePlaybackTelemetryService
+    {
+        public List<(PlaybackRequest Request, TrackingTelemetrySession Session)> Sessions { get; } = [];
+
+        public IYouTubePlaybackTelemetrySession Start(PlaybackRequest request)
+        {
+            var session = new TrackingTelemetrySession(request);
+            Sessions.Add((request, session));
+            return session;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class TrackingTelemetrySession(PlaybackRequest request) : IYouTubePlaybackTelemetrySession
+    {
+        public PlaybackRequest Request { get; } = request;
+        public List<PlaybackPresenceState> Updates { get; } = [];
+        public bool IsDisposed { get; private set; }
+
+        public void UpdateState(PlaybackPresenceState state)
+        {
+            Updates.Add(state);
+        }
+
+        public void Dispose()
+        {
+            IsDisposed = true;
+        }
+    }
+
+    private sealed class TrackingWatchProgress : IWatchProgressService
+    {
+        public List<(PlaybackRequest Request, PlaybackPresenceState State)> Updates { get; } = [];
+
+        public event EventHandler<WatchProgress>? ProgressChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public double? GetFraction(string videoId) => null;
+        public double? GetResumeFraction(string videoId) => null;
+
+        public void Update(PlaybackRequest request, PlaybackPresenceState state)
+        {
+            Updates.Add((request, state));
+        }
+    }
+
+    private sealed class TrackingCookieProvider(CookieFileLease? lease = null) : ICookieFileProvider
+    {
+        public int CallCount { get; private set; }
+
+        public CookieFileLease? CreateCookieFile()
+        {
+            CallCount++;
+            return lease;
         }
     }
 

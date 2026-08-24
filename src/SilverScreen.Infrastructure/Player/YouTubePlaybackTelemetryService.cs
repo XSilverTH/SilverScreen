@@ -79,12 +79,11 @@ public sealed class YouTubePlaybackTelemetryService(
 
     private HttpClient? CreateAuthenticatedClient()
     {
-        var manualSession = sessionService.GetManualSessionCookies();
-        if (manualSession is null) return null;
+        var cookies = sessionService.CreateCookieContainer();
+        if (cookies is null) return null;
 
         try
         {
-            var cookies = ParseCookies(manualSession);
             var handler = handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
             {
                 CookieContainer = cookies,
@@ -103,45 +102,6 @@ public sealed class YouTubePlaybackTelemetryService(
             Logger.Debug(exception, "Could not prepare authenticated YouTube playback telemetry");
             return null;
         }
-    }
-
-    private static CookieContainer ParseCookies(ManualSessionCookies manualSession)
-    {
-        if (manualSession.Format is not SessionCookieFormat.NetscapeCookiesText)
-            throw new NotSupportedException($"Unsupported cookie format: {manualSession.Format}");
-
-        var cookies = new CookieContainer();
-        foreach (var sourceLine in manualSession.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var line = sourceLine.TrimEnd('\r');
-            var httpOnly = line.StartsWith("#HttpOnly_", StringComparison.Ordinal);
-            if (line.StartsWith('#') && !httpOnly) continue;
-            if (httpOnly) line = line[10..];
-
-            var fields = line.Split('\t');
-            if (fields.Length != 7) continue;
-            var domain = fields[0];
-            if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(fields[5])) continue;
-
-            try
-            {
-                var cookie = new Cookie(fields[5], fields[6], fields[2], domain)
-                {
-                    Secure = bool.TryParse(fields[3], out var secure) && secure,
-                    HttpOnly = httpOnly
-                };
-                if (long.TryParse(fields[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var expiration) &&
-                    expiration > 0)
-                    cookie.Expires = DateTimeOffset.FromUnixTimeSeconds(expiration).UtcDateTime;
-                cookies.Add(cookie);
-            }
-            catch (CookieException)
-            {
-                // Browser exports can contain cookies outside CookieContainer's accepted domain syntax.
-            }
-        }
-
-        return cookies;
     }
 
     private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)

@@ -1,21 +1,12 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
+using System.Net;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
-public sealed class InMemorySessionService : ISessionService
+public sealed class InMemorySessionService(string? tempRoot = null) : ISessionService
 {
     private readonly Lock _gate = new();
+    private readonly string? _tempRoot = tempRoot;
     private ManualSessionCookies? _manualCookies;
 
     public event EventHandler? SessionChanged;
@@ -39,6 +30,32 @@ public sealed class InMemorySessionService : ISessionService
         lock (_gate)
         {
             return _manualCookies;
+        }
+    }
+
+    public CookieFileLease? AcquireCookieFileLease()
+    {
+        lock (_gate)
+        {
+            if (_manualCookies is null || _manualCookies.Format != SessionCookieFormat.NetscapeCookiesText ||
+                string.IsNullOrWhiteSpace(_manualCookies.Content))
+                return null;
+
+            return TemporaryCookieFile.CreateLease(_manualCookies.Content, _tempRoot);
+        }
+    }
+
+    public CookieFileLease? CreateCookieFile() => AcquireCookieFileLease();
+
+    public CookieContainer? CreateCookieContainer()
+    {
+        lock (_gate)
+        {
+            if (_manualCookies is null || _manualCookies.Format != SessionCookieFormat.NetscapeCookiesText ||
+                string.IsNullOrWhiteSpace(_manualCookies.Content))
+                return null;
+
+            return NetscapeCookieParser.CreateCookieContainer(_manualCookies.Content);
         }
     }
 

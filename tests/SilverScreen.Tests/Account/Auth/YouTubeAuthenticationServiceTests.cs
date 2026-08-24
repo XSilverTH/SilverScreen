@@ -145,6 +145,17 @@ public sealed class YouTubeAuthenticationServiceTests
         {
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, _cookies);
         }
+        public CookieFileLease? AcquireCookieFileLease()
+        {
+            return TemporaryCookieFile.CreateLease(_cookies);
+        }
+
+        public CookieFileLease? CreateCookieFile() => AcquireCookieFileLease();
+
+        public System.Net.CookieContainer? CreateCookieContainer()
+        {
+            return NetscapeCookieParser.CreateCookieContainer(_cookies);
+        }
 
         public void SetManualSession(string cookieContent, SessionCookieFormat format)
         {

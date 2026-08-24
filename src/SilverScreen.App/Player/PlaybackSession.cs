@@ -1,32 +1,39 @@
-using SilverScreen.Shell;
 using System.Collections.Immutable;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Player;
+using SilverScreen.Shell;
 
 namespace SilverScreen.Player;
 
-internal sealed class PlaybackSession(
-    ICookieFileProvider cookieFiles,
-    IPlaybackPresenceService playbackPresence,
-    IYouTubePlaybackTelemetryService playbackTelemetry,
-    IWatchProgressService watchProgress,
-    DesktopMediaIntegration desktopMedia)
-    : IDisposable
+internal sealed class PlaybackSession : IDisposable
 {
+    private readonly PlaybackCoordinator _coordinator;
+    private readonly DesktopMediaIntegration _desktopMedia;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
-    private IYouTubePlaybackTelemetrySession? _playbackTelemetrySession;
+    private long _playbackId;
+
+    public PlaybackSession(
+        PlaybackCoordinator coordinator,
+        DesktopMediaIntegration desktopMedia)
+    {
+        _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+        _desktopMedia = desktopMedia ?? throw new ArgumentNullException(nameof(desktopMedia));
+    }
+
+    public PlaybackSession(
+        ICookieFileProvider cookieFiles,
+        IPlaybackPresenceService playbackPresence,
+        IYouTubePlaybackTelemetryService playbackTelemetry,
+        IWatchProgressService watchProgress,
+        DesktopMediaIntegration desktopMedia)
+        : this(
+            new PlaybackCoordinator(cookieFiles, playbackPresence, playbackTelemetry, watchProgress),
+            desktopMedia)
+    {
+    }
 
     public PlaybackRequest? Request { get; private set; }
 
@@ -54,10 +61,10 @@ internal sealed class PlaybackSession(
         ReleaseResources();
         Request = request;
         CurrentPlaylistIndex = 0;
-        CurrentVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
+        CurrentVideo = PlaybackCoordinator.GetVideoAt(request, 0);
         HasMedia = false;
-        _playbackTelemetrySession = playbackTelemetry.Start(request);
-        _cookieFile = cookieFiles.CreateCookieFile();
+        _playbackId = _coordinator.RegisterActivePlayback(request);
+        _cookieFile = _coordinator.AcquireCookieFileLease();
 
         if (CurrentVideo is not null) VideoChanged?.Invoke(CurrentVideo, 0);
     }
@@ -67,7 +74,7 @@ internal sealed class PlaybackSession(
         if (_disposed) return;
         HasMedia = state.HasMedia;
 
-        if (Request is { } playbackRequest && state.HasMedia)
+        if (Request is { } playbackRequest && state.HasMedia && _playbackId != 0)
         {
             var playbackState = new PlaybackPresenceState(
                 state.PlaylistIndex,
@@ -77,30 +84,30 @@ internal sealed class PlaybackSession(
                 state.Speed,
                 DateTimeOffset.UtcNow);
 
-            playbackPresence.SetPlaybackState(playbackRequest, playbackState);
-            _playbackTelemetrySession?.UpdateState(playbackState);
-            watchProgress.Update(playbackRequest, playbackState);
+            _coordinator.UpdateActivePlayback(_playbackId, playbackState);
         }
 
-        desktopMedia.UpdatePlayback(Request, state);
+        _desktopMedia.UpdatePlayback(Request, state);
 
-        if (Request is not { } request ||
-            state.PlaylistIndex is < 0 or >= int.MaxValue ||
-            state.PlaylistIndex >= request.Videos.Length) return;
-        var newIndex = state.PlaylistIndex;
-        var video = request.Videos[newIndex];
-        var videoChanged = CurrentPlaylistIndex != newIndex || CurrentVideo?.Id != video.Id;
+        if (PlaybackCoordinator.TryResolveVideoChange(
+                Request,
+                CurrentPlaylistIndex,
+                CurrentVideo?.Id,
+                state.PlaylistIndex,
+                out var video,
+                out var videoChanged) && video is not null)
+        {
+            CurrentPlaylistIndex = state.PlaylistIndex;
+            CurrentVideo = video;
 
-        CurrentPlaylistIndex = newIndex;
-        CurrentVideo = video;
-
-        if (videoChanged) VideoChanged?.Invoke(video, newIndex);
+            if (videoChanged) VideoChanged?.Invoke(video, state.PlaylistIndex);
+        }
     }
 
     public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
         if (_disposed || Request is null) return;
-        Request = new PlaybackRequest(newVideos);
+        Request = PlaybackCoordinator.UpdateQueue(Request, newVideos);
     }
 
     public void EndSession()
@@ -128,11 +135,14 @@ internal sealed class PlaybackSession(
 
     private void ReleaseResources()
     {
-        playbackPresence.Clear();
-        _playbackTelemetrySession?.Dispose();
-        _playbackTelemetrySession = null;
+        if (_playbackId != 0)
+        {
+            _coordinator.CompleteActivePlayback(_playbackId);
+            _playbackId = 0;
+        }
+
         _cookieFile?.Dispose();
         _cookieFile = null;
-        desktopMedia.ClearPlayback();
+        _desktopMedia.ClearPlayback();
     }
 }

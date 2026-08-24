@@ -61,8 +61,7 @@ public sealed class SessionValidationCoordinatorTests
         {
             LoadFirstPageAsyncHandler = _ => tcs.Task
         };
-        var validator = new HomeSessionValidator(fakeFeed);
-        var coordinator = new SessionValidationCoordinator(validator, sessionService);
+        var coordinator = new SessionValidationCoordinator(fakeFeed, sessionService);
 
         // Act & Assert
         // Start first validation

@@ -1,18 +1,8 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
@@ -23,17 +13,19 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
+    private readonly string? _tempRoot;
     private bool _isAvailable = true;
     private ManualSessionCookies? _manualCookies;
 
-    public SecretServiceSessionService()
-        : this(new LibSecretCookieStore())
+    public SecretServiceSessionService(string? tempRoot = null)
+        : this(new LibSecretCookieStore(), tempRoot)
     {
     }
 
-    internal SecretServiceSessionService(ICookieSecretStore store)
+    internal SecretServiceSessionService(ICookieSecretStore store, string? tempRoot = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _tempRoot = tempRoot;
         try
         {
             _manualCookies = LoadStoredCookies();
@@ -42,12 +34,13 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
         catch (SessionPersistenceException exception)
         {
-            Logger.Warning(exception, "Secret Service was unavailable while restoring the YouTube session");
+            Logger.Warning("Secret Service was unavailable while restoring the YouTube session: {Message}",
+                exception.InnerException?.Message ?? exception.Message);
+            Logger.Debug(exception, "Secret Service startup restoration error details");
             _isAvailable = false;
             _manualCookies = null;
         }
     }
-
     public bool IsAvailable
     {
         get
@@ -82,6 +75,32 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             return _manualCookies;
         }
     }
+    public CookieFileLease? AcquireCookieFileLease()
+    {
+        lock (_gate)
+        {
+            if (_manualCookies is null || _manualCookies.Format != SessionCookieFormat.NetscapeCookiesText ||
+                string.IsNullOrWhiteSpace(_manualCookies.Content))
+                return null;
+
+            return TemporaryCookieFile.CreateLease(_manualCookies.Content, _tempRoot);
+        }
+    }
+
+    public CookieFileLease? CreateCookieFile() => AcquireCookieFileLease();
+
+    public CookieContainer? CreateCookieContainer()
+    {
+        lock (_gate)
+        {
+            if (_manualCookies is null || _manualCookies.Format != SessionCookieFormat.NetscapeCookiesText ||
+                string.IsNullOrWhiteSpace(_manualCookies.Content))
+                return null;
+
+            return NetscapeCookieParser.CreateCookieContainer(_manualCookies.Content);
+        }
+    }
+
 
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {

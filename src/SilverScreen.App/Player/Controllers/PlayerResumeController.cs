@@ -1,25 +1,16 @@
 using Gtk;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
-internal sealed class PlayerResumeController : IPlayerFeature
+internal sealed class PlayerResumeController : IDisposable
 {
-    private const uint PromptDurationMilliseconds = 6_000;
-    private const double MinimumResumeSeconds = 5;
+    private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
     private readonly IPreferencesService _preferences;
     private readonly Button _restartButton;
     private readonly Button _resumeButton;
@@ -33,8 +24,12 @@ internal sealed class PlayerResumeController : IPlayerFeature
     private double? _resumeFraction;
     private string? _videoId;
 
-    public PlayerResumeController(IPreferencesService preferences, IWatchProgressService watchProgress,
-        Button resumeButton, Button restartButton, Action<double> seekAbsolute)
+    public PlayerResumeController(
+        IPreferencesService preferences,
+        IWatchProgressService watchProgress,
+        Button resumeButton,
+        Button restartButton,
+        Action<double> seekAbsolute)
     {
         _preferences = preferences;
         _watchProgress = watchProgress;
@@ -69,18 +64,24 @@ internal sealed class PlayerResumeController : IPlayerFeature
 
         _handledCurrentVideo = true;
         _lastKnownDuration = state.Duration;
-        if (!TryGetResumePosition(_resumeFraction, state.Duration, out var resumePosition))
-            return;
 
         var preferences = _preferences.GetPreferences();
-        if (preferences.ResumePlaybackAutomatically)
+        var promptState = PlayerTimelineEngine.GetResumePromptState(
+            _resumeFraction,
+            state.Duration,
+            preferences.ResumePlaybackAutomatically,
+            preferences.ResumePlaybackOnDemand,
+            out var resumePosition);
+
+        switch (promptState)
         {
-            _seekAbsolute(resumePosition.TotalSeconds);
-            ShowRestartPrompt();
-        }
-        else if (preferences.ResumePlaybackOnDemand)
-        {
-            ShowResumePrompt(resumePosition);
+            case ResumePromptState.AutoResume:
+                _seekAbsolute(resumePosition.TotalSeconds);
+                ShowRestartPrompt();
+                break;
+            case ResumePromptState.ManualResume:
+                ShowResumePrompt(resumePosition);
+                break;
         }
     }
 
@@ -96,8 +97,8 @@ internal sealed class PlayerResumeController : IPlayerFeature
 
     public bool TryResume()
     {
-        if (_disposed || !_resumeButton.GetVisible() || _resumeFraction is not { } fraction ||
-            !TryGetResumePosition(fraction, _lastKnownDuration, out var resumePosition))
+        if (_disposed || !_resumeButton.GetVisible() ||
+            !PlayerTimelineEngine.TryGetResumePosition(_resumeFraction, _lastKnownDuration, out var resumePosition))
             return false;
 
         _seekAbsolute(resumePosition.TotalSeconds);
@@ -113,20 +114,10 @@ internal sealed class PlayerResumeController : IPlayerFeature
         return true;
     }
 
-    private static bool TryGetResumePosition(double? fraction, TimeSpan duration, out TimeSpan position)
-    {
-        position = TimeSpan.Zero;
-        if (fraction is not > 0 or >= 1 || duration <= TimeSpan.Zero) return false;
-        var candidate = TimeSpan.FromSeconds(duration.TotalSeconds * fraction.Value);
-        if (candidate < TimeSpan.FromSeconds(MinimumResumeSeconds) || candidate >= duration) return false;
-        position = candidate;
-        return true;
-    }
-
     private void ShowResumePrompt(TimeSpan resumePosition)
     {
-        _resumeButton.SetLabel($"Resume from {PlayerTimeFormatter.FormatTime(resumePosition)}");
-        _resumeButton.SetTooltipText($"Resume playback at {PlayerTimeFormatter.FormatTime(resumePosition)} (Enter)");
+        _resumeButton.SetLabel($"Resume from {PlayerTimelineEngine.FormatTime(resumePosition)}");
+        _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineEngine.FormatTime(resumePosition)} (Enter)");
         _resumeButton.SetVisible(true);
         _restartButton.SetVisible(false);
         SchedulePromptHide();
@@ -160,15 +151,20 @@ internal sealed class PlayerResumeController : IPlayerFeature
             _promptHideSource = 0;
         }
 
-        _resumeButton.SetVisible(false);
-        _restartButton.SetVisible(false);
+        if (!_disposed)
+        {
+            _resumeButton.SetVisible(false);
+            _restartButton.SetVisible(false);
+        }
     }
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
         IdleAdd(0, () =>
         {
-            if (!_disposed) HidePrompt();
+            if (_disposed || preferences.ResumePlaybackAutomatically || preferences.ResumePlaybackOnDemand)
+                return false;
+            HidePrompt();
             return false;
         });
     }

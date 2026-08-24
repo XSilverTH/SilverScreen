@@ -64,8 +64,12 @@ internal sealed class PlayerChapterOverlay(
 
     private void Layout(TimeSpan duration)
     {
-        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(timeline, host,
-            playbackPosition(), duration);
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(
+            timeline,
+            host,
+            playbackPosition(),
+            duration);
+
         if (_duration == duration && _trackStart == trackStart && _trackWidth == trackWidth) return;
         _duration = duration;
         _trackStart = trackStart;
@@ -78,10 +82,13 @@ internal sealed class PlayerChapterOverlay(
             var chapter = _chapters[index];
             marker.SetVisible(hasDuration && chapter.Start <= duration);
             if (!hasDuration) continue;
-            var markerX = Math.Clamp(Math.Round(
-                    PlayerTimelineGeometry.GetTrackPosition(chapter.Start, duration, trackStart, trackWidth) -
-                    MarkerHitTargetWidth / 2d),
-                0, Math.Max(0, hostWidth - MarkerHitTargetWidth));
+            var markerX = PlayerTimelineEngine.CalculateChapterMarkerPosition(
+                chapter.Start,
+                duration,
+                trackStart,
+                trackWidth,
+                hostWidth,
+                MarkerHitTargetWidth);
             marker.MarginStart = (int)markerX;
         }
     }

@@ -143,6 +143,12 @@ public sealed class YouTubePlaybackTelemetryTests
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText,
                 ".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
         }
+        public CookieFileLease? AcquireCookieFileLease() => null;
+        public CookieFileLease? CreateCookieFile() => null;
+        public System.Net.CookieContainer? CreateCookieContainer()
+        {
+            return NetscapeCookieParser.CreateCookieContainer(".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
+        }
 
         public void SetManualSession(string cookieContent, SessionCookieFormat format)
         {

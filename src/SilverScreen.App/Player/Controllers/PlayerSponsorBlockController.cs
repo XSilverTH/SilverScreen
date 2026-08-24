@@ -4,15 +4,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure;
 using SilverScreen.Infrastructure.Player;
@@ -20,9 +12,9 @@ using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
-internal sealed class PlayerSponsorBlockController : IPlayerFeature
+internal sealed class PlayerSponsorBlockController : IDisposable
 {
-    private const uint SkipPromptDurationMilliseconds = 3_000;
+    private const uint SkipPromptDurationMilliseconds = PlayerTimelineEngine.DefaultSkipPromptDurationMilliseconds;
     private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
     private readonly IPreferencesService _preferences;
@@ -48,8 +40,13 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
     private VideoSummary? _video;
     private string? _videoId;
 
-    public PlayerSponsorBlockController(ISponsorBlockService sponsorBlock, IPreferencesService preferences,
-        Scale timeline, Overlay timelineOverlay, Button skipButton, Action<double> seekAbsolute)
+    public PlayerSponsorBlockController(
+        ISponsorBlockService sponsorBlock,
+        IPreferencesService preferences,
+        Scale timeline,
+        Overlay timelineOverlay,
+        Button skipButton,
+        Action<double> seekAbsolute)
     {
         _sponsorBlock = sponsorBlock;
         _preferences = preferences;
@@ -85,7 +82,7 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
         _video = video;
         _videoId = video.Id;
         var preferences = _preferences.GetPreferences();
-        _configurationKey = GetSponsorBlockConfigurationKey(preferences);
+        _configurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
         if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled) ||
             !PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
             return;
@@ -129,9 +126,9 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
 
     public bool TrySkipManualSegment()
     {
-        if (_lastPlaybackState is not { } state || !ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
+        if (_lastPlaybackState is not { } state || !PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
             return false;
-        var segment = FindSponsorBlockSegmentAtPosition(_segments, state.Position);
+        var segment = PlayerTimelineEngine.FindSponsorBlockSegmentAt(_segments, state.Position);
         if (segment is null) return false;
         _seekAbsolute(segment.End.TotalSeconds);
         HideManualPrompt();
@@ -166,14 +163,14 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
     {
         IdleAdd(0, () =>
         {
-            if (_disposed || GetSponsorBlockConfigurationKey(preferences) == _configurationKey) return false;
+            if (_disposed || PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences) == _configurationKey) return false;
             if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled))
             {
                 Clear();
                 return false;
             }
 
-            if (_video is null) _configurationKey = GetSponsorBlockConfigurationKey(preferences);
+            if (_video is null) _configurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
             else Load(_video);
             return false;
         });
@@ -232,10 +229,11 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
 
     private void TryAutoSkip(LibMpvPlaybackState state, string videoId)
     {
-        if (state.IsPaused || !_preferences.GetPreferences().SponsorBlockAutoSkipEnabled ||
-            !string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
-        var segment = FindSponsorBlockSegmentAtPosition(_segments, state.Position);
-        if (segment is null || !_autoSkippedSegmentIds.Add(segment.Id)) return;
+        var preferences = _preferences.GetPreferences();
+        if (!string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
+        if (!PlayerTimelineEngine.ShouldAutoSkip(state.Position, _segments, state.IsPaused, preferences.SponsorBlockAutoSkipEnabled, _autoSkippedSegmentIds, out var segment))
+            return;
+
         Logger.Information(
             "Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s",
             segment.Id, segment.Category, videoId, segment.End.TotalSeconds);
@@ -244,14 +242,15 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
 
     private void UpdateManualPrompt(LibMpvPlaybackState state, string videoId)
     {
-        if (!ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()) ||
+        var preferences = _preferences.GetPreferences();
+        if (!PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(preferences) ||
             !string.Equals(_videoId, videoId, StringComparison.Ordinal))
         {
             ResetManualPrompt();
             return;
         }
 
-        var segment = FindSponsorBlockSegmentAtPosition(_segments, state.Position);
+        var segment = PlayerTimelineEngine.FindSponsorBlockSegmentAt(_segments, state.Position);
         if (segment is null)
         {
             _activeManualSegment = null;
@@ -261,9 +260,13 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
             return;
         }
 
-        var shouldShow = _manualPromptAfterSeek ||
-                         !string.Equals(_activeManualSegment?.Id, segment.Id, StringComparison.Ordinal) ||
-                         (state.IsPaused && !_manualWasPaused);
+        var shouldShow = PlayerTimelineEngine.ShouldShowManualPrompt(
+            _activeManualSegment,
+            segment,
+            state.IsPaused,
+            _manualWasPaused,
+            _manualPromptAfterSeek);
+
         _activeManualSegment = segment;
         _manualPromptAfterSeek = false;
         _manualWasPaused = state.IsPaused;
@@ -272,7 +275,7 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
 
     private void ShowManualPrompt(SponsorBlockSegment segment)
     {
-        var category = SponsorBlockCategoryLabel(segment.Category);
+        var category = PlayerTimelineEngine.GetSponsorBlockCategoryLabel(segment.Category);
         _skipButton.SetLabel($"Skip {category}");
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
@@ -307,49 +310,10 @@ internal sealed class PlayerSponsorBlockController : IPlayerFeature
 
     private void SetSkipButtonColor(string category)
     {
-        var resolvedCategory =
-            SponsorBlockCategories.All.Contains(category) ? category : SponsorBlockCategories.Sponsor;
-        var colorClass = $"player-sponsorblock-skip-button-{resolvedCategory}";
+        var colorClass = PlayerTimelineEngine.GetSponsorBlockButtonColorClass(category);
         if (string.Equals(_skipButtonColorClass, colorClass, StringComparison.Ordinal)) return;
         if (_skipButtonColorClass is not null) _skipButton.RemoveCssClass(_skipButtonColorClass);
         _skipButton.AddCssClass(colorClass);
         _skipButtonColorClass = colorClass;
-    }
-
-    private static string GetSponsorBlockConfigurationKey(AppPreferences preferences)
-    {
-        if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled))
-            return "disabled";
-        var categories = preferences.SponsorBlockCategories.Where(SponsorBlockCategories.All.Contains)
-            .Distinct(StringComparer.Ordinal);
-        return $"{preferences.SponsorBlockAutoSkipEnabled}:{preferences.SponsorBlockSegmentDisplayEnabled}:" +
-               string.Join(',', categories);
-    }
-
-    private static SponsorBlockSegment? FindSponsorBlockSegmentAtPosition(IReadOnlyList<SponsorBlockSegment> segments,
-        TimeSpan position)
-    {
-        return segments.FirstOrDefault(segment => position >= segment.Start && position < segment.End);
-    }
-
-    private static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
-    {
-        return preferences is { SponsorBlockSegmentDisplayEnabled: true, SponsorBlockAutoSkipEnabled: false };
-    }
-
-    private static string SponsorBlockCategoryLabel(string category)
-    {
-        return category switch
-        {
-            SponsorBlockCategories.Sponsor => "Sponsor",
-            SponsorBlockCategories.SelfPromotion => "Self-promotion",
-            SponsorBlockCategories.InteractionReminder => "Interaction reminder",
-            SponsorBlockCategories.Intro => "Intro",
-            SponsorBlockCategories.Outro => "Outro",
-            SponsorBlockCategories.Preview => "Preview",
-            SponsorBlockCategories.Hook => "Hook",
-            SponsorBlockCategories.Filler => "Filler",
-            _ => category
-        };
     }
 }

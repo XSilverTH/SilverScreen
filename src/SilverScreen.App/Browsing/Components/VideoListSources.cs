@@ -26,30 +26,30 @@ namespace SilverScreen.Browsing.Components;
 
 public sealed class HomeVideoListSource : IVideoListSource
 {
-    private readonly HomeViewModel _viewModel;
+    private readonly HomeFeedCoordinator _coordinator;
     private bool _disposed;
 
-    public HomeVideoListSource(HomeViewModel viewModel)
+    public HomeVideoListSource(HomeFeedCoordinator coordinator)
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _viewModel.StateChanged += OnStateChanged;
+        _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+        _coordinator.StateChanged += OnStateChanged;
     }
 
-    public VideoListPresentationState State => MapState(_viewModel.State);
+    public VideoListPresentationState State => MapState(_coordinator.State);
 
     public event EventHandler<VideoListPresentationState>? StateChanged;
 
     public Task RefreshAsync()
     {
-        return _viewModel.State is
+        return _coordinator.State is
             { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
-            ? _viewModel.RefreshAsync()
+            ? _coordinator.RefreshAsync()
             : Task.CompletedTask;
     }
 
     public Task LoadMoreAsync()
     {
-        return _viewModel.LoadMoreAsync();
+        return _coordinator.LoadMoreAsync();
     }
 
     public static VideoListPresentationState MapState(HomeFeedState state)
@@ -92,8 +92,7 @@ public sealed class HomeVideoListSource : IVideoListSource
             return;
 
         _disposed = true;
-        _viewModel.StateChanged -= OnStateChanged;
-        _viewModel.Dispose();
+        _coordinator.StateChanged -= OnStateChanged;
     }
 }
 

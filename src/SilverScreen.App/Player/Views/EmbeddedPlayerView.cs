@@ -57,7 +57,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly CommentsView _commentsView;
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly PlayerEngagementController _engagement;
-    private readonly ImmutableArray<IPlayerFeature> _features;
     private readonly VideoInfoPanelController _infoPanel;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
@@ -115,10 +114,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress, player_resume_button,
             player_restart_button,
             pos => SeekAbsolute(pos));
-        _features = [_engagement, _sponsorBlockController, _resumeController];
         _desktopMedia = new DesktopMediaIntegration(_player, presentRequested);
-        _session = new PlaybackSession(dependencies.CookieFiles, dependencies.PlaybackPresence,
-            dependencies.PlaybackTelemetry, dependencies.WatchProgress, _desktopMedia);
+        _session = new PlaybackSession(dependencies.PlaybackCoordinator, _desktopMedia);
         _session.VideoChanged += OnSessionVideoChanged;
         _session.SessionEnded += OnSessionEnded;
         _session.Failed += OnSessionFailed;
@@ -186,7 +183,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timelineController.Dispose();
         _infoPanel.Dispose();
         _subtitleController.Dispose();
-        foreach (var feature in _features) feature.Dispose();
+        _engagement.Dispose();
+        _sponsorBlockController.Dispose();
+        _resumeController.Dispose();
 
         _chapterOverlay.Dispose();
         _preferences.PreferencesChanged -= OnPreferencesChanged;
@@ -587,7 +586,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_previous_queue_button.Sensitive = state.PlaylistIndex > 0;
             player_next_queue_button.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
             var video = request.Videos[state.PlaylistIndex];
-            foreach (var feature in _features) feature.UpdatePlayback(state, video.Id);
+            _sponsorBlockController.UpdatePlayback(state, video.Id);
+            _resumeController.UpdatePlayback(state, video.Id);
         }
         finally
         {
@@ -601,7 +601,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_title_label.SetText(video.Title);
         player_channel_label.SetText(video.ChannelName);
         if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
-        foreach (var feature in _features) feature.Load(video);
+        _engagement.Load(video);
+        _sponsorBlockController.Load(video);
+        _resumeController.Load(video);
         _commentsVideoId = video.Id;
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar)
@@ -622,7 +624,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_channel_label.SetText($"Embedded playback failed: {detail}");
         _timelineController.Reset();
         player_play_pause_button.SetIconName("media-playback-start-symbolic");
-        foreach (var feature in _features) feature.Clear();
+        _engagement.Clear();
+        _sponsorBlockController.Clear();
+        _resumeController.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
@@ -648,7 +652,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
-        foreach (var feature in _features) feature.Clear();
+        _engagement.Clear();
+        _sponsorBlockController.Clear();
+        _resumeController.Clear();
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);

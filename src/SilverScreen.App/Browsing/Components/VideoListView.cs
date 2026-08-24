@@ -78,11 +78,11 @@ public partial class VideoListView : ViewBase<Box>
     }
 
     public VideoListView(
-        HomeViewModel viewModel,
+        HomeFeedCoordinator coordinator,
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this(new HomeVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+        : this(new HomeVideoListSource(coordinator), thumbnails, watchProgress, videoActions)
     {
     }
 

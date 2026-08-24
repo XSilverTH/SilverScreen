@@ -19,7 +19,7 @@ using SilverScreen.Browsing.History;
 
 namespace SilverScreen.Account.Session;
 
-public sealed class SessionValidationCoordinator(HomeSessionValidator validator, ISessionService sessionService)
+public sealed class SessionValidationCoordinator(IAuthenticatedHomeFeedService feedService, ISessionService sessionService)
     : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<SessionValidationCoordinator>();
@@ -28,10 +28,10 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
-    private readonly HomeSessionValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+    private readonly IAuthenticatedHomeFeedService _feedService =
+        feedService ?? throw new ArgumentNullException(nameof(feedService));
     private CancellationTokenSource? _cts;
     private bool _isValidating;
-
     public bool IsValidating
     {
         get
@@ -54,6 +54,7 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
     {
         Logger.Information("Starting YouTube session validation");
         CancellationToken token;
+        lock (_lock)
         {
             if (!HasManualSession()) return SessionValidationFormatter.NoActiveSessionMessage;
 
@@ -66,7 +67,20 @@ public sealed class SessionValidationCoordinator(HomeSessionValidator validator,
 
         try
         {
-            var result = await _validator.ValidateSessionAsync(token);
+            var feedResult = await _feedService.LoadFirstPageAsync(token);
+            var isSuccess = feedResult.Status == AuthenticatedHomeFeedStatus.Success;
+            var videoCount = feedResult.FeedPage.Videos.Count;
+            var hasContinuation = !string.IsNullOrEmpty(feedResult.FeedPage.ContinuationToken);
+            var requiresAuth = feedResult.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
+                or AuthenticatedHomeFeedStatus.AuthenticationRejected;
+
+            var result = new HomeSessionValidationResult(
+                isSuccess,
+                videoCount,
+                hasContinuation,
+                requiresAuth,
+                feedResult.Status,
+                feedResult.StatusMessage);
             return SessionValidationFormatter.FormatResult(result);
         }
         catch (OperationCanceledException)

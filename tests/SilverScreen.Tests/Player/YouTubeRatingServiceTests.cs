@@ -176,6 +176,12 @@ public sealed class YouTubeRatingServiceTests
         {
             return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, Cookies);
         }
+        public CookieFileLease? AcquireCookieFileLease() => null;
+        public CookieFileLease? CreateCookieFile() => null;
+        public System.Net.CookieContainer? CreateCookieContainer()
+        {
+            return NetscapeCookieParser.CreateCookieContainer(Cookies);
+        }
 
         public void SetManualSession(string cookieContent, SessionCookieFormat format)
         {

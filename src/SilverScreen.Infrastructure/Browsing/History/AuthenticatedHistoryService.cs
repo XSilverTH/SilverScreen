@@ -1,16 +1,18 @@
+using System.Globalization;
 using Serilog;
+using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Core.Queue;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Infrastructure.Browsing.History;
@@ -18,23 +20,39 @@ namespace SilverScreen.Infrastructure.Browsing.History;
 /// <summary>Keeps the current server-backed watch-history page sequence for the active session.</summary>
 public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, IDisposable
 {
+    private const int PageSize = 20;
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string BackendFailureMessage = "Watch history is temporarily unavailable.";
     private const string EmptyHistoryMessage = "No watch history was returned.";
     private const string NoContinuationMessage = "No additional watch history is available.";
     private const string SuccessMessage = "Watch history loaded.";
+
     private static readonly ILogger Logger = Log.ForContext<AuthenticatedHistoryService>();
-    private readonly IYouTubeHistoryClient _historyClient;
+
+    private readonly ISessionService _sessionService;
+    private readonly ICookieFileProvider _cookieFileProvider;
+    private readonly IPreferencesService _preferencesService;
+    private readonly IYtDlpRunner _runner;
+    private readonly TimeSpan _timeout;
+
     private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
-    private readonly ISessionService _sessionService;
     private string? _continuationToken;
 
-    public AuthenticatedHistoryService(IYouTubeHistoryClient historyClient, ISessionService sessionService)
+    public AuthenticatedHistoryService(
+        ISessionService sessionService,
+        ICookieFileProvider cookieFileProvider,
+        IPreferencesService preferencesService,
+        IYtDlpRunner runner,
+        TimeSpan? timeout = null)
     {
-        _historyClient = historyClient ?? throw new ArgumentNullException(nameof(historyClient));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _cookieFileProvider = cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _timeout = timeout ?? TimeSpan.FromSeconds(30);
+
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
@@ -49,21 +67,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
                 AuthenticationRequiredMessage);
         }
 
-        try
-        {
-            return ProcessClientResult(
-                await _historyClient.GetHistoryAsync(null, cancellationToken).ConfigureAwait(false), true);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Exception while loading first page of watch history");
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
-                BackendFailureMessage);
-        }
+        return await FetchPageAsync(startIndex: 1, isFirstPage: true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
@@ -77,32 +81,21 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
                 AuthenticationRequiredMessage);
         }
 
-        string? continuationToken;
+        string? currentToken;
         lock (_lock)
         {
-            continuationToken = _continuationToken;
+            currentToken = _continuationToken;
         }
 
-        if (string.IsNullOrEmpty(continuationToken))
+        if (string.IsNullOrEmpty(currentToken))
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
                 NoContinuationMessage);
 
-        try
-        {
-            return ProcessClientResult(
-                await _historyClient.GetHistoryAsync(continuationToken, cancellationToken).ConfigureAwait(false),
-                false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Exception while loading next page of watch history");
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
-                BackendFailureMessage);
-        }
+        if (!int.TryParse(currentToken, out var startIndex) || startIndex < 1)
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
+                "Invalid history continuation.");
+
+        return await FetchPageAsync(startIndex: startIndex, isFirstPage: false, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -126,48 +119,113 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
-    private AuthenticatedHistoryResult ProcessClientResult(HistoryFeedResult clientResult, bool isFirstPage)
+    private async Task<AuthenticatedHistoryResult> FetchPageAsync(
+        int startIndex,
+        bool isFirstPage,
+        CancellationToken cancellationToken)
     {
-        if (!clientResult.IsSuccess)
-        {
-            if (clientResult.RequiresAuthentication)
-            {
-                ClearCachedResults();
-                return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRejected, FeedPage.Empty,
-                    AuthenticationRejectedMessage);
-            }
-
-            var message = clientResult.StatusMessage?.StartsWith("yt-dlp ", StringComparison.OrdinalIgnoreCase) == true
-                ? clientResult.StatusMessage
-                : BackendFailureMessage;
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
-                message);
-        }
-
-        var usableVideos = clientResult.Videos.Where(video => !video.IsShort).ToArray();
-        if (usableVideos.Length == 0 && isFirstPage)
+        var cookies = _sessionService.GetManualSessionCookies();
+        if (cookies is null || string.IsNullOrWhiteSpace(cookies.Content))
         {
             ClearCachedResults();
-            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
-                EmptyHistoryMessage);
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRejected, FeedPage.Empty,
+                AuthenticationRejectedMessage);
         }
 
-        lock (_lock)
+        using var cookieFile = _cookieFileProvider.CreateCookieFile();
+        if (cookieFile is null || string.IsNullOrWhiteSpace(cookieFile.Path))
+        {
+            ClearCachedResults();
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRejected, FeedPage.Empty,
+                AuthenticationRejectedMessage);
+        }
+
+        var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
+        ProcessResult processResult;
+        try
+        {
+            processResult = await _runner.RunAsync(
+                    YtDlpCommandBuilder.BuildHistory(executablePath, startIndex, cookieFile.Path),
+                    _timeout,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (TimeoutException exception)
+        {
+            Logger.Warning(exception, "yt-dlp timed out while loading watch history");
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
+                RuntimeDependencyGuidance.YtDlpTimedOut);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Could not execute yt-dlp for watch history");
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
+                RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
+        }
+
+        if (processResult.ExitCode != 0)
+        {
+            Logger.Warning("yt-dlp exited with code {ExitCode} while loading watch history", processResult.ExitCode);
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
+                RuntimeDependencyGuidance.YtDlpFailed($"the process exited with error code {processResult.ExitCode}."));
+        }
+
+        if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
         {
             if (isFirstPage)
-                _loadedVideos.Clear();
+            {
+                ClearCachedResults();
+                return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
+                    EmptyHistoryMessage);
+            }
 
-            foreach (var video in usableVideos)
-                if (_loadedVideos.All(existingVideo => existingVideo.Id != video.Id))
-                    _loadedVideos.Add(video);
-
-            _continuationToken = clientResult.ContinuationToken;
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
+                NoContinuationMessage);
         }
 
-        return new AuthenticatedHistoryResult(
-            AuthenticatedHistoryStatus.Success,
-            new FeedPage(usableVideos, clientResult.ContinuationToken),
-            SuccessMessage);
+        try
+        {
+            var pageEntries = YtDlpVideoParser.Parse(processResult.StandardOutput).ToArray();
+            var usableVideos = pageEntries.Where(video => !video.IsShort).ToArray();
+
+            if (usableVideos.Length == 0 && isFirstPage)
+            {
+                ClearCachedResults();
+                return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, FeedPage.Empty,
+                    EmptyHistoryMessage);
+            }
+
+            var nextToken = pageEntries.Length == PageSize
+                ? (startIndex + PageSize).ToString(CultureInfo.InvariantCulture)
+                : null;
+
+            lock (_lock)
+            {
+                if (isFirstPage)
+                    _loadedVideos.Clear();
+
+                foreach (var video in usableVideos)
+                    if (_loadedVideos.All(existing => existing.Id != video.Id))
+                        _loadedVideos.Add(video);
+
+                _continuationToken = nextToken;
+            }
+
+            return new AuthenticatedHistoryResult(
+                AuthenticatedHistoryStatus.Success,
+                new FeedPage(usableVideos, nextToken),
+                SuccessMessage);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Could not parse yt-dlp output for watch history");
+            return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.TemporaryBackendFailure, FeedPage.Empty,
+                RuntimeDependencyGuidance.YtDlpFailed("the watch history output could not be read."));
+        }
     }
 
     private void ClearCachedResults()

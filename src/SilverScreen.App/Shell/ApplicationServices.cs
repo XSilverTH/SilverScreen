@@ -107,6 +107,7 @@ public static class ApplicationServiceCollectionExtensions
                 provider.GetRequiredService<IPreferencesService>(),
                 provider.GetRequiredService<ApplicationConfiguration>().DiscordApplicationId));
         services.AddSingleton<IYouTubePlaybackTelemetryService, YouTubePlaybackTelemetryService>();
+        services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
         services.AddSingleton<IWatchProgressService, FileWatchProgressService>();
         services.AddSingleton<YtDlpRunner>();
@@ -118,19 +119,15 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
-        services.AddSingleton<IYouTubeHomeClient, YtDlpHomeClient>();
         services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
         services.AddSingleton<IYouTubeVideoDetailsService, YtDlpVideoDetailsService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
-        services.AddSingleton<IYouTubeHistoryClient, YtDlpHistoryClient>();
         services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
         services.AddSingleton<HomeFeedCoordinator>();
-        services.AddSingleton<HomeSessionValidator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
         services.AddSingleton<SessionValidationCoordinator>();
         services.AddSingleton<PlayerDependencies>();
         services.AddSingleton<ApplicationServices>();
-
         return services;
     }
 }

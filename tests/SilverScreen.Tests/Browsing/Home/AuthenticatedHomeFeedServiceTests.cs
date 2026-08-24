@@ -1,45 +1,12 @@
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
+using System.Diagnostics;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.Account.Session;
+using SilverScreen.Infrastructure.Browsing.Home;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Infrastructure.Player;
-using SilverScreen.Infrastructure.Player.Comments;
-using SilverScreen.Infrastructure.Browsing.Common;
-using SilverScreen.Infrastructure.Browsing.Home;
-using SilverScreen.Infrastructure.Browsing.Channel;
-using SilverScreen.Infrastructure.Browsing.Search;
-using SilverScreen.Infrastructure.Browsing.History;
-using SilverScreen.Infrastructure.Queue;
-using SilverScreen.Infrastructure.Account.Session;
-using SilverScreen.Infrastructure.Account.Auth;
-using SilverScreen.Infrastructure.Account.Profile;
-using SilverScreen.Infrastructure.Preferences;
-using SilverScreen.Shell;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.History;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
-using SilverScreen.Player.Controllers;
-using SilverScreen.Player.Comments;
-using SilverScreen.Queue;
-using SilverScreen.Account.Profile;
-using SilverScreen.Account.Auth;
-using SilverScreen.Account.Session;
-using SilverScreen.Preferences;
-
 
 namespace SilverScreen.Tests.Browsing.Home;
 
@@ -48,103 +15,157 @@ public sealed class AuthenticatedHomeFeedServiceTests
     private const string CookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession\n";
 
-
     [Fact]
     public async Task LoadFirstPageAsync_MapsAndCachesSuccessfulResults()
     {
-        var client = new FakeYouTubeHomeClient
+        var runner = new FakeRunner(_ =>
         {
-            ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult(
-                [CreateVideo("v1"), CreateVideo("v2")], "next", true, "OK", false))
-        };
-        var service = CreateService(client);
+            var output = GenerateYtDlpJson(20);
+            return Task.FromResult(new ProcessResult(0, output, ""));
+        });
+        var (service, _) = CreateService(runner);
 
         var result = await service.LoadFirstPageAsync();
 
         Assert.Equal(AuthenticatedHomeFeedStatus.Success, result.Status);
-        Assert.Equal(["v1", "v2"], result.FeedPage.Videos.Select(video => video.Id));
-        Assert.Equal("next", service.GetHomeFeed().ContinuationToken);
+        Assert.Equal(20, result.FeedPage.Videos.Count);
+        Assert.Equal("21", service.GetHomeFeed().ContinuationToken);
+        Assert.Equal(20, service.GetHomeFeed().Videos.Count);
     }
 
     [Fact]
-    public async Task LoadFirstPageAsync_AuthenticationRejectionClearsCachedResults()
+    public async Task LoadFirstPageAsync_AuthenticationRequiredClearsCachedResults()
     {
-        var client = new FakeYouTubeHomeClient
+        var runner = new FakeRunner(_ =>
         {
-            ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult(
-                [CreateVideo("v1")], "next", true, "OK", false))
-        };
-        var service = CreateService(client);
+            var output = GenerateYtDlpJson(2);
+            return Task.FromResult(new ProcessResult(0, output, ""));
+        });
+        var (service, session) = CreateService(runner);
         await service.LoadFirstPageAsync();
-        client.ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult([], null, false, "Rejected", true));
+        Assert.Equal(2, service.GetHomeFeed().Videos.Count);
+
+        session.ClearSession();
 
         var result = await service.LoadFirstPageAsync();
 
-        Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRejected, result.Status);
+        Assert.Equal(AuthenticatedHomeFeedStatus.AuthenticationRequired, result.Status);
         Assert.Empty(service.GetHomeFeed().Videos);
     }
 
     [Fact]
     public async Task LoadFirstPageAsync_BackendFailurePreservesCachedResults()
     {
-        var client = new FakeYouTubeHomeClient
+        var callCount = 0;
+        var runner = new FakeRunner(_ =>
         {
-            ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult(
-                [CreateVideo("v1")], "next", true, "OK", false))
-        };
-        var service = CreateService(client);
+            callCount++;
+            if (callCount == 1)
+            {
+                var output = GenerateYtDlpJson(2);
+                return Task.FromResult(new ProcessResult(0, output, ""));
+            }
+
+            return Task.FromResult(new ProcessResult(1, "", "Error"));
+        });
+        var (service, _) = CreateService(runner);
         await service.LoadFirstPageAsync();
-        client.ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult([], null, false, "Failure", false));
+        Assert.Equal(2, service.GetHomeFeed().Videos.Count);
 
         var result = await service.LoadFirstPageAsync();
 
         Assert.Equal(AuthenticatedHomeFeedStatus.TemporaryBackendFailure, result.Status);
-        Assert.Single(service.GetHomeFeed().Videos);
+        Assert.Equal(2, service.GetHomeFeed().Videos.Count);
     }
 
     [Fact]
     public async Task LoadNextPageAsync_UsesContinuationAndAppendsToTheCache()
     {
-        var client = new FakeYouTubeHomeClient
+        var runner = new FakeRunner(info =>
         {
-            ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult(
-                [CreateVideo("v1")], "next", true, "OK", false))
-        };
-        var service = CreateService(client);
+            var isNextPage = info.ArgumentList.Contains("21");
+            var count = isNextPage ? 5 : 20;
+            var prefix = isNextPage ? "page2_" : "page1_";
+            var output = GenerateYtDlpJson(count, prefix);
+            return Task.FromResult(new ProcessResult(0, output, ""));
+        });
+        var (service, _) = CreateService(runner);
         await service.LoadFirstPageAsync();
-        client.ResponseFactory = (_, _) => Task.FromResult(new HomeFeedResult(
-            [CreateVideo("v2")], null, true, "OK", false));
 
         var result = await service.LoadNextPageAsync();
 
-        Assert.Equal("next", client.LastContinuationToken);
-        Assert.Equal(["v2"], result.FeedPage.Videos.Select(video => video.Id));
-        Assert.Equal(["v1", "v2"], service.GetHomeFeed().Videos.Select(video => video.Id));
+        Assert.Equal(5, result.FeedPage.Videos.Count);
+        Assert.Equal(25, service.GetHomeFeed().Videos.Count);
     }
 
-    private static AuthenticatedHomeFeedService CreateService(FakeYouTubeHomeClient client)
+    [Fact]
+    public async Task LoadFirstPageAsync_RetriesWithoutCookiesWhenZeroVideosReturned()
+    {
+        var calls = new List<ProcessStartInfo>();
+        var runner = new FakeRunner(info =>
+        {
+            calls.Add(info);
+            var output = calls.Count == 1 ? "{\"entries\": []}" : GenerateYtDlpJson(2, "public_");
+            return Task.FromResult(new ProcessResult(0, output, ""));
+        });
+        var (service, _) = CreateService(runner);
+
+        var result = await service.LoadFirstPageAsync();
+
+        Assert.Equal(AuthenticatedHomeFeedStatus.Success, result.Status);
+        Assert.Equal("Public recommendations are displayed.", result.StatusMessage);
+        Assert.Equal(2, result.FeedPage.Videos.Count);
+        Assert.Equal(2, calls.Count);
+        Assert.Contains("--cookies", calls[0].ArgumentList);
+        Assert.DoesNotContain("--cookies", calls[1].ArgumentList);
+    }
+
+    private static (AuthenticatedHomeFeedService Service, InMemorySessionService Session) CreateService(IYtDlpRunner runner)
     {
         var session = new InMemorySessionService();
         session.SetManualSession(CookieContent, SessionCookieFormat.NetscapeCookiesText);
-        return new AuthenticatedHomeFeedService(client, session);
+        var cookieProvider = new FakeCookieFileProvider();
+        var preferences = new TestPreferences();
+        var service = new AuthenticatedHomeFeedService(session, cookieProvider, preferences, runner);
+        return (service, session);
     }
 
-    private static VideoSummary CreateVideo(string id)
+    private static string GenerateYtDlpJson(int count, string prefix = "vid")
     {
-        return new VideoSummary(id, $"Video {id}", "Channel", TimeSpan.FromMinutes(3), "thumbnail", false);
-    }
-
-    private sealed class FakeYouTubeHomeClient : IYouTubeHomeClient
-    {
-        public string? LastContinuationToken { get; private set; }
-        public Func<string?, CancellationToken, Task<HomeFeedResult>>? ResponseFactory { get; set; }
-
-        public Task<HomeFeedResult> GetHomeFeedAsync(string? continuationToken = null,
-            CancellationToken cancellationToken = default)
+        var entries = Enumerable.Range(1, count).Select(i =>
         {
-            LastContinuationToken = continuationToken;
-            return ResponseFactory?.Invoke(continuationToken, cancellationToken)
-                   ?? Task.FromResult(new HomeFeedResult([], null, true, "OK", false));
+            var id = $"{prefix}_{i}".PadLeft(11, '0');
+            return $$"""{"id": "{{id}}", "webpage_url": "https://www.youtube.com/watch?v={{id}}", "title": "Video {{i}}", "uploader": "Channel", "duration": 180}""";
+        });
+        return $$"""{"entries": [{{string.Join(",", entries)}}]}""";
+    }
+
+    private sealed class TestPreferences : IPreferencesService
+    {
+        public event EventHandler<AppPreferences>? PreferencesChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public AppPreferences GetPreferences() => new();
+
+        public void SavePreferences(AppPreferences preferences) { }
+    }
+
+    private sealed class FakeCookieFileProvider : ICookieFileProvider
+    {
+        public CookieFileLease? CreateCookieFile()
+        {
+            return new CookieFileLease("/tmp/fake_cookie_file");
+        }
+    }
+
+    private sealed class FakeRunner(Func<ProcessStartInfo, Task<ProcessResult>> handler) : IYtDlpRunner
+    {
+        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            return handler(startInfo);
         }
     }
 }

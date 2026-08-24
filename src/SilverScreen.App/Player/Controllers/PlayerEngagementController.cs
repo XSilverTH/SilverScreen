@@ -29,7 +29,7 @@ internal sealed class PlayerEngagementController(
     Button dislikeButton,
     Image dislikeImage,
     Label dislikesLabel)
-    : IPlayerFeature
+    : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PlayerEngagementController>();
     private CancellationTokenSource? _cancellation;
@@ -63,10 +63,6 @@ internal sealed class PlayerEngagementController(
         var version = ++_loadVersion;
         UpdateEngagementAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
         UpdateRatingStateAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
-    }
-
-    public void UpdatePlayback(LibMpvPlaybackState state, string videoId)
-    {
     }
 
     public void Clear()

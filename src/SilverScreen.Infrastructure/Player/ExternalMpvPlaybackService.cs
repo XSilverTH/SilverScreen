@@ -1,52 +1,56 @@
-using SilverScreen.Infrastructure.Common;
 using System.ComponentModel;
 using System.Diagnostics;
 using Serilog;
-using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Player.Comments;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Search;
-using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Core.Common;
+using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 
-public sealed class ExternalMpvPlaybackService(
-    IPreferencesService preferencesService,
-    ICookieFileProvider? cookieFileProvider = null,
-    IPlaybackPresenceService? playbackPresenceService = null,
-    IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-    IWatchProgressService? watchProgressService = null)
-    : IPlaybackService, IDisposable
+public sealed class ExternalMpvPlaybackService : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
-    private readonly Lock _activePlaybackLock = new();
-    private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
-
-    private readonly IPreferencesService _preferencesService =
-        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-
+    private readonly Lock _activeObserversLock = new();
+    private readonly Dictionary<long, MpvIpcPlaybackObserver> _activeObservers = [];
+    private readonly PlaybackCoordinator _coordinator;
+    private readonly IPreferencesService _preferencesService;
     private bool _disposed;
-    private long _nextPlaybackId;
+
+    public ExternalMpvPlaybackService(
+        IPreferencesService preferencesService,
+        PlaybackCoordinator playbackCoordinator)
+    {
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+        _coordinator = playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
+    }
+
+    internal ExternalMpvPlaybackService(
+        IPreferencesService preferencesService,
+        ICookieFileProvider? cookieFileProvider = null,
+        IPlaybackPresenceService? playbackPresenceService = null,
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
+        IWatchProgressService? watchProgressService = null)
+        : this(
+            preferencesService,
+            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService, watchProgressService))
+    {
+    }
 
     public void Dispose()
     {
-        lock (_activePlaybackLock)
+        lock (_activeObserversLock)
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var playback in _activePlaybacks.Values)
+            foreach (var observer in _activeObservers.Values)
             {
-                playback.Observer?.Dispose();
-                playback.Telemetry?.Dispose();
+                observer.Dispose();
             }
+            _activeObservers.Clear();
         }
+        _coordinator.Dispose();
     }
 
     public async Task<string> PlayAsync(PlaybackRequest request)
@@ -57,7 +61,7 @@ public sealed class ExternalMpvPlaybackService(
 
         try
         {
-            cookieFile = cookieFileProvider?.CreateCookieFile();
+            cookieFile = _coordinator.AcquireCookieFileLease();
             activeOptions = GetActiveOptions();
             ipcDirectory = Directory.CreateTempSubdirectory("silverscreen-mpv-");
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
@@ -124,33 +128,20 @@ public sealed class ExternalMpvPlaybackService(
 
     internal long RegisterActivePlayback(PlaybackRequest request)
     {
-        lock (_activePlaybackLock)
-        {
-            var playback = new ActivePlayback(++_nextPlaybackId, request, StartTelemetryQuietly(request));
-            _activePlaybacks.Add(playback.Id, playback);
-            return playback.Id;
-        }
+        return _coordinator.RegisterActivePlayback(request);
     }
 
     internal void UpdateActivePlayback(long playbackId, PlaybackPresenceState state)
     {
-        lock (_activePlaybackLock)
-        {
-            if (!_activePlaybacks.TryGetValue(playbackId, out var playback)) return;
-
-            playback.State = state;
-            SetTelemetryQuietly(playback.Telemetry, state);
-            watchProgressService?.Update(playback.Request, state);
-            if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
-        }
+        _coordinator.UpdateActivePlayback(playbackId, state);
     }
 
     private void AttachObserver(long playbackId, MpvIpcPlaybackObserver observer)
     {
-        lock (_activePlaybackLock)
+        lock (_activeObserversLock)
         {
-            if (_activePlaybacks.TryGetValue(playbackId, out var playback))
-                playback.Observer = observer;
+            if (!_disposed)
+                _activeObservers[playbackId] = observer;
             else
                 observer.Dispose();
         }
@@ -158,24 +149,14 @@ public sealed class ExternalMpvPlaybackService(
 
     internal void CompleteActivePlayback(long playbackId)
     {
-        lock (_activePlaybackLock)
+        lock (_activeObserversLock)
         {
-            if (!_activePlaybacks.TryGetValue(playbackId, out var completedPlayback)) return;
-
-            var wasMostRecent = _activePlaybacks.Keys.Max() == completedPlayback.Id;
-            _activePlaybacks.Remove(playbackId);
-            completedPlayback.Observer?.Dispose();
-            completedPlayback.Telemetry?.Dispose();
-            if (!wasMostRecent) return;
-
-            var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id);
-            if (currentPlayback?.State is { } state)
-                SetPresenceQuietly(currentPlayback.Request, state);
-            else
-                ClearPresenceQuietly();
+            if (_activeObservers.Remove(playbackId, out var observer))
+                observer.Dispose();
         }
-    }
 
+        _coordinator.CompleteActivePlayback(playbackId);
+    }
     private static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
     {
         try
@@ -280,83 +261,15 @@ public sealed class ExternalMpvPlaybackService(
             argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
     }
 
-    private void SetPresenceQuietly(PlaybackRequest request, PlaybackPresenceState state)
-    {
-        if (playbackPresenceService is null) return;
-
-        try
-        {
-            playbackPresenceService.SetPlaybackState(request, state);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Playback presence update failed safely");
-        }
-    }
-
-    private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
-    {
-        if (playbackTelemetryService is null) return null;
-        try
-        {
-            return playbackTelemetryService.Start(request);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "YouTube playback telemetry start failed safely");
-            return null;
-        }
-    }
-
-    private static void SetTelemetryQuietly(IYouTubePlaybackTelemetrySession? telemetry,
-        PlaybackPresenceState state)
-    {
-        if (telemetry is null) return;
-        try
-        {
-            telemetry.UpdateState(state);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "YouTube playback telemetry update failed safely");
-        }
-    }
-
-    private void ClearPresenceQuietly()
-    {
-        if (playbackPresenceService is null) return;
-
-        try
-        {
-            playbackPresenceService.Clear();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Playback presence clear failed safely");
-        }
-    }
-
     private static void CleanupIpcDirectoryQuietly(DirectoryInfo? directory)
     {
         if (directory is null) return;
         try
         {
-            directory.Delete(true);
+            if (directory.Exists) directory.Delete(true);
         }
-        catch (IOException)
+        catch
         {
         }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private sealed class ActivePlayback(long id, PlaybackRequest request, IYouTubePlaybackTelemetrySession? telemetry)
-    {
-        public long Id { get; } = id;
-        public PlaybackRequest Request { get; } = request;
-        public IYouTubePlaybackTelemetrySession? Telemetry { get; } = telemetry;
-        public MpvIpcPlaybackObserver? Observer { get; set; }
-        public PlaybackPresenceState? State { get; set; }
     }
 }
