@@ -8,7 +8,10 @@ Gtk.Box SearchPopoverView {
   margin-start: 10;
   margin-end: 10;
   width-request: 440;
-  styles ["search-popover-box"]
+
+  styles [
+    "search-popover-box",
+  ]
 
   Gtk.SearchEntry search_entry {
     placeholder-text: "Search or paste a YouTube URL";
@@ -16,7 +19,10 @@ Gtk.Box SearchPopoverView {
     hexpand: true;
     activate => $OnSearchEntryActivated();
     search-changed => $OnSearchTextChanged();
-    styles ["search-popover-entry"]
+
+    styles [
+      "search-popover-entry",
+    ]
   }
 
   Gtk.Revealer suggestions_revealer {
@@ -29,7 +35,9 @@ Gtk.Box SearchPopoverView {
       spacing: 6;
 
       Gtk.Separator {
-        styles ["spacer"]
+        styles [
+          "spacer",
+        ]
       }
 
       Gtk.ScrolledWindow suggestions_scroll {
@@ -38,12 +46,19 @@ Gtk.Box SearchPopoverView {
         min-content-height: 0;
         max-content-height: 280;
         propagate-natural-height: true;
-        styles ["search-suggestions-scroll"]
+
+        styles [
+          "search-suggestions-scroll",
+        ]
 
         child: Gtk.ListBox suggestions_list {
           selection-mode: single;
           can-focus: false;
-          styles ["search-suggestions-list", "navigation-sidebar"]
+
+          styles [
+            "search-suggestions-list",
+            "navigation-sidebar",
+          ]
         };
       }
     };

@@ -1,14 +1,15 @@
 using Gtk 4.0;
 using Adw 1;
 
-Gtk.Box AccountPopoverView {
-  orientation: vertical;
-  spacing: 10;
+Adw.Bin AccountPopoverView {
   margin-top: 12;
   margin-bottom: 12;
   margin-start: 12;
   margin-end: 12;
-  styles ["account-popover"]
+
+  styles [
+    "account-popover",
+  ]
 
   Gtk.Stack account_stack {
     hhomogeneous: false;
@@ -16,17 +17,24 @@ Gtk.Box AccountPopoverView {
 
     Gtk.StackPage {
       name: "signed_out";
+
       child: Gtk.Box {
         orientation: vertical;
         spacing: 8;
         width-request: 320;
-        styles ["account-sign-in-actions"]
+
+        styles [
+          "account-sign-in-actions",
+        ]
 
         Gtk.Button signed_out_google_button {
           clicked => $OnWebLoginClicked();
           label: "Google login";
           halign: fill;
-          styles ["suggested-action"]
+
+          styles [
+            "suggested-action",
+          ]
         }
 
         Gtk.Button signed_out_manual_button {
@@ -39,38 +47,49 @@ Gtk.Box AccountPopoverView {
 
     Gtk.StackPage {
       name: "signed_in";
+
       child: Gtk.Box {
         orientation: horizontal;
         spacing: 12;
         width-request: 208;
-        styles ["account-card"]
+
+        styles [
+          "account-card",
+        ]
 
         Adw.Avatar signed_in_avatar {
           size: 48;
           text: "YouTube";
           show-initials: true;
-          styles ["account-avatar"]
+
+          styles [
+            "account-avatar",
+          ]
         }
 
-        Gtk.Box {
-          orientation: vertical;
-          spacing: 3;
+        Adw.Bin {
           hexpand: true;
           valign: center;
 
           Gtk.Label signed_in_display_name {
             xalign: 0;
             ellipsize: end;
-            styles ["account-display-name"]
-          }
 
+            styles [
+              "account-display-name",
+            ]
+          }
         }
 
         Gtk.Button signed_in_sign_out_button {
           clicked => $OnClearButtonClicked();
           tooltip-text: "Sign out";
           valign: center;
-          styles ["circular", "account-sign-out-button"]
+
+          styles [
+            "circular",
+            "account-sign-out-button",
+          ]
 
           child: Gtk.Image {
             icon-name: "system-log-out-symbolic";
@@ -78,54 +97,68 @@ Gtk.Box AccountPopoverView {
         }
       };
     }
+
     Gtk.StackPage {
       name: "manual";
+
       child: Gtk.Box {
-      orientation: vertical;
-      spacing: 10;
+        orientation: vertical;
+        spacing: 10;
 
-      Gtk.Label manual_heading {
-        xalign: 0;
-        styles ["heading"]
-      }
+        Gtk.Label manual_heading {
+          xalign: 0;
 
-      Gtk.Label {
-        label: "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical.";
-        xalign: 0;
-        wrap: true;
-        styles ["dim-label"]
-      }
+          styles [
+            "heading",
+          ]
+        }
 
-      Gtk.ScrolledWindow {
-        hexpand: true;
-        width-request: 440;
-        height-request: 180;
+        Gtk.Label {
+          label: "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical.";
+          xalign: 0;
+          wrap: true;
 
-        Gtk.TextView manual_editor {
-          monospace: true;
-          wrap-mode: char;
+          styles [
+            "dim-label",
+          ]
+        }
+
+        Gtk.ScrolledWindow {
+          hexpand: true;
+          width-request: 440;
           height-request: 180;
-        }
-      }
 
-      Gtk.Box manual_editor_actions {
-        orientation: horizontal;
-        spacing: 6;
-        halign: end;
-
-        Gtk.Button manual_cancel_button {
-          clicked => $OnManualCancelButtonClicked();
-          label: "Cancel";
-          halign: fill;
-          styles ["flat"]
+          Gtk.TextView manual_editor {
+            monospace: true;
+            wrap-mode: char;
+            height-request: 180;
+          }
         }
 
-        Gtk.Button manual_save_button {
-          clicked => $OnManualSaveButtonClicked();
-          label: "Save session";
-          styles ["suggested-action"]
+        Gtk.Box manual_editor_actions {
+          orientation: horizontal;
+          spacing: 6;
+          halign: end;
+
+          Gtk.Button manual_cancel_button {
+            clicked => $OnManualCancelButtonClicked();
+            label: "Cancel";
+            halign: fill;
+
+            styles [
+              "flat",
+            ]
+          }
+
+          Gtk.Button manual_save_button {
+            clicked => $OnManualSaveButtonClicked();
+            label: "Save session";
+
+            styles [
+              "suggested-action",
+            ]
+          }
         }
-      }
       };
     }
   }

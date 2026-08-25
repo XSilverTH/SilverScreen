@@ -1,29 +1,34 @@
 using Gtk 4.0;
+using Adw 1;
 
 menu video_actions {
   item {
     label: "Play";
     action: "video.play";
   }
+
   item {
     label: "Open in other player";
     action: "video.play-alternate";
   }
+
   item {
     label: "Add to queue";
     action: "video.add-to-queue";
   }
+
   item {
     label: "Open channel";
     action: "video.open-channel";
   }
+
   item {
     label: "Copy link";
     action: "video.copy-link";
   }
 }
 
-Gtk.Box VideoCardView {
+Adw.Bin VideoCardView {
   width-request: 336;
   halign: center;
   valign: start;
@@ -38,7 +43,11 @@ Gtk.Box VideoCardView {
     width-request: 336;
     halign: center;
     valign: start;
-    styles ["video-card"]
+
+    styles [
+      "video-card",
+    ]
+
     overflow: hidden;
 
     Gtk.Overlay thumbnail {
@@ -46,7 +55,10 @@ Gtk.Box VideoCardView {
       width-request: 336;
       hexpand: true;
       overflow: hidden;
-      styles ["video-thumbnail"]
+
+      styles [
+        "video-thumbnail",
+      ]
 
       child: Gtk.Image placeholder {
         icon-name: "media-playback-start-symbolic";
@@ -61,7 +73,11 @@ Gtk.Box VideoCardView {
         valign: end;
         margin-end: 10;
         margin-bottom: 9;
-        styles ["caption", "duration-pill"]
+
+        styles [
+          "caption",
+          "duration-pill",
+        ]
       }
 
       [overlay]
@@ -70,7 +86,10 @@ Gtk.Box VideoCardView {
         valign: end;
         visible: false;
         show-text: false;
-        styles ["watched-progress-bar"]
+
+        styles [
+          "watched-progress-bar",
+        ]
       }
     }
 
@@ -79,7 +98,10 @@ Gtk.Box VideoCardView {
       margin-end: 12;
       margin-top: 9;
       margin-bottom: 10;
-      styles ["video-metadata"]
+
+      styles [
+        "video-metadata",
+      ]
 
       child: Gtk.Box text {
         orientation: vertical;
@@ -91,7 +113,10 @@ Gtk.Box VideoCardView {
           wrap: true;
           max-width-chars: 30;
           height-request: 38;
-          styles ["video-title"]
+
+          styles [
+            "video-title",
+          ]
         }
 
         Gtk.Box footer {
@@ -104,7 +129,11 @@ Gtk.Box VideoCardView {
             hexpand: true;
             wrap: false;
             ellipsize: end;
-            styles ["dim-label", "channel-link"]
+
+            styles [
+              "dim-label",
+              "channel-link",
+            ]
           }
 
           Gtk.Label upload_date {
@@ -112,7 +141,10 @@ Gtk.Box VideoCardView {
             halign: end;
             wrap: false;
             visible: false;
-            styles ["dim-label"]
+
+            styles [
+              "dim-label",
+            ]
           }
         }
       };
@@ -122,7 +154,11 @@ Gtk.Box VideoCardView {
         icon-name: "view-more-symbolic";
         halign: end;
         valign: start;
-        styles ["flat"]
+
+        styles [
+          "flat",
+        ]
+
         menu-model: video_actions;
       }
     }

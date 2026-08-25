@@ -11,8 +11,7 @@ Adw.Window WebLoginWindow {
     [top]
     Adw.HeaderBar {}
 
-    content: Gtk.Box web_view_container {
-      orientation: vertical;
+    content: Adw.Bin web_view_container {
       hexpand: true;
       vexpand: true;
 
@@ -24,7 +23,10 @@ Adw.Window WebLoginWindow {
         margin-bottom: 8;
         margin-start: 12;
         margin-end: 12;
-        styles ["dim-label"]
+
+        styles [
+          "dim-label",
+        ]
       }
     };
   };

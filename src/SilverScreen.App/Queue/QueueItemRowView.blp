@@ -5,14 +5,17 @@ menu queue_item_actions {
     label: "Play now";
     action: "queue.play-now";
   }
+
   item {
     label: "Move up";
     action: "queue.move-up";
   }
+
   item {
     label: "Move down";
     action: "queue.move-down";
   }
+
   item {
     label: "Remove";
     action: "queue.remove";
@@ -21,7 +24,11 @@ menu queue_item_actions {
 
 Gtk.Box QueueItemRowView {
   hexpand: true;
-  styles ["queue-row"]
+
+  styles [
+    "queue-row",
+  ]
+
   spacing: 8;
   margin-top: 3;
   margin-bottom: 3;
@@ -46,9 +53,15 @@ Gtk.Box QueueItemRowView {
 
     Gtk.StackPage {
       name: "index";
+
       child: Gtk.Label position {
         label: "";
-        styles ["caption", "dim-label"]
+
+        styles [
+          "caption",
+          "dim-label",
+        ]
+
         halign: center;
         valign: center;
       };
@@ -56,12 +69,16 @@ Gtk.Box QueueItemRowView {
 
     Gtk.StackPage {
       name: "playing";
+
       child: Gtk.Image playing_icon {
         icon-name: "audio-volume-high-symbolic";
         tooltip-text: "Now playing";
         halign: center;
         valign: center;
-        styles ["queue-now-playing-icon"]
+
+        styles [
+          "queue-now-playing-icon",
+        ]
       };
     }
   }
@@ -69,8 +86,13 @@ Gtk.Box QueueItemRowView {
   Overlay thumbnail {
     width-request: 96;
     height-request: 54;
-    styles ["queue-thumbnail"]
+
+    styles [
+      "queue-thumbnail",
+    ]
+
     overflow: hidden;
+
     child: Image placeholder {
       icon-name: "media-playback-start-symbolic";
       halign: center;
@@ -83,7 +105,11 @@ Gtk.Box QueueItemRowView {
       valign: end;
       visible: false;
       show-text: false;
-      styles ["watched-progress-bar", "queue-progress-bar"]
+
+      styles [
+        "watched-progress-bar",
+        "queue-progress-bar",
+      ]
     }
 
     [overlay]
@@ -93,7 +119,11 @@ Gtk.Box QueueItemRowView {
       valign: end;
       margin-end: 4;
       margin-bottom: 4;
-      styles ["caption", "queue-duration-pill"]
+
+      styles [
+        "caption",
+        "queue-duration-pill",
+      ]
     }
   }
 
@@ -121,13 +151,21 @@ Gtk.Box QueueItemRowView {
         xalign: 0;
         ellipsize: end;
         hexpand: true;
-        styles ["caption", "dim-label"]
+
+        styles [
+          "caption",
+          "dim-label",
+        ]
       }
 
       Label duration {
         label: "";
         xalign: 1;
-        styles ["caption", "dim-label"]
+
+        styles [
+          "caption",
+          "dim-label",
+        ]
       }
     }
   }
@@ -135,7 +173,12 @@ Gtk.Box QueueItemRowView {
   Button remove_button {
     icon-name: "user-trash-symbolic";
     tooltip-text: "Remove from queue";
-    styles ["flat", "circular"]
+
+    styles [
+      "flat",
+      "circular",
+    ]
+
     valign: center;
     clicked => $OnRemoveButtonClicked();
   }
@@ -143,7 +186,12 @@ Gtk.Box QueueItemRowView {
   MenuButton menu {
     icon-name: "view-more-symbolic";
     tooltip-text: "Queue item actions";
-    styles ["flat", "circular"]
+
+    styles [
+      "flat",
+      "circular",
+    ]
+
     valign: center;
     menu-model: queue_item_actions;
   }

@@ -1,8 +1,7 @@
 using Gtk 4.0;
 using Adw 1;
 
-Gtk.Box VideoListView {
-  orientation: vertical;
+Adw.Bin VideoListView {
   hexpand: true;
   vexpand: true;
 
@@ -12,6 +11,7 @@ Gtk.Box VideoListView {
 
     Gtk.StackPage {
       name: "loading";
+
       child: Gtk.Box video_list_loading_page {
         orientation: vertical;
         spacing: 12;
@@ -26,13 +26,16 @@ Gtk.Box VideoListView {
         }
 
         Gtk.Label video_list_loading_label {
-          styles ["dim-label"]
+          styles [
+            "dim-label",
+          ]
         }
       };
     }
 
     Gtk.StackPage {
       name: "content";
+
       child: Gtk.Overlay video_list_content_overlay {
         hexpand: true;
         vexpand: true;
@@ -67,7 +70,10 @@ Gtk.Box VideoListView {
             halign: center;
             spacing: 10;
             can-focus: false;
-            styles ["pagination-loading-pill"]
+
+            styles [
+              "pagination-loading-pill",
+            ]
 
             Gtk.Spinner {
               spinning: true;
@@ -77,7 +83,11 @@ Gtk.Box VideoListView {
 
             Gtk.Label video_list_pagination_loading_label {
               label: "Loading more videos…";
-              styles ["caption", "dim-label"]
+
+              styles [
+                "caption",
+                "dim-label",
+              ]
             }
           };
         }
@@ -86,6 +96,7 @@ Gtk.Box VideoListView {
 
     Gtk.StackPage {
       name: "status";
+
       child: Adw.StatusPage video_list_status_page {
         hexpand: true;
         vexpand: true;
@@ -94,7 +105,10 @@ Gtk.Box VideoListView {
           label: "Retry";
           halign: center;
           clicked => $OnRetryButtonClicked();
-          styles ["suggested-action"]
+
+          styles [
+            "suggested-action",
+          ]
         };
       };
     }

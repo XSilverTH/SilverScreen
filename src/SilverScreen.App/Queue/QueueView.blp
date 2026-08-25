@@ -5,7 +5,10 @@ Gtk.Box QueueView {
   orientation: vertical;
   width-request: 380;
   vexpand: true;
-  styles ["queue-panel"]
+
+  styles [
+    "queue-panel",
+  ]
 
   Gtk.Box {
     orientation: horizontal;
@@ -23,13 +26,20 @@ Gtk.Box QueueView {
       Gtk.Label {
         label: "Up next";
         xalign: 0;
-        styles ["title-3"]
+
+        styles [
+          "title-3",
+        ]
       }
 
       Gtk.Label queue_summary_label {
         label: "0 videos · 0s";
         xalign: 0;
-        styles ["caption", "dim-label"]
+
+        styles [
+          "caption",
+          "dim-label",
+        ]
       }
     }
 
@@ -37,7 +47,11 @@ Gtk.Box QueueView {
       icon-name: "window-close-symbolic";
       tooltip-text: "Close queue";
       clicked => $OnCloseButtonClicked();
-      styles ["flat", "circular"]
+
+      styles [
+        "flat",
+        "circular",
+      ]
     }
   }
 
@@ -70,37 +84,43 @@ Gtk.Box QueueView {
 
     Gtk.Button queue_play_button {
       clicked => $OnPlayButtonClicked();
-      styles ["suggested-action"]
+
+      styles [
+        "suggested-action",
+      ]
+
       halign: fill;
 
       child: Gtk.Stack queue_play_stack {
         Gtk.StackPage {
           name: "idle";
+
           child: Gtk.Box {
-          halign: center;
-          spacing: 8;
+            halign: center;
+            spacing: 8;
 
-          Gtk.Image {
-            icon-name: "media-playlist-start-symbolic";
-          }
+            Gtk.Image {
+              icon-name: "media-playlist-start-symbolic";
+            }
 
-          Gtk.Label {
-            label: "Play all";
-          }
+            Gtk.Label {
+              label: "Play all";
+            }
           };
         }
 
         Gtk.StackPage {
           name: "launching";
+
           child: Gtk.Box {
-          halign: center;
-          spacing: 8;
+            halign: center;
+            spacing: 8;
 
-          Gtk.Spinner queue_play_spinner {}
+            Gtk.Spinner queue_play_spinner {}
 
-          Gtk.Label {
-            label: "Opening MPV…";
-          }
+            Gtk.Label {
+              label: "Opening MPV…";
+            }
           };
         }
       };
@@ -109,7 +129,11 @@ Gtk.Box QueueView {
     Gtk.Button queue_clear_button {
       clicked => $OnClearButtonClicked();
       label: "Clear";
-      styles ["flat"]
+
+      styles [
+        "flat",
+      ]
+
       halign: center;
     }
   }

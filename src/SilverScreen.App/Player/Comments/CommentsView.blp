@@ -5,7 +5,10 @@ Gtk.Box CommentsView {
   orientation: vertical;
   width-request: 380;
   vexpand: true;
-  styles ["queue-panel"]
+
+  styles [
+    "queue-panel",
+  ]
 
   Gtk.Box {
     orientation: horizontal;
@@ -15,15 +18,16 @@ Gtk.Box CommentsView {
     margin-top: 16;
     margin-bottom: 12;
 
-    Gtk.Box {
-      orientation: vertical;
-      spacing: 2;
+    Adw.Bin {
       hexpand: true;
 
       Gtk.Label {
         label: "Comments";
         xalign: 0;
-        styles ["title-3"]
+
+        styles [
+          "title-3",
+        ]
       }
     }
 
@@ -31,7 +35,11 @@ Gtk.Box CommentsView {
       icon-name: "window-close-symbolic";
       tooltip-text: "Close comments";
       clicked => $OnCloseButtonClicked();
-      styles ["flat", "circular"]
+
+      styles [
+        "flat",
+        "circular",
+      ]
     }
   }
 
@@ -40,9 +48,14 @@ Gtk.Box CommentsView {
     margin-end: 16;
     margin-bottom: 12;
     notify => $OnSortDropdownNotify();
+
     model: Gtk.StringList {
-      strings: ["Top comments", "Newest first"];
+      strings: [
+        "Top comments",
+        "Newest first",
+      ];
     };
+
     selected: 0;
   }
 
@@ -52,6 +65,7 @@ Gtk.Box CommentsView {
 
     Gtk.StackPage {
       name: "unavailable";
+
       child: Adw.StatusPage {
         icon-name: "comments-symbolic";
         title: "Comments unavailable";
@@ -61,9 +75,8 @@ Gtk.Box CommentsView {
 
     Gtk.StackPage {
       name: "loading";
-      child: Gtk.Box {
-        orientation: vertical;
-        spacing: 12;
+
+      child: Adw.Bin {
         halign: center;
         valign: center;
 
@@ -75,6 +88,7 @@ Gtk.Box CommentsView {
 
     Gtk.StackPage {
       name: "list";
+
       child: Gtk.Overlay comments_list_overlay {
         hexpand: true;
         vexpand: true;
@@ -101,7 +115,10 @@ Gtk.Box CommentsView {
             halign: center;
             spacing: 10;
             can-focus: false;
-            styles ["pagination-loading-pill"]
+
+            styles [
+              "pagination-loading-pill",
+            ]
 
             Gtk.Spinner {
               spinning: true;
@@ -111,14 +128,20 @@ Gtk.Box CommentsView {
 
             Gtk.Label comments_pagination_loading_label {
               label: "Loading more comments…";
-              styles ["caption", "dim-label"]
+
+              styles [
+                "caption",
+                "dim-label",
+              ]
             }
           };
         }
       };
     }
+
     Gtk.StackPage {
       name: "empty";
+
       child: Adw.StatusPage comments_empty_page {
         icon-name: "comments-symbolic";
         title: "No comments";
@@ -128,6 +151,7 @@ Gtk.Box CommentsView {
 
     Gtk.StackPage {
       name: "error";
+
       child: Adw.StatusPage comments_error_page {
         icon-name: "dialog-error-symbolic";
         title: "Couldn’t load comments";
@@ -136,7 +160,10 @@ Gtk.Box CommentsView {
         child: Gtk.Button {
           label: "Retry";
           clicked => $OnRetryButtonClicked();
-          styles ["suggested-action"]
+
+          styles [
+            "suggested-action",
+          ]
         };
       };
     }

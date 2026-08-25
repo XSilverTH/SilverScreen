@@ -6,10 +6,12 @@ menu app_menu {
     label: "Preferences";
     action: "win.preferences";
   }
+
   item {
     label: "About SilverScreen";
     action: "win.about";
   }
+
   item {
     label: "Quit";
     action: "win.quit";
@@ -24,140 +26,169 @@ Adw.ApplicationWindow MainWindow {
   content: Gtk.Stack main_stack {
     Gtk.StackPage {
       name: "shell";
+
       child: Adw.OverlaySplitView queue_split_view {
-    sidebar-position: end;
-    collapsed: true;
+        sidebar-position: end;
+        collapsed: true;
 
-    content: Adw.ToolbarView {
-      [top]
-      Adw.HeaderBar {
-        [start]
-        Button navigation_back_button {
-          icon-name: "go-previous-symbolic";
-          tooltip-text: "Back to Home";
-          visible: false;
-          clicked => $OnNavigationBackButtonClicked();
-          styles ["flat"]
-        }
+        content: Adw.ToolbarView {
+          [top]
+          Adw.HeaderBar {
+            [start]
+            Button navigation_back_button {
+              icon-name: "go-previous-symbolic";
+              tooltip-text: "Back to Home";
+              visible: false;
+              clicked => $OnNavigationBackButtonClicked();
 
-        [start]
-        MenuButton account_button {
-          tooltip-text: "Account";
-          styles ["flat", "circular"]
+              styles [
+                "flat",
+              ]
+            }
 
-          child: Adw.Avatar account_avatar {
-            size: 24;
-            text: "YouTube";
-            show-initials: true;
-          };
+            [start]
+            MenuButton account_button {
+              tooltip-text: "Account";
 
-          popover: Popover account_popover {};
-        }
+              styles [
+                "flat",
+                "circular",
+              ]
 
-        [start]
-        MenuButton search_button {
-          tooltip-text: "Search";
-          icon-name: "system-search-symbolic";
-          styles ["flat"]
+              child: Adw.Avatar account_avatar {
+                size: 24;
+                text: "YouTube";
+                show-initials: true;
+              };
 
-          popover: Popover search_popover {};
-        }
-        title-widget: Adw.ViewSwitcher view_switcher {
-          policy: wide;
-        };
+              popover: Popover account_popover {};
+            }
 
-        [end]
-        MenuButton app_menu_button {
-          icon-name: "open-menu-symbolic";
-          tooltip-text: "Main Menu";
-          menu-model: app_menu;
-        }
+            [start]
+            MenuButton search_button {
+              tooltip-text: "Search";
+              icon-name: "system-search-symbolic";
 
-        [end]
-        ToggleButton queue_button {
-          visible: false;
-          tooltip-text: "Queued videos";
-          styles ["flat", "queue-indicator"]
+              styles [
+                "flat",
+              ]
 
-          child: Label queue_button_label {
-            styles ["queue-count"]
-            halign: center;
-            valign: center;
-            width-request: 24;
-            height-request: 24;
-          };
-        }
+              popover: Popover search_popover {};
+            }
 
-        [end]
-        Button home_refresh_button {
-          tooltip-text: "Refresh";
-          clicked => $OnHomeRefreshButtonClicked();
-          styles ["flat"]
+            title-widget: Adw.ViewSwitcher view_switcher {
+              policy: wide;
+            };
 
-          child: Stack home_refresh_stack {
-            StackPage {
-              name: "idle";
-              child: Image {
-                icon-name: "view-refresh-symbolic";
+            [end]
+            MenuButton app_menu_button {
+              icon-name: "open-menu-symbolic";
+              tooltip-text: "Main Menu";
+              menu-model: app_menu;
+            }
+
+            [end]
+            ToggleButton queue_button {
+              visible: false;
+              tooltip-text: "Queued videos";
+
+              styles [
+                "flat",
+                "queue-indicator",
+              ]
+
+              child: Label queue_button_label {
+                styles [
+                  "queue-count",
+                ]
+
+                halign: center;
+                valign: center;
+                width-request: 24;
+                height-request: 24;
               };
             }
 
-            StackPage {
-              name: "loading";
-              child: Spinner home_refresh_spinner {};
+            [end]
+            Button home_refresh_button {
+              tooltip-text: "Refresh";
+              clicked => $OnHomeRefreshButtonClicked();
+
+              styles [
+                "flat",
+              ]
+
+              child: Stack home_refresh_stack {
+                StackPage {
+                  name: "idle";
+
+                  child: Image {
+                    icon-name: "view-refresh-symbolic";
+                  };
+                }
+
+                StackPage {
+                  name: "loading";
+
+                  child: Spinner home_refresh_spinner {};
+                }
+              };
+            }
+          }
+
+          content: Adw.ViewStack view_stack {
+            hexpand: true;
+            vexpand: true;
+            hhomogeneous: false;
+            vhomogeneous: false;
+            notify => $OnViewStackNotify();
+
+            Adw.ViewStackPage {
+              name: "home";
+              title: "Home";
+              icon-name: "go-home-symbolic";
+
+              child: Gtk.Box home_host {
+                hexpand: true;
+                vexpand: true;
+              };
+            }
+
+            Adw.ViewStackPage {
+              name: "subscriptions";
+              title: "Subscriptions";
+              icon-name: "emblem-favorite-symbolic";
+
+              child: Adw.StatusPage {
+                title: "Subscriptions";
+                description: "Subscription feeds will land after account/session support.";
+                icon-name: "applications-internet-symbolic";
+              };
+            }
+
+            Adw.ViewStackPage {
+              name: "history";
+              title: "History";
+              icon-name: "document-open-recent-symbolic";
+
+              child: Gtk.Box history_host {
+                hexpand: true;
+                vexpand: true;
+              };
             }
           };
-        }
-      }
+        };
 
-      content: Adw.ViewStack view_stack {
-        hexpand: true;
-        vexpand: true;
-        hhomogeneous: false;
-        vhomogeneous: false;
-        notify => $OnViewStackNotify();
-        Adw.ViewStackPage {
-          name: "home";
-          title: "Home";
-          icon-name: "go-home-symbolic";
-          child: Gtk.Box home_host {
-            hexpand: true;
-            vexpand: true;
-          };
-        }
-
-        Adw.ViewStackPage {
-          name: "subscriptions";
-          title: "Subscriptions";
-          icon-name: "emblem-favorite-symbolic";
-          child: Adw.StatusPage {
-            title: "Subscriptions";
-            description: "Subscription feeds will land after account/session support.";
-            icon-name: "applications-internet-symbolic";
-          };
-        }
-
-        Adw.ViewStackPage {
-          name: "history";
-          title: "History";
-          icon-name: "document-open-recent-symbolic";
-          child: Gtk.Box history_host {
-            hexpand: true;
-            vexpand: true;
-          };
-        }
-      };
-    };
-
-    sidebar: Gtk.Box queue_sidebar_host {
-      hexpand: false;
-      vexpand: true;
-    };
+        sidebar: Gtk.Box queue_sidebar_host {
+          hexpand: false;
+          vexpand: true;
+        };
       };
     }
 
     Gtk.StackPage {
       name: "player";
+
       child: Gtk.Box player_host {
         hexpand: true;
         vexpand: true;
