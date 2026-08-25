@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Browsing.Channel;
@@ -13,7 +14,7 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Components;
 
-public partial class VideoListView : ViewBase<Box>
+public partial class VideoListView : ViewBase<Bin>
 {
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
 

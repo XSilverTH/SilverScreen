@@ -1,3 +1,4 @@
+using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gio;
@@ -20,7 +21,7 @@ public sealed class VideoCardActions
     public Func<VideoSummary, Task>? OpenChannelAsync { get; init; }
 }
 
-public partial class VideoCardView : ViewBase<Box>
+public partial class VideoCardView : ViewBase<Bin>
 {
     private const int CardWidth = 336;
     private const int ThumbnailHeight = 189;

@@ -1,10 +1,11 @@
+using Adw;
 using Gtk;
 using SilverScreen.Core.Player.Comments;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentRowView(Action<string> repliesToggleRequested) : ViewBase<Box>
+public partial class CommentRowView(Action<string> repliesToggleRequested) : ViewBase<Bin>
 {
     private readonly Action<string> _repliesToggleRequested =
         repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));

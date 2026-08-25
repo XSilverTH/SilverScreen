@@ -45,7 +45,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         _webView.Vexpand = true;
         _webView.GetSettings().SetUserAgent(BrowserUserAgent);
 
-        web_view_container.Append(_webView);
+        web_view_container.SetChild(_webView);
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,

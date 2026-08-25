@@ -1,3 +1,4 @@
+using Adw;
 using Gdk;
 using GdkPixbuf;
 using Gtk;
@@ -9,7 +10,7 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Account.Profile;
 
-public partial class AccountPopoverView : ViewBase<Box>
+public partial class AccountPopoverView : ViewBase<Bin>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
     private readonly Action _openWebLogin;
