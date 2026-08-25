@@ -29,13 +29,13 @@ Gtk.Box ChannelView {
       Gtk.Box channel_profile_box {
         orientation: horizontal;
         spacing: 20;
-        valign: center;
+        valign: start;
 
         Gtk.Overlay channel_avatar_overlay {
           width-request: 80;
           height-request: 80;
           halign: start;
-          valign: center;
+          valign: start;
 
           styles [
             "channel-avatar",
@@ -53,7 +53,7 @@ Gtk.Box ChannelView {
           orientation: vertical;
           spacing: 4;
           hexpand: true;
-          valign: center;
+          valign: start;
 
           Gtk.Label channel_name {
             xalign: 0;
@@ -68,6 +68,7 @@ Gtk.Box ChannelView {
           Gtk.Box channel_sub_meta {
             orientation: horizontal;
             spacing: 8;
+            halign: start;
 
             Gtk.Label channel_handle {
               xalign: 0;
@@ -100,17 +101,34 @@ Gtk.Box ChannelView {
             }
           }
 
-          Gtk.Label channel_description {
-            xalign: 0;
-            wrap: true;
-            lines: 3;
-            ellipsize: end;
+          Gtk.ScrolledWindow channel_description_scroller {
+            hscrollbar-policy: never;
+            vscrollbar-policy: automatic;
+            max-content-height: 80;
+            propagate-natural-height: true;
+            hexpand: true;
             visible: false;
             margin-top: 4;
 
             styles [
-              "channel-description",
+              "channel-description-scroller",
             ]
+
+            Gtk.TextView channel_description {
+              editable: false;
+              cursor-visible: false;
+              wrap-mode: word;
+              accepts-tab: false;
+              monospace: false;
+              top-margin: 0;
+              bottom-margin: 0;
+              left-margin: 0;
+              right-margin: 0;
+
+              styles [
+                "channel-description",
+              ]
+            }
           }
         }
       }

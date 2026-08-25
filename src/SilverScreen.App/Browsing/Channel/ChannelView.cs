@@ -236,12 +236,18 @@ public partial class ChannelView : ViewBase<Box>
 
         if (!string.IsNullOrWhiteSpace(state.Description))
         {
-            channel_description.SetText(state.Description);
-            channel_description.Visible = true;
+            if (channel_description.Buffer is { } buffer)
+                buffer.Text = state.Description;
+
+            channel_description_scroller.Vadjustment?.SetValue(0);
+            channel_description_scroller.Visible = true;
         }
         else
         {
-            channel_description.Visible = false;
+            if (channel_description.Buffer is { } buffer)
+                buffer.Text = string.Empty;
+
+            channel_description_scroller.Visible = false;
         }
 
         if (!string.Equals(_currentAvatarUrl, state.AvatarUrl, StringComparison.Ordinal))
@@ -356,6 +362,7 @@ public partial class ChannelView : ViewBase<Box>
                     picture.ContentFit = ContentFit.Cover;
                     picture.WidthRequest = AvatarSize;
                     picture.HeightRequest = AvatarSize;
+                    picture.CanShrink = true;
 
                     ClearAvatar();
                     channel_avatar_overlay.Child = picture;
