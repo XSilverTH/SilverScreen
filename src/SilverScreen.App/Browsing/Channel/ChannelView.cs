@@ -89,9 +89,29 @@ public partial class ChannelView : ViewBase<Box>
         return _videoList.GetBatchSize();
     }
 
-    public Task RefreshAsync()
+    public void ScrollToTop()
     {
-        return _videoList.RefreshAsync();
+        if (_disposed) return;
+        _videoList.ScrollToTop();
+        SetHeaderCollapsed(false);
+    }
+
+    public async Task RefreshAsync()
+    {
+        try
+        {
+            await _videoList.RefreshAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            Functions.IdleAdd(0, () =>
+            {
+                if (!_disposed)
+                    SetHeaderCollapsed(false);
+
+                return false;
+            });
+        }
     }
 
     private void OnVideoListRefreshLoadingChanged(object? sender, bool isLoading)

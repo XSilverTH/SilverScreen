@@ -148,15 +148,35 @@ public partial class VideoListView : ViewBase<Bin>
     {
         return GetColumnsPerRow() * RowsPerBatch;
     }
-
-    public Task RefreshAsync()
+    public void ScrollToTop()
     {
-        return _source.RefreshAsync(GetBatchSize());
+        if (_disposed || Vadjustment is null)
+            return;
+
+        Vadjustment.Value = Vadjustment.Lower;
+    }
+
+    public async Task RefreshAsync()
+    {
+        try
+        {
+            await _source.RefreshAsync(GetBatchSize()).ConfigureAwait(false);
+        }
+        finally
+        {
+            Functions.IdleAdd(0, () =>
+            {
+                if (!_disposed)
+                    ScrollToTop();
+
+                return false;
+            });
+        }
     }
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _source.RefreshAsync(GetBatchSize()).FireAndForget(Logger);
+        RefreshAsync().FireAndForget(Logger);
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
