@@ -3,6 +3,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Player;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
@@ -27,10 +28,11 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
+    private YouTubeVideoDetails? _loadedDetails;
+    private string? _loadedError;
     private bool _disposed;
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
-
     public VideoInfoPanelController(
         IYouTubeVideoDetailsService videoDetails,
         Action<VideoSummary> channelRequested,
@@ -92,25 +94,36 @@ internal sealed class VideoInfoPanelController : IDisposable
         _titleLabel.SetText(video.Title);
         _channelLabel.SetText(video.ChannelName);
         _closeButton.GrabFocus();
-        _statusLabel.SetText("Loading video details…");
-        _statusLabel.SetVisible(true);
-        _descriptionScroller.SetVisible(false);
-        _infoLoadCancellation?.Cancel();
-        _infoLoadCancellation?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _infoLoadCancellation = cancellation;
-        var generation = ++_infoLoadGeneration;
-        LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
-    }
 
+        if (_loadedDetails is { } details)
+        {
+            SetInfoContent(details);
+        }
+        else if (_loadedError is { } error)
+        {
+            _statusLabel.SetText(error);
+            _statusLabel.SetVisible(true);
+            _descriptionScroller.SetVisible(false);
+        }
+        else
+        {
+            _statusLabel.SetText("Loading video details…");
+            _statusLabel.SetVisible(true);
+            _descriptionScroller.SetVisible(false);
+
+            if (_infoLoadCancellation is null && PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
+            {
+                var cancellation = new CancellationTokenSource();
+                _infoLoadCancellation = cancellation;
+                var generation = ++_infoLoadGeneration;
+                LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
+            }
+        }
+    }
     public void Close()
     {
         if (!IsOpen && !_revealer.RevealChild) return;
         IsOpen = false;
-        ++_infoLoadGeneration;
-        _infoLoadCancellation?.Cancel();
-        _infoLoadCancellation?.Dispose();
-        _infoLoadCancellation = null;
         _revealer.RevealChild = false;
         _backdrop.SetVisible(false);
         _cueRevealer.RevealChild = false;
@@ -129,10 +142,27 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     public void SetVideo(VideoSummary? video)
     {
-        if (_currentVideo?.Id != video?.Id && IsOpen) Close();
+        if (string.Equals(_currentVideo?.Id, video?.Id, StringComparison.Ordinal))
+            return;
+
+        if (IsOpen) Close();
+
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        _infoLoadCancellation = null;
+        _loadedDetails = null;
+        _loadedError = null;
 
         _currentVideo = video;
         if (!IsOpen) SetInfoContent(null);
+
+        if (video is not null && PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
+        {
+            var cancellation = new CancellationTokenSource();
+            _infoLoadCancellation = cancellation;
+            var generation = ++_infoLoadGeneration;
+            LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
+        }
     }
 
     public void UpdatePointer(double x, double y, double width, double height, bool hasMedia)
@@ -177,19 +207,31 @@ internal sealed class VideoInfoPanelController : IDisposable
 
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || !IsOpen || generation != _infoLoadGeneration ||
-                _currentVideo?.Id != videoId)
+            if (_disposed || generation != _infoLoadGeneration ||
+                !string.Equals(_currentVideo?.Id, videoId, StringComparison.Ordinal))
                 return false;
 
             if (result is { IsSuccess: true, Details: { } details })
             {
-                SetInfoContent(details);
+                _loadedDetails = details;
+                _loadedError = null;
+                if (IsOpen)
+                {
+                    SetInfoContent(details);
+                }
             }
             else
             {
-                _statusLabel.SetText(result.StatusMessage);
-                _statusLabel.SetVisible(true);
-                _descriptionScroller.SetVisible(false);
+                _loadedDetails = null;
+                _loadedError = string.IsNullOrWhiteSpace(result.StatusMessage)
+                    ? "Video details could not be loaded."
+                    : result.StatusMessage;
+                if (IsOpen)
+                {
+                    _statusLabel.SetText(_loadedError);
+                    _statusLabel.SetVisible(true);
+                    _descriptionScroller.SetVisible(false);
+                }
             }
 
             return false;

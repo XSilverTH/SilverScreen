@@ -83,7 +83,13 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         _currentMaxComments = InitialPageSize;
         _hasMore = false;
         ClearComments();
-        Publish(CommentsViewStatus.Unavailable, string.Empty);
+        if (_videoId is null)
+        {
+            Publish(CommentsViewStatus.Unavailable, string.Empty);
+            return;
+        }
+
+        StartLoad();
     }
 
     public void EnsureLoaded()

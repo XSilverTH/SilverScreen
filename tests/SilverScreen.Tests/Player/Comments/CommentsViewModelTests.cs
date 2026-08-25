@@ -132,6 +132,58 @@ public sealed class CommentsViewModelTests
         Assert.Single(service.Requests);
     }
 
+    [Fact]
+    public async Task SetVideo_AutomaticallyPreloadsCommentsWithoutRequiringEnsureLoaded()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.SetVideo("aaaaaaaaaaa");
+
+        var request = Assert.Single(service.Requests);
+        Assert.Equal(YouTubeCommentSort.Top, request.Sort);
+        Assert.Equal(CommentsViewModel.InitialPageSize, request.MaxComments);
+        Assert.Equal(CommentsViewStatus.Loading, viewModel.State.Status);
+
+        var root = Comment("root");
+        request.Completion.SetResult(new YouTubeCommentsResult([root], true, "Comments loaded."));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.Equal(["root"], viewModel.State.VisibleComments.Select(row => row.Comment.Id));
+
+        // EnsureLoaded is a no-op when preloading has already completed
+        viewModel.EnsureLoaded();
+        Assert.Single(service.Requests);
+    }
+
+    [Fact]
+    public void SetVideo_WithNullOrInvalidVideoId_DoesNotPreloadAndSetsUnavailable()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.SetVideo(null);
+        Assert.Empty(service.Requests);
+        Assert.Equal(CommentsViewStatus.Unavailable, viewModel.State.Status);
+
+        viewModel.SetVideo("invalid_short");
+        Assert.Empty(service.Requests);
+        Assert.Equal(CommentsViewStatus.Unavailable, viewModel.State.Status);
+    }
+
+    [Fact]
+    public void SetVideo_WithSameVideoId_DoesNotDuplicateRequest()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.SetVideo("aaaaaaaaaaa");
+        Assert.Single(service.Requests);
+
+        viewModel.SetVideo("aaaaaaaaaaa");
+        Assert.Single(service.Requests);
+    }
+
     private static YouTubeComment Comment(string id, string? parentId = null)
     {
         return new YouTubeComment(id, id, id, "", 0, parentId);

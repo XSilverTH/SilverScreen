@@ -595,6 +595,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
         _infoPanel.Close();
+        _infoPanel.SetVideo(null);
         player_title_label.SetText("Playback failed");
         SetLoading(false);
         player_channel_label.SetText($"Embedded playback failed: {detail}");
@@ -625,6 +626,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _timelineController.Reset();
         _infoPanel.Close();
+        _infoPanel.SetVideo(null);
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
