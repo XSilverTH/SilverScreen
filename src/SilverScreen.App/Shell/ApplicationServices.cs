@@ -118,6 +118,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
+        services.AddSingleton<YtDlpMediaResolver>();
+        services.AddSingleton<IYouTubeMediaResolver>(static provider => provider.GetRequiredService<YtDlpMediaResolver>());
         services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
         services.AddSingleton<IYouTubeVideoDetailsService, YtDlpVideoDetailsService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();

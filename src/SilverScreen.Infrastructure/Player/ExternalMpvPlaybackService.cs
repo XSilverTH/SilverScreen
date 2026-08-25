@@ -11,7 +11,8 @@ namespace SilverScreen.Infrastructure.Player;
 
 public sealed class ExternalMpvPlaybackService(
     IPreferencesService preferencesService,
-    PlaybackCoordinator playbackCoordinator)
+    PlaybackCoordinator playbackCoordinator,
+    IYouTubeMediaResolver? mediaResolver = null)
     : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
@@ -24,6 +25,8 @@ public sealed class ExternalMpvPlaybackService(
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
 
+    private readonly IYouTubeMediaResolver? _mediaResolver = mediaResolver;
+
     private bool _disposed;
 
     internal ExternalMpvPlaybackService(
@@ -31,11 +34,13 @@ public sealed class ExternalMpvPlaybackService(
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
         IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-        IWatchProgressService? watchProgressService = null)
+        IWatchProgressService? watchProgressService = null,
+        IYouTubeMediaResolver? mediaResolver = null)
         : this(
             preferencesService,
             new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService,
-                watchProgressService))
+                watchProgressService),
+            mediaResolver)
     {
     }
 
@@ -64,13 +69,26 @@ public sealed class ExternalMpvPlaybackService(
             activeOptions = GetActiveOptions();
             ipcDirectory = Directory.CreateTempSubdirectory("silverscreen-mpv-");
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
-            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint);
+
+            IReadOnlyList<ResolvedMedia>? resolvedMediaList = null;
+            if (_mediaResolver is not null && !request.Videos.IsDefaultOrEmpty && PlaybackRequest.LooksLikeYouTubeVideoId(request.Videos[0].Id))
+            {
+                var firstVideoId = request.Videos[0].Id;
+                var res = await _mediaResolver.ResolveMediaAsync(firstVideoId, activeOptions.VideoQuality).ConfigureAwait(false);
+                if (res is { IsSuccess: true, Media: { } media })
+                {
+                    resolvedMediaList = [media];
+                }
+            }
+
+            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, resolvedMediaList);
             Logger.Information(
-                "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}",
+                "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}; ResolvedDirectUrl: {ResolvedDirectUrl}",
                 command.ExecutablePath,
                 cookieFile is not null,
                 cookieFile is not null,
-                CommandUsesYtdlCookiesOption(command));
+                CommandUsesYtdlCookiesOption(command),
+                resolvedMediaList is not null && resolvedMediaList.Count > 0);
 
             var startInfo = MpvCommandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
@@ -139,10 +157,13 @@ public sealed class ExternalMpvPlaybackService(
     {
         lock (_activeObserversLock)
         {
-            if (!_disposed)
-                _activeObservers[playbackId] = observer;
-            else
+            if (_disposed)
+            {
                 observer.Dispose();
+                return;
+            }
+
+            _activeObservers[playbackId] = observer;
         }
     }
 
@@ -150,8 +171,7 @@ public sealed class ExternalMpvPlaybackService(
     {
         lock (_activeObserversLock)
         {
-            if (_activeObservers.Remove(playbackId, out var observer))
-                observer.Dispose();
+            if (_activeObservers.Remove(playbackId, out var observer)) observer.Dispose();
         }
 
         _coordinator.CompleteActivePlayback(playbackId);
@@ -162,25 +182,24 @@ public sealed class ExternalMpvPlaybackService(
         try
         {
             var exitCode = TryGetExitCode(process);
-            if (exitCode is null)
-                Logger.Information("MPV exited; exit code unavailable");
+            if (exitCode is { } code)
+                Logger.Information("MPV process exited. ProcessId: {ProcessId}; ExitCode: {ExitCode}",
+                    process is not null ? TryGetProcessId(process) : null,
+                    code);
             else
-                Logger.Information("MPV exited with code {ExitCode}", exitCode);
-            CleanupCookieLeaseQuietly(cookieFileLease, "MPV process exited");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "MPV exit cleanup handler failed safely");
+                Logger.Information("MPV process exited. ProcessId: {ProcessId}",
+                    process is not null ? TryGetProcessId(process) : null);
         }
         finally
         {
+            CleanupCookieLeaseQuietly(cookieFileLease, "MPV process exited");
             try
             {
                 process?.Dispose();
             }
             catch (Exception ex)
             {
-                Logger.Warning(ex, "MPV process disposal failed safely");
+                Logger.Warning(ex, "Failed to dispose MPV process instance");
             }
         }
     }
@@ -193,7 +212,7 @@ public sealed class ExternalMpvPlaybackService(
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Could not observe MPV exit");
+            Logger.Warning(ex, "Failed while waiting for MPV process exit");
         }
         finally
         {
@@ -204,41 +223,28 @@ public sealed class ExternalMpvPlaybackService(
 
     private static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
     {
-        if (cookieFileLease is null)
-        {
-            Logger.Debug(
-                "No temporary cookie file lease to clean up. Reason: {Reason}",
-                reason);
-            return;
-        }
-
+        if (cookieFileLease is null) return;
         try
         {
             cookieFileLease.Dispose();
-            Logger.Information(
-                "Temporary cookie file lease cleaned up. Reason: {Reason}",
-                reason);
+            Logger.Information("Cleaned up temporary MPV cookie lease ({Reason})", reason);
         }
         catch (Exception ex)
         {
-            Logger.Warning(
-                ex,
-                "Temporary cookie file lease cleanup failed safely. Reason: {Reason}",
-                reason);
+            Logger.Warning(ex, "Failed to clean up temporary MPV cookie file ({Reason})", reason);
         }
     }
 
     private static int? TryGetExitCode(Process? process)
     {
-        if (process is null)
-            return null;
-
+        if (process is null) return null;
         try
         {
-            return process.ExitCode;
+            return process.HasExited ? process.ExitCode : null;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        catch (Exception ex)
         {
+            Logger.Debug(ex, "Failed to read exit code from MPV process");
             return null;
         }
     }
@@ -249,8 +255,9 @@ public sealed class ExternalMpvPlaybackService(
         {
             return process.Id;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        catch (Exception ex)
         {
+            Logger.Debug(ex, "Failed to read PID from MPV process");
             return null;
         }
     }
@@ -258,7 +265,7 @@ public sealed class ExternalMpvPlaybackService(
     private static bool CommandUsesYtdlCookiesOption(MpvPlaybackCommand command)
     {
         return command.Arguments.Any(argument =>
-            argument.StartsWith("--ytdl-raw-options=cookies=", StringComparison.Ordinal));
+            argument.StartsWith("--ytdl-raw-options=", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void CleanupIpcDirectoryQuietly(DirectoryInfo? directory)
@@ -268,9 +275,9 @@ public sealed class ExternalMpvPlaybackService(
         {
             if (directory.Exists) directory.Delete(true);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Logger.Warning(ex, "Failed to clean up MPV IPC directory {Directory}", directory.FullName);
         }
     }
 }

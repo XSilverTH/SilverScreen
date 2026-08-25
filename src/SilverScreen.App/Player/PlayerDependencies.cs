@@ -22,4 +22,5 @@ public sealed record PlayerDependencies(
     IYouTubeCommentService Comments,
     IYouTubeVideoDetailsService VideoDetails,
     IQueueService Queue,
-    IThumbnailService Thumbnails);
+    IThumbnailService Thumbnails,
+    IYouTubeMediaResolver? MediaResolver = null);

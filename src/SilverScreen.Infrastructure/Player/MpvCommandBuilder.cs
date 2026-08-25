@@ -9,7 +9,8 @@ public sealed record MpvPlaybackCommand(string ExecutablePath, IReadOnlyList<str
 public sealed class MpvCommandBuilder
 {
     public static MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options,
-        string? cookieFilePath = null, string? inputIpcServerPath = null)
+        string? cookieFilePath = null, string? inputIpcServerPath = null,
+        IReadOnlyList<ResolvedMedia>? resolvedMediaItems = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -20,11 +21,29 @@ public sealed class MpvCommandBuilder
         if (string.IsNullOrWhiteSpace(options.MpvExecutablePath))
             throw new InvalidOperationException(RuntimeDependencyGuidance.MpvUnavailable(options.MpvExecutablePath));
 
-        var playbackUrls = GetPlaybackUrls(request);
-
         var arguments = new List<string>();
         if (options.Fullscreen)
             arguments.Add("--fs");
+
+        // If we have resolved direct media URLs for the video(s), pass them directly and disable ytdl
+        if (resolvedMediaItems is not null && resolvedMediaItems.Count > 0 && resolvedMediaItems[0] is { } firstMedia)
+        {
+            arguments.Add("--ytdl=no");
+            if (!string.IsNullOrWhiteSpace(firstMedia.AudioUrl))
+            {
+                arguments.Add($"--audio-file={firstMedia.AudioUrl}");
+            }
+            arguments.Add(options.AutoAdvanceNextVideo ? "--keep-open=yes" : "--keep-open=always");
+            if (!string.IsNullOrWhiteSpace(inputIpcServerPath))
+                arguments.Add($"--input-ipc-server={inputIpcServerPath}");
+
+            arguments.Add(firstMedia.VideoUrl);
+            return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
+        }
+
+        // Fallback to watch URLs and mpv ytdl
+        var playbackUrls = GetPlaybackUrls(request);
+
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {
             var ytdlOptions = $"cookies={cookieFilePath}";
