@@ -153,7 +153,7 @@ public static class YtDlpCommandBuilder
         };
         var maxReplies = Math.Max(maxComments / 2, 10);
         startInfo.ArgumentList.Add(
-            $"youtube:comment_sort={sortArg};max_comments={maxComments.ToString(CultureInfo.InvariantCulture)},{maxComments.ToString(CultureInfo.InvariantCulture)},{maxReplies.ToString(CultureInfo.InvariantCulture)},25,2");
+            $"youtube:comment_sort={sortArg};max_comments={maxComments.ToString(CultureInfo.InvariantCulture)},{maxComments.ToString(CultureInfo.InvariantCulture)},{maxReplies.ToString(CultureInfo.InvariantCulture)},25,2;player_client=web;player_skip=configs;skip=hls,dash,translated_subs");
 
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {

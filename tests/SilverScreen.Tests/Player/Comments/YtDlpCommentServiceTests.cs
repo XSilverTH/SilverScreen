@@ -71,6 +71,9 @@ public sealed class YtDlpCommentServiceTests
             .FirstOrDefault();
         Assert.NotNull(extractorArg);
         Assert.Contains("max_comments=20,20,10,25,2", extractorArg);
+        Assert.Contains("player_client=web", extractorArg);
+        Assert.Contains("player_skip=configs", extractorArg);
+        Assert.Contains("skip=hls,dash,translated_subs", extractorArg);
         Assert.False(result.HasMore);
     }
 
