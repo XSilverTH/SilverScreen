@@ -6,17 +6,16 @@ namespace SilverScreen.Tests.Preferences;
 public sealed class PreferencesViewModelTests
 {
     [Fact]
-    public void Save_InvalidMaxResults_UsesTwenty_AndPreservesCurrentSubtitleLanguage()
+    public void Save_PreservesCurrentSubtitleLanguage()
     {
         var service = new FakePreferencesService(new AppPreferences { PreferredSubtitleLanguage = "ja" });
         var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { MaxResultsText = "not a number" });
+        var result = viewModel.Save(viewModel.EditorState with { Theme = "Dark" });
 
         Assert.True(result.Succeeded);
         Assert.NotNull(service.Saved);
-        Assert.Equal(20, service.Saved!.MaxResults);
-        Assert.Equal("ja", service.Saved.PreferredSubtitleLanguage);
+        Assert.Equal("ja", service.Saved!.PreferredSubtitleLanguage);
     }
 
     [Fact]
@@ -128,15 +127,15 @@ public sealed class PreferencesViewModelTests
     [Fact]
     public void Save_WhenPersistenceFails_ReturnsRevertedStateAndExactStatusMessage()
     {
-        var original = new AppPreferences { Theme = "Light", MaxResults = 12 };
+        var original = new AppPreferences { Theme = "Light", YtDlpExecutablePath = "/usr/bin/yt-dlp" };
         var service = new FakePreferencesService(original) { ThrowOnSave = true };
         var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { Theme = "Dark", MaxResultsText = "99" });
+        var result = viewModel.Save(viewModel.EditorState with { Theme = "Dark", YtDlpExecutablePath = "/custom/yt-dlp" });
 
         Assert.False(result.Succeeded);
         Assert.Equal("Light", result.State.Theme);
-        Assert.Equal("12", result.State.MaxResultsText);
+        Assert.Equal("/usr/bin/yt-dlp", result.State.YtDlpExecutablePath);
         Assert.Equal(PreferencesViewModel.PersistenceErrorMessage, result.ErrorMessage);
         Assert.Null(service.Saved);
     }

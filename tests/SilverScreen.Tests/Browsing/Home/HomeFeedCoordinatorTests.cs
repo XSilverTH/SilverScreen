@@ -292,6 +292,34 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Equal(2, coordinator.State.Videos.Length);
         Assert.Equal(["1", "2"], coordinator.State.Videos.Select(v => v.Id));
     }
+    [Fact]
+    public async Task RefreshAndLoadMore_WithCustomCount_PropagatesCountToService()
+    {
+        var sessionService = new InMemorySessionService();
+        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        var fakeFeed = new FakeAuthenticatedHomeFeedService();
+
+        var firstPageTcs = fakeFeed.ExpectLoadFirstPage();
+        firstPageTcs.SetResult(new AuthenticatedHomeFeedResult(
+            AuthenticatedHomeFeedStatus.Success,
+            new FeedPage([CreateTestVideo("1")], "token_1"),
+            "Success"));
+
+        using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
+        await fakeFeed.FirstPageCalledTask;
+        await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
+
+        fakeFeed.ResetCalledTasks();
+        var nextPageTcs = fakeFeed.ExpectLoadNextPage();
+        nextPageTcs.SetResult(new AuthenticatedHomeFeedResult(
+            AuthenticatedHomeFeedStatus.Success,
+            new FeedPage([CreateTestVideo("2")], "token_2"),
+            "Success"));
+
+        await coordinator.LoadMoreAsync(count: 40);
+        Assert.Equal(40, Assert.Single(fakeFeed.NextPageCounts));
+    }
+
 
     private sealed class FakeAuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
     {
@@ -307,17 +335,19 @@ public sealed class HomeFeedCoordinatorTests
 
         public int LoadFirstPageCallCount { get; private set; }
         public int LoadNextPageCallCount { get; private set; }
-
         public List<CancellationToken> FirstPageTokens { get; } = [];
-
+        public List<int> FirstPageCounts { get; } = [];
+        public List<int> NextPageCounts { get; } = [];
 
         public Task FirstPageCalledTask => _firstPageCalledTcs.Task;
         public Task NextPageCalledTask => _nextPageCalledTcs.Task;
 
-        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
             LoadFirstPageCallCount++;
             FirstPageTokens.Add(cancellationToken);
+            FirstPageCounts.Add(count);
             _firstPageCalledTcs.TrySetResult();
 
             if (_firstPageTcsQueue.Count == 0)
@@ -334,9 +364,11 @@ public sealed class HomeFeedCoordinatorTests
             return tcs.Task;
         }
 
-        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
             LoadNextPageCallCount++;
+            NextPageCounts.Add(count);
             _nextPageCalledTcs.TrySetResult();
 
             if (_nextPageTcsQueue.Count == 0)
@@ -345,7 +377,6 @@ public sealed class HomeFeedCoordinatorTests
                     FeedPage.Empty,
                     "Success"
                 ));
-
             var (tcs, ignoreCancellation) = _nextPageTcsQueue.Dequeue();
             if (ignoreCancellation) return tcs.Task;
             var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));

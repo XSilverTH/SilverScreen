@@ -245,13 +245,36 @@ public sealed class ViewModelTests
 
         var loadMore = viewModel.LoadMoreAsync();
         Assert.Equal(2, service.Requests.Count);
-        Assert.Equal(21, service.Requests[1].StartIndex);
+        Assert.Equal(21, service.Requests[1].Request.StartIndex);
         service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
         await loadMore;
 
         Assert.Equal([first, next], viewModel.State.Videos);
         Assert.False(viewModel.State.HasMore);
     }
+    [Fact]
+    public async Task SearchLoadMoreAsync_WithCustomCount_PropagatesCountToSearchRequest()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+        var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
+        var next = new VideoSummary("def456ghi78", "Next", "Channel", TimeSpan.FromMinutes(2), "", false);
+
+        var search = viewModel.SubmitAsync("query", count: 40);
+        Assert.Equal(40, service.Requests[0].Request.Count);
+        service.Requests[0].Completion.SetResult(new SearchResultPage([first], ContinuationToken: "41"));
+        await search;
+
+        var loadMore = viewModel.LoadMoreAsync(count: 40);
+        Assert.Equal(2, service.Requests.Count);
+        Assert.Equal(41, service.Requests[1].Request.StartIndex);
+        Assert.Equal(40, service.Requests[1].Request.Count);
+        service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
+        await loadMore;
+
+        Assert.Equal([first, next], viewModel.State.Videos);
+    }
+
 
     [Fact]
     public async Task SearchFailure_SetsIsSuccessFalse()
@@ -286,7 +309,7 @@ public sealed class ViewModelTests
 
     private sealed class ControlledSearchService : ISearchService
     {
-        public List<(string Query, int StartIndex, CancellationToken Token, TaskCompletionSource<SearchResultPage>
+        public List<(SearchRequest Request, CancellationToken Token, TaskCompletionSource<SearchResultPage>
                 Completion)>
             Requests { get; } = [];
 
@@ -294,7 +317,7 @@ public sealed class ViewModelTests
         {
             var completion =
                 new TaskCompletionSource<SearchResultPage>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Requests.Add((request.Query, request.StartIndex, cancellationToken, completion));
+            Requests.Add((request, cancellationToken, completion));
             return completion.Task;
         }
     }

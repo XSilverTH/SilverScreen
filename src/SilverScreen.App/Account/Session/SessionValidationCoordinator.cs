@@ -57,7 +57,7 @@ public sealed class SessionValidationCoordinator(
 
         try
         {
-            var feedResult = await _feedService.LoadFirstPageAsync(token);
+            var feedResult = await _feedService.LoadFirstPageAsync(cancellationToken: token);
             var isSuccess = feedResult.Status == AuthenticatedHomeFeedStatus.Success;
             var videoCount = feedResult.FeedPage.Videos.Count;
             var hasContinuation = !string.IsNullOrEmpty(feedResult.FeedPage.ContinuationToken);

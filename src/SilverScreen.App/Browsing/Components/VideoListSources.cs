@@ -2,9 +2,9 @@ using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
-
 namespace SilverScreen.Browsing.Components;
 
 public sealed class HomeVideoListSource : IVideoListSource
@@ -22,17 +22,17 @@ public sealed class HomeVideoListSource : IVideoListSource
 
     public event EventHandler<VideoListPresentationState>? StateChanged;
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         return _coordinator.State is
             { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
-            ? _coordinator.RefreshAsync()
+            ? _coordinator.RefreshAsync(count)
             : Task.CompletedTask;
     }
 
-    public Task LoadMoreAsync()
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _coordinator.LoadMoreAsync();
+        return _coordinator.LoadMoreAsync(count);
     }
 
     public void Dispose()
@@ -91,14 +91,14 @@ public sealed class SearchVideoListSource : IVideoListSource
 
     public event EventHandler<VideoListPresentationState>? StateChanged;
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.RefreshAsync();
+        return _viewModel.RefreshAsync(count);
     }
 
-    public Task LoadMoreAsync()
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.LoadMoreAsync();
+        return _viewModel.LoadMoreAsync(count);
     }
 
     public void Dispose()
@@ -173,15 +173,15 @@ public sealed class HistoryVideoListSource : IVideoListSource
 
     public event EventHandler<VideoListPresentationState>? StateChanged;
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.RefreshAsync();
+        return _viewModel.RefreshAsync(count);
     }
 
-    public Task LoadMoreAsync()
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
-            ? _viewModel.LoadMoreAsync()
+            ? _viewModel.LoadMoreAsync(count)
             : Task.CompletedTask;
     }
 
@@ -276,15 +276,15 @@ public sealed class ChannelVideoListSource : IVideoListSource
 
     public event EventHandler<VideoListPresentationState>? StateChanged;
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.RefreshAsync();
+        return _viewModel.RefreshAsync(count);
     }
 
-    public Task LoadMoreAsync()
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
-            ? _viewModel.LoadMoreAsync()
+            ? _viewModel.LoadMoreAsync(count)
             : Task.CompletedTask;
     }
 

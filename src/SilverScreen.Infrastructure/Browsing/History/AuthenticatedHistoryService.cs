@@ -13,7 +13,6 @@ namespace SilverScreen.Infrastructure.Browsing.History;
 /// <summary>Keeps the current server-backed watch-history page sequence for the active session.</summary>
 public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, IDisposable
 {
-    private const int PageSize = 20;
     private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string EmptyHistoryMessage = "No watch history was returned.";
@@ -48,18 +47,20 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
-    public async Task<AuthenticatedHistoryResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+    public async Task<AuthenticatedHistoryResult> LoadFirstPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
         Logger.Information("Loading first page of watch history");
         if (IsSessionActive())
-            return await FetchPageAsync(1, true, cancellationToken).ConfigureAwait(false);
+            return await FetchPageAsync(1, count, true, cancellationToken).ConfigureAwait(false);
         Logger.Information("No active YouTube session; returning authentication required for history");
         ClearCachedResults();
         return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.AuthenticationRequired, FeedPage.Empty,
             AuthenticationRequiredMessage);
     }
 
-    public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+    public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
         Logger.Information("Loading next page of watch history");
         if (!IsSessionActive())
@@ -84,7 +85,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
             return new AuthenticatedHistoryResult(AuthenticatedHistoryStatus.Empty, GetHistory(),
                 "Invalid history continuation.");
 
-        return await FetchPageAsync(startIndex, false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(startIndex, count, false, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -110,6 +111,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
 
     private async Task<AuthenticatedHistoryResult> FetchPageAsync(
         int startIndex,
+        int count,
         bool isFirstPage,
         CancellationToken cancellationToken)
     {
@@ -134,7 +136,7 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
         try
         {
             processResult = await _runner.RunAsync(
-                    YtDlpCommandBuilder.BuildHistory(executablePath, startIndex, cookieFile.Path),
+                    YtDlpCommandBuilder.BuildHistory(executablePath, startIndex, count, cookieFile.Path),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -185,8 +187,8 @@ public sealed class AuthenticatedHistoryService : IAuthenticatedHistoryService, 
                     EmptyHistoryMessage);
             }
 
-            var nextToken = pageEntries.Length == PageSize
-                ? (startIndex + PageSize).ToString(CultureInfo.InvariantCulture)
+            var nextToken = pageEntries.Length == count
+                ? (startIndex + count).ToString(CultureInfo.InvariantCulture)
                 : null;
 
             lock (_lock)

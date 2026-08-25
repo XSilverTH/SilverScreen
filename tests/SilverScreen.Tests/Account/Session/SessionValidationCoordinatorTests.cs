@@ -102,7 +102,8 @@ public sealed class SessionValidationCoordinatorTests
         public Func<CancellationToken, Task<AuthenticatedHomeFeedResult>>? LoadFirstPageAsyncHandler { get; init; }
         public int LoadFirstPageCallCount { get; private set; }
 
-        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(CancellationToken cancellationToken = default)
+        public Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
             LoadFirstPageCallCount++;
             if (LoadFirstPageAsyncHandler != null) return LoadFirstPageAsyncHandler(cancellationToken);
@@ -114,7 +115,8 @@ public sealed class SessionValidationCoordinatorTests
             ));
         }
 
-        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(CancellationToken cancellationToken = default)
+        public Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }

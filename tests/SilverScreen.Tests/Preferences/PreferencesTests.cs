@@ -65,7 +65,6 @@ public sealed class PreferencesTests : IDisposable
             PlaybackBackend = PlaybackBackends.EmbeddedPlayer,
             OpenInFullscreen = false,
             AutoAdvanceNextVideo = false,
-            MaxResults = 50,
             MarkWatchedVideos = true,
             DiscordRichPresenceEnabled = true,
             SponsorBlockAutoSkipEnabled = true,
@@ -96,7 +95,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
         Assert.False(loaded.OpenInFullscreen);
         Assert.False(loaded.AutoAdvanceNextVideo);
-        Assert.Equal(50, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.True(loaded.DiscordRichPresenceEnabled);
         Assert.True(loaded.SponsorBlockAutoSkipEnabled);
@@ -349,7 +347,6 @@ public sealed class PreferencesTests : IDisposable
                                       "VideoQuality": "720p",
                                       "PreferredSubtitleLanguage": "ja",
                                       "YtDlpExecutablePath": "/usr/bin/yt-dlp",
-                                      "MaxResults": 35,
                                       "MarkWatchedVideos": true,
                                       "YouTubePlaybackTelemetryEnabled": false,
                                       "DiscordRichPresenceEnabled": true,
@@ -395,7 +392,6 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("720p", loaded.VideoQuality);
         Assert.Equal("ja", loaded.PreferredSubtitleLanguage);
         Assert.Equal("/usr/bin/yt-dlp", loaded.YtDlpExecutablePath);
-        Assert.Equal(35, loaded.MaxResults);
         Assert.True(loaded.MarkWatchedVideos);
         Assert.False(loaded.YouTubePlaybackTelemetryEnabled);
         Assert.True(loaded.DiscordRichPresenceEnabled);

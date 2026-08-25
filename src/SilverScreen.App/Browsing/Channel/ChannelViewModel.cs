@@ -29,9 +29,9 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private bool _disposed;
     private int? _nextStartIndex;
+    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
-
     public ChannelViewState State
     {
         get;
@@ -59,14 +59,15 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<ChannelViewState>? StateChanged;
 
-    public async Task OpenChannelAsync(string channelUrl, string fallbackName)
+    public async Task OpenChannelAsync(string channelUrl, string fallbackName,
+        int count = VideoFeedConstants.DefaultPageSize)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
         Logger.Information("Opening channel {ChannelUrl} (FallbackName: {FallbackName})", channelUrl, fallbackName);
-        await LoadAsync(channelUrl, fallbackName, ChannelVideoSort.Newest).ConfigureAwait(false);
+        await LoadAsync(channelUrl, fallbackName, ChannelVideoSort.Newest, count).ConfigureAwait(false);
     }
 
-    public Task SetSortSelection(uint selected)
+    public Task SetSortSelection(uint selected, int count = VideoFeedConstants.DefaultPageSize)
     {
         var sort = selected switch
         {
@@ -75,28 +76,28 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
             2 => ChannelVideoSort.Popular,
             _ => throw new ArgumentOutOfRangeException(nameof(selected), selected, null)
         };
-        return SetSortAsync(sort);
+        return SetSortAsync(sort, count);
     }
 
-    private Task SetSortAsync(ChannelVideoSort sort)
+    private Task SetSortAsync(ChannelVideoSort sort, int count = VideoFeedConstants.DefaultPageSize)
     {
-        return State.Url is null ? Task.CompletedTask : LoadAsync(State.Url, State.Name, sort);
+        return State.Url is null ? Task.CompletedTask : LoadAsync(State.Url, State.Name, sort, count);
     }
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         return State.Url is null
             ? Task.CompletedTask
-            : LoadAsync(State.Url, State.Name, State.Sort);
+            : LoadAsync(State.Url, State.Name, State.Sort, count);
     }
 
-    public async Task LoadMoreAsync()
+    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        _lastRequestedCount = count;
         if (State is { IsLoading: true } or { IsLoadingMore: true } || State.Url is null ||
             _nextStartIndex is not { } startIndex)
             return;
-
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;
@@ -106,7 +107,7 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
 
         try
         {
-            var page = await channelService.GetChannelAsync(State.Url, State.Name, State.Sort, startIndex, token)
+            var page = await channelService.GetChannelAsync(State.Url, State.Name, State.Sort, startIndex, count, token)
                 .ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
@@ -144,9 +145,11 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
         State = ChannelViewState.Empty;
     }
 
-    private async Task LoadAsync(string channelUrl, string fallbackName, ChannelVideoSort sort)
+    private async Task LoadAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
+        int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        _lastRequestedCount = count;
         if (_requestCancellation is not null)
             await _requestCancellation.CancelAsync();
 
@@ -171,7 +174,7 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
 
         try
         {
-            var page = await channelService.GetChannelAsync(channelUrl, fallbackName, sort, 1, token)
+            var page = await channelService.GetChannelAsync(channelUrl, fallbackName, sort, 1, count, token)
                 .ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;

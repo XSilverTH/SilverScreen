@@ -13,7 +13,6 @@ public sealed record PreferencesEditorState
     public string PlaybackBackend { get; init; } = PlaybackBackends.ExternalMpv;
     public bool OpenInFullscreen { get; init; } = true;
     public bool AutoAdvanceNextVideo { get; init; } = true;
-    public string MaxResultsText { get; init; } = "20";
     public bool MarkWatchedVideos { get; init; }
     public bool YouTubePlaybackTelemetryEnabled { get; init; }
     public bool DiscordRichPresenceEnabled { get; init; }
@@ -118,7 +117,6 @@ public sealed class PreferencesViewModel
             PlaybackBackend = preferences.PlaybackBackend,
             OpenInFullscreen = preferences.OpenInFullscreen,
             AutoAdvanceNextVideo = preferences.AutoAdvanceNextVideo,
-            MaxResultsText = preferences.MaxResults.ToString(),
             MarkWatchedVideos = preferences.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = preferences.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = preferences.DiscordRichPresenceEnabled,
@@ -135,7 +133,6 @@ public sealed class PreferencesViewModel
 
     private static AppPreferences ToPreferences(PreferencesEditorState state, AppPreferences current)
     {
-        var maxResults = int.TryParse(state.MaxResultsText, out var parsedMaxResults) ? parsedMaxResults : 20;
 
         return new AppPreferences
         {
@@ -146,7 +143,6 @@ public sealed class PreferencesViewModel
             PlaybackBackend = state.PlaybackBackend,
             OpenInFullscreen = state.OpenInFullscreen,
             AutoAdvanceNextVideo = state.AutoAdvanceNextVideo,
-            MaxResults = maxResults,
             MarkWatchedVideos = state.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = state.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = state.DiscordRichPresenceEnabled,

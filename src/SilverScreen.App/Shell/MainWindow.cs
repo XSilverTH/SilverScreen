@@ -144,7 +144,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         view_stack.VisibleChildName = "channel";
         UpdateHomeRefreshButton(_channel.IsLoading);
-        await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName).ConfigureAwait(false);
+        await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
+            .ConfigureAwait(false);
     }
 
     private void CloseChannel()
@@ -160,7 +161,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         view_stack.VisibleChildName = "search";
         navigation_back_button.Visible = true;
         UpdateHomeRefreshButton(_searchView.IsLoading);
-        _searchViewModel.SubmitAsync(query).FireAndForget(Logger);
+        _searchViewModel.SubmitAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
     }
 
     private void CloseSearch()
@@ -266,7 +267,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 break;
             case "history":
                 UpdateHomeRefreshButton(_history.IsLoading);
-                _historyViewModel.LoadAsync().FireAndForget(Logger);
+                _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
                 break;
             case "search":
                 UpdateHomeRefreshButton(_searchView.IsLoading);

@@ -49,7 +49,7 @@ public sealed class YtDlpSearchService(
                 return SearchResultPage.Failed($"Search failed: {RuntimeDependencyGuidance.YtDlpFailed(error)}");
             }
 
-            var pageSize = Math.Max(activeOptions.MaxResults, 1);
+            var pageSize = Math.Max(request.Count, 1);
             var pageEntries = ParseVideos(result.StandardOutput).ToArray();
             var videos = pageEntries
                 .Where(video => !video.IsShort)
@@ -88,8 +88,7 @@ public sealed class YtDlpSearchService(
         var prefs = _preferencesService.GetPreferences();
         return new YtDlpOptions
         {
-            ExecutablePath = prefs.YtDlpExecutablePath,
-            MaxResults = prefs.MaxResults
+            ExecutablePath = prefs.YtDlpExecutablePath
         };
     }
 

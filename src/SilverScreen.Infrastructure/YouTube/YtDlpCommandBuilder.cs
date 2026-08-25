@@ -13,9 +13,10 @@ public static class YtDlpCommandBuilder
         string? cookieFilePath = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(request.StartIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(request.Count, 1);
         var startInfo = CreateStartInfo(options.ExecutablePath);
         AddCommonArguments(startInfo, cookieFilePath);
-        var pageSize = Math.Max(options.MaxResults, 1);
+        var pageSize = Math.Max(request.Count, 1);
         startInfo.ArgumentList.Add("--playlist-start");
         startInfo.ArgumentList.Add(request.StartIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
@@ -25,37 +26,44 @@ public static class YtDlpCommandBuilder
         return startInfo;
     }
 
-    public static ProcessStartInfo BuildHome(string executablePath, int startIndex, string? cookieFilePath = null)
+    public static ProcessStartInfo BuildHome(string executablePath, int startIndex, int count,
+        string? cookieFilePath = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
         var startInfo = CreateStartInfo(executablePath);
         AddCommonArguments(startInfo, cookieFilePath);
+        var pageSize = Math.Max(count, 1);
         startInfo.ArgumentList.Add("--playlist-start");
         startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add((startIndex + 19).ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add(":ytrec");
         return startInfo;
     }
 
-    public static ProcessStartInfo BuildHistory(string executablePath, int startIndex, string cookieFilePath)
+    public static ProcessStartInfo BuildHistory(string executablePath, int startIndex, int count,
+        string cookieFilePath)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
         ArgumentException.ThrowIfNullOrWhiteSpace(cookieFilePath);
         var startInfo = CreateStartInfo(executablePath);
         AddCommonArguments(startInfo, cookieFilePath);
+        var pageSize = Math.Max(count, 1);
         startInfo.ArgumentList.Add("--playlist-start");
         startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");
-        startInfo.ArgumentList.Add((startIndex + 19).ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("https://www.youtube.com/feed/history");
         return startInfo;
     }
 
     public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
-        int startIndex, string? cookieFilePath = null)
+        int startIndex, int count, string? cookieFilePath = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
         if (!Uri.TryCreate(channelUrl, UriKind.Absolute, out var uri)
             || (!string.Equals(uri.Host, "www.youtube.com", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(uri.Host, "youtube.com", StringComparison.OrdinalIgnoreCase)
@@ -64,7 +72,7 @@ public static class YtDlpCommandBuilder
 
         var startInfo = CreateStartInfo(options.ExecutablePath);
         AddCommonArguments(startInfo, cookieFilePath);
-        var pageSize = Math.Max(options.MaxResults, 1);
+        var pageSize = Math.Max(count, 1);
         startInfo.ArgumentList.Add("--playlist-start");
         startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--playlist-end");

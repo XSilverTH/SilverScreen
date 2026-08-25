@@ -24,7 +24,7 @@ public sealed class AuthenticatedHomeFeedServiceTests
         });
         var (service, _) = CreateService(runner);
 
-        var result = await service.LoadFirstPageAsync();
+        var result = await service.LoadFirstPageAsync(20);
 
         Assert.Equal(AuthenticatedHomeFeedStatus.Success, result.Status);
         Assert.Equal(20, result.FeedPage.Videos.Count);
@@ -89,9 +89,9 @@ public sealed class AuthenticatedHomeFeedServiceTests
             return Task.FromResult(new ProcessResult(0, output, ""));
         });
         var (service, _) = CreateService(runner);
-        await service.LoadFirstPageAsync();
+        await service.LoadFirstPageAsync(20);
 
-        var result = await service.LoadNextPageAsync();
+        var result = await service.LoadNextPageAsync(20);
 
         Assert.Equal(5, result.FeedPage.Videos.Count);
         Assert.Equal(25, service.GetHomeFeed().Videos.Count);

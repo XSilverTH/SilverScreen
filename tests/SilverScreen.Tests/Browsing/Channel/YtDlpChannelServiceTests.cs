@@ -33,7 +33,7 @@ public sealed class YtDlpChannelServiceTests
         var service = CreateService(runner);
 
         var page = await service.GetChannelAsync("https://www.youtube.com/@example", "Fallback",
-            ChannelVideoSort.Popular, 1, CancellationToken.None);
+            ChannelVideoSort.Popular, 1, 20, CancellationToken.None);
 
         Assert.True(page.IsSuccess);
         Assert.Equal("Example Channel", page.Name);
@@ -65,7 +65,7 @@ public sealed class YtDlpChannelServiceTests
 
         public AppPreferences GetPreferences()
         {
-            return new AppPreferences { YtDlpExecutablePath = "yt-dlp-test", MaxResults = 25 };
+            return new AppPreferences { YtDlpExecutablePath = "yt-dlp-test" };
         }
 
         public void SavePreferences(AppPreferences preferences)

@@ -17,28 +17,27 @@ public sealed class YtDlpChannelService(
     private static readonly ILogger Logger = Log.ForContext<YtDlpChannelService>();
 
     public async Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
-        int startIndex, CancellationToken cancellationToken)
+        int startIndex, int count, CancellationToken cancellationToken)
     {
-        Logger.Information("Loading channel page for {ChannelUrl} (Sort: {Sort}, StartIndex: {StartIndex})", channelUrl,
-            sort, startIndex);
+        Logger.Information("Loading channel page for {ChannelUrl} (Sort: {Sort}, StartIndex: {StartIndex}, Count: {Count})", channelUrl,
+            sort, startIndex, count);
         var preferences = preferencesService.GetPreferences();
         var options = new YtDlpOptions
         {
-            ExecutablePath = preferences.YtDlpExecutablePath,
-            MaxResults = preferences.MaxResults
+            ExecutablePath = preferences.YtDlpExecutablePath
         };
+        var pageSize = Math.Max(count, 1);
 
         try
         {
             using var cookieFile = cookieFileProvider.CreateCookieFile();
             var result = await runner.RunAsync(
-                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, cookieFile?.Path),
+                YtDlpCommandBuilder.BuildChannel(channelUrl, sort, options, startIndex, pageSize, cookieFile?.Path),
                 options.Timeout,
                 cancellationToken).ConfigureAwait(false);
             if (result.ExitCode == 0)
                 return ParsePage(result.StandardOutput, channelUrl, fallbackName, sort,
-                    startIndex, Math.Max(options.MaxResults, 1));
-
+                    startIndex, pageSize);
             var error = string.IsNullOrWhiteSpace(result.StandardError)
                 ? $"yt-dlp exited with code {result.ExitCode}."
                 : result.StandardError.Trim();

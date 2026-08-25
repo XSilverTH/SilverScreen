@@ -84,6 +84,11 @@ public partial class ChannelView : ViewBase<Box>
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
+    public int GetBatchSize()
+    {
+        return _videoList.GetBatchSize();
+    }
+
     public Task RefreshAsync()
     {
         return _videoList.RefreshAsync();
@@ -271,7 +276,7 @@ public partial class ChannelView : ViewBase<Box>
             if (_updatingSortDropdown || _disposed) return;
 
             var selected = channel_sort_dropdown.Selected;
-            await _viewModel.SetSortSelection(selected);
+            await _viewModel.SetSortSelection(selected, GetBatchSize());
         }
         catch (OperationCanceledException)
         {

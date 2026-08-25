@@ -83,7 +83,6 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             fullscreen_row.Active = state.OpenInFullscreen;
             auto_advance_next_video_row.Active = state.AutoAdvanceNextVideo;
             ((Editable)ytdlp_path_row).SetText(state.YtDlpExecutablePath);
-            ((Editable)max_results_row).SetText(state.MaxResultsText);
             ((Editable)mpv_path_row).SetText(state.MpvExecutablePath);
             mark_watched_row.Active = state.MarkWatchedVideos;
             youtube_playback_telemetry_row.Active = state.YouTubePlaybackTelemetryEnabled;
@@ -256,7 +255,6 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
                 PlaybackBackends.ExternalMpv),
             OpenInFullscreen = fullscreen_row.Active,
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,
-            MaxResultsText = ((Editable)max_results_row).GetText(),
             MarkWatchedVideos = mark_watched_row.Active,
             YouTubePlaybackTelemetryEnabled = youtube_playback_telemetry_row.Active,
             DiscordRichPresenceEnabled = discord_rich_presence_row.Active,

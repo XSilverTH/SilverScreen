@@ -101,14 +101,62 @@ public partial class VideoListView : ViewBase<Bin>
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
+    public const int RowsPerBatch = VideoFeedConstants.RowsPerBatch;
+    private const int CardWidthWithMargin = 330;
+
+    public int GetColumnsPerRow()
+    {
+        var width = video_list_grid.GetWidth();
+        if (width <= 0)
+        {
+            var scrolledWidth = video_list_scrolled_window.GetWidth();
+            if (scrolledWidth > 0)
+                width = Math.Max(0, scrolledWidth - 48);
+        }
+
+        if (width <= 0)
+        {
+            var widgetWidth = Widget.GetWidth();
+            if (widgetWidth > 0)
+                width = Math.Max(0, widgetWidth - 48);
+        }
+
+        if (width <= 0)
+            return VideoFeedConstants.DefaultColumns;
+
+        var cardWidth = CardWidthWithMargin;
+        foreach (var card in _cardsByListItem)
+        {
+            card.Value.Widget.Measure(Orientation.Horizontal, -1, out _, out var nat, out _, out _);
+            if (nat > 0)
+            {
+                cardWidth = nat;
+                break;
+            }
+        }
+
+        var minColumns = (int)video_list_grid.MinColumns;
+        if (minColumns <= 0) minColumns = 1;
+        var maxColumns = (int)video_list_grid.MaxColumns;
+        if (maxColumns <= 0) maxColumns = 8;
+
+        var computed = width / Math.Max(1, cardWidth);
+        return Math.Clamp(computed, minColumns, maxColumns);
+    }
+
+    public int GetBatchSize()
+    {
+        return GetColumnsPerRow() * RowsPerBatch;
+    }
+
     public Task RefreshAsync()
     {
-        return _source.RefreshAsync();
+        return _source.RefreshAsync(GetBatchSize());
     }
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _source.RefreshAsync().FireAndForget(Logger);
+        _source.RefreshAsync(GetBatchSize()).FireAndForget(Logger);
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
@@ -117,7 +165,7 @@ public partial class VideoListView : ViewBase<Bin>
             Vadjustment.Value + Vadjustment.PageSize < Vadjustment.Upper - 240)
             return;
 
-        _source.LoadMoreAsync().FireAndForget(Logger);
+        _source.LoadMoreAsync(GetBatchSize()).FireAndForget(Logger);
     }
 
     private void OnStateChanged(object? sender, VideoListPresentationState state)

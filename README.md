@@ -27,7 +27,7 @@ dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
 2. Enter a normal YouTube search or paste a supported YouTube video URL.
 3. Select a result to play it in MPV, or open its menu to add it to the queue.
 
-Text searches use `yt-dlp` and show up to 20 non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
+Text searches use `yt-dlp` and show non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
 
 The queue is a small in-memory list. **Add to queue** appends a video to the end of the queue (or middle-click a video card); you can remove items or clear the list from the floating queue button. It does nothing for now. in the future I hope to turn it into something used in place of opening multiple tabs to watch back to back.
 

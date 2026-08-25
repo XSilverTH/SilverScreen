@@ -25,9 +25,9 @@ public sealed class SearchViewModel(
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
     private string? _continuationToken;
     private bool _disposed;
+    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
-
     public SearchViewState State
     {
         get;
@@ -100,9 +100,10 @@ public sealed class SearchViewModel(
 
     public event EventHandler<SearchViewState>? StateChanged;
 
-    public async Task SubmitAsync(string text)
+    public async Task SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("Search submitted: {Text}", text);
+        _lastRequestedCount = count;
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query)) return;
 
@@ -121,7 +122,7 @@ public sealed class SearchViewModel(
                 case YouTubeUrlKind.Invalid:
                     return;
                 case YouTubeUrlKind.NotYouTube:
-                    await SearchPlainTextAsync(query);
+                    await SearchPlainTextAsync(query, count);
                     return;
                 default:
                     return;
@@ -133,14 +134,16 @@ public sealed class SearchViewModel(
         }
     }
 
-    public Task RefreshAsync()
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return CurrentQuery is null ? Task.CompletedTask : SearchPlainTextAsync(CurrentQuery);
+        _lastRequestedCount = count;
+        return CurrentQuery is null ? Task.CompletedTask : SearchPlainTextAsync(CurrentQuery, count);
     }
 
-    public async Task LoadMoreAsync()
+    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        _lastRequestedCount = count;
         if (State is { IsLoading: true } or { IsLoadingMore: true } || CurrentQuery is null ||
             !int.TryParse(_continuationToken, out var startIndex) || startIndex < 1)
             return;
@@ -153,7 +156,7 @@ public sealed class SearchViewModel(
         State = loadingState;
         try
         {
-            var result = await searchService.SearchAsync(new SearchRequest(CurrentQuery, startIndex), token)
+            var result = await searchService.SearchAsync(new SearchRequest(CurrentQuery, startIndex, count), token)
                 .ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
@@ -178,9 +181,10 @@ public sealed class SearchViewModel(
         }
     }
 
-    private async Task SearchPlainTextAsync(string query)
+    private async Task SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        _lastRequestedCount = count;
         if (_requestCancellation is not null)
             await _requestCancellation.CancelAsync();
 
@@ -196,10 +200,9 @@ public sealed class SearchViewModel(
 
         try
         {
-            var result = await searchService.SearchAsync(new SearchRequest(query), token).ConfigureAwait(false);
+            var result = await searchService.SearchAsync(new SearchRequest(query, 1, count), token).ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
-
             _continuationToken = result.IsSuccess ? result.ContinuationToken : null;
             var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
             State = new SearchViewState(NormalizeVideos(result.Videos), summary, false, false,

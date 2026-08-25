@@ -20,6 +20,6 @@ public interface IVideoListSource : IDisposable
 {
     VideoListPresentationState State { get; }
     event EventHandler<VideoListPresentationState>? StateChanged;
-    Task RefreshAsync();
-    Task LoadMoreAsync();
+    Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize);
+    Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize);
 }

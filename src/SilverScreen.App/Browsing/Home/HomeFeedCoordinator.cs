@@ -17,10 +17,10 @@ public sealed class HomeFeedCoordinator : IDisposable
     private CancellationTokenSource? _cts;
 
     private long _currentRequestId;
+    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private bool _isLoading;
     private long _publishedStateVersion;
     private long _stateVersion;
-
     public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -49,9 +49,10 @@ public sealed class HomeFeedCoordinator : IDisposable
 
     public event EventHandler<HomeFeedState>? StateChanged;
 
-    public async Task RefreshAsync()
+    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("HomeFeedCoordinator refreshing home feed");
+        _lastRequestedCount = count;
         if (!IsSessionActive())
         {
             CancelAndClear();
@@ -60,16 +61,17 @@ public sealed class HomeFeedCoordinator : IDisposable
         }
 
         await ExecuteFeedRequestAsync(
-            token => _feedService.LoadFirstPageAsync(token),
+            token => _feedService.LoadFirstPageAsync(count, token),
             true,
             "HomeFeedCoordinator failed to refresh home feed");
     }
 
-    public async Task LoadMoreAsync()
+    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("HomeFeedCoordinator loading more home feed items");
+        _lastRequestedCount = count;
         await ExecuteFeedRequestAsync(
-            token => _feedService.LoadNextPageAsync(token),
+            token => _feedService.LoadNextPageAsync(count, token),
             false,
             "HomeFeedCoordinator failed to load more recommendations",
             () => !_isLoading && IsSessionActive() && !string.IsNullOrEmpty(_continuationToken));

@@ -25,7 +25,7 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
     private bool _disposed;
     private CancellationTokenSource? _requestCancellation;
     private long _requestGeneration;
-
+    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     public HistoryViewState State
     {
         get;
@@ -52,16 +52,17 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<HistoryViewState>? StateChanged;
 
-    public Task LoadAsync()
+    public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync() : Task.CompletedTask;
+        _lastRequestedCount = count;
+        return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync(count) : Task.CompletedTask;
     }
 
-    public async Task RefreshAsync()
+    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("HistoryViewModel refreshing watch history");
         ThrowIfDisposed();
-
+        _lastRequestedCount = count;
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;
@@ -69,7 +70,7 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         State = new HistoryViewState([], "Loading watch history…", true, true, AuthenticatedHistoryStatus.Success);
         try
         {
-            var result = await historyService.LoadFirstPageAsync(token).ConfigureAwait(false);
+            var result = await historyService.LoadFirstPageAsync(count, token).ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
 
@@ -94,12 +95,12 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         }
     }
 
-    public async Task LoadMoreAsync()
+    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        _lastRequestedCount = count;
         if (State is { IsLoading: true } or { IsLoadingMore: true } || !State.HasMore)
             return;
-
         _requestCancellation?.Dispose();
         _requestCancellation = new CancellationTokenSource();
         var token = _requestCancellation.Token;
@@ -107,7 +108,7 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         State = State with { IsLoadingMore = true, Summary = "Loading more watch history…" };
         try
         {
-            var result = await historyService.LoadNextPageAsync(token).ConfigureAwait(false);
+            var result = await historyService.LoadNextPageAsync(count, token).ConfigureAwait(false);
             if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
                 return;
 
