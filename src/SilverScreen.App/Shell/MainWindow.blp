@@ -159,10 +159,9 @@ Adw.ApplicationWindow MainWindow {
               title: "Subscriptions";
               icon-name: "emblem-favorite-symbolic";
 
-              child: Adw.StatusPage {
-                title: "Subscriptions";
-                description: "Subscription feeds will land after account/session support.";
-                icon-name: "applications-internet-symbolic";
+              child: Gtk.Box subscriptions_host {
+                hexpand: true;
+                vexpand: true;
               };
             }
 

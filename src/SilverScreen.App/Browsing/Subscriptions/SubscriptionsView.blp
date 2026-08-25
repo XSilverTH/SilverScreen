@@ -1,0 +1,60 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box SubscriptionsView {
+  orientation: vertical;
+  hexpand: true;
+  vexpand: true;
+
+  styles [
+    "subscriptions-view",
+  ]
+
+  Gtk.Revealer channel_bar_revealer {
+    reveal-child: false;
+    transition-type: slide_down;
+    transition-duration: 200;
+
+    child: Gtk.ScrolledWindow channel_bar_scroller {
+      hscrollbar-policy: automatic;
+      vscrollbar-policy: never;
+      hexpand: true;
+
+      styles [
+        "subscriptions-channel-bar-scroller",
+      ]
+
+      child: Gtk.Box channel_bar_box {
+        orientation: horizontal;
+        spacing: 12;
+        margin-start: 24;
+        margin-end: 24;
+        margin-top: 12;
+        margin-bottom: 8;
+
+        styles [
+          "subscriptions-channel-bar",
+        ]
+
+        Gtk.Button all_channel_button {
+          valign: center;
+          clicked => $OnAllButtonClicked();
+
+          styles [
+            "channel-pill",
+            "active",
+          ]
+
+          child: Gtk.Label all_channel_label {
+            label: "All";
+          };
+        }
+      };
+    };
+  }
+
+  Gtk.Box subscriptions_video_list_host {
+    hexpand: true;
+    vexpand: true;
+  }
+}

@@ -1,3 +1,5 @@
+using SilverScreen.Browsing.Subscriptions;
+using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Home;
@@ -341,5 +343,133 @@ public sealed class ChannelVideoListSource : IVideoListSource
     {
         if (!_disposed)
             StateChanged?.Invoke(this, MapState(state));
+    }
+}
+
+public sealed class SubscriptionsVideoListSource : IVideoListSource
+{
+    private readonly SubscriptionsViewModel _viewModel;
+    private readonly Action? _openWebLogin;
+    private bool _disposed;
+
+    public SubscriptionsVideoListSource(SubscriptionsViewModel viewModel, Action? openWebLogin = null)
+    {
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _openWebLogin = openWebLogin;
+        _viewModel.StateChanged += OnStateChanged;
+    }
+
+    public VideoListPresentationState State => MapState(_viewModel.State, _openWebLogin);
+
+    public event EventHandler<VideoListPresentationState>? StateChanged;
+
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        return _viewModel.RefreshAsync(count);
+    }
+
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
+            ? _viewModel.LoadMoreAsync(count)
+            : Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _viewModel.StateChanged -= OnStateChanged;
+    }
+
+    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null)
+    {
+        VideoListStatus status;
+        switch (state.Status)
+        {
+            case AuthenticatedSubscriptionsStatus.AuthenticationRequired:
+            case AuthenticatedSubscriptionsStatus.AuthenticationRejected:
+                status = new VideoListStatus(
+                    "Sign in to see subscriptions",
+                    !string.IsNullOrWhiteSpace(state.Summary)
+                        ? state.Summary
+                        : "Subscriptions feed requires an active YouTube session.",
+                    "avatar-default-symbolic",
+                    false,
+                    "Sign In",
+                    openWebLogin);
+                break;
+
+            case AuthenticatedSubscriptionsStatus.TemporaryBackendFailure:
+                status = new VideoListStatus(
+                    "Could not load subscriptions",
+                    !string.IsNullOrWhiteSpace(state.Summary)
+                        ? state.Summary
+                        : "Failed to load your subscriptions. Check your network connection and try again.",
+                    "network-error-symbolic",
+                    true);
+                break;
+
+            case AuthenticatedSubscriptionsStatus.Empty:
+            case AuthenticatedSubscriptionsStatus.Success:
+            default:
+                if (!state.IsSuccess)
+                {
+                    status = new VideoListStatus(
+                        "Could not load subscriptions",
+                        !string.IsNullOrWhiteSpace(state.Summary)
+                            ? state.Summary
+                            : "Failed to load your subscriptions. Check your network connection and try again.",
+                        "network-error-symbolic",
+                        true);
+                }
+                else if (state.Videos.Count == 0)
+                {
+                    if (state.SelectedChannel is not null)
+                    {
+                        status = new VideoListStatus(
+                            "No videos found",
+                            $"No videos found for {state.SelectedChannel.Title}.",
+                            "video-x-generic-symbolic");
+                    }
+                    else
+                    {
+                        status = new VideoListStatus(
+                            "No subscriptions",
+                            !string.IsNullOrWhiteSpace(state.Summary)
+                                ? state.Summary
+                                : "Channels you subscribe to on YouTube will appear here.",
+                            "emblem-favorite-symbolic");
+                    }
+                }
+                else
+                {
+                    status = new VideoListStatus(
+                        "Subscriptions",
+                        string.Empty,
+                        "emblem-favorite-symbolic");
+                }
+                break;
+        }
+
+        var loadingMessage = !string.IsNullOrWhiteSpace(state.Summary)
+            ? state.Summary
+            : "Loading subscriptions…";
+
+        return new VideoListPresentationState(
+            state.Videos,
+            state.IsLoading,
+            state.IsLoadingMore,
+            status,
+            loadingMessage,
+            "Loading more videos…");
+    }
+
+    private void OnStateChanged(object? sender, SubscriptionsViewState state)
+    {
+        if (!_disposed)
+            StateChanged?.Invoke(this, MapState(state, _openWebLogin));
     }
 }

@@ -221,6 +221,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private static bool TryCreateHttpUri(string thumbnailUrl, out Uri uri)
     {
+        if (!string.IsNullOrWhiteSpace(thumbnailUrl) && thumbnailUrl.StartsWith("//", StringComparison.Ordinal))
+            thumbnailUrl = $"https:{thumbnailUrl}";
+
         if (Uri.TryCreate(thumbnailUrl, UriKind.Absolute, out uri!)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
             return true;

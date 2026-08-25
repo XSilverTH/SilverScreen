@@ -33,6 +33,7 @@ public sealed class ApplicationCompositionTests
         Assert.NotNull(services.Thumbnails);
         Assert.NotNull(services.HomeFeed);
         Assert.NotNull(services.History);
+        Assert.NotNull(services.Subscriptions);
         Assert.NotNull(services.RuntimeDependencyDiagnostics);
         Assert.NotNull(services.SessionValidation);
         Assert.NotNull(services.WatchProgress);

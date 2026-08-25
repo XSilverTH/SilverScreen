@@ -8,6 +8,7 @@ using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
@@ -44,10 +45,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly QueueViewModel _queueViewModel;
     private readonly SearchPopoverView _searchPopover;
     private readonly VideoListView _searchView;
+    private readonly SubscriptionsView _subscriptions;
+    private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
     private bool _closed;
     private WebLoginWindow? _webLogin;
+    private string? _lastVisibleChildName;
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
     {
@@ -71,6 +75,20 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _historyViewModel = new HistoryViewModel(services.History);
         _history = new VideoListView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
+        _subscriptionsViewModel = new SubscriptionsViewModel(
+            services.Subscriptions,
+            services.Channels,
+            services.Session,
+            subscribeSessionEvents: true);
+        _subscriptions = new SubscriptionsView(
+            _subscriptionsViewModel,
+            services.Thumbnails,
+            services.WatchProgress,
+            actions,
+            OpenWebLogin,
+            (url, name) => OpenChannelAsync(new VideoSummary("", "", name, TimeSpan.Zero, "", false, "", null, null, url)).FireAndForget(Logger));
+        _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged;
+        subscriptions_host.Append(_subscriptions.Widget);
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
@@ -221,6 +239,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             case "history":
                 _history.RefreshAsync().FireAndForget(Logger);
                 break;
+            case "subscriptions":
+                _subscriptions.RefreshAsync().FireAndForget(Logger);
+                break;
             case "search":
                 _searchView.RefreshAsync().FireAndForget(Logger);
                 break;
@@ -233,7 +254,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
         if (!_closed && view_stack.VisibleChildName != "channel" && view_stack.VisibleChildName != "history" &&
-            view_stack.VisibleChildName != "search")
+            view_stack.VisibleChildName != "subscriptions" && view_stack.VisibleChildName != "search")
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
@@ -249,6 +270,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateHomeRefreshButton(_history.IsLoading);
     }
 
+    private void OnSubscriptionsRefreshLoadingChanged(object? sender, bool isLoading)
+    {
+        if (!_closed && view_stack.VisibleChildName == "subscriptions")
+            UpdateHomeRefreshButton(_subscriptions.IsLoading);
+    }
+
     private void OnSearchRefreshLoadingChanged(object? sender, bool isLoading)
     {
         if (!_closed && view_stack.VisibleChildName == "search")
@@ -260,14 +287,24 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_closed) return;
         navigation_back_button.Visible = view_stack.VisibleChildName is "search" or "channel";
 
-        switch (view_stack.VisibleChildName)
+        var currentChildName = view_stack.VisibleChildName;
+        var childChanged = currentChildName != _lastVisibleChildName;
+        _lastVisibleChildName = currentChildName;
+
+        switch (currentChildName)
         {
             case "channel":
                 UpdateHomeRefreshButton(_channel.IsLoading);
                 break;
             case "history":
                 UpdateHomeRefreshButton(_history.IsLoading);
-                _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
+                if (childChanged)
+                    _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
+                break;
+            case "subscriptions":
+                UpdateHomeRefreshButton(_subscriptions.IsLoading);
+                if (childChanged)
+                    _subscriptionsViewModel.LoadAsync(_subscriptions.GetBatchSize()).FireAndForget(Logger);
                 break;
             case "search":
                 UpdateHomeRefreshButton(_searchView.IsLoading);
@@ -277,7 +314,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 break;
         }
     }
-
     private void UpdateHomeRefreshButton(bool isLoading)
     {
         home_refresh_button.Sensitive = !isLoading;
@@ -374,6 +410,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
         _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
         _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
+        _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged;
+        _subscriptions.Dispose();
+        _subscriptionsViewModel.Dispose();
         _searchView.Dispose();
         _searchPopover.Dispose();
         _searchViewModel.Dispose();

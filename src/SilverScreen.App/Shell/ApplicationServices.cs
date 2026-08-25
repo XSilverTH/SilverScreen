@@ -8,6 +8,7 @@ using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Browsing.Search;
+using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
@@ -20,6 +21,7 @@ using SilverScreen.Infrastructure.Browsing.Common;
 using SilverScreen.Infrastructure.Browsing.History;
 using SilverScreen.Infrastructure.Browsing.Home;
 using SilverScreen.Infrastructure.Browsing.Search;
+using SilverScreen.Infrastructure.Browsing.Subscriptions;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Infrastructure.Player.Comments;
@@ -43,6 +45,7 @@ public sealed class ApplicationServices(
     IThumbnailService thumbnails,
     HomeFeedCoordinator homeFeed,
     IAuthenticatedHistoryService history,
+    IAuthenticatedSubscriptionsService subscriptions,
     SessionValidationCoordinator sessionValidation,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
     IWatchProgressService watchProgress,
@@ -59,6 +62,7 @@ public sealed class ApplicationServices(
     public IThumbnailService Thumbnails { get; } = thumbnails;
     public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
     public IAuthenticatedHistoryService History { get; } = history;
+    public IAuthenticatedSubscriptionsService Subscriptions { get; } = subscriptions;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
     public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
     public IWatchProgressService WatchProgress { get; } = watchProgress;
@@ -113,6 +117,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeVideoDetailsService, YtDlpVideoDetailsService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
         services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
+        services.AddSingleton<IAuthenticatedSubscriptionsService, AuthenticatedSubscriptionsService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
         services.AddSingleton<SessionValidationCoordinator>();

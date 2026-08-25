@@ -42,6 +42,28 @@ public sealed class YtDlpCommandBuilderTests
     }
 
     [Fact]
+    public void BuildSubscriptions_WithCustomCount_SetsCorrectPlaylistRange()
+    {
+        var startInfo = YtDlpCommandBuilder.BuildSubscriptions("yt-dlp", startIndex: 1, count: 40, "fake-cookie-path");
+
+        Assert.Contains("--playlist-start", startInfo.ArgumentList);
+        Assert.Contains("1", startInfo.ArgumentList);
+        Assert.Contains("--playlist-end", startInfo.ArgumentList);
+        Assert.Contains("40", startInfo.ArgumentList);
+        Assert.Contains("https://www.youtube.com/feed/subscriptions", startInfo.ArgumentList);
+    }
+
+    [Fact]
+    public void BuildSubscribedChannels_SetsChannelsUrlAndCookies()
+    {
+        var startInfo = YtDlpCommandBuilder.BuildSubscribedChannels("yt-dlp", "fake-cookie-path");
+
+        Assert.Contains("--cookies", startInfo.ArgumentList);
+        Assert.Contains("fake-cookie-path", startInfo.ArgumentList);
+        Assert.Contains("https://www.youtube.com/feed/channels", startInfo.ArgumentList);
+    }
+
+    [Fact]
     public void BuildSearch_WithCustomCount_SetsSearchLimitAndRange()
     {
         var request = new SearchRequest("test query", StartIndex: 1, Count: 40);

@@ -59,6 +59,32 @@ public static class YtDlpCommandBuilder
         return startInfo;
     }
 
+    public static ProcessStartInfo BuildSubscriptions(string executablePath, int startIndex, int count,
+        string cookieFilePath)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(startIndex, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cookieFilePath);
+        var startInfo = CreateStartInfo(executablePath);
+        AddCommonArguments(startInfo, cookieFilePath);
+        var pageSize = Math.Max(count, 1);
+        startInfo.ArgumentList.Add("--playlist-start");
+        startInfo.ArgumentList.Add(startIndex.ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--playlist-end");
+        startInfo.ArgumentList.Add((startIndex + pageSize - 1).ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("https://www.youtube.com/feed/subscriptions");
+        return startInfo;
+    }
+
+    public static ProcessStartInfo BuildSubscribedChannels(string executablePath, string cookieFilePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cookieFilePath);
+        var startInfo = CreateStartInfo(executablePath);
+        AddCommonArguments(startInfo, cookieFilePath);
+        startInfo.ArgumentList.Add("https://www.youtube.com/feed/channels");
+        return startInfo;
+    }
+
     public static ProcessStartInfo BuildChannel(string channelUrl, ChannelVideoSort sort, YtDlpOptions options,
         int startIndex, int count, string? cookieFilePath = null)
     {

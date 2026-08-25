@@ -1,3 +1,4 @@
+using SilverScreen.Browsing.Subscriptions;
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
@@ -28,6 +29,7 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly IWatchProgressService _watchProgress;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
+    private Action? _currentStatusAction;
 
     private VideoListView(
         IVideoListSource source,
@@ -90,6 +92,16 @@ public partial class VideoListView : ViewBase<Bin>
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
         : this(new ChannelVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+    {
+    }
+
+    public VideoListView(
+        SubscriptionsViewModel viewModel,
+        IThumbnailService thumbnails,
+        IWatchProgressService watchProgress,
+        VideoCardActions videoActions,
+        Action? openWebLogin = null)
+        : this(new SubscriptionsVideoListSource(viewModel, openWebLogin), thumbnails, watchProgress, videoActions)
     {
     }
 
@@ -176,6 +188,12 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
+        if (_currentStatusAction != null)
+        {
+            _currentStatusAction();
+            return;
+        }
+
         RefreshAsync().FireAndForget(Logger);
     }
 
@@ -233,7 +251,9 @@ public partial class VideoListView : ViewBase<Bin>
         video_list_status_page.Title = state.Status.Title;
         video_list_status_page.Description = state.Status.Description;
         video_list_status_page.IconName = state.Status.IconName;
-        video_list_retry_button.Visible = state.Status.ShowRetry;
+        _currentStatusAction = state.Status.Action;
+        video_list_retry_button.Label = state.Status.ActionLabel ?? "Retry";
+        video_list_retry_button.Visible = state.Status.ShowRetry || state.Status.Action != null || !string.IsNullOrWhiteSpace(state.Status.ActionLabel);
         video_list_stack.VisibleChildName = "status";
     }
 

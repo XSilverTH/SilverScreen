@@ -38,8 +38,11 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
         catch (OperationCanceledException)
         {
-            Logger.Warning("yt-dlp process execution timed out after {TimeoutSeconds}s or was canceled",
-                timeout.TotalSeconds);
+            if (cancellationToken.IsCancellationRequested)
+                Logger.Debug("yt-dlp process execution was canceled");
+            else
+                Logger.Warning("yt-dlp process execution timed out after {TimeoutSeconds}s", timeout.TotalSeconds);
+
             TryKill(process);
             await DrainAndWaitForExitAsync(process, outputTask, errorTask).ConfigureAwait(false);
 
