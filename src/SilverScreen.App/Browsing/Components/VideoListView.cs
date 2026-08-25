@@ -17,7 +17,6 @@ namespace SilverScreen.Browsing.Components;
 public partial class VideoListView : ViewBase<Bin>
 {
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
-
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly IVideoListSource _source;
     private readonly IThumbnailService _thumbnails;
@@ -54,7 +53,6 @@ public partial class VideoListView : ViewBase<Bin>
         _videoFactory.OnTeardown += OnVideoCardTeardown;
         video_list_grid.Model = _videoSelection;
         video_list_grid.Factory = _videoFactory;
-
         _source.StateChanged += OnStateChanged;
         Render(_source.State);
     }

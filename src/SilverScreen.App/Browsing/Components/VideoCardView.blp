@@ -29,10 +29,10 @@ menu video_actions {
 }
 
 Adw.Bin VideoCardView {
-  width-request: 336;
-  halign: center;
+  width-request: 310;
+  halign: fill;
   valign: start;
-  hexpand: false;
+  hexpand: true;
   margin-start: 10;
   margin-end: 10;
   margin-top: 12;
@@ -40,9 +40,10 @@ Adw.Bin VideoCardView {
 
   Gtk.Box card {
     orientation: vertical;
-    width-request: 336;
-    halign: center;
+    width-request: 310;
+    halign: fill;
     valign: start;
+    hexpand: true;
 
     styles [
       "video-card",
@@ -52,7 +53,6 @@ Adw.Bin VideoCardView {
 
     Gtk.Overlay thumbnail {
       height-request: 189;
-      width-request: 336;
       hexpand: true;
       overflow: hidden;
 

@@ -212,7 +212,6 @@ public partial class VideoCardView : ViewBase<Bin>
                     picture = Picture.NewForPaintable(texture);
                     picture.AlternativeText = _thumbnailAlternativeText;
                     picture.ContentFit = ContentFit.Cover;
-                    picture.WidthRequest = CardWidth;
                     picture.HeightRequest = ThumbnailHeight;
                     picture.Hexpand = true;
                     picture.Vexpand = true;
