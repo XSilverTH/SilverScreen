@@ -317,7 +317,20 @@ button.player-chapter-marker:active {
     opacity: 1;
 }
 
-/* Edge Drawer Tabs / Cue Handles */
+/* Edge Drawer Tabs / Cue Buttons & Handles */
+button.player-comments-cue-button,
+button.player-info-cue-button {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+}
+
 .player-comments-cue-handle,
 .player-info-cue-handle {
     background-color: alpha(#000000, 0.72);
@@ -343,6 +356,8 @@ button.player-chapter-marker:active {
     box-shadow: 2px 2px 14px alpha(#000000, 0.45);
 }
 
+button.player-comments-cue-button:hover .player-comments-cue-handle,
+button.player-comments-cue-button:focus-visible .player-comments-cue-handle,
 .player-comments-cue-handle:hover,
 .player-comments-cue-handle:focus-visible {
     background-color: alpha(#ffffff, 0.22);
@@ -352,6 +367,7 @@ button.player-chapter-marker:active {
     transform: translateX(2px);
 }
 
+button.player-comments-cue-button:active .player-comments-cue-handle,
 .player-comments-cue-handle:active {
     background-color: alpha(#ffffff, 0.32);
     border-color: alpha(#ffffff, 0.55);
@@ -371,6 +387,8 @@ button.player-chapter-marker:active {
     box-shadow: 0 -2px 14px alpha(#000000, 0.45);
 }
 
+button.player-info-cue-button:hover .player-info-cue-handle,
+button.player-info-cue-button:focus-visible .player-info-cue-handle,
 .player-info-cue-handle:hover,
 .player-info-cue-handle:focus-visible {
     background-color: alpha(#ffffff, 0.22);
@@ -380,6 +398,7 @@ button.player-chapter-marker:active {
     transform: translateY(-2px);
 }
 
+button.player-info-cue-button:active .player-info-cue-handle,
 .player-info-cue-handle:active {
     background-color: alpha(#ffffff, 0.32);
     border-color: alpha(#ffffff, 0.55);
@@ -392,8 +411,12 @@ button.player-chapter-marker:active {
     transition: opacity 160ms ease-out;
 }
 
+button.player-comments-cue-button:hover .player-comments-cue-icon,
+button.player-comments-cue-button:focus-visible .player-comments-cue-icon,
 .player-comments-cue-handle:hover .player-comments-cue-icon,
 .player-comments-cue-handle:focus-visible .player-comments-cue-icon,
+button.player-info-cue-button:hover .player-info-cue-icon,
+button.player-info-cue-button:focus-visible .player-info-cue-icon,
 .player-info-cue-handle:hover .player-info-cue-icon,
 .player-info-cue-handle:focus-visible .player-info-cue-icon {
     opacity: 1;
