@@ -105,7 +105,12 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
         services.AddSingleton<IWatchProgressService, FileWatchProgressService>();
         services.AddSingleton<YtDlpRunner>();
-        services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<YtDlpRunner>());
+        services.AddSingleton<IYtDlpProcessHost, YtDlpProcessHost>();
+        services.AddSingleton<WarmYtDlpRunner>(static provider => new WarmYtDlpRunner(
+            provider.GetRequiredService<IPreferencesService>(),
+            provider.GetRequiredService<IYtDlpProcessHost>(),
+            provider.GetRequiredService<YtDlpRunner>()));
+        services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<WarmYtDlpRunner>());
         services.AddSingleton<ISearchService, YtDlpSearchService>();
         services.AddSingleton<ISearchSuggestionService, YouTubeSearchSuggestionService>();
         services.AddSingleton<IChannelService, YtDlpChannelService>();
