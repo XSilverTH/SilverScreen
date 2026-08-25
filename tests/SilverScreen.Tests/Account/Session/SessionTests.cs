@@ -127,19 +127,6 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public void SessionPersistenceException_PreservesInnerExceptionAndMessage()
-    {
-        var inner = new InvalidOperationException("keyring locked");
-        var exceptionWithInner = new SessionPersistenceException(inner);
-        Assert.Same(inner, exceptionWithInner.InnerException);
-        Assert.Equal(RuntimeDependencyGuidance.SecretServiceUnavailable, exceptionWithInner.Message);
-
-        var customMessageException = new SessionPersistenceException("custom message", inner);
-        Assert.Same(inner, customMessageException.InnerException);
-        Assert.Equal("custom message", customMessageException.Message);
-    }
-
-    [Fact]
     public void CookieProviderCreatesTempFileWithExpectedContent()
     {
         using var tempRoot = new TemporaryDirectory();

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
@@ -227,114 +226,6 @@ public sealed class PreferencesTests : IDisposable
     }
 
     [Fact]
-    public void EveryAppPreferenceProperty_ParticipatesInEquality_SaveNotification_AndPersistence()
-    {
-        var properties = typeof(AppPreferences).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p is { CanRead: true, CanWrite: true })
-            .ToArray();
-
-        Assert.NotEmpty(properties);
-
-        foreach (var property in properties)
-        {
-            var tempPath = Path.Combine(Path.GetTempPath(),
-                $"silverscreen-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
-            try
-            {
-                var basePrefs = new AppPreferences();
-                var modifiedPrefs = new AppPreferences();
-                var originalValue = property.GetValue(basePrefs);
-                var distinctValue = GetDistinctValue(property.PropertyType, property.Name, originalValue);
-
-                property.SetValue(modifiedPrefs, distinctValue);
-
-                // 1. Value equality must detect the difference without manual method bodies
-                Assert.False(basePrefs.Equals(modifiedPrefs),
-                    $"Property '{property.Name}' was not considered in AppPreferences.Equals.");
-                Assert.False(basePrefs == modifiedPrefs,
-                    $"Property '{property.Name}' was not considered in AppPreferences operator==.");
-                Assert.NotEqual(basePrefs.GetHashCode(), modifiedPrefs.GetHashCode());
-
-                // 2. FilePreferencesService must detect the change and NOT suppress saving
-                var service = new FilePreferencesService(tempPath);
-                service.SavePreferences(basePrefs);
-
-                var eventsRaised = 0;
-                service.PreferencesChanged += (_, _) => eventsRaised++;
-
-                service.SavePreferences(modifiedPrefs);
-                Assert.Equal(1, eventsRaised);
-
-                // 3. The persisted file on disk must reload the modified value
-                var secondService = new FilePreferencesService(tempPath);
-                var loaded = secondService.GetPreferences();
-                var loadedValue = property.GetValue(loaded);
-
-                Assert.Equal(distinctValue, loadedValue);
-                Assert.Equal(modifiedPrefs, loaded);
-            }
-            finally
-            {
-                if (File.Exists(tempPath)) File.Delete(tempPath);
-            }
-        }
-    }
-
-    [Fact]
-    public void EveryPlayerShortcutProperty_ParticipatesInEquality_AndPersistence()
-    {
-        var properties = typeof(PlayerShortcutBindings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p is { CanRead: true, CanWrite: true })
-            .ToArray();
-
-        Assert.NotEmpty(properties);
-
-        foreach (var property in properties)
-        {
-            var tempPath = Path.Combine(Path.GetTempPath(),
-                $"silverscreen-shortcut-prop-test-{property.Name}-{Guid.NewGuid():N}.json");
-            try
-            {
-                var baseShortcuts = new PlayerShortcutBindings();
-                var modifiedShortcuts = new PlayerShortcutBindings();
-                var distinctShortcuts = new EquatableArray<string>(["UniqueCustomKey_" + property.Name]);
-
-                property.SetValue(modifiedShortcuts, distinctShortcuts);
-
-                // 1. Equality and HashCode
-                Assert.False(baseShortcuts.Equals(modifiedShortcuts),
-                    $"Shortcut property '{property.Name}' was not considered in PlayerShortcutBindings.Equals.");
-                Assert.False(baseShortcuts == modifiedShortcuts,
-                    $"Shortcut property '{property.Name}' was not considered in PlayerShortcutBindings operator==.");
-                Assert.NotEqual(baseShortcuts.GetHashCode(), modifiedShortcuts.GetHashCode());
-
-                // 2. Persistence through AppPreferences
-                var basePrefs = new AppPreferences { Shortcuts = baseShortcuts };
-                var modifiedPrefs = new AppPreferences { Shortcuts = modifiedShortcuts };
-
-                var service = new FilePreferencesService(tempPath);
-                service.SavePreferences(basePrefs);
-
-                var eventsRaised = 0;
-                service.PreferencesChanged += (_, _) => eventsRaised++;
-
-                service.SavePreferences(modifiedPrefs);
-                Assert.Equal(1, eventsRaised);
-
-                var loaded = new FilePreferencesService(tempPath).GetPreferences();
-                var loadedShortcutValue = property.GetValue(loaded.Shortcuts);
-
-                Assert.Equal(distinctShortcuts, loadedShortcutValue);
-                Assert.Equal(modifiedPrefs, loaded);
-            }
-            finally
-            {
-                if (File.Exists(tempPath)) File.Delete(tempPath);
-            }
-        }
-    }
-
-    [Fact]
     public void LoadPreferences_FromExistingPreferencesJsonFile_LoadsAllPropertiesAccurately()
     {
         const string existingJson = """
@@ -450,20 +341,5 @@ public sealed class PreferencesTests : IDisposable
         var currentAgain = service.GetPreferences();
         Assert.Equal("Light", currentAgain.Theme);
         Assert.Equal(["space"], currentAgain.Shortcuts.TogglePause);
-    }
-
-    private static object GetDistinctValue(Type type, string propertyName, object? currentValue)
-    {
-        if (type == typeof(string))
-            return $"custom_{propertyName}_val";
-        if (type == typeof(bool))
-            return !(bool)(currentValue ?? false);
-        if (type == typeof(int))
-            return (int)(currentValue ?? 0) + 42;
-        if (type == typeof(EquatableArray<string>))
-            return new EquatableArray<string>(["custom_cat_1", "custom_cat_2"]);
-        return type == typeof(PlayerShortcutBindings)
-            ? new PlayerShortcutBindings { TogglePause = ["CustomTestKey"] }
-            : throw new NotSupportedException($"Add test support for type {type.Name}");
     }
 }

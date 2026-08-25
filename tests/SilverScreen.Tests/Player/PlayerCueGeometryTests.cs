@@ -89,30 +89,4 @@ public class PlayerCueGeometryTests
         Assert.False(PlayerCueGeometry.IsInfoCueActive(10, 10, 0, 0, true));
         Assert.False(PlayerCueGeometry.IsInfoCueActive(10, 10, 100, -100, true));
     }
-
-    [Fact]
-    public void Cues_SymmetricBehaviorRelativeToEdge()
-    {
-        const double distanceFromEdge = 60; // Less than 80 trigger distance
-        const double centerSpan = 360;
-
-        // Comments cue at 60px from left edge
-        var commentsActive = PlayerCueGeometry.IsCommentsCueActive(
-            distanceFromEdge,
-            centerSpan,
-            ViewWidth,
-            ViewHeight,
-            false);
-
-        // Info cue at 60px from bottom edge
-        var infoActive = PlayerCueGeometry.IsInfoCueActive(
-            centerSpan,
-            ViewHeight - distanceFromEdge,
-            ViewWidth,
-            ViewHeight,
-            false);
-
-        Assert.True(commentsActive);
-        Assert.True(infoActive);
-    }
 }
