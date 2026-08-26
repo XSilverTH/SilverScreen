@@ -20,7 +20,6 @@ public sealed record PlayerDependencies(
     ISponsorBlockService SponsorBlock,
     ISessionService Session,
     IYouTubeCommentService Comments,
-    IYouTubeVideoDetailsService VideoDetails,
+    IYouTubeMediaResolver MediaResolver,
     IQueueService Queue,
-    IThumbnailService Thumbnails,
-    IYouTubeMediaResolver? MediaResolver = null);
+    IThumbnailService Thumbnails);

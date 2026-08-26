@@ -24,7 +24,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     private readonly Label _statsLabel;
     private readonly Label _statusLabel;
     private readonly Label _titleLabel;
-    private readonly IYouTubeVideoDetailsService _videoDetails;
+    private readonly IYouTubeMediaResolver _mediaResolver;
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
@@ -34,7 +34,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
     public VideoInfoPanelController(
-        IYouTubeVideoDetailsService videoDetails,
+        IYouTubeMediaResolver mediaResolver,
         Action<VideoSummary> channelRequested,
         Button backdrop,
         Revealer cueRevealer,
@@ -48,7 +48,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         Button closeButton,
         Action? closed = null)
     {
-        _videoDetails = videoDetails;
+        _mediaResolver = mediaResolver;
         _channelRequested = channelRequested;
         _backdrop = backdrop;
         _cueRevealer = cueRevealer;
@@ -193,7 +193,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         YouTubeVideoDetailsResult result;
         try
         {
-            result = await _videoDetails.GetDetailsAsync(videoId, cancellation.Token).ConfigureAwait(false);
+            result = await _mediaResolver.GetVideoDetailsAsync(videoId, forceRefresh: false, cancellation.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
