@@ -22,6 +22,17 @@ public interface ISessionService : ICookieFileProvider
     CookieFileLease? AcquireCookieFileLease();
 
     CookieContainer? CreateCookieContainer();
+
+    bool IsValidating => false;
+
+    Task<string> ValidateSessionAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(string.Empty);
+    }
+
+    void CancelValidation()
+    {
+    }
 }
 
 public sealed record ManualSessionCookies(SessionCookieFormat Format, string Content);

@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
-using SilverScreen.Account.Session;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Infrastructure.Common;
@@ -13,18 +12,15 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private static readonly ILogger Logger = Log.ForContext<AccountViewModel>();
     private readonly IAccountProfileService _accountProfileService;
     private readonly ISessionService _sessionService;
-    private readonly SessionValidationCoordinator _validation;
     private bool _disposed;
     private AccountProfile? _profile;
     private CancellationTokenSource? _profileCancellation;
     private AccountSession _session;
 
-    public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService,
-        SessionValidationCoordinator validation)
+    public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService)
     {
         _accountProfileService = accountProfileService;
         _sessionService = sessionService;
-        _validation = validation;
         _session = _sessionService.GetCurrentSession();
         if (_session.HasManualSession)
             _profile = _accountProfileService.GetCachedProfile();
@@ -57,21 +53,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public string? AvatarUrl => _profile?.AvatarUrl ?? Session.AvatarUrl;
 
-
-    // public bool IsValidating
-    // {
-    //     get;
-    //     private set
-    //     {
-    //         if (field == value)
-    //             return;
-    //
-    //         field = value;
-    //         OnPropertyChanged();
-    //         StateChanged?.Invoke(this, EventArgs.Empty);
-    //     }
-    // }
-
     public void Dispose()
     {
         if (_disposed)
@@ -80,7 +61,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         _disposed = true;
         _profileCancellation?.Cancel();
         _profileCancellation?.Dispose();
-        _validation.Cancel();
+        _sessionService.CancelValidation();
         _sessionService.SessionChanged -= OnSessionChanged;
     }
 
@@ -130,12 +111,12 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ValidateAsync()
     {
-        if (!_validation.IsAvailable || _disposed)
+        if (_disposed)
             return;
 
         try
         {
-            await _validation.ValidateAsync().ConfigureAwait(false);
+            await _sessionService.ValidateSessionAsync().ConfigureAwait(false);
         }
         catch (Exception exception)
         {

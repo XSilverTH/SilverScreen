@@ -109,7 +109,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _queueViewModel = new QueueViewModel(services.Queue, _playback);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
         queue_sidebar_host.Append(_queueView.Widget);
-        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session, services.SessionValidation);
+        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
             services.Thumbnails,

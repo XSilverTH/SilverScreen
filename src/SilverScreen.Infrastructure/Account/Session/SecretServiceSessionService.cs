@@ -3,28 +3,59 @@ using System.Security.Cryptography;
 using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
-public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability
+public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability, IDisposable
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
     private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
+    private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly string? _tempRoot;
     private bool _isAvailable = true;
     private ManualSessionCookies? _manualCookies;
+    private CancellationTokenSource? _validationCts;
+    private bool _isValidating;
 
     public SecretServiceSessionService(string? tempRoot = null)
-        : this(new LibSecretCookieStore(), tempRoot)
+        : this(new LibSecretCookieStore(), (Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
+    {
+    }
+
+    public SecretServiceSessionService(Func<IAuthenticatedHomeFeedService>? feedServiceFactory, string? tempRoot = null)
+        : this(new LibSecretCookieStore(), feedServiceFactory, tempRoot)
+    {
+    }
+
+    public SecretServiceSessionService(IAuthenticatedHomeFeedService feedService, string? tempRoot = null)
+        : this(new LibSecretCookieStore(), () => feedService, tempRoot)
     {
     }
 
     internal SecretServiceSessionService(ICookieSecretStore store, string? tempRoot = null)
+        : this(store, (Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
+    {
+    }
+
+    internal SecretServiceSessionService(
+        ICookieSecretStore store,
+        IAuthenticatedHomeFeedService feedService,
+        string? tempRoot = null)
+        : this(store, () => feedService, tempRoot)
+    {
+    }
+
+    internal SecretServiceSessionService(
+        ICookieSecretStore store,
+        Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
+        string? tempRoot = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _feedServiceFactory = feedServiceFactory;
         _tempRoot = tempRoot;
         try
         {
@@ -106,6 +137,102 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
     }
 
+    public bool IsValidating
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isValidating;
+            }
+        }
+    }
+
+    public async Task<string> ValidateSessionAsync(CancellationToken cancellationToken = default)
+    {
+        Logger.Information("Starting YouTube session validation");
+        CancellationTokenSource linkedCts;
+        IAuthenticatedHomeFeedService? feedService;
+        lock (_gate)
+        {
+            var session = GetCurrentSession();
+            if (!session.IsSignedIn || !session.HasManualSession)
+                return SessionValidationFormatter.NoActiveSessionMessage;
+
+            if (_isValidating)
+                return SessionValidationFormatter.AlreadyRunningMessage;
+
+            _isValidating = true;
+            _validationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCts = _validationCts;
+            feedService = _feedServiceFactory?.Invoke();
+        }
+
+        if (feedService is null)
+        {
+            lock (_gate)
+            {
+                _isValidating = false;
+                _validationCts?.Dispose();
+                _validationCts = null;
+            }
+
+            return SessionValidationFormatter.FormatUnexpectedError();
+        }
+
+        try
+        {
+            var feedResult = await feedService.LoadFirstPageAsync(cancellationToken: linkedCts.Token)
+                .ConfigureAwait(false);
+            var isSuccess = feedResult.Status == AuthenticatedHomeFeedStatus.Success;
+            var videoCount = feedResult.FeedPage.Videos.Count;
+            var hasContinuation = !string.IsNullOrEmpty(feedResult.FeedPage.ContinuationToken);
+            var requiresAuth = feedResult.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
+                or AuthenticatedHomeFeedStatus.AuthenticationRejected;
+
+            var result = new HomeSessionValidationResult(
+                isSuccess,
+                videoCount,
+                hasContinuation,
+                requiresAuth,
+                feedResult.Status,
+                feedResult.StatusMessage);
+            return SessionValidationFormatter.FormatResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            return SessionValidationFormatter.FormatCancellation();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Unexpected error during session validation");
+            return SessionValidationFormatter.FormatUnexpectedError();
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isValidating = false;
+                _validationCts?.Dispose();
+                _validationCts = null;
+            }
+        }
+    }
+
+    public void CancelValidation()
+    {
+        lock (_gate)
+        {
+            if (_isValidating && _validationCts != null)
+                _validationCts.Cancel();
+        }
+    }
+
+    public void Dispose()
+    {
+        CancelValidation();
+    }
+
 
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {
@@ -144,6 +271,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
     public void ClearSession()
     {
+        CancelValidation();
         bool changed;
         try
         {

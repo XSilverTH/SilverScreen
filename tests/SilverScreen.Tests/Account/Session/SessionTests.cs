@@ -126,15 +126,14 @@ public sealed class SessionTests
         Assert.Equal(FakeCookieContent, store.StoredContent);
     }
 
-    [Fact]
-    public void CookieProviderCreatesTempFileWithExpectedContent()
+[Fact]
+    public void SessionService_CreatesTempFileWithExpectedContent()
     {
         using var tempRoot = new TemporaryDirectory();
-        var service = new InMemorySessionService();
+        var service = new InMemorySessionService(tempRoot.Path);
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-        var provider = new TemporaryCookieFileProvider(service, tempRoot.Path);
 
-        using var lease = provider.CreateCookieFile();
+        using var lease = service.CreateCookieFile();
 
         Assert.NotNull(lease);
         Assert.StartsWith(tempRoot.Path, lease.Path, StringComparison.Ordinal);
@@ -148,15 +147,13 @@ public sealed class SessionTests
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(lease.Path));
     }
 
-
     [Fact]
-    public void CookieProviderCleanupRemovesTempFileAndDirectory()
+    public void SessionService_CleanupRemovesTempFileAndDirectory()
     {
         using var tempRoot = new TemporaryDirectory();
-        var service = new InMemorySessionService();
+        var service = new InMemorySessionService(tempRoot.Path);
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-        var provider = new TemporaryCookieFileProvider(service, tempRoot.Path);
-        var lease = provider.CreateCookieFile();
+        var lease = service.CreateCookieFile();
         Assert.NotNull(lease);
         var cookiePath = lease.Path;
         var directoryPath = Directory.GetParent(cookiePath)?.FullName;

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SilverScreen.Account.Session;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
@@ -46,7 +45,6 @@ public sealed class ApplicationServices(
     HomeFeedCoordinator homeFeed,
     IAuthenticatedHistoryService history,
     IAuthenticatedSubscriptionsService subscriptions,
-    SessionValidationCoordinator sessionValidation,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
     IWatchProgressService watchProgress,
     PlayerDependencies player)
@@ -64,7 +62,6 @@ public sealed class ApplicationServices(
     public IAuthenticatedHistoryService History { get; } = history;
     public IAuthenticatedSubscriptionsService Subscriptions { get; } = subscriptions;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
-    public SessionValidationCoordinator SessionValidation { get; } = sessionValidation;
     public IWatchProgressService WatchProgress { get; } = watchProgress;
     public PlayerDependencies Player { get; } = player;
 }
@@ -82,12 +79,14 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton(configuration);
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
-        services.AddSingleton<SecretServiceSessionService>();
+        services.AddSingleton<SecretServiceSessionService>(static provider => new SecretServiceSessionService(
+            () => provider.GetRequiredService<IAuthenticatedHomeFeedService>()));
         services.AddSingleton<ISessionService>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ISecretServiceAvailability>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
-        services.AddSingleton<ICookieFileProvider, TemporaryCookieFileProvider>();
+        services.AddSingleton<ICookieFileProvider>(static provider =>
+            provider.GetRequiredService<SecretServiceSessionService>());
         services.AddKeyedSingleton<HttpClient>("youtube-account", static (_, _) => new HttpClient());
         services.AddKeyedSingleton<HttpClient>("youtube-rating", static (_, _) => new HttpClient
         {
@@ -121,13 +120,11 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<YtDlpMediaResolver>();
         services.AddSingleton<IYouTubeMediaResolver>(static provider => provider.GetRequiredService<YtDlpMediaResolver>());
         services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
-        services.AddSingleton<IYouTubeVideoDetailsService, YtDlpVideoDetailsService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
         services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
         services.AddSingleton<IAuthenticatedSubscriptionsService, AuthenticatedSubscriptionsService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
-        services.AddSingleton<SessionValidationCoordinator>();
         services.AddSingleton<PlayerDependencies>();
         services.AddSingleton<ApplicationServices>();
         return services;

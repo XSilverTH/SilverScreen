@@ -1,4 +1,3 @@
-using SilverScreen.Account.Session;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
@@ -6,36 +5,32 @@ using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Account.Session;
 
-public sealed class SessionValidationCoordinatorTests
+public sealed class SessionValidationTests
 {
     private const string FakeCookieContent =
         "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
-
 
     [Fact]
     public async Task DuplicateValidation_Prevention()
     {
         // Arrange
-        var sessionService = new InMemorySessionService();
-        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
-
         var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>();
         var fakeFeed = new FakeAuthenticatedHomeFeedService
         {
             LoadFirstPageAsyncHandler = _ => tcs.Task
         };
-        var coordinator = new SessionValidationCoordinator(fakeFeed, sessionService);
+        var sessionService = new InMemorySessionService(fakeFeed);
+        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
 
         // Act & Assert
         // Start first validation
-        var task1 = coordinator.ValidateAsync();
+        var task1 = sessionService.ValidateSessionAsync();
 
-        // Verify coordinator status during in-flight validation
-        Assert.True(coordinator.IsValidating);
-        Assert.False(coordinator.IsAvailable);
+        // Verify status during in-flight validation
+        Assert.True(sessionService.IsValidating);
 
         // Start duplicate validation while first is in flight
-        var duplicateResult = await coordinator.ValidateAsync();
+        var duplicateResult = await sessionService.ValidateSessionAsync();
 
         // Complete the first validation
         tcs.SetResult(new AuthenticatedHomeFeedResult(
@@ -54,10 +49,43 @@ public sealed class SessionValidationCoordinatorTests
         Assert.Contains("Validation succeeded.", firstResult);
         Assert.Contains("Usable videos: 1", firstResult);
         Assert.Equal(1, fakeFeed.LoadFirstPageCallCount);
-        Assert.False(coordinator.IsValidating);
-        Assert.True(coordinator.IsAvailable);
+        Assert.False(sessionService.IsValidating);
     }
 
+    [Fact]
+    public async Task ValidateSessionAsync_WithoutActiveSession_ReturnsNoActiveSessionMessage()
+    {
+        var sessionService = new InMemorySessionService();
+        var result = await sessionService.ValidateSessionAsync();
+
+        Assert.Equal(SessionValidationFormatter.NoActiveSessionMessage, result);
+    }
+
+    [Fact]
+    public async Task ValidateSessionAsync_Cancellation_ReturnsCancellationMessage()
+    {
+        var tcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>();
+        var fakeFeed = new FakeAuthenticatedHomeFeedService
+        {
+            LoadFirstPageAsyncHandler = token =>
+            {
+                var cancelTcs = new TaskCompletionSource<AuthenticatedHomeFeedResult>();
+                token.Register(() => cancelTcs.TrySetCanceled(token));
+                return cancelTcs.Task;
+            }
+        };
+        var sessionService = new InMemorySessionService(fakeFeed);
+        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+
+        var task = sessionService.ValidateSessionAsync();
+        Assert.True(sessionService.IsValidating);
+
+        sessionService.CancelValidation();
+
+        var result = await task;
+        Assert.Equal("Validation canceled.", result);
+        Assert.False(sessionService.IsValidating);
+    }
 
     [Fact]
     public void SafeFormatter_ExcludesStatusMessage_HighLevelStatusMapping()

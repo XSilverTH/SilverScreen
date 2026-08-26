@@ -1,12 +1,35 @@
 using System.Net;
+using Serilog;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
-public sealed class InMemorySessionService(string? tempRoot = null) : ISessionService
+public sealed class InMemorySessionService : ISessionService, IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<InMemorySessionService>();
     private readonly Lock _gate = new();
+    private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
+    private readonly string? _tempRoot;
     private ManualSessionCookies? _manualCookies;
+    private CancellationTokenSource? _validationCts;
+    private bool _isValidating;
+
+    public InMemorySessionService(string? tempRoot = null)
+        : this((Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
+    {
+    }
+
+    public InMemorySessionService(Func<IAuthenticatedHomeFeedService>? feedServiceFactory, string? tempRoot = null)
+    {
+        _feedServiceFactory = feedServiceFactory;
+        _tempRoot = tempRoot;
+    }
+
+    public InMemorySessionService(IAuthenticatedHomeFeedService feedService, string? tempRoot = null)
+        : this(() => feedService, tempRoot)
+    {
+    }
 
     public event EventHandler? SessionChanged;
 
@@ -40,7 +63,7 @@ public sealed class InMemorySessionService(string? tempRoot = null) : ISessionSe
                 string.IsNullOrWhiteSpace(_manualCookies.Content))
                 return null;
 
-            return TemporaryCookieFile.CreateLease(_manualCookies.Content, tempRoot);
+            return TemporaryCookieFile.CreateLease(_manualCookies.Content, _tempRoot);
         }
     }
 
@@ -61,6 +84,97 @@ public sealed class InMemorySessionService(string? tempRoot = null) : ISessionSe
         }
     }
 
+    public bool IsValidating
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isValidating;
+            }
+        }
+    }
+
+    public async Task<string> ValidateSessionAsync(CancellationToken cancellationToken = default)
+    {
+        Logger.Information("Starting YouTube session validation");
+        CancellationTokenSource linkedCts;
+        IAuthenticatedHomeFeedService? feedService;
+        lock (_gate)
+        {
+            var session = GetCurrentSession();
+            if (!session.IsSignedIn || !session.HasManualSession)
+                return SessionValidationFormatter.NoActiveSessionMessage;
+
+            if (_isValidating)
+                return SessionValidationFormatter.AlreadyRunningMessage;
+
+            _isValidating = true;
+            _validationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCts = _validationCts;
+            feedService = _feedServiceFactory?.Invoke();
+        }
+
+        if (feedService is null)
+        {
+            lock (_gate)
+            {
+                _isValidating = false;
+                _validationCts?.Dispose();
+                _validationCts = null;
+            }
+
+            return SessionValidationFormatter.FormatUnexpectedError();
+        }
+
+        try
+        {
+            var feedResult = await feedService.LoadFirstPageAsync(cancellationToken: linkedCts.Token)
+                .ConfigureAwait(false);
+            var isSuccess = feedResult.Status == AuthenticatedHomeFeedStatus.Success;
+            var videoCount = feedResult.FeedPage.Videos.Count;
+            var hasContinuation = !string.IsNullOrEmpty(feedResult.FeedPage.ContinuationToken);
+            var requiresAuth = feedResult.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
+                or AuthenticatedHomeFeedStatus.AuthenticationRejected;
+
+            var result = new HomeSessionValidationResult(
+                isSuccess,
+                videoCount,
+                hasContinuation,
+                requiresAuth,
+                feedResult.Status,
+                feedResult.StatusMessage);
+            return SessionValidationFormatter.FormatResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            return SessionValidationFormatter.FormatCancellation();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Unexpected error during session validation");
+            return SessionValidationFormatter.FormatUnexpectedError();
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isValidating = false;
+                _validationCts?.Dispose();
+                _validationCts = null;
+            }
+        }
+    }
+
+    public void CancelValidation()
+    {
+        lock (_gate)
+        {
+            if (_isValidating && _validationCts != null)
+                _validationCts.Cancel();
+        }
+    }
+
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {
         if (string.IsNullOrWhiteSpace(cookieContent))
@@ -76,6 +190,7 @@ public sealed class InMemorySessionService(string? tempRoot = null) : ISessionSe
 
     public void ClearSession()
     {
+        CancelValidation();
         bool changed;
         lock (_gate)
         {
@@ -85,5 +200,10 @@ public sealed class InMemorySessionService(string? tempRoot = null) : ISessionSe
 
         if (changed)
             SessionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Dispose()
+    {
+        CancelValidation();
     }
 }
