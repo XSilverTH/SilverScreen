@@ -86,16 +86,16 @@ public sealed class PlaybackStatsFormatterTests
         var markup = PlaybackStatsFormatter.FormatOverviewPageMarkup(stats);
 
         Assert.Contains("[1/4] Overview", markup);
-        Assert.Contains("FILE &amp; STREAM", markup);
+        Assert.Contains("<b>File</b>", markup);
         Assert.Contains("Sample Video Title", markup);
-        Assert.Contains("VIDEO STREAM", markup);
+        Assert.Contains("<b>Video</b>", markup);
         Assert.Contains("av01.0.08M.08", markup);
         Assert.Contains("vaapi (hw)", markup);
         Assert.Contains("1920×1080", markup);
-        Assert.Contains("AUDIO STREAM", markup);
+        Assert.Contains("<b>Audio</b>", markup);
         Assert.Contains("Opus", markup);
-        Assert.Contains("PERFORMANCE &amp; BUFFERING", markup);
-        Assert.Contains("PLAYBACK", markup);
+        Assert.Contains("<b>Performance</b>", markup);
+        Assert.Contains("<b>Playback</b>", markup);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class PlaybackStatsFormatterTests
 
         Assert.Contains("foreground=\"#e66100\"", markup);
         Assert.Contains("<span weight=\"bold\" foreground=\"#e66100\"><b>[1/4] Overview</b></span>", markup);
-        Assert.Contains("<span weight=\"bold\" foreground=\"#e66100\"><b>FILE &amp; STREAM</b></span>", markup);
+        Assert.Contains("<span weight=\"bold\" foreground=\"#e66100\"><b>File</b></span>", markup);
     }
 
     [Fact]
@@ -116,10 +116,10 @@ public sealed class PlaybackStatsFormatterTests
         var markup = PlaybackStatsFormatter.FormatPerformancePageMarkup(stats);
 
         Assert.Contains("[2/4] Performance", markup);
-        Assert.Contains("FRAME &amp; RENDERING PERFORMANCE", markup);
+        Assert.Contains("<b>Rendering</b>", markup);
         Assert.Contains("59.98 fps", markup);
-        Assert.Contains("BITRATE &amp; BANDWIDTH", markup);
-        Assert.Contains("CACHE &amp; DEMUXER BUFFER", markup);
+        Assert.Contains("<b>Bitrate</b>", markup);
+        Assert.Contains("<b>Cache</b>", markup);
     }
 
     [Fact]
@@ -129,9 +129,9 @@ public sealed class PlaybackStatsFormatterTests
         var markup = PlaybackStatsFormatter.FormatTracksPageMarkup(stats);
 
         Assert.Contains("[3/4] Tracks", markup);
-        Assert.Contains("VIDEO TRACKS", markup);
-        Assert.Contains("AUDIO TRACKS", markup);
-        Assert.Contains("SUBTITLE TRACKS", markup);
+        Assert.Contains("<b>Video</b>", markup);
+        Assert.Contains("<b>Audio</b>", markup);
+        Assert.Contains("<b>Subtitle</b>", markup);
         Assert.Contains("English [cc]", markup);
     }
 
@@ -141,11 +141,11 @@ public sealed class PlaybackStatsFormatterTests
         var stats = CreateSampleStats();
         var markup = PlaybackStatsFormatter.FormatEnginePageMarkup(stats);
 
-        Assert.Contains("[4/4] Engine", markup);
-        Assert.Contains("MEDIA BACKEND", markup);
+        Assert.Contains("[4/4] System", markup);
+        Assert.Contains("<b>Media</b>", markup);
         Assert.Contains("libmpv", markup);
         Assert.Contains("mpv 0.38.0", markup);
-        Assert.Contains("APPLICATION", markup);
+        Assert.Contains("<b>Application</b>", markup);
         Assert.Contains("SilverScreen", markup);
     }
 
@@ -155,15 +155,15 @@ public sealed class PlaybackStatsFormatterTests
         var stats = CreateSampleStats();
         var summary = PlaybackStatsFormatter.FormatFullSummary(stats);
 
-        Assert.Contains("=== SILVERSCREEN PLAYBACK STATISTICS ===", summary);
-        Assert.Contains("[FILE & STREAM]", summary);
+        Assert.Contains("=== Playback statistics ===", summary);
+        Assert.Contains("[File]", summary);
         Assert.Contains("Title: Sample Video Title", summary);
-        Assert.Contains("[VIDEO STREAM]", summary);
-        Assert.Contains("[AUDIO STREAM]", summary);
-        Assert.Contains("[PERFORMANCE & BUFFERING]", summary);
-        Assert.Contains("[PLAYBACK]", summary);
-        Assert.Contains("[TRACKS]", summary);
-        Assert.Contains("[ENGINE]", summary);
+        Assert.Contains("[Video]", summary);
+        Assert.Contains("[Audio]", summary);
+        Assert.Contains("[Performance]", summary);
+        Assert.Contains("[Playback]", summary);
+        Assert.Contains("[Tracks]", summary);
+        Assert.Contains("[Engine]", summary);
     }
 
     private static PlaybackStats CreateSampleStats()
