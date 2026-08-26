@@ -50,19 +50,20 @@ public sealed class RuntimeDependencyDiagnostics
             warnings.Add(msg);
         }
 
-        switch (preferences.PlaybackBackend)
+        if (PlaybackBackends.IsEmbedded(preferences.PlaybackBackend))
         {
-            case PlaybackBackends.ExternalMpv when
-                !_isExecutableAvailable(preferences.MpvExecutablePath):
-                var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath);
-                Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
-                warnings.Add(mpvMsg);
-                break;
-            case PlaybackBackends.EmbeddedPlayer when !_isLibMpvAvailable():
+            if (!_isLibMpvAvailable())
+            {
                 const string libMpvMsg = RuntimeDependencyGuidance.LibMpvUnavailable;
                 Logger.Warning("Startup dependency warning: {Warning}", libMpvMsg);
                 warnings.Add(libMpvMsg);
-                break;
+            }
+        }
+        else if (!_isExecutableAvailable(preferences.MpvExecutablePath))
+        {
+            var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath);
+            Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
+            warnings.Add(mpvMsg);
         }
 
         if (!_secretServiceAvailability.IsAvailable)

@@ -156,7 +156,7 @@ public sealed class PreferencesViewModel
             Shortcuts = state.Shortcuts,
 
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
-            PreferredSubtitleLanguage = current.PreferredSubtitleLanguage
+            PreferredSubtitleLanguage = state.PreferredSubtitleLanguage
         };
     }
 }

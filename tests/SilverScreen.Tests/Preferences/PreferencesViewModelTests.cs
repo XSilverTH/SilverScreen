@@ -19,6 +19,20 @@ public sealed class PreferencesViewModelTests
     }
 
     [Fact]
+    public void Save_PersistsPreferredSubtitleLanguage()
+    {
+        var service = new FakePreferencesService(new AppPreferences { PreferredSubtitleLanguage = "en" });
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with { PreferredSubtitleLanguage = "es" });
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(service.Saved);
+        Assert.Equal("es", service.Saved!.PreferredSubtitleLanguage);
+        Assert.Equal("es", result.State.PreferredSubtitleLanguage);
+    }
+
+    [Fact]
     public void Save_PersistsShortcutBindings()
     {
         var service = new FakePreferencesService(new AppPreferences());

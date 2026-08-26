@@ -80,12 +80,12 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         {
             theme_row.Selected = (uint)GetSelectionIndex(theme_model, state.Theme);
             quality_row.Selected = (uint)GetSelectionIndex(quality_model, state.VideoQuality);
-            playback_backend_row.Selected =
-                (uint)GetSelectionIndex(playback_backend_model, state.PlaybackBackend);
+            playback_backend_row.Selected = (uint)(PlaybackBackends.IsEmbedded(state.PlaybackBackend) ? 1 : 0);
             fullscreen_row.Active = state.OpenInFullscreen;
             auto_advance_next_video_row.Active = state.AutoAdvanceNextVideo;
             ((Editable)ytdlp_path_row).SetText(state.YtDlpExecutablePath);
             ((Editable)mpv_path_row).SetText(state.MpvExecutablePath);
+            ((Editable)subtitle_language_row).SetText(state.PreferredSubtitleLanguage);
             mark_watched_row.Active = state.MarkWatchedVideos;
             youtube_playback_telemetry_row.Active = state.YouTubePlaybackTelemetryEnabled;
             discord_rich_presence_row.Active = state.DiscordRichPresenceEnabled;
@@ -256,9 +256,11 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             VideoQuality = GetSelectedValue(quality_model, quality_row.Selected, "Best"),
             YtDlpExecutablePath = ((Editable)ytdlp_path_row).GetText(),
             MpvExecutablePath = ((Editable)mpv_path_row).GetText(),
-            PlaybackBackend = GetSelectedValue(playback_backend_model, playback_backend_row.Selected,
-                PlaybackBackends.ExternalMpv),
+            PlaybackBackend = playback_backend_row.Selected == 1
+                ? PlaybackBackends.EmbeddedPlayer
+                : PlaybackBackends.ExternalMpv,
             OpenInFullscreen = fullscreen_row.Active,
+            PreferredSubtitleLanguage = ((Editable)subtitle_language_row).GetText(),
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,
             MarkWatchedVideos = mark_watched_row.Active,
             YouTubePlaybackTelemetryEnabled = youtube_playback_telemetry_row.Active,

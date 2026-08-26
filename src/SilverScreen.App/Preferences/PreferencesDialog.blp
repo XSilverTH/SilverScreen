@@ -14,9 +14,7 @@ Adw.PreferencesDialog PreferencesDialog {
 
       Adw.ComboRow theme_row {
         notify => $OnRowNotify();
-        title: "Application Theme";
-        subtitle: "Select your preferred color scheme";
-
+        title: "Theme";
         model: Gtk.StringList theme_model {
           strings: [
             "System",
@@ -28,13 +26,17 @@ Adw.PreferencesDialog PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
-      title: "Search (yt-dlp)";
+      title: "Dependencies";
 
       Adw.EntryRow ytdlp_path_row {
         changed => $OnRowChanged();
-        title: "yt-dlp Executable Path";
+        title: "yt-dlp Executable path";
       }
 
+      Adw.EntryRow mpv_path_row {
+        changed => $OnRowChanged();
+        title: "MPV Executable path";
+      }
     }
   }
 
@@ -43,66 +45,96 @@ Adw.PreferencesDialog PreferencesDialog {
     icon-name: "media-playback-start-symbolic";
 
     Adw.PreferencesGroup {
-      title: "Player";
+      title: "Engine";
 
       Adw.ComboRow playback_backend_row {
         notify => $OnRowNotify();
-        title: "Playback mode";
-        subtitle: "Choose whether videos open in MPV or in SilverScreen";
-
+        title: "Playback Mode";
         model: Gtk.StringList playback_backend_model {
           strings: [
-            "External MPV",
-            "Embedded Player",
+            "MPV",
+            "Internal player",
+          ];
+        };
+      }
+
+      Adw.SwitchRow auto_advance_next_video_row {
+        notify => $OnRowNotify();
+        title: "Automatically play next video in queue";
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Resume Playback";
+
+      Adw.SwitchRow resume_playback_on_demand_row {
+        notify => $OnRowNotify();
+        title: "Offer to resume playback";
+        subtitle: "Show an on-screen prompt to jump to the last saved position";
+      }
+       
+      Adw.SwitchRow resume_playback_automatically_row {
+        notify => $OnRowNotify();
+        title: "Resume playback automatically";
+      }
+
+    }
+  }
+
+  Adw.PreferencesPage {
+    title: "Video";
+    icon-name: "video-x-generic-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "Display and Quality";
+
+      Adw.ComboRow quality_row {
+        notify => $OnRowNotify();
+        title: "Default video quality";
+
+        model: Gtk.StringList quality_model {
+          strings: [
+            "Best",
+            "1080p",
+            "720p",
+            "480p",
+            "360p",
           ];
         };
       }
 
       Adw.SwitchRow fullscreen_row {
         notify => $OnRowNotify();
-        title: "Open videos in fullscreen";
-        subtitle: "Automatically start video playback in full screen";
+        title: "Open Videos in Fullscreen";
       }
 
-      Adw.SwitchRow auto_advance_next_video_row {
-        notify => $OnRowNotify();
-        title: "Automatically play next video";
-        subtitle: "Advance to the next video in the playlist when the current video ends";
+      Adw.EntryRow subtitle_language_row {
+        changed => $OnRowChanged();
+        title: "Preferred Subtitle Language";
       }
     }
+  }
+
+  Adw.PreferencesPage {
+    title: "Sponsorblock";
+    icon-name: "media-seek-forward-symbolic";
 
     Adw.PreferencesGroup {
-      title: "Resume Playback";
-      description: "Continue previously watched videos from where you left off";
-
-      Adw.SwitchRow resume_playback_automatically_row {
-        notify => $OnRowNotify();
-        title: "Resume playback automatically";
-        subtitle: "Start videos at their last saved position";
-      }
-
-      Adw.SwitchRow resume_playback_on_demand_row {
-        notify => $OnRowNotify();
-        title: "Offer to resume playback";
-        subtitle: "Show a button to jump to your last saved position";
-      }
-    }
-
-    Adw.PreferencesGroup {
-      title: "SponsorBlock";
-      description: "Uses SponsorBlock data from https://sponsor.ajay.app/";
+      title: "Behavior";
 
       Adw.SwitchRow sponsorblock_auto_skip_row {
         notify => $OnRowNotify();
         title: "Automatically skip segments";
-        subtitle: "Seek past matching SponsorBlock segments during playback";
       }
 
       Adw.SwitchRow sponsorblock_display_row {
         notify => $OnRowNotify();
-        title: "Show segments on the timeline";
-        subtitle: "Display matching SponsorBlock segments in the embedded player's timeline";
+        title: "Show Segments on Timeline";
       }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Categories to filter";
 
       Adw.SwitchRow sponsorblock_sponsor_row {
         notify => $OnRowNotify();
@@ -144,80 +176,13 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Filler";
       }
     }
-
-    Adw.PreferencesGroup {
-      title: "MPV Configuration";
-
-      Adw.EntryRow mpv_path_row {
-        changed => $OnRowChanged();
-        title: "MPV Executable Path";
-      }
-    }
-
-    Adw.PreferencesGroup {
-      title: "Quality";
-
-      Adw.ComboRow quality_row {
-        notify => $OnRowNotify();
-        title: "Default Quality";
-        subtitle: "Preferred video resolution";
-
-        model: Gtk.StringList quality_model {
-          strings: [
-            "Best",
-            "1080p",
-            "720p",
-            "480p",
-            "360p",
-          ];
-        };
-      }
-    }
-
-    Adw.PreferencesGroup {
-      title: "YouTube";
-
-      Adw.SwitchRow mark_watched_row {
-        notify => $OnRowNotify();
-        title: "Mark watched on YouTube";
-        subtitle: "Use your signed-in session to add played videos to watch history";
-      }
-
-      Adw.SwitchRow youtube_playback_telemetry_row {
-        notify => $OnRowNotify();
-        title: "Send playback activity to YouTube";
-        subtitle: "Send live watch progress to improve recommendations; cannot be used with Mark watched on YouTube";
-      }
-    }
-
-    Adw.PreferencesGroup {
-      title: "Discord";
-
-      Adw.SwitchRow discord_rich_presence_row {
-        notify => $OnRowNotify();
-        title: "Share playback activity on Discord";
-        subtitle: "Show the current video in your Discord profile";
-      }
-    }
   }
 
   Adw.PreferencesPage {
-    title: "Shortcuts";
+    title: "Keybinds";
     icon-name: "input-keyboard-symbolic";
-
-    Adw.PreferencesGroup {
-      title: "On-Screen Display";
-
-      Adw.SwitchRow shortcut_osd_enabled_row {
-        notify => $OnRowNotify();
-        title: "Shortcut On-Screen Display";
-        subtitle: "Show visual confirmation badges when shortcuts are pressed";
-      }
-    }
-
     Adw.PreferencesGroup {
       title: "Playback and Navigation";
-      description: "Click a shortcut, then press one key. Changes apply immediately.";
 
       Adw.ActionRow shortcut_toggle_pause_row {
         title: "Play / Pause";
@@ -228,7 +193,7 @@ Adw.PreferencesDialog PreferencesDialog {
       }
 
       Adw.ActionRow shortcut_seek_backward_row {
-        title: "Seek backward 10 seconds";
+        title: "Seek backward 10s";
 
         Gtk.Button shortcut_seek_backward_button {
           label: "Unassigned";
@@ -236,7 +201,7 @@ Adw.PreferencesDialog PreferencesDialog {
       }
 
       Adw.ActionRow shortcut_seek_forward_row {
-        title: "Seek forward 10 seconds";
+        title: "Seek forward 10s";
 
         Gtk.Button shortcut_seek_forward_button {
           label: "Unassigned";
@@ -313,7 +278,7 @@ Adw.PreferencesDialog PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
-      title: "Playback Controls";
+      title: "Frame and Speed Controls";
 
       Adw.ActionRow shortcut_step_frame_backward_row {
         title: "Step frame backward";
@@ -357,7 +322,7 @@ Adw.PreferencesDialog PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
-      title: "View";
+      title: "View and Interface";
 
       Adw.ActionRow shortcut_toggle_stats_row {
         title: "Playback statistics";
@@ -382,12 +347,51 @@ Adw.PreferencesDialog PreferencesDialog {
           label: "Unassigned";
         }
       }
+
       Adw.ActionRow shortcut_toggle_fullscreen_row {
-        title: "Fullscreen";
+        title: "Toggle fullscreen";
 
         Gtk.Button shortcut_toggle_fullscreen_button {
           label: "Unassigned";
         }
+      }
+    }
+    Adw.PreferencesGroup {
+          title: "Feedback";
+    
+          Adw.SwitchRow shortcut_osd_enabled_row {
+            notify => $OnRowNotify();
+            title: "Shortcut On-Screen Display";
+          }
+        } 
+  }
+
+  Adw.PreferencesPage {
+    title: "Others";
+    icon-name: "preferences-other-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "YouTube";
+
+      Adw.SwitchRow mark_watched_row {
+        notify => $OnRowNotify();
+        title: "Mark videos as watched on YouTube";
+      }
+
+      Adw.SwitchRow youtube_playback_telemetry_row {
+        notify => $OnRowNotify();
+        title: "Send live playback activity to YouTube";
+        subtitle: "This will result in better recommendations by Youtube";
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Discord";
+
+      Adw.SwitchRow discord_rich_presence_row {
+        notify => $OnRowNotify();
+        title: "Share playback activity on Discord";
+        subtitle: "Show the currently playing video in Discord Rich Presence";
       }
     }
   }

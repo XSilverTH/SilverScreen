@@ -19,7 +19,7 @@ internal sealed class PlaybackModeRoutingService(
         var firstVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
         Logger.Information("Routing playback for video {VideoId} ({Title}) using backend {Backend}", firstVideo?.Id,
             firstVideo?.Title, backend);
-        return backend == PlaybackBackends.EmbeddedPlayer
+        return PlaybackBackends.IsEmbedded(backend)
             ? embeddedPlayer.PresentAsync(request)
             : externalMpvPlayback.PlayAsync(request);
     }
