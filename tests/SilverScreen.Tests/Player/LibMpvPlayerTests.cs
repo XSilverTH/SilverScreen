@@ -123,6 +123,95 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("loadfile|https://www.youtube.com/watch?v=dQw4w9WgXcQ|append-play", native.Commands);
     }
 
+    [Fact]
+    public void GetPlaybackStats_WhenNoMedia_ReturnsNull()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        var stats = player.GetPlaybackStats();
+        Assert.Null(stats);
+    }
+
+    [Fact]
+    public void GetPlaybackStats_ReturnsPopulatedStatsFromNativeProperties()
+    {
+        var native = new RecordingNative();
+        native.ReadProperties["media-title"] = "Test Title";
+        native.ReadProperties["file-format"] = "matroska,webm";
+        native.ReadProperties["demuxer"] = "lavf";
+        native.ReadProperties["path"] = "https://example.com/video";
+        native.ReadProperties["file-size"] = "10485760";
+        native.ReadProperties["video-codec"] = "av1";
+        native.ReadProperties["video-decoder-name"] = "libdav1d";
+        native.ReadProperties["hwdec-current"] = "vaapi";
+        native.ReadProperties["video-params/w"] = "1920";
+        native.ReadProperties["video-params/h"] = "1080";
+        native.ReadProperties["dwidth"] = "1920";
+        native.ReadProperties["dheight"] = "1080";
+        native.ReadProperties["video-params/aspect"] = "1.777778";
+        native.ReadProperties["container-fps"] = "60";
+        native.ReadProperties["estimated-vf-fps"] = "59.98";
+        native.ReadProperties["video-bitrate"] = "4000000";
+        native.ReadProperties["video-params/pixelformat"] = "yuv420p";
+        native.ReadProperties["video-params/colormatrix"] = "bt709";
+        native.ReadProperties["video-params/colorlevels"] = "limited";
+        native.ReadProperties["audio-codec-name"] = "opus";
+        native.ReadProperties["audio-params/samplerate"] = "48000";
+        native.ReadProperties["audio-params/channels"] = "stereo";
+        native.ReadProperties["audio-params/channel-count"] = "2";
+        native.ReadProperties["audio-bitrate"] = "160000";
+        native.ReadProperties["frame-drop-count"] = "3";
+        native.ReadProperties["vo-drop-frame-count"] = "1";
+        native.ReadProperties["mistimed-frame-count"] = "0";
+        native.ReadProperties["avsync"] = "0.002";
+        native.ReadProperties["demuxer-cache-duration"] = "15.5";
+        native.ReadProperties["demuxer-cache-state/bytes"] = "5242880";
+        native.ReadProperties["percent-pos"] = "42.5";
+        native.ReadProperties["mpv-version"] = "mpv 0.38.0";
+        native.ReadProperties["ffmpeg-version"] = "7.1";
+        native.ReadProperties["track-list/count"] = "1";
+        native.ReadProperties["track-list/0/type"] = "video";
+        native.ReadProperties["track-list/0/id"] = "1";
+        native.ReadProperties["track-list/0/codec"] = "av1";
+        native.ReadProperties["track-list/0/demux-w"] = "1920";
+        native.ReadProperties["track-list/0/demux-h"] = "1080";
+        native.ReadProperties["track-list/0/selected"] = "yes";
+
+        using var player = new LibMpvPlayer(native, action => action());
+        var handleFileLoaded = typeof(LibMpvPlayer).GetMethod("HandleFileLoaded",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(handleFileLoaded);
+        handleFileLoaded.Invoke(player, null);
+
+        var stats = player.GetPlaybackStats();
+        Assert.NotNull(stats);
+        Assert.Equal("Test Title", stats.Title);
+        Assert.Equal("matroska,webm", stats.FileFormat);
+        Assert.Equal("lavf", stats.Demuxer);
+        Assert.Equal(10485760, stats.FileSize);
+        Assert.Equal("av1", stats.VideoCodec);
+        Assert.Equal("libdav1d", stats.VideoDecoder);
+        Assert.Equal("vaapi", stats.HwDec);
+        Assert.Equal(1920, stats.VideoWidth);
+        Assert.Equal(1080, stats.VideoHeight);
+        Assert.Equal(60, stats.ContainerFps);
+        Assert.Equal(4000000, stats.VideoBitrate);
+        Assert.Equal("opus", stats.AudioCodec);
+        Assert.Equal(48000, stats.AudioSampleRate);
+        Assert.Equal("stereo", stats.AudioChannelLayout);
+        Assert.Equal(160000, stats.AudioBitrate);
+        Assert.Equal(3, stats.DroppedFrames);
+        Assert.Equal(15.5, stats.CacheDuration);
+        Assert.Equal(5242880, stats.CacheBytes);
+        Assert.Equal(42.5, stats.PercentPosition);
+        Assert.Equal("mpv 0.38.0", stats.MpvVersion);
+        Assert.Equal("7.1", stats.FfmpegVersion);
+        Assert.Single(stats.Tracks);
+        Assert.Equal("av1", stats.Tracks[0].Codec);
+        Assert.True(stats.Tracks[0].IsSelected);
+    }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);

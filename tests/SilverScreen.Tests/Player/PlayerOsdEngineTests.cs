@@ -170,6 +170,21 @@ public class PlayerOsdEngineTests
     }
 
     [Fact]
+    public void ProcessStats_ReturnsExpectedModel()
+    {
+        var engine = new PlayerOsdEngine();
+
+        var open = engine.ProcessStats(true);
+        Assert.Equal("utilities-system-monitor-symbolic", open.IconName);
+        Assert.Equal("Playback Stats: Open", open.Text);
+        Assert.Equal(OsdActionKind.Stats, engine.CurrentActionKind);
+
+        var closed = engine.ProcessStats(false);
+        Assert.Equal("utilities-system-monitor-symbolic", closed.IconName);
+        Assert.Equal("Playback Stats: Closed", closed.Text);
+    }
+
+    [Fact]
     public void Reset_ClearsCurrentActionAndAccumulatedState()
     {
         var engine = new PlayerOsdEngine();

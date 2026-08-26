@@ -175,6 +175,7 @@ public sealed class PreferencesTests : IDisposable
         var service = new FilePreferencesService(_tempFilePath);
 
         Assert.Equal(["space", "k"], service.GetPreferences().Shortcuts.TogglePause);
+        Assert.Equal(["i", "I"], service.GetPreferences().Shortcuts.ToggleStats);
         Assert.Equal(["Return", "KP_Enter"], service.GetPreferences().Shortcuts.ResumeOrSkip);
     }
 
@@ -274,7 +275,8 @@ public sealed class PreferencesTests : IDisposable
                                         "VolumeDown": ["Down"],
                                         "SeekToBeginning": ["Home"],
                                         "ReturnToShell": ["Escape"],
-                                        "ToggleVideoInfo": ["i"],
+                                        "ToggleVideoInfo": ["d"],
+                                        "ToggleStats": ["i", "I"],
                                         "SpeedDecrease": ["[", "{"],
                                         "SpeedIncrease": ["]", "}"],
                                         "NextVideo": [">"],
@@ -319,7 +321,8 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(["Down"], loaded.Shortcuts.VolumeDown);
         Assert.Equal(["Home"], loaded.Shortcuts.SeekToBeginning);
         Assert.Equal(["Escape"], loaded.Shortcuts.ReturnToShell);
-        Assert.Equal(["i"], loaded.Shortcuts.ToggleVideoInfo);
+        Assert.Equal(["d"], loaded.Shortcuts.ToggleVideoInfo);
+        Assert.Equal(["i", "I"], loaded.Shortcuts.ToggleStats);
         Assert.Equal(["[", "{"], loaded.Shortcuts.SpeedDecrease);
         Assert.Equal(["]", "}"], loaded.Shortcuts.SpeedIncrease);
         Assert.Equal([">"], loaded.Shortcuts.NextVideo);

@@ -578,7 +578,31 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           }
         }
       }
+      [overlay]
+      Gtk.Revealer player_stats_revealer {
+        halign: start;
+        valign: start;
+        margin-top: 18;
+        margin-start: 18;
+        margin-end: 18;
+        margin-bottom: 18;
+        reveal-child: false;
+        transition-type: crossfade;
+        transition-duration: 150;
+        can-target: false;
 
+        child: Gtk.Label player_stats_label {
+          xalign: 0;
+          yalign: 0;
+          wrap: false;
+          use-markup: true;
+          can-target: false;
+
+          styles [
+            "player-stats-overlay",
+          ]
+        };
+      }
       [overlay]
       Gtk.Button player_info_backdrop {
         visible: false;

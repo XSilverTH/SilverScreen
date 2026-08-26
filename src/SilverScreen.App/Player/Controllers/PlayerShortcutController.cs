@@ -17,6 +17,7 @@ public static class PlayerShortcutActions
     public const string SeekToBeginning = nameof(PlayerShortcutBindings.SeekToBeginning);
     public const string ReturnToShell = nameof(PlayerShortcutBindings.ReturnToShell);
     public const string ToggleVideoInfo = nameof(PlayerShortcutBindings.ToggleVideoInfo);
+    public const string ToggleStats = nameof(PlayerShortcutBindings.ToggleStats);
     public const string SpeedDecrease = nameof(PlayerShortcutBindings.SpeedDecrease);
     public const string SpeedIncrease = nameof(PlayerShortcutBindings.SpeedIncrease);
     public const string NextVideo = nameof(PlayerShortcutBindings.NextVideo);
@@ -34,6 +35,8 @@ internal sealed class PlayerShortcutController : IDisposable
     private readonly Dictionary<uint, string> _shortcutMap = [];
     private readonly Widget _viewWidget;
     private bool _disposed;
+    public Func<uint, bool>? KeyInterceptor { get; set; }
+
 
     private EventControllerKey? _keyboardController;
     private Widget? _keyboardRoot;
@@ -85,6 +88,7 @@ internal sealed class PlayerShortcutController : IDisposable
         Bind(PlayerShortcutActions.SeekToBeginning, shortcuts.SeekToBeginning);
         Bind(PlayerShortcutActions.ReturnToShell, shortcuts.ReturnToShell);
         Bind(PlayerShortcutActions.ToggleVideoInfo, shortcuts.ToggleVideoInfo);
+        Bind(PlayerShortcutActions.ToggleStats, shortcuts.ToggleStats);
         Bind(PlayerShortcutActions.SpeedDecrease, shortcuts.SpeedDecrease);
         Bind(PlayerShortcutActions.SpeedIncrease, shortcuts.SpeedIncrease);
         Bind(PlayerShortcutActions.NextVideo, shortcuts.NextVideo);
@@ -126,8 +130,8 @@ internal sealed class PlayerShortcutController : IDisposable
 
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (_disposed || !_hasMedia()) return false;
         var keyval = Functions.KeyvalToLower(args.Keyval);
+        if (KeyInterceptor?.Invoke(keyval) == true) return true;
         if (!_shortcutMap.TryGetValue(keyval, out var actionName)) return false;
         if (!_actionHandlers.TryGetValue(actionName, out var handlers) || handlers.Count == 0) return false;
 

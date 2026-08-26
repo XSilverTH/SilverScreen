@@ -15,6 +15,7 @@ public sealed record PlayerShortcutBindings
     public EquatableArray<string> SeekToBeginning { get; set; } = ["0", "Home"];
     public EquatableArray<string> ReturnToShell { get; set; } = ["Escape"];
     public EquatableArray<string> ToggleVideoInfo { get; set; } = ["d"];
+    public EquatableArray<string> ToggleStats { get; set; } = ["i", "I"];
     public EquatableArray<string> SpeedDecrease { get; set; } = ["bracketleft", "braceleft"];
     public EquatableArray<string> SpeedIncrease { get; set; } = ["bracketright", "braceright"];
     public EquatableArray<string> NextVideo { get; set; } = ["n"];

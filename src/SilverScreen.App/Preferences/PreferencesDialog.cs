@@ -45,7 +45,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ["VolumeDown"] = shortcut_volume_down_button,
             ["SeekToBeginning"] = shortcut_seek_to_beginning_button,
             ["ReturnToShell"] = shortcut_return_to_shell_button,
+            ["ToggleStats"] = shortcut_toggle_stats_button,
             ["ToggleVideoInfo"] = shortcut_toggle_video_info_button,
+            ["ToggleQueue"] = shortcut_toggle_queue_button,
             ["SpeedDecrease"] = shortcut_speed_decrease_button,
             ["SpeedIncrease"] = shortcut_speed_increase_button,
             ["NextVideo"] = shortcut_next_video_button,
@@ -115,7 +117,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         SetShortcut("VolumeDown", shortcuts.VolumeDown);
         SetShortcut("SeekToBeginning", shortcuts.SeekToBeginning);
         SetShortcut("ReturnToShell", shortcuts.ReturnToShell);
+        SetShortcut("ToggleStats", shortcuts.ToggleStats);
         SetShortcut("ToggleVideoInfo", shortcuts.ToggleVideoInfo);
+        SetShortcut("ToggleQueue", shortcuts.ToggleQueue);
         SetShortcut("SpeedDecrease", shortcuts.SpeedDecrease);
         SetShortcut("SpeedIncrease", shortcuts.SpeedIncrease);
         SetShortcut("NextVideo", shortcuts.NextVideo);
@@ -288,7 +292,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             VolumeDown = ReadShortcut("VolumeDown"),
             SeekToBeginning = ReadShortcut("SeekToBeginning"),
             ReturnToShell = ReadShortcut("ReturnToShell"),
+            ToggleStats = ReadShortcut("ToggleStats"),
             ToggleVideoInfo = ReadShortcut("ToggleVideoInfo"),
+            ToggleQueue = ReadShortcut("ToggleQueue"),
             SpeedDecrease = ReadShortcut("SpeedDecrease"),
             SpeedIncrease = ReadShortcut("SpeedIncrease"),
             NextVideo = ReadShortcut("NextVideo"),

@@ -13,6 +13,7 @@ public enum OsdActionKind
     Subtitles,
     Queue,
     VideoInfo,
+    Stats,
     Fullscreen,
     NextVideo,
     PreviousVideo,
@@ -105,6 +106,12 @@ public sealed class PlayerOsdEngine(
     {
         RecordAction(OsdActionKind.VideoInfo);
         return new OsdDisplayModel("info-symbolic", isOpen ? "Video Info Open" : "Video Info Closed");
+    }
+
+    public OsdDisplayModel ProcessStats(bool isOpen)
+    {
+        RecordAction(OsdActionKind.Stats);
+        return new OsdDisplayModel("utilities-system-monitor-symbolic", isOpen ? "Playback Stats: Open" : "Playback Stats: Closed");
     }
 
     public OsdDisplayModel ProcessFullscreen(bool isFullscreen)

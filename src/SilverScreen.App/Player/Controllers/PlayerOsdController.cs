@@ -90,6 +90,13 @@ internal sealed class PlayerOsdController : IDisposable
         var model = _engine.ProcessVideoInfo(isOpen);
         ApplyAndScheduleHide(model);
     }
+    public void ShowStats(bool isOpen)
+    {
+        if (!_enabled || _disposed) return;
+        var model = _engine.ProcessStats(isOpen);
+        ApplyAndScheduleHide(model);
+    }
+
 
     public void ShowFullscreen(bool isFullscreen)
     {

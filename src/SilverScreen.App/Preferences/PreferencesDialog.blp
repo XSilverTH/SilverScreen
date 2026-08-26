@@ -359,6 +359,14 @@ Adw.PreferencesDialog PreferencesDialog {
     Adw.PreferencesGroup {
       title: "View";
 
+      Adw.ActionRow shortcut_toggle_stats_row {
+        title: "Playback statistics";
+
+        Gtk.Button shortcut_toggle_stats_button {
+          label: "Unassigned";
+        }
+      }
+
       Adw.ActionRow shortcut_toggle_video_info_row {
         title: "Video information";
 
@@ -367,6 +375,13 @@ Adw.PreferencesDialog PreferencesDialog {
         }
       }
 
+      Adw.ActionRow shortcut_toggle_queue_row {
+        title: "Toggle queue";
+
+        Gtk.Button shortcut_toggle_queue_button {
+          label: "Unassigned";
+        }
+      }
       Adw.ActionRow shortcut_toggle_fullscreen_row {
         title: "Fullscreen";
 
