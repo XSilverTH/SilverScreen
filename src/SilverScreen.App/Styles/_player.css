@@ -549,3 +549,35 @@ button.player-info-cue-button:focus-visible .player-info-cue-icon,
 .player-channel-button:focus-visible {
     background-color: alpha(#ffffff, 0.12);
 }
+
+/* Player Shortcut On-Screen Display (OSD) Badge */
+.player-osd-revealer {
+    margin-bottom: 124px;
+    transition: margin-bottom 250ms ease-out;
+}
+
+.player-osd-revealer.player-osd-chrome-hidden {
+    margin-bottom: 32px;
+}
+
+.player-osd-badge {
+    background-color: alpha(#1e1e1e, 0.90);
+    border: 1px solid alpha(#ffffff, 0.16);
+    border-radius: 9999px;
+    padding: 10px 20px;
+    box-shadow: 0 6px 24px alpha(#000000, 0.6);
+    min-height: 24px;
+}
+
+.player-osd-icon {
+    color: #ffffff;
+    -gtk-icon-size: 20px;
+}
+
+.player-osd-label {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    font-feature-settings: "tnum";
+    letter-spacing: 0.2px;
+}

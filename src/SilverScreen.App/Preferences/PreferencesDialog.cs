@@ -91,6 +91,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             sponsorblock_display_row.Active = state.SponsorBlockSegmentDisplayEnabled;
             resume_playback_automatically_row.Active = state.ResumePlaybackAutomatically;
             resume_playback_on_demand_row.Active = state.ResumePlaybackOnDemand;
+            shortcut_osd_enabled_row.Active = state.ShortcutOsdEnabled;
             ApplyShortcuts(state.Shortcuts);
 
             foreach (var (category, row) in _sponsorBlockCategoryRows)
@@ -262,6 +263,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             SponsorBlockSegmentDisplayEnabled = sponsorblock_display_row.Active,
             ResumePlaybackAutomatically = resume_playback_automatically_row.Active,
             ResumePlaybackOnDemand = resume_playback_on_demand_row.Active,
+            ShortcutOsdEnabled = shortcut_osd_enabled_row.Active,
             Shortcuts = CreateShortcutBindings(),
             SponsorBlockCategories =
             [

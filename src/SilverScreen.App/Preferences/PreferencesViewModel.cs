@@ -20,6 +20,7 @@ public sealed record PreferencesEditorState
     public bool SponsorBlockSegmentDisplayEnabled { get; init; } = true;
     public bool ResumePlaybackAutomatically { get; init; }
     public bool ResumePlaybackOnDemand { get; init; }
+    public bool ShortcutOsdEnabled { get; init; } = true;
     public PlayerShortcutBindings Shortcuts { get; init; } = new();
 
 
@@ -124,6 +125,7 @@ public sealed class PreferencesViewModel
             SponsorBlockSegmentDisplayEnabled = preferences.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = preferences.ResumePlaybackOnDemand,
+            ShortcutOsdEnabled = preferences.ShortcutOsdEnabled,
             Shortcuts = preferences.Shortcuts,
 
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
@@ -150,6 +152,7 @@ public sealed class PreferencesViewModel
             SponsorBlockSegmentDisplayEnabled = state.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,
             ResumePlaybackOnDemand = state.ResumePlaybackOnDemand,
+            ShortcutOsdEnabled = state.ShortcutOsdEnabled,
             Shortcuts = state.Shortcuts,
 
             SponsorBlockCategories = [.. state.SponsorBlockCategories],

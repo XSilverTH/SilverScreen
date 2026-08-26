@@ -52,14 +52,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerSponsorBlockController _sponsorBlockController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
+    private readonly PlayerOsdController _osdController;
 
     private string? _commentsVideoId;
     private bool _disposed;
     private bool _rendererReady;
     private double _speed = 1;
+    private bool _isPaused = true;
+    private double _volume = 100;
+    private bool _isMuted;
     private bool _syncingQueue;
     private bool _updatingControls;
-
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
     {
@@ -118,6 +121,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.StateChanged += OnStateChanged;
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
+        _osdController = new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label);
         _chromeController = new PlayerChromeController(
             Widget,
             player_header_bar,
@@ -125,17 +129,53 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_controls,
             () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
             () => _chapterOverlay.Layout(),
-            UpdatePointer);
-        _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia, RegisterActivity);
-        _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () => _player.TogglePause());
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () => SeekRelative(-10));
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekForward, () => SeekRelative(10));
+            UpdatePointer,
+            visible => _osdController.SetChromeVisible(visible));
+        _osdController.SetChromeVisible(true);
+        _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia);
+        _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
+        {
+            _isPaused = !_isPaused;
+            _player.TogglePause();
+            _osdController.ShowPlayPause(_isPaused);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () =>
+        {
+            SeekRelative(-10);
+            _osdController.ShowSeek(-10);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.SeekForward, () =>
+        {
+            SeekRelative(10);
+            _osdController.ShowSeek(10);
+        });
         _shortcutController.RegisterAction(PlayerShortcutActions.StepFrameBackward, () => _player.StepFrame(false));
         _shortcutController.RegisterAction(PlayerShortcutActions.StepFrameForward, () => _player.StepFrame(true));
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleMute, () => _player.ToggleMute());
-        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeUp, () => _player.AdjustVolume(5));
-        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeDown, () => _player.AdjustVolume(-5));
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekToBeginning, () => SeekAbsolute(0));
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleMute, () =>
+        {
+            _isMuted = !_isMuted;
+            _player.ToggleMute();
+            _osdController.ShowVolume(_volume, _isMuted);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeUp, () =>
+        {
+            _volume = Math.Clamp(_volume + 5, 0, 100);
+            _isMuted = false;
+            _player.AdjustVolume(5);
+            _osdController.ShowVolume(_volume, _isMuted);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeDown, () =>
+        {
+            _volume = Math.Clamp(_volume - 5, 0, 100);
+            _isMuted = false;
+            _player.AdjustVolume(-5);
+            _osdController.ShowVolume(_volume, _isMuted);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.SeekToBeginning, () =>
+        {
+            SeekAbsolute(0);
+            _osdController.ShowSeekToBeginning();
+        });
         _shortcutController.RegisterAction(PlayerShortcutActions.ReturnToShell, () =>
         {
             if (_timelineController.IsScrubbing) _timelineController.CancelScrubbing();
@@ -144,20 +184,52 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             else if (_infoPanel.IsOpen) _infoPanel.Close();
             else ReturnToShell();
         });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleQueue,
-            () => player_queue_button.Active = !player_queue_button.Active);
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleVideoInfo,
-            () => _infoPanel.Toggle(_session.CurrentVideo));
-        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () => AdjustSpeed(-1));
-        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedIncrease, () => AdjustSpeed(1));
-        _shortcutController.RegisterAction(PlayerShortcutActions.NextVideo, () => _player.MovePlaylist(true));
-        _shortcutController.RegisterAction(PlayerShortcutActions.PreviousVideo, () => _player.MovePlaylist(false));
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleFullscreen, ToggleFullscreen);
-        _shortcutController.RegisterAction(PlayerShortcutActions.PreferredSubtitle, ShowPreferredSubtitle);
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleQueue, () =>
+        {
+            player_queue_button.Active = !player_queue_button.Active;
+            _osdController.ShowQueue(player_queue_button.Active);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleVideoInfo, () =>
+        {
+            _infoPanel.Toggle(_session.CurrentVideo);
+            _osdController.ShowVideoInfo(_infoPanel.IsOpen);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () =>
+        {
+            var speed = AdjustSpeed(-1);
+            _osdController.ShowSpeed(speed);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedIncrease, () =>
+        {
+            var speed = AdjustSpeed(1);
+            _osdController.ShowSpeed(speed);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.NextVideo, () =>
+        {
+            _player.MovePlaylist(true);
+            _osdController.ShowNextVideo();
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.PreviousVideo, () =>
+        {
+            _player.MovePlaylist(false);
+            _osdController.ShowPreviousVideo();
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleFullscreen, () =>
+        {
+            var isFullscreen = ToggleFullscreen();
+            _osdController.ShowFullscreen(isFullscreen);
+        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.PreferredSubtitle, () =>
+        {
+            var state = ShowPreferredSubtitle();
+            _osdController.ShowSubtitles(state);
+        });
         _shortcutController.RegisterAction(PlayerShortcutActions.ResumeOrSkip, () =>
         {
-            if (!_resumeController.TryResume())
-                _sponsorBlockController.TrySkipManualSegment();
+            if (_resumeController.TryResume())
+                _osdController.ShowResumed();
+            else if (_sponsorBlockController.TrySkipManualSegment())
+                _osdController.ShowSkippedSponsor();
         });
         _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
         _shortcutController.Attach();
@@ -171,7 +243,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _engagement.Dispose();
         _sponsorBlockController.Dispose();
         _resumeController.Dispose();
-
+        _osdController.Dispose();
         _chapterOverlay.Dispose();
         _preferences.PreferencesChanged -= OnPreferencesChanged;
         _chromeController.Dispose();
@@ -302,15 +374,24 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.SeekRelative(offset);
     }
 
-    private void AdjustSpeed(int direction)
+    private double AdjustSpeed(int direction)
     {
-        _player.SetSpeed(Math.Clamp(SnapPlaybackSpeed(_speed) + direction * PlaybackSpeedIncrement,
-            MinimumPlaybackSpeed, MaximumPlaybackSpeed));
+        var newSpeed = Math.Clamp(SnapPlaybackSpeed(_speed) + direction * PlaybackSpeedIncrement,
+            MinimumPlaybackSpeed, MaximumPlaybackSpeed);
+        _speed = newSpeed;
+        _player.SetSpeed(newSpeed);
+        return newSpeed;
     }
 
-    private void ToggleFullscreen()
+    private bool ToggleFullscreen()
     {
-        if (Widget.GetRoot() is Window window) window.Fullscreened = !window.Fullscreened;
+        if (Widget.GetRoot() is Window window)
+        {
+            window.Fullscreened = !window.Fullscreened;
+            return window.Fullscreened;
+        }
+
+        return false;
     }
 
     private void RegisterActivity()
@@ -439,9 +520,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         ShowPreferredSubtitle();
     }
 
-    private void ShowPreferredSubtitle()
+    private string ShowPreferredSubtitle()
     {
-        _subtitleController.ShowPreferredSubtitle();
+        return _subtitleController.ShowPreferredSubtitle();
     }
 
     private void UpdatePointer(double x, double y)
@@ -535,6 +616,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (_disposed) return;
         _speed = state.Speed;
+        _isPaused = state.IsPaused;
+        _volume = state.Volume;
+        _isMuted = state.IsMuted;
         _session.UpdatePlayback(state);
 
         SetLoading(state.IsLoading);
@@ -600,6 +684,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetLoading(false);
         player_channel_label.SetText($"Embedded playback failed: {detail}");
         _timelineController.Reset();
+        _osdController.HideImmediate();
         player_play_pause_button.SetIconName("media-playback-start-symbolic");
         _engagement.Clear();
         _sponsorBlockController.Clear();
@@ -625,6 +710,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnSessionEnded()
     {
         _timelineController.Reset();
+        _osdController.HideImmediate();
         _infoPanel.Close();
         _infoPanel.SetVideo(null);
         player_queue_controls.SetVisible(false);
@@ -651,6 +737,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void SetControls(double volume, double speed, string quality)
     {
         _updatingControls = true;
+        _volume = volume;
+        _speed = speed;
+        _isMuted = false;
         try
         {
             player_volume_scale.SetValue(volume);

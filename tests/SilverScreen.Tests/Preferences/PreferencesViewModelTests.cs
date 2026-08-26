@@ -32,6 +32,20 @@ public sealed class PreferencesViewModelTests
         Assert.Equal(["Pause"], result.State.Shortcuts.TogglePause);
     }
 
+    [Fact]
+    public void Save_PersistsShortcutOsdEnabled()
+    {
+        var service = new FakePreferencesService(new AppPreferences());
+        var viewModel = new PreferencesViewModel(service);
+        Assert.True(viewModel.EditorState.ShortcutOsdEnabled);
+
+        var result = viewModel.Save(viewModel.EditorState with { ShortcutOsdEnabled = false });
+
+        Assert.True(result.Succeeded);
+        Assert.False(service.Saved!.ShortcutOsdEnabled);
+        Assert.False(result.State.ShortcutOsdEnabled);
+    }
+
 
     [Fact]
     public void Save_WhenMarkWatchedIsEnabled_DisablesTelemetry()

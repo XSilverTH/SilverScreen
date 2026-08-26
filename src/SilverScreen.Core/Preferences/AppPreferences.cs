@@ -20,6 +20,7 @@ public sealed record AppPreferences
     public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
     public bool ResumePlaybackAutomatically { get; set; }
     public bool ResumePlaybackOnDemand { get; set; }
+    public bool ShortcutOsdEnabled { get; set; } = true;
     public PlayerShortcutBindings Shortcuts { get; set; } = new();
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =

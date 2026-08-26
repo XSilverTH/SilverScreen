@@ -931,6 +931,49 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           };
         }
       }
+
+      [overlay]
+      Gtk.Revealer player_osd_revealer {
+        halign: center;
+        valign: end;
+        reveal-child: false;
+        transition-type: crossfade;
+        transition-duration: 250;
+        can-target: false;
+
+        styles [
+          "player-osd-revealer",
+        ]
+
+        child: Gtk.Box player_osd_box {
+          orientation: horizontal;
+          spacing: 10;
+          halign: center;
+          valign: center;
+
+          styles [
+            "osd",
+            "player-osd-badge",
+          ]
+
+          Gtk.Image player_osd_icon {
+            icon-name: "media-playback-pause-symbolic";
+            pixel-size: 20;
+
+            styles [
+              "player-osd-icon",
+            ]
+          }
+
+          Gtk.Label player_osd_label {
+            label: "Paused";
+
+            styles [
+              "player-osd-label",
+            ]
+          }
+        };
+      }
     };
   };
 }

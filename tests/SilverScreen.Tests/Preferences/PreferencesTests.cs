@@ -70,6 +70,7 @@ public sealed class PreferencesTests : IDisposable
             SponsorBlockSegmentDisplayEnabled = false,
             ResumePlaybackAutomatically = true,
             ResumePlaybackOnDemand = false,
+            ShortcutOsdEnabled = false,
             Shortcuts = new PlayerShortcutBindings
             {
                 TogglePause = ["Pause"],
@@ -102,6 +103,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.False(loaded.SponsorBlockSegmentDisplayEnabled);
         Assert.True(loaded.ResumePlaybackAutomatically);
         Assert.False(loaded.ResumePlaybackOnDemand);
+        Assert.False(loaded.ShortcutOsdEnabled);
         Assert.Equal([SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro], loaded.SponsorBlockCategories);
     }
 
@@ -147,6 +149,22 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(1, events);
         var secondService = new FilePreferencesService(_tempFilePath);
         Assert.True(secondService.GetPreferences().ResumePlaybackOnDemand);
+    }
+
+    [Fact]
+    public void SavePreferences_WhenOnlyShortcutOsdEnabledChanges_PersistsAndRaisesEvent()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        service.SavePreferences(new AppPreferences { ShortcutOsdEnabled = true });
+
+        var events = 0;
+        service.PreferencesChanged += (_, _) => events++;
+
+        service.SavePreferences(new AppPreferences { ShortcutOsdEnabled = false });
+
+        Assert.Equal(1, events);
+        var secondService = new FilePreferencesService(_tempFilePath);
+        Assert.False(secondService.GetPreferences().ShortcutOsdEnabled);
     }
 
     [Fact]

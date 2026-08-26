@@ -206,6 +206,16 @@ Adw.PreferencesDialog PreferencesDialog {
     icon-name: "input-keyboard-symbolic";
 
     Adw.PreferencesGroup {
+      title: "On-Screen Display";
+
+      Adw.SwitchRow shortcut_osd_enabled_row {
+        notify => $OnRowNotify();
+        title: "Shortcut On-Screen Display";
+        subtitle: "Show visual confirmation badges when shortcuts are pressed";
+      }
+    }
+
+    Adw.PreferencesGroup {
       title: "Playback and Navigation";
       description: "Click a shortcut, then press one key. Changes apply immediately.";
 

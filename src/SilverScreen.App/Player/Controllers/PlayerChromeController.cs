@@ -15,6 +15,7 @@ internal sealed class PlayerChromeController : IDisposable
     private readonly EventControllerMotion _motionController;
     private readonly Action? _onActivity;
     private readonly Action<double, double>? _onPointerMoved;
+    private readonly Action<bool>? _onControlsVisibilityChanged;
     private readonly Widget _playerControls;
 
     private readonly Widget _viewWidget;
@@ -32,7 +33,8 @@ internal sealed class PlayerChromeController : IDisposable
         Widget playerControls,
         Func<bool> hasOpenPopover,
         Action? onActivity = null,
-        Action<double, double>? onPointerMoved = null)
+        Action<double, double>? onPointerMoved = null,
+        Action<bool>? onControlsVisibilityChanged = null)
     {
         _viewWidget = viewWidget;
         _headerBar = headerBar;
@@ -41,7 +43,7 @@ internal sealed class PlayerChromeController : IDisposable
 
         _onActivity = onActivity;
         _onPointerMoved = onPointerMoved;
-
+        _onControlsVisibilityChanged = onControlsVisibilityChanged;
         _motionController = EventControllerMotion.New();
         _motionController.SetPropagationPhase(PropagationPhase.Capture);
         _motionController.OnMotion += OnMotion;
@@ -114,6 +116,7 @@ internal sealed class PlayerChromeController : IDisposable
         SetControlVisible(_headerBar, visible);
         SetControlVisible(_centerControls, visible);
         SetControlVisible(_playerControls, visible);
+        _onControlsVisibilityChanged?.Invoke(visible);
         if (!visible) _viewWidget.GrabFocus();
     }
 

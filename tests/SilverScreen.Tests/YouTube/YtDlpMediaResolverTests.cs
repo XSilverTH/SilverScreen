@@ -26,7 +26,7 @@ public sealed class YtDlpMediaResolverTests
                     "vcodec": "none",
                     "acodec": "mp4a.40.2",
                     "abr": 128,
-                    "url": "https://googlevideo.com/audio140?expire=1787720000"
+                    "url": "https://googlevideo.com/audio140?expire=2000000000"
                 },
                 {
                     "format_id": "137",
@@ -35,7 +35,7 @@ public sealed class YtDlpMediaResolverTests
                     "height": 1080,
                     "fps": 30,
                     "tbr": 4000,
-                    "url": "https://googlevideo.com/video1080?expire=1787720000"
+                    "url": "https://googlevideo.com/video1080?expire=2000000000"
                 },
                 {
                     "format_id": "136",
@@ -44,7 +44,7 @@ public sealed class YtDlpMediaResolverTests
                     "height": 720,
                     "fps": 30,
                     "tbr": 2000,
-                    "url": "https://googlevideo.com/video720?expire=1787720000"
+                    "url": "https://googlevideo.com/video720?expire=2000000000"
                 },
                 {
                     "format_id": "18",
@@ -53,7 +53,7 @@ public sealed class YtDlpMediaResolverTests
                     "height": 360,
                     "fps": 30,
                     "tbr": 600,
-                    "url": "https://googlevideo.com/muxed360?expire=1787720000"
+                    "url": "https://googlevideo.com/muxed360?expire=2000000000"
                 }
             ]
         }
@@ -73,8 +73,8 @@ public sealed class YtDlpMediaResolverTests
         var mediaResult = await resolver.ResolveMediaAsync("abc12345678");
         Assert.True(mediaResult.IsSuccess);
         Assert.NotNull(mediaResult.Media);
-        Assert.Equal("https://googlevideo.com/video1080?expire=1787720000", mediaResult.Media.VideoUrl);
-        Assert.Equal("https://googlevideo.com/audio140?expire=1787720000", mediaResult.Media.AudioUrl);
+        Assert.Equal("https://googlevideo.com/video1080?expire=2000000000", mediaResult.Media.VideoUrl);
+        Assert.Equal("https://googlevideo.com/audio140?expire=2000000000", mediaResult.Media.AudioUrl);
         Assert.Equal(1, runner.ExecutionCount);
 
         // 2. Get video details (details panel path)
@@ -102,8 +102,8 @@ public sealed class YtDlpMediaResolverTests
         var mediaResult = await resolver.ResolveMediaAsync("abc12345678");
         Assert.True(mediaResult.IsSuccess);
         Assert.NotNull(mediaResult.Media);
-        Assert.Equal("https://googlevideo.com/video720?expire=1787720000", mediaResult.Media.VideoUrl);
-        Assert.Equal("https://googlevideo.com/audio140?expire=1787720000", mediaResult.Media.AudioUrl);
+        Assert.Equal("https://googlevideo.com/video720?expire=2000000000", mediaResult.Media.VideoUrl);
+        Assert.Equal("https://googlevideo.com/audio140?expire=2000000000", mediaResult.Media.AudioUrl);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public sealed class YtDlpMediaResolverTests
     public async Task StaleExpiredMediaTriggersReExtraction()
     {
         // Expired timestamp: 1700000000 (past)
-        var expiredJson = SampleJson.Replace("1787720000", "1700000000");
+        var expiredJson = SampleJson.Replace("2000000000", "1700000000");
         var runner = new CountingRunner(expiredJson);
         var preferences = new TestPreferences(new AppPreferences { VideoQuality = "1080p" });
         var resolver = new YtDlpMediaResolver(
