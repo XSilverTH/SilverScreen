@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
 
@@ -24,14 +25,35 @@ public sealed record ChannelViewState(
         ChannelVideoSort.Newest, string.Empty, false, true);
 }
 
-public sealed class ChannelViewModel(IChannelService channelService) : IDisposable
+public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
+    private readonly IChannelService _channelService;
+    private readonly PagedFeedEngine _engine;
+    private readonly Lock _lock = new();
     private bool _disposed;
-    private int? _nextStartIndex;
-    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
-    private CancellationTokenSource? _requestCancellation;
-    private long _requestGeneration;
+    private string? _url;
+    private string _name = string.Empty;
+    private string? _description;
+    private string? _avatarUrl;
+    private long? _subscriberCount;
+    private ChannelVideoSort _sort = ChannelVideoSort.Newest;
+
+    public ChannelViewModel(IChannelService channelService)
+    {
+        _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
+
+        _engine = new PagedFeedEngine(
+            fetcher: FetchChannelPageAsync,
+            statusMapper: (_, _, state) => ChannelVideoListSource.MapStatus(state),
+            loadingMessage: "Loading channel…",
+            paginationLoadingMessage: "Loading more videos…",
+            defaultTitle: "Channel",
+            clearOnRefresh: true);
+
+        _engine.EngineStateChanged += OnEngineStateChanged;
+    }
+
     public ChannelViewState State
     {
         get;
@@ -43,21 +65,15 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
         }
     } = ChannelViewState.Empty;
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-        _nextStartIndex = null;
-    }
-
+    public VideoListPresentationState PresentationState => _engine.State;
+    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<ChannelViewState>? StateChanged;
+    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
 
     public async Task OpenChannelAsync(string channelUrl, string fallbackName,
         int count = VideoFeedConstants.DefaultPageSize)
@@ -91,57 +107,24 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
             : LoadAsync(State.Url, State.Name, State.Sort, count);
     }
 
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        if (State is { IsLoading: true } or { IsLoadingMore: true } || State.Url is null ||
-            _nextStartIndex is not { } startIndex)
-            return;
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-        var loadingState = State with { IsLoadingMore = true, Summary = "Loading more videos…" };
-        State = loadingState;
-
-        try
-        {
-            var page = await channelService.GetChannelAsync(State.Url, State.Name, State.Sort, startIndex, count, token)
-                .ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
-
-            _nextStartIndex = page.IsSuccess ? page.NextStartIndex : _nextStartIndex;
-            var videos = State.Videos.Concat(page.Videos).DistinctBy(video => video.Id).ToArray();
-            var summary = page.StatusMessage ??
-                          $"Showing {videos.Length} video{(videos.Length == 1 ? string.Empty : "s")} from {page.Name}.";
-            State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
-                videos, page.Sort, summary, false, page.IsSuccess, false,
-                page.IsSuccess && _nextStartIndex is not null);
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
-
-            Logger.Warning(exception, "Failed to load more channel videos for {ChannelUrl}", State.Url);
-            const string message = "Could not load more channel videos.";
-            State = State with { Summary = message, IsLoadingMore = false };
-        }
+        return _engine.LoadMoreAsync(count);
     }
 
     public void Clear()
     {
         ThrowIfDisposed();
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-        _nextStartIndex = null;
+        lock (_lock)
+        {
+            _url = null;
+            _name = string.Empty;
+            _description = null;
+            _avatarUrl = null;
+            _subscriberCount = null;
+        }
+        _engine.Reset();
         State = ChannelViewState.Empty;
     }
 
@@ -149,56 +132,102 @@ public sealed class ChannelViewModel(IChannelService channelService) : IDisposab
         int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        if (_requestCancellation is not null)
-            await _requestCancellation.CancelAsync();
-
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-        _nextStartIndex = null;
-        var loadingState = State with
+        lock (_lock)
         {
-            Url = channelUrl,
-            Name = fallbackName,
-            Sort = sort,
-            Summary = $"Loading {fallbackName}…",
-            IsLoading = true,
-            IsLoadingMore = false,
-            HasMore = false,
-            IsSuccess = true,
-            Videos = []
-        };
-        State = loadingState;
-
-        try
-        {
-            var page = await channelService.GetChannelAsync(channelUrl, fallbackName, sort, 1, count, token)
-                .ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
-
-            _nextStartIndex = page.IsSuccess ? page.NextStartIndex : null;
-            var summary = page.StatusMessage ??
-                          $"Showing {page.Videos.Count} video{(page.Videos.Count == 1 ? string.Empty : "s")} from {page.Name}.";
-            State = new ChannelViewState(page.Url, page.Name, page.Description, page.AvatarUrl, page.SubscriberCount,
-                page.Videos, page.Sort, summary, false, page.IsSuccess, false,
-                page.IsSuccess && _nextStartIndex is not null);
+            _url = channelUrl;
+            _name = fallbackName;
+            _sort = sort;
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
 
-            Logger.Warning(exception, "Failed to load channel for {ChannelUrl}", channelUrl);
-            const string message = "Could not load channel.";
-            _nextStartIndex = null;
-            State = State with { Summary = message, IsLoading = false, IsSuccess = false, Videos = [] };
+        _engine.SetLoadingMessage($"Loading {fallbackName}…");
+        await _engine.RefreshAsync(count).ConfigureAwait(false);
+    }
+
+    private async Task<FeedPageResult> FetchChannelPageAsync(string? token, int count, CancellationToken ct)
+    {
+        string? url;
+        string name;
+        ChannelVideoSort sort;
+        lock (_lock)
+        {
+            url = _url;
+            name = _name;
+            sort = _sort;
         }
+
+        if (url is null)
+            return FeedPageResult.Empty;
+
+        var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
+        var page = await _channelService.GetChannelAsync(url, name, sort, startIndex, count, ct).ConfigureAwait(false);
+
+        if (page.IsSuccess)
+        {
+            lock (_lock)
+            {
+                _url = page.Url;
+                _name = page.Name;
+                _description = page.Description;
+                _avatarUrl = page.AvatarUrl;
+                _subscriberCount = page.SubscriberCount;
+            }
+        }
+
+        return new FeedPageResult(
+            page.Videos,
+            page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+            page.IsSuccess,
+            page.StatusMessage);
+    }
+
+    private void OnEngineStateChanged(object? sender, FeedEngineState state)
+    {
+        string? url;
+        string name;
+        string? description;
+        string? avatarUrl;
+        long? subscriberCount;
+        ChannelVideoSort sort;
+
+        lock (_lock)
+        {
+            url = _url;
+            name = _name;
+            description = _description;
+            avatarUrl = _avatarUrl;
+            subscriberCount = _subscriberCount;
+            sort = _sort;
+        }
+
+        var summary = state.IsLoading
+            ? $"Loading {name}…"
+            : state.IsLoadingMore
+                ? "Loading more videos…"
+                : !state.IsSuccess || state.LastError != null
+                    ? (state.IsLoadingMore ? "Could not load more channel videos." : "Could not load channel.")
+                    : state.StatusMessage ??
+                      $"Showing {state.Videos.Count} video{(state.Videos.Count == 1 ? string.Empty : "s")} from {name}.";
+
+        State = new ChannelViewState(
+            url,
+            name,
+            description,
+            avatarUrl,
+            subscriberCount,
+            state.Videos,
+            sort,
+            summary,
+            state.IsLoading,
+            state.IsSuccess && state.LastError == null,
+            state.IsLoadingMore,
+            state.HasMore);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

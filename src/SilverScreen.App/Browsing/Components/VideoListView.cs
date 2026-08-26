@@ -64,7 +64,7 @@ public partial class VideoListView : ViewBase<Bin>
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this(new HomeVideoListSource(coordinator), thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)coordinator, thumbnails, watchProgress, videoActions)
     {
     }
 
@@ -73,7 +73,7 @@ public partial class VideoListView : ViewBase<Bin>
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this(new SearchVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
     {
     }
 
@@ -82,7 +82,7 @@ public partial class VideoListView : ViewBase<Bin>
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this(new HistoryVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
     {
     }
 
@@ -91,7 +91,7 @@ public partial class VideoListView : ViewBase<Bin>
         IThumbnailService thumbnails,
         IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this(new ChannelVideoListSource(viewModel), thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
     {
     }
 
@@ -101,7 +101,7 @@ public partial class VideoListView : ViewBase<Bin>
         IWatchProgressService watchProgress,
         VideoCardActions videoActions,
         Action? openWebLogin = null)
-        : this(new SubscriptionsVideoListSource(viewModel, openWebLogin), thumbnails, watchProgress, videoActions)
+        : this(viewModel.GetVideoListSource(openWebLogin), thumbnails, watchProgress, videoActions)
     {
     }
 

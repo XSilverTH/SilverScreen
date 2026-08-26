@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
@@ -16,18 +17,38 @@ public sealed record SearchViewState(
     bool HasMore = false,
     bool IsSuccess = true);
 
-public sealed class SearchViewModel(
-    ISearchService searchService,
-    IPlaybackService playbackService,
-    ISearchSuggestionService? suggestionService = null)
-    : INotifyPropertyChanged, IDisposable
+public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
-    private string? _continuationToken;
+    private readonly ISearchService _searchService;
+    private readonly IPlaybackService _playbackService;
+    private readonly ISearchSuggestionService? _suggestionService;
+    private readonly PagedFeedEngine _engine;
+    private readonly Lock _lock = new();
+    private string? _currentQuery;
     private bool _disposed;
-    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
-    private CancellationTokenSource? _requestCancellation;
-    private long _requestGeneration;
+
+    public SearchViewModel(
+        ISearchService searchService,
+        IPlaybackService playbackService,
+        ISearchSuggestionService? suggestionService = null)
+    {
+        _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
+        _playbackService = playbackService ?? throw new ArgumentNullException(nameof(playbackService));
+        _suggestionService = suggestionService;
+
+        _engine = new PagedFeedEngine(
+            fetcher: FetchSearchPageAsync,
+            statusMapper: (_, _, state) => SearchVideoListSource.MapStatus(state),
+            loadingMessage: "Searching YouTube…",
+            paginationLoadingMessage: "Loading more results…",
+            initialStatus: new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
+            defaultTitle: "Search",
+            clearOnRefresh: true);
+
+        _engine.EngineStateChanged += OnEngineStateChanged;
+    }
+
     public SearchViewState State
     {
         get;
@@ -46,33 +67,37 @@ public sealed class SearchViewModel(
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
-    public string? CurrentQuery { get; private set; }
-
-
-    public void Dispose()
+    public string? CurrentQuery
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
+        get
+        {
+            lock (_lock)
+                return _currentQuery;
+        }
+        private set
+        {
+            lock (_lock)
+                _currentQuery = value;
+        }
     }
 
+    public VideoListPresentationState PresentationState => _engine.State;
+    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event EventHandler<SearchViewState>? StateChanged;
+    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
 
     public void Reset()
     {
         ThrowIfDisposed();
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-        _continuationToken = null;
         CurrentQuery = null;
-        State = new SearchViewState([], "Search results will appear here.", false);
+        _engine.Reset(
+            status: new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
+            statusMessage: "Search results will appear here.");
     }
 
     public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text,
@@ -80,12 +105,12 @@ public sealed class SearchViewModel(
     {
         ThrowIfDisposed();
         var query = text.Trim();
-        if (string.IsNullOrWhiteSpace(query) || suggestionService is null)
+        if (string.IsNullOrWhiteSpace(query) || _suggestionService is null)
             return [];
 
         try
         {
-            return await suggestionService.GetSuggestionsAsync(query, cancellationToken).ConfigureAwait(false);
+            return await _suggestionService.GetSuggestionsAsync(query, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -98,12 +123,9 @@ public sealed class SearchViewModel(
         }
     }
 
-    public event EventHandler<SearchViewState>? StateChanged;
-
     public async Task SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("Search submitted: {Text}", text);
-        _lastRequestedCount = count;
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query)) return;
 
@@ -136,96 +158,59 @@ public sealed class SearchViewModel(
 
     public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        _lastRequestedCount = count;
-        return CurrentQuery is null ? Task.CompletedTask : SearchPlainTextAsync(CurrentQuery, count);
+        return CurrentQuery is null ? Task.CompletedTask : _engine.RefreshAsync(count);
     }
 
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        if (State is { IsLoading: true } or { IsLoadingMore: true } || CurrentQuery is null ||
-            !int.TryParse(_continuationToken, out var startIndex) || startIndex < 1)
-            return;
-
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-        var loadingState = State with { IsLoadingMore = true, Summary = "Loading more results…" };
-        State = loadingState;
-        try
-        {
-            var result = await searchService.SearchAsync(new SearchRequest(CurrentQuery, startIndex, count), token)
-                .ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
-
-            var videos = State.Videos.Concat(NormalizeVideos(result.Videos)).DistinctBy(video => video.Id).ToArray();
-            _continuationToken = result.IsSuccess ? result.ContinuationToken : _continuationToken;
-            var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
-            State = new SearchViewState(videos, summary, false, false,
-                result.IsSuccess && _continuationToken is not null, result.IsSuccess);
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
-
-            Logger.Warning(exception, "Failed to load more search results for query {Query}", CurrentQuery);
-            const string message = "Search could not be completed.";
-            State = State with { Summary = message, IsLoadingMore = false, IsSuccess = false };
-        }
+        return _engine.LoadMoreAsync(count);
     }
 
     private async Task SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        if (_requestCancellation is not null)
-            await _requestCancellation.CancelAsync();
-
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-
         CurrentQuery = query;
-        _continuationToken = null;
-        var searching = $"Searching YouTube for “{query}”…";
-        State = new SearchViewState([], searching, true);
-
-        try
-        {
-            var result = await searchService.SearchAsync(new SearchRequest(query, 1, count), token).ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
-            _continuationToken = result.IsSuccess ? result.ContinuationToken : null;
-            var summary = result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed.");
-            State = new SearchViewState(NormalizeVideos(result.Videos), summary, false, false,
-                result.IsSuccess && _continuationToken is not null, result.IsSuccess);
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
-
-            Logger.Warning(exception, "Failed to execute search for query {Query}", query);
-            const string message = "Search could not be completed.";
-            _continuationToken = null;
-            State = new SearchViewState([], message, false, false, false, false);
-        }
+        _engine.SetLoadingMessage($"Searching YouTube for “{query}”…");
+        await _engine.RefreshAsync(count).ConfigureAwait(false);
     }
 
-    private static VideoSummary[] NormalizeVideos(IReadOnlyList<VideoSummary> videos)
+    private async Task<FeedPageResult> FetchSearchPageAsync(string? token, int count, CancellationToken ct)
     {
-        return [.. videos.Where(video => !video.IsShort).DistinctBy(video => video.Id)];
+        var query = CurrentQuery;
+        if (query is null)
+            return FeedPageResult.Empty;
+
+        var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
+        var result = await _searchService.SearchAsync(new SearchRequest(query, startIndex, count), ct).ConfigureAwait(false);
+
+        return new FeedPageResult(
+            result.Videos,
+            result.IsSuccess ? result.ContinuationToken : null,
+            result.IsSuccess,
+            result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed."));
+    }
+
+    private void OnEngineStateChanged(object? sender, FeedEngineState state)
+    {
+        var query = CurrentQuery;
+        var summary = state.IsLoading
+            ? query != null ? $"Searching YouTube for “{query}”… " : "Searching YouTube…"
+            : state.IsLoadingMore
+                ? "Loading more results…"
+                : !state.IsSuccess || state.LastError != null
+                    ? (state.IsLoadingMore ? "Search could not be completed." : (state.StatusMessage ?? "Search could not be completed."))
+                    : query is null
+                        ? "Search results will appear here."
+                        : state.StatusMessage ?? "Search complete.";
+
+        State = new SearchViewState(
+            state.Videos,
+            summary,
+            state.IsLoading,
+            state.IsLoadingMore,
+            state.HasMore,
+            state.IsSuccess && state.LastError == null);
     }
 
     private async Task PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
@@ -234,7 +219,14 @@ public sealed class SearchViewModel(
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
-        await playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+        await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

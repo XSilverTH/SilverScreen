@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
 
@@ -19,13 +20,42 @@ public sealed record HistoryViewState(
         AuthenticatedHistoryStatus.Success);
 }
 
-public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService) : IDisposable
+public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
+    private readonly PagedFeedEngine _engine;
+    private AuthenticatedHistoryStatus _historyStatus = AuthenticatedHistoryStatus.Success;
     private bool _disposed;
-    private CancellationTokenSource? _requestCancellation;
-    private long _requestGeneration;
-    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
+
+    public HistoryViewModel(IAuthenticatedHistoryService historyService)
+    {
+        ArgumentNullException.ThrowIfNull(historyService);
+
+        _engine = PagedFeedEngine.Create(
+            fetchFirstPage: (count, ct) => historyService.LoadFirstPageAsync(count, ct),
+            fetchNextPage: (_, count, ct) => historyService.LoadNextPageAsync(count, ct),
+            extractResult: res =>
+            {
+                _historyStatus = res.Status;
+                var isSuccess = res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
+                var hasContinuation = res.Status == AuthenticatedHistoryStatus.Success &&
+                                      !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
+
+                return new FeedPageResult(
+                    res.FeedPage.Videos,
+                    hasContinuation ? res.FeedPage.ContinuationToken : null,
+                    isSuccess,
+                    res.StatusMessage);
+            },
+            statusMapper: (_, _, state) => HistoryVideoListSource.MapStatus(_historyStatus, state),
+            loadingMessage: "Loading watch history…",
+            paginationLoadingMessage: "Loading more history…",
+            defaultTitle: "History",
+            clearOnRefresh: true);
+
+        _engine.EngineStateChanged += OnEngineStateChanged;
+    }
+
     public HistoryViewState State
     {
         get;
@@ -37,99 +67,64 @@ public sealed class HistoryViewModel(IAuthenticatedHistoryService historyService
         }
     } = HistoryViewState.Empty;
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-    }
-
+    public VideoListPresentationState PresentationState => _engine.State;
+    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<HistoryViewState>? StateChanged;
+    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
 
     public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        _lastRequestedCount = count;
+        ThrowIfDisposed();
         return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync(count) : Task.CompletedTask;
     }
 
-    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        Logger.Information("HistoryViewModel refreshing watch history");
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-        State = new HistoryViewState([], "Loading watch history…", true, true, AuthenticatedHistoryStatus.Success);
-        try
-        {
-            var result = await historyService.LoadFirstPageAsync(count, token).ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
-
-            var state = new HistoryViewState(result.FeedPage.Videos, result.StatusMessage, false,
-                result.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty,
-                result.Status,
-                false,
-                result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
-            State = state;
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
-
-            Logger.Warning(exception, "Failed to refresh watch history");
-            const string message = "Could not load watch history.";
-            State = new HistoryViewState([], message, false, false, AuthenticatedHistoryStatus.TemporaryBackendFailure);
-        }
+        Logger.Information("HistoryViewModel refreshing watch history");
+        return _engine.RefreshAsync(count);
     }
 
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        _lastRequestedCount = count;
-        if (State is { IsLoading: true } or { IsLoadingMore: true } || !State.HasMore)
-            return;
-        _requestCancellation?.Dispose();
-        _requestCancellation = new CancellationTokenSource();
-        var token = _requestCancellation.Token;
-        var generation = ++_requestGeneration;
-        State = State with { IsLoadingMore = true, Summary = "Loading more watch history…" };
-        try
-        {
-            var result = await historyService.LoadNextPageAsync(count, token).ConfigureAwait(false);
-            if (token.IsCancellationRequested || generation != _requestGeneration || _disposed)
-                return;
+        return _engine.LoadMoreAsync(count);
+    }
 
-            var videos = State.Videos.Concat(result.FeedPage.Videos).DistinctBy(video => video.Id).ToArray();
-            var isSuccess = result.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
-            var state = new HistoryViewState(videos, result.StatusMessage, false, isSuccess, result.Status, false,
-                result is { Status: AuthenticatedHistoryStatus.Success, FeedPage.ContinuationToken: not null });
-            State = state;
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            if (generation != _requestGeneration || _disposed)
-                return;
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
+    }
 
-            Logger.Warning(exception, "Failed to load more watch history");
-            const string message = "Could not load more watch history.";
-            State = State with { Summary = message, IsLoadingMore = false };
-        }
+    private void OnEngineStateChanged(object? sender, FeedEngineState state)
+    {
+        var summary = state.IsLoading
+            ? "Loading watch history…"
+            : state.IsLoadingMore
+                ? "Loading more watch history…"
+                : !state.IsSuccess || state.LastError != null
+                    ? (state.IsLoadingMore ? "Could not load more watch history." : "Could not load watch history.")
+                    : state.StatusMessage ?? string.Empty;
+
+        var status = state.LastError != null
+            ? AuthenticatedHistoryStatus.TemporaryBackendFailure
+            : _historyStatus;
+
+        State = new HistoryViewState(
+            state.Videos,
+            summary,
+            state.IsLoading,
+            state.IsSuccess && state.LastError == null,
+            status,
+            state.IsLoadingMore,
+            state.HasMore);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

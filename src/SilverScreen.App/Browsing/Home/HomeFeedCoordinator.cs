@@ -1,4 +1,5 @@
 using Serilog;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
@@ -6,26 +7,55 @@ using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Browsing.Home;
 
-public sealed class HomeFeedCoordinator : IDisposable
+public sealed class HomeFeedCoordinator : IDisposable, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<HomeFeedCoordinator>();
-    private readonly IAuthenticatedHomeFeedService _feedService;
-    private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
-    private readonly List<VideoSummary> _videos = [];
-    private string? _continuationToken;
-    private CancellationTokenSource? _cts;
+    private readonly PagedFeedEngine _engine;
+    private readonly Lock _lock = new();
+    private AuthenticatedHomeFeedStatus _lastStatus = AuthenticatedHomeFeedStatus.Success;
+    private bool _disposed;
 
-    private long _currentRequestId;
-    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
-    private bool _isLoading;
-    private long _publishedStateVersion;
-    private long _stateVersion;
     public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
-        _feedService = feedService ?? throw new ArgumentNullException(nameof(feedService));
+        ArgumentNullException.ThrowIfNull(feedService);
 
+        _engine = PagedFeedEngine.Create(
+            fetchFirstPage: (count, ct) => feedService.LoadFirstPageAsync(count, ct),
+            fetchNextPage: (_, count, ct) => feedService.LoadNextPageAsync(count, ct),
+            extractResult: res =>
+            {
+                lock (_lock)
+                {
+                    _lastStatus = res.Status;
+                }
+
+                if (res.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired or AuthenticatedHomeFeedStatus.AuthenticationRejected)
+                {
+                    return FeedPageResult.Failed("Your YouTube session is no longer valid.", clearExisting: true);
+                }
+
+                var isSuccess = res.Status is AuthenticatedHomeFeedStatus.Success or AuthenticatedHomeFeedStatus.Empty;
+                var hasContinuation = res.Status == AuthenticatedHomeFeedStatus.Success &&
+                                      !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
+
+                if (!isSuccess)
+                {
+                    return FeedPageResult.Failed("Could not load YouTube recommendations.", clearExisting: false);
+                }
+
+                return new FeedPageResult(
+                    res.FeedPage.Videos,
+                    hasContinuation ? res.FeedPage.ContinuationToken : null,
+                    isSuccess,
+                    res.StatusMessage);
+            },
+            statusMapper: (_, _, state) => MapHomeStatus(state),
+            defaultTitle: "Home",
+            clearOnRefresh: false);
+
+        _engine.EngineStateChanged += OnEngineStateChanged;
         _sessionService.SessionChanged += OnSessionChanged;
 
         if (IsSessionActive())
@@ -36,237 +66,115 @@ public sealed class HomeFeedCoordinator : IDisposable
         else
         {
             State = HomeFeedState.SignedOut;
+            _engine.SetStatus(MapSignedOutStatus());
         }
     }
 
     public HomeFeedState State { get; private set; }
+    public VideoListPresentationState PresentationState => _engine.State;
+    VideoListPresentationState IVideoListSource.State => _engine.State;
+
+    public event EventHandler<HomeFeedState>? StateChanged;
+    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
+
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        Logger.Information("HomeFeedCoordinator refreshing home feed");
+        if (!IsSessionActive())
+        {
+            _engine.Reset(status: MapSignedOutStatus());
+            UpdateHomeFeedState(HomeFeedState.SignedOut);
+            return Task.CompletedTask;
+        }
+
+        return _engine.RefreshAsync(count);
+    }
+
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        Logger.Information("HomeFeedCoordinator loading more home feed items");
+        if (!IsSessionActive())
+            return Task.CompletedTask;
+
+        return _engine.LoadMoreAsync(count);
+    }
 
     public void Dispose()
     {
-        _sessionService.SessionChanged -= OnSessionChanged;
-        CancelAndClear();
+        lock (_lock)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _sessionService.SessionChanged -= OnSessionChanged;
+            _engine.Dispose();
+        }
     }
 
-    public event EventHandler<HomeFeedState>? StateChanged;
-
-    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    private void OnEngineStateChanged(object? sender, FeedEngineState engineState)
     {
-        Logger.Information("HomeFeedCoordinator refreshing home feed");
-        _lastRequestedCount = count;
         if (!IsSessionActive())
         {
-            CancelAndClear();
-            PublishState(HomeFeedState.SignedOut);
+            UpdateHomeFeedState(HomeFeedState.SignedOut);
             return;
         }
 
-        await ExecuteFeedRequestAsync(
-            token => _feedService.LoadFirstPageAsync(count, token),
-            true,
-            "HomeFeedCoordinator failed to refresh home feed");
-    }
+        HomeFeedStateKind kind;
+        string? message = engineState.StatusMessage;
 
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        Logger.Information("HomeFeedCoordinator loading more home feed items");
-        _lastRequestedCount = count;
-        await ExecuteFeedRequestAsync(
-            token => _feedService.LoadNextPageAsync(count, token),
-            false,
-            "HomeFeedCoordinator failed to load more recommendations",
-            () => !_isLoading && IsSessionActive() && !string.IsNullOrEmpty(_continuationToken));
-    }
-
-    private async Task ExecuteFeedRequestAsync(
-        Func<CancellationToken, Task<AuthenticatedHomeFeedResult>> fetchDelegate,
-        bool isFirstPage,
-        string failureLogMessage,
-        Func<bool>? guard = null)
-    {
-        CancellationToken token;
-        long requestId;
+        AuthenticatedHomeFeedStatus lastStatus;
         lock (_lock)
         {
-            if (guard != null && !guard())
-                return;
-
-            _cts?.Cancel();
-            _cts?.Dispose();
-            _cts = new CancellationTokenSource();
-            token = _cts.Token;
-            _isLoading = true;
-            _currentRequestId++;
-            requestId = _currentRequestId;
+            lastStatus = _lastStatus;
         }
 
-        HomeFeedState pendingState;
-        long version;
-        lock (_lock)
+        if (lastStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired or AuthenticatedHomeFeedStatus.AuthenticationRejected)
         {
-            if (_currentRequestId != requestId)
-                return;
-
-            if (isFirstPage)
-                pendingState = _videos.Count > 0
-                    ? new HomeFeedState(
-                        HomeFeedStateKind.Ready,
-                        [.. _videos],
-                        IsLoading: true,
-                        HasContinuation: !string.IsNullOrEmpty(_continuationToken))
-                    : new HomeFeedState(
-                        HomeFeedStateKind.InitialLoading,
-                        [],
-                        IsLoading: true);
-            else
-                pendingState = new HomeFeedState(
-                    HomeFeedStateKind.Ready,
-                    [.. _videos],
-                    IsLoadingMore: true,
-                    HasContinuation: !string.IsNullOrEmpty(_continuationToken));
-
-            _stateVersion++;
-            State = pendingState;
-            version = _stateVersion;
+            kind = HomeFeedStateKind.AuthenticationRequired;
+            message = "Your YouTube session is no longer valid.";
         }
-
-        PublishStateWithVersion(pendingState, version);
-
-        try
+        else if (engineState.LastError != null || !engineState.IsSuccess)
         {
-            var result = await fetchDelegate(token);
-
-            token.ThrowIfCancellationRequested();
-
-            ProcessResult(result, isFirstPage, requestId);
+            kind = HomeFeedStateKind.SafeError;
+            message = "Could not load YouTube recommendations.";
         }
-        catch (OperationCanceledException)
+        else if (engineState.IsLoading && engineState.Videos.Count == 0)
         {
-            // Cancellation never publishes errors
+            kind = HomeFeedStateKind.InitialLoading;
         }
-        catch (Exception ex)
+        else if (engineState.Videos.Count == 0 && !engineState.IsLoading)
         {
-            Logger.Warning(ex, "{FailureReason}", failureLogMessage);
-            HomeFeedState errorState;
-            long errVersion;
-            lock (_lock)
-            {
-                if (_currentRequestId == requestId)
-                {
-                    errorState = new HomeFeedState(
-                        HomeFeedStateKind.SafeError,
-                        [.. _videos],
-                        "Could not load YouTube recommendations.",
-                        false,
-                        false,
-                        !string.IsNullOrEmpty(_continuationToken));
-
-                    _stateVersion++;
-                    State = errorState;
-                    errVersion = _stateVersion;
-                }
-                else
-                {
-                    return;
-                }
-            }
-
-            PublishStateWithVersion(errorState, errVersion);
+            kind = HomeFeedStateKind.Empty;
+            message = "No recommendations are available right now.";
         }
-        finally
+        else
         {
-            lock (_lock)
-            {
-                if (_currentRequestId == requestId)
-                    _isLoading = false;
-            }
+            kind = HomeFeedStateKind.Ready;
         }
+
+        var newState = new HomeFeedState(
+            kind,
+            engineState.Videos.ToArray(),
+            message,
+            engineState.IsLoading,
+            engineState.IsLoadingMore,
+            engineState.HasMore);
+
+        UpdateHomeFeedState(newState);
     }
 
-    private void ProcessResult(AuthenticatedHomeFeedResult result, bool isFirstPage, long requestId)
+    private void UpdateHomeFeedState(HomeFeedState newState)
     {
-        HomeFeedState nextState;
-        long version;
-
         lock (_lock)
         {
-            if (_currentRequestId != requestId)
-                return;
-
-            switch (result.Status)
-            {
-                case AuthenticatedHomeFeedStatus.AuthenticationRequired:
-                case AuthenticatedHomeFeedStatus.AuthenticationRejected:
-                    _videos.Clear();
-                    _continuationToken = null;
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.AuthenticationRequired,
-                        [],
-                        "Your YouTube session is no longer valid.");
-                    break;
-                case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.SafeError,
-                        [.. _videos],
-                        "Could not load YouTube recommendations.",
-                        false,
-                        false,
-                        !string.IsNullOrEmpty(_continuationToken));
-                    break;
-                case AuthenticatedHomeFeedStatus.Empty when isFirstPage:
-                    _videos.Clear();
-                    _continuationToken = null;
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.Empty,
-                        [],
-                        "No recommendations are available right now.");
-                    break;
-                case AuthenticatedHomeFeedStatus.Empty:
-                    _continuationToken = null;
-                    nextState = new HomeFeedState(
-                        HomeFeedStateKind.Ready,
-                        [.. _videos],
-                        IsLoading: false,
-                        IsLoadingMore: false,
-                        HasContinuation: false);
-                    break;
-                // Success
-                case AuthenticatedHomeFeedStatus.Success:
-                default:
-                {
-                    var newVideos = result.FeedPage.Videos
-                        .Where(v => !v.IsShort)
-                        .ToList();
-
-                    if (isFirstPage) _videos.Clear();
-
-                    foreach (var video in newVideos.Where(video => _videos.All(existing => existing.Id != video.Id)))
-                        _videos.Add(video);
-
-                    _continuationToken = result.FeedPage.ContinuationToken;
-
-                    if (_videos.Count == 0)
-                        nextState = new HomeFeedState(
-                            HomeFeedStateKind.Empty,
-                            [],
-                            "No recommendations are available right now.");
-                    else
-                        nextState = new HomeFeedState(
-                            HomeFeedStateKind.Ready,
-                            [.. _videos],
-                            IsLoading: false,
-                            IsLoadingMore: false,
-                            HasContinuation: !string.IsNullOrEmpty(_continuationToken));
-
-                    break;
-                }
-            }
-
-            _stateVersion++;
-            State = nextState;
-            version = _stateVersion;
+            State = newState;
         }
-
-        PublishStateWithVersion(nextState, version);
+        StateChanged?.Invoke(this, newState);
     }
 
     private bool IsSessionActive()
@@ -285,51 +193,37 @@ public sealed class HomeFeedCoordinator : IDisposable
         }
         else
         {
-            CancelAndClear();
-            PublishState(HomeFeedState.SignedOut);
+            _engine.Reset(status: MapSignedOutStatus());
+            UpdateHomeFeedState(HomeFeedState.SignedOut);
         }
     }
 
-    private void CancelAndClear()
-    {
-        lock (_lock)
-        {
-            _cts?.Cancel();
-            _cts?.Dispose();
-            _cts = null;
-            _isLoading = false;
-            _videos.Clear();
-            _continuationToken = null;
-            _currentRequestId++;
-        }
-    }
+    private static VideoListStatus MapSignedOutStatus() => new(
+        "Home",
+        "Sign in to see your YouTube recommendations.",
+        "avatar-default-symbolic");
 
-    private void PublishState(HomeFeedState newState)
+    private static VideoListStatus MapHomeStatus(FeedEngineState state)
     {
-        long version;
-        lock (_lock)
+        if (state.LastError != null || !state.IsSuccess)
         {
-            _stateVersion++;
-            State = newState;
-            version = _stateVersion;
+            return new VideoListStatus(
+                "Home",
+                "Could not load YouTube recommendations.",
+                "network-error-symbolic");
         }
 
-        PublishStateWithVersion(newState, version);
-    }
-
-    private void PublishStateWithVersion(HomeFeedState stateToPublish, long version)
-    {
-        var shouldPublish = false;
-        lock (_lock)
+        if (state.Videos.Count == 0 && !state.IsLoading)
         {
-            if (version == _stateVersion && version > _publishedStateVersion)
-            {
-                _publishedStateVersion = version;
-                shouldPublish = true;
-            }
+            return new VideoListStatus(
+                "Home",
+                "No recommendations are available right now.",
+                "applications-internet-symbolic");
         }
 
-        if (shouldPublish)
-            StateChanged?.Invoke(this, stateToPublish);
+        return new VideoListStatus(
+            "Home",
+            "No recommendations are available right now.",
+            "applications-internet-symbolic");
     }
 }

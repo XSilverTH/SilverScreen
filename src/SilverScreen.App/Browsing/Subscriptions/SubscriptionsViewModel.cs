@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
@@ -34,37 +35,59 @@ public sealed record SubscriptionsViewState(
         true);
 }
 
-public sealed class SubscriptionsViewModel(
-    IAuthenticatedSubscriptionsService subscriptionsService,
-    IChannelService channelService,
-    ISessionService sessionService) : IDisposable
+public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsViewModel>();
 
+    private readonly IAuthenticatedSubscriptionsService _subscriptionsService;
+    private readonly IChannelService _channelService;
+    private readonly ISessionService _sessionService;
+    private readonly PagedFeedEngine _engine;
     private readonly List<SubscribedChannel> _channels = [];
-    private readonly List<VideoSummary> _channelVideos = [];
     private readonly List<VideoSummary> _feedVideos = [];
+    private readonly List<VideoSummary> _channelVideos = [];
     private readonly Lock _lock = new();
 
-    private CancellationTokenSource? _channelCancellation;
-    private int? _channelNextStartIndex;
-    private long _channelRequestGeneration;
-    private bool _disposed;
+    private SubscribedChannel? _selectedChannel;
     private AuthenticatedSubscriptionsStatus _feedStatus = AuthenticatedSubscriptionsStatus.Success;
     private bool _feedSuccess = true;
     private string _feedSummary = string.Empty;
     private bool _hasMoreFeed;
-    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
+    private string? _feedContinuationToken;
+    private bool _isLoadingChannels;
     private bool _loadedAtLeastOnce;
-    private CancellationTokenSource? _requestCancellation;
-    private long _requestGeneration;
-    private SubscribedChannel? _selectedChannel;
+    private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
+    private Action? _openWebLogin;
+    private bool _disposed;
 
     public SubscriptionsViewModel(
         IAuthenticatedSubscriptionsService subscriptionsService,
         IChannelService channelService,
         ISessionService sessionService,
-        bool subscribeSessionEvents) : this(subscriptionsService, channelService, sessionService)
+        Action? openWebLogin = null)
+    {
+        _subscriptionsService = subscriptionsService ?? throw new ArgumentNullException(nameof(subscriptionsService));
+        _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
+        _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _openWebLogin = openWebLogin;
+
+        _engine = new PagedFeedEngine(
+            fetcher: FetchCurrentFeedPageAsync,
+            statusMapper: (_, _, _) => SubscriptionsVideoListSource.MapState(State, _openWebLogin).Status,
+            loadingMessage: "Loading subscriptions…",
+            paginationLoadingMessage: "Loading more videos…",
+            defaultTitle: "Subscriptions",
+            clearOnRefresh: false);
+
+        _engine.EngineStateChanged += OnEngineStateChanged;
+    }
+
+    public SubscriptionsViewModel(
+        IAuthenticatedSubscriptionsService subscriptionsService,
+        IChannelService channelService,
+        ISessionService sessionService,
+        bool subscribeSessionEvents,
+        Action? openWebLogin = null) : this(subscriptionsService, channelService, sessionService, openWebLogin)
     {
         if (subscribeSessionEvents)
             sessionService.SessionChanged += OnSessionChanged;
@@ -81,18 +104,22 @@ public sealed class SubscriptionsViewModel(
         }
     } = SubscriptionsViewState.Empty;
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        sessionService.SessionChanged -= OnSessionChanged;
-        CancelAll();
-    }
-
+    public VideoListPresentationState PresentationState => _engine.State;
+    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<SubscriptionsViewState>? StateChanged;
+    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
+
+    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
+    {
+        if (openWebLogin != null)
+            _openWebLogin = openWebLogin;
+        return this;
+    }
 
     public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
@@ -117,7 +144,6 @@ public sealed class SubscriptionsViewModel(
 
         if (!IsSessionActive())
         {
-            CancelAll();
             lock (_lock)
             {
                 _feedVideos.Clear();
@@ -125,8 +151,11 @@ public sealed class SubscriptionsViewModel(
                 _channelVideos.Clear();
                 _selectedChannel = null;
                 _loadedAtLeastOnce = false;
+                _feedContinuationToken = null;
+                _hasMoreFeed = false;
             }
 
+            _engine.Reset();
             State = new SubscriptionsViewState(
                 [],
                 null,
@@ -141,10 +170,10 @@ public sealed class SubscriptionsViewModel(
             return;
         }
 
-        CancelAll();
-        var generation = ++_requestGeneration;
-        _requestCancellation = new CancellationTokenSource();
-        var cancellationToken = _requestCancellation.Token;
+        lock (_lock)
+        {
+            _isLoadingChannels = true;
+        }
 
         State = State with
         {
@@ -155,12 +184,12 @@ public sealed class SubscriptionsViewModel(
 
         try
         {
-            var channelsTask = subscriptionsService.LoadSubscribedChannelsAsync(cancellationToken);
-            var feedTask = subscriptionsService.LoadFirstFeedPageAsync(_lastRequestedCount, cancellationToken);
+            var channelsTask = _subscriptionsService.LoadSubscribedChannelsAsync(CancellationToken.None);
+            var feedTask = _subscriptionsService.LoadFirstFeedPageAsync(_lastRequestedCount, CancellationToken.None);
 
             await Task.WhenAll(channelsTask, feedTask).ConfigureAwait(false);
 
-            if (_disposed || cancellationToken.IsCancellationRequested || _requestGeneration != generation)
+            if (_disposed)
                 return;
 
             var channelsResult = await channelsTask.ConfigureAwait(false);
@@ -172,42 +201,46 @@ public sealed class SubscriptionsViewModel(
                 _channels.AddRange(channelsResult.Channels);
 
                 _feedVideos.Clear();
-                _feedVideos.AddRange(feedResult.FeedPage.Videos);
-                _hasMoreFeed = !string.IsNullOrEmpty(feedResult.FeedPage.ContinuationToken);
+                _feedVideos.AddRange(feedResult.FeedPage.Videos.Where(v => !v.IsShort).DistinctBy(v => v.Id));
+                _feedContinuationToken = feedResult.FeedPage.ContinuationToken;
+                _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
                 _feedStatus = feedResult.Status;
                 _feedSummary = feedResult.StatusMessage;
                 _feedSuccess = feedResult.Status is AuthenticatedSubscriptionsStatus.Success
                     or AuthenticatedSubscriptionsStatus.Empty;
                 _loadedAtLeastOnce = true;
+                _isLoadingChannels = false;
             }
 
             if (_selectedChannel is { } activeChannel)
             {
-                await RefreshSelectedChannelAsync(activeChannel, generation, cancellationToken).ConfigureAwait(false);
+                await RefreshSelectedChannelAsync(activeChannel).ConfigureAwait(false);
                 return;
             }
 
-            State = new SubscriptionsViewState(
-                [.. _channels],
-                null,
-                [.. _feedVideos],
-                false,
-                false,
+            _engine.SetVideos(
+                _feedVideos,
+                _feedContinuationToken,
                 _hasMoreFeed,
-                false,
-                feedResult.Status,
-                feedResult.StatusMessage,
-                _feedSuccess);
+                statusMessage: feedResult.StatusMessage,
+                isSuccess: _feedSuccess);
+
+            UpdateViewState();
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             // Ignored
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to refresh subscriptions");
-            if (_disposed || cancellationToken.IsCancellationRequested || _requestGeneration != generation)
+            if (_disposed)
                 return;
+
+            lock (_lock)
+            {
+                _isLoadingChannels = false;
+            }
 
             State = State with
             {
@@ -221,102 +254,14 @@ public sealed class SubscriptionsViewModel(
         }
     }
 
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-
         if (State.IsLoading || State.IsLoadingMore || !State.HasMore)
-            return;
+            return Task.CompletedTask;
 
-        var generation = _requestGeneration;
         _lastRequestedCount = Math.Max(count, 1);
-
-        State = State with { IsLoadingMore = true };
-
-        try
-        {
-            if (_selectedChannel is { } activeChannel)
-            {
-                if (!_channelNextStartIndex.HasValue)
-                {
-                    State = State with { IsLoadingMore = false, HasMore = false };
-                    return;
-                }
-
-                var page = await channelService.GetChannelAsync(
-                    activeChannel.Url,
-                    activeChannel.Title,
-                    ChannelVideoSort.Newest,
-                    _channelNextStartIndex.Value,
-                    _lastRequestedCount,
-                    CancellationToken.None).ConfigureAwait(false);
-
-                if (_disposed || _requestGeneration != generation || _selectedChannel != activeChannel)
-                    return;
-
-                if (page.IsSuccess && page.Videos.Count > 0)
-                {
-                    lock (_lock)
-                    {
-                        foreach (var video in page.Videos)
-                            if (_channelVideos.All(existing => existing.Id != video.Id))
-                                _channelVideos.Add(video);
-
-                        _channelNextStartIndex = page.NextStartIndex;
-                    }
-
-                    State = State with
-                    {
-                        Videos = [.. _channelVideos],
-                        IsLoadingMore = false,
-                        HasMore = _channelNextStartIndex.HasValue
-                    };
-                }
-                else
-                {
-                    _channelNextStartIndex = null;
-                    State = State with { IsLoadingMore = false, HasMore = false };
-                }
-
-                return;
-            }
-
-            var result = await subscriptionsService.LoadNextFeedPageAsync(_lastRequestedCount, CancellationToken.None)
-                .ConfigureAwait(false);
-
-            if (_disposed || _requestGeneration != generation || _selectedChannel is not null)
-                return;
-
-            if (result.Status == AuthenticatedSubscriptionsStatus.Success && result.FeedPage.Videos.Count > 0)
-            {
-                lock (_lock)
-                {
-                    foreach (var video in result.FeedPage.Videos)
-                        if (_feedVideos.All(existing => existing.Id != video.Id))
-                            _feedVideos.Add(video);
-
-                    _hasMoreFeed = !string.IsNullOrEmpty(result.FeedPage.ContinuationToken);
-                }
-
-                State = State with
-                {
-                    Videos = [.. _feedVideos],
-                    IsLoadingMore = false,
-                    HasMore = _hasMoreFeed
-                };
-            }
-            else
-            {
-                _hasMoreFeed = false;
-                State = State with { IsLoadingMore = false, HasMore = false };
-            }
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to load more subscriptions");
-            if (!_disposed && _requestGeneration == generation)
-                State = State with { IsLoadingMore = false, HasMore = false };
-        }
+        return _engine.LoadMoreAsync(count);
     }
 
     public async Task SelectChannelAsync(SubscribedChannel? channel, int batchSize = VideoFeedConstants.DefaultPageSize)
@@ -328,28 +273,20 @@ public sealed class SubscriptionsViewModel(
             if (_selectedChannel is null)
                 return;
 
-            _channelCancellation?.Cancel();
-            _channelCancellation?.Dispose();
-            _channelCancellation = null;
-            _selectedChannel = null;
-
             lock (_lock)
             {
+                _selectedChannel = null;
                 _channelVideos.Clear();
-                _channelNextStartIndex = null;
             }
 
-            State = State with
-            {
-                SelectedChannel = null,
-                Videos = [.. _feedVideos],
-                IsLoading = false,
-                IsLoadingMore = false,
-                HasMore = _hasMoreFeed,
-                Status = _feedStatus,
-                Summary = _feedSummary,
-                IsSuccess = _feedSuccess
-            };
+            _engine.SetVideos(
+                _feedVideos,
+                _feedContinuationToken,
+                _hasMoreFeed,
+                statusMessage: _feedSummary,
+                isSuccess: _feedSuccess);
+
+            UpdateViewState();
             return;
         }
 
@@ -364,26 +301,26 @@ public sealed class SubscriptionsViewModel(
         _selectedChannel = channel;
         var pageSize = Math.Max(batchSize, 1);
 
-        // 1. Immediate in-memory filter
         List<VideoSummary> inMemoryMatches;
         lock (_lock)
         {
             inMemoryMatches = _feedVideos.Where(v => IsMatchingChannel(v, channel)).ToList();
             _channelVideos.Clear();
             _channelVideos.AddRange(inMemoryMatches);
-            _channelNextStartIndex = null;
         }
 
-        var channelGen = ++_channelRequestGeneration;
-        _channelCancellation?.Cancel();
-        _channelCancellation?.Dispose();
-        _channelCancellation = new CancellationTokenSource();
-        var token = _channelCancellation.Token;
+        // Configure engine for channel uploads
+        _engine.SetVideos(
+            inMemoryMatches,
+            continuationToken: null,
+            hasMore: true,
+            statusMessage: inMemoryMatches.Count == 0 ? $"Loading {channel.Title} uploads…" : string.Empty,
+            isSuccess: true);
 
         State = State with
         {
             SelectedChannel = channel,
-            Videos = [.. _channelVideos],
+            Videos = [.. inMemoryMatches],
             IsLoading = inMemoryMatches.Count == 0,
             IsLoadingMore = inMemoryMatches.Count > 0,
             HasMore = true,
@@ -392,19 +329,17 @@ public sealed class SubscriptionsViewModel(
             IsSuccess = true
         };
 
-        // 2. Background channel fetch
         try
         {
-            var page = await channelService.GetChannelAsync(
+            var page = await _channelService.GetChannelAsync(
                 channel.Url,
                 channel.Title,
                 ChannelVideoSort.Newest,
                 1,
                 pageSize,
-                token).ConfigureAwait(false);
+                CancellationToken.None).ConfigureAwait(false);
 
-            if (_disposed || token.IsCancellationRequested || _channelRequestGeneration != channelGen ||
-                _selectedChannel != channel)
+            if (_disposed || _selectedChannel != channel)
                 return;
 
             if (page.IsSuccess)
@@ -414,58 +349,45 @@ public sealed class SubscriptionsViewModel(
                     foreach (var video in page.Videos)
                         if (_channelVideos.All(existing => existing.Id != video.Id))
                             _channelVideos.Add(video);
-
-                    _channelNextStartIndex = page.NextStartIndex;
                 }
 
-                State = State with
-                {
-                    Videos = [.. _channelVideos],
-                    IsLoading = false,
-                    IsLoadingMore = false,
-                    HasMore = _channelNextStartIndex.HasValue,
-                    Status = AuthenticatedSubscriptionsStatus.Success,
-                    Summary = string.Empty,
-                    IsSuccess = true
-                };
+                _engine.SetVideos(
+                    _channelVideos,
+                    page.NextStartIndex?.ToString(),
+                    page.NextStartIndex.HasValue,
+                    statusMessage: string.Empty,
+                    isSuccess: true);
             }
             else
             {
-                State = State with
-                {
-                    IsLoading = false,
-                    IsLoadingMore = false,
-                    HasMore = false,
-                    Status = _channelVideos.Count > 0
-                        ? AuthenticatedSubscriptionsStatus.Success
-                        : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                    Summary = page.StatusMessage ?? "Could not load channel uploads.",
-                    IsSuccess = _channelVideos.Count > 0
-                };
+                _engine.SetVideos(
+                    _channelVideos,
+                    null,
+                    false,
+                    statusMessage: page.StatusMessage ?? "Could not load channel uploads.",
+                    isSuccess: _channelVideos.Count > 0);
             }
+
+            UpdateViewState();
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             // Ignored
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to load background channel uploads for {ChannelTitle}", channel.Title);
-            if (_disposed || token.IsCancellationRequested || _channelRequestGeneration != channelGen ||
-                _selectedChannel != channel)
+            if (_disposed || _selectedChannel != channel)
                 return;
 
-            State = State with
-            {
-                IsLoading = false,
-                IsLoadingMore = false,
-                HasMore = false,
-                Status = _channelVideos.Count > 0
-                    ? AuthenticatedSubscriptionsStatus.Success
-                    : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                Summary = "Failed to load channel uploads.",
-                IsSuccess = _channelVideos.Count > 0
-            };
+            _engine.SetVideos(
+                _channelVideos,
+                null,
+                false,
+                statusMessage: "Failed to load channel uploads.",
+                isSuccess: _channelVideos.Count > 0);
+
+            UpdateViewState();
         }
     }
 
@@ -503,27 +425,70 @@ public sealed class SubscriptionsViewModel(
         return false;
     }
 
-    private async Task RefreshSelectedChannelAsync(SubscribedChannel activeChannel, long generation,
-        CancellationToken cancellationToken)
+    private async Task<FeedPageResult> FetchCurrentFeedPageAsync(string? token, int count, CancellationToken ct)
+    {
+        SubscribedChannel? selected;
+        lock (_lock)
+        {
+            selected = _selectedChannel;
+        }
+
+        if (selected is not null)
+        {
+            var startIndex = token != null && int.TryParse(token, out var idx) ? idx : 1;
+            var page = await _channelService.GetChannelAsync(
+                selected.Url,
+                selected.Title,
+                ChannelVideoSort.Newest,
+                startIndex,
+                count,
+                ct).ConfigureAwait(false);
+
+            return new FeedPageResult(
+                page.Videos,
+                page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+                page.IsSuccess,
+                page.StatusMessage);
+        }
+
+        var res = token is null
+            ? await _subscriptionsService.LoadFirstFeedPageAsync(count, ct).ConfigureAwait(false)
+            : await _subscriptionsService.LoadNextFeedPageAsync(count, ct).ConfigureAwait(false);
+
+        lock (_lock)
+        {
+            _feedStatus = res.Status;
+            _feedSummary = res.StatusMessage;
+            _feedSuccess = res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty;
+            _feedContinuationToken = res.FeedPage.ContinuationToken;
+            _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
+        }
+
+        return new FeedPageResult(
+            res.FeedPage.Videos,
+            res.Status == AuthenticatedSubscriptionsStatus.Success ? res.FeedPage.ContinuationToken : null,
+            _feedSuccess,
+            res.StatusMessage);
+    }
+
+    private async Task RefreshSelectedChannelAsync(SubscribedChannel activeChannel)
     {
         var inMemoryMatches = _feedVideos.Where(v => IsMatchingChannel(v, activeChannel)).ToList();
         lock (_lock)
         {
             _channelVideos.Clear();
             _channelVideos.AddRange(inMemoryMatches);
-            _channelNextStartIndex = null;
         }
 
-        var page = await channelService.GetChannelAsync(
+        var page = await _channelService.GetChannelAsync(
             activeChannel.Url,
             activeChannel.Title,
             ChannelVideoSort.Newest,
             1,
             _lastRequestedCount,
-            cancellationToken).ConfigureAwait(false);
+            CancellationToken.None).ConfigureAwait(false);
 
-        if (_disposed || cancellationToken.IsCancellationRequested || _requestGeneration != generation ||
-            _selectedChannel != activeChannel)
+        if (_disposed || _selectedChannel != activeChannel)
             return;
 
         if (page.IsSuccess)
@@ -533,44 +498,57 @@ public sealed class SubscriptionsViewModel(
                 foreach (var video in page.Videos)
                     if (_channelVideos.All(existing => existing.Id != video.Id))
                         _channelVideos.Add(video);
-
-                _channelNextStartIndex = page.NextStartIndex;
             }
 
-            State = new SubscriptionsViewState(
-                [.. _channels],
-                activeChannel,
-                [.. _channelVideos],
-                false,
-                false,
-                _channelNextStartIndex.HasValue,
-                false,
-                AuthenticatedSubscriptionsStatus.Success,
-                string.Empty,
-                true);
+            _engine.SetVideos(
+                _channelVideos,
+                page.NextStartIndex?.ToString(),
+                page.NextStartIndex.HasValue,
+                statusMessage: string.Empty,
+                isSuccess: true);
         }
         else
         {
-            State = new SubscriptionsViewState(
-                [.. _channels],
-                activeChannel,
-                [.. _channelVideos],
+            _engine.SetVideos(
+                _channelVideos,
+                null,
                 false,
-                false,
-                false,
-                false,
-                _channelVideos.Count > 0
-                    ? AuthenticatedSubscriptionsStatus.Success
-                    : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                page.StatusMessage ?? "Could not load channel uploads.",
-                _channelVideos.Count > 0);
+                statusMessage: page.StatusMessage ?? "Could not load channel uploads.",
+                isSuccess: _channelVideos.Count > 0);
         }
+
+        UpdateViewState();
+    }
+
+    private void OnEngineStateChanged(object? sender, FeedEngineState engineState)
+    {
+        UpdateViewState();
+    }
+
+    private void UpdateViewState()
+    {
+        var engineState = _engine.EngineState;
+        var status = _selectedChannel != null
+            ? (engineState.IsSuccess ? AuthenticatedSubscriptionsStatus.Success : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure)
+            : _feedStatus;
+
+        State = new SubscriptionsViewState(
+            [.. _channels],
+            _selectedChannel,
+            engineState.Videos,
+            engineState.IsLoading,
+            engineState.IsLoadingMore,
+            engineState.HasMore,
+            _isLoadingChannels,
+            status,
+            engineState.StatusMessage ?? string.Empty,
+            engineState.IsSuccess);
     }
 
     private bool IsSessionActive()
     {
-        var session = sessionService.GetCurrentSession();
-        var cookies = sessionService.GetManualSessionCookies();
+        var session = _sessionService.GetCurrentSession();
+        var cookies = _sessionService.GetManualSessionCookies();
         return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
@@ -583,7 +561,6 @@ public sealed class SubscriptionsViewModel(
         }
         else
         {
-            CancelAll();
             lock (_lock)
             {
                 _feedVideos.Clear();
@@ -593,6 +570,7 @@ public sealed class SubscriptionsViewModel(
                 _loadedAtLeastOnce = false;
             }
 
+            _engine.Reset();
             State = new SubscriptionsViewState(
                 [],
                 null,
@@ -607,17 +585,12 @@ public sealed class SubscriptionsViewModel(
         }
     }
 
-    private void CancelAll()
+    public void Dispose()
     {
-        ++_requestGeneration;
-        _requestCancellation?.Cancel();
-        _requestCancellation?.Dispose();
-        _requestCancellation = null;
-
-        ++_channelRequestGeneration;
-        _channelCancellation?.Cancel();
-        _channelCancellation?.Dispose();
-        _channelCancellation = null;
+        if (_disposed) return;
+        _disposed = true;
+        _sessionService.SessionChanged -= OnSessionChanged;
+        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

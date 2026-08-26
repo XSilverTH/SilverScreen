@@ -1,12 +1,13 @@
-using SilverScreen.Browsing.Subscriptions;
-using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Browsing.Subscriptions;
+
 namespace SilverScreen.Browsing.Components;
 
 public sealed class HomeVideoListSource : IVideoListSource
@@ -26,10 +27,7 @@ public sealed class HomeVideoListSource : IVideoListSource
 
     public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _coordinator.State is
-            { Kind: not HomeFeedStateKind.SignedOut, IsLoading: false, IsLoadingMore: false }
-            ? _coordinator.RefreshAsync(count)
-            : Task.CompletedTask;
+        return _coordinator.RefreshAsync(count);
     }
 
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
@@ -110,35 +108,11 @@ public sealed class SearchVideoListSource : IVideoListSource
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
-        _viewModel.Dispose();
     }
 
     public static VideoListPresentationState MapState(SearchViewState state)
     {
-        VideoListStatus status;
-        if (!state.IsSuccess)
-        {
-            var description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search failed."
-                ? "Failed to load search results. Check your network connection and try again."
-                : state.Summary;
-
-            status = new VideoListStatus(
-                "Could not complete search",
-                description,
-                "network-error-symbolic",
-                true);
-        }
-        else
-        {
-            var description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search complete."
-                ? "Try different keywords or check spelling."
-                : state.Summary;
-
-            status = new VideoListStatus(
-                "No results found",
-                description,
-                "system-search-symbolic");
-        }
+        var status = MapStatus(state);
 
         var loadingMessage = string.IsNullOrWhiteSpace(state.Summary)
             ? "Searching YouTube…"
@@ -151,6 +125,56 @@ public sealed class SearchVideoListSource : IVideoListSource
             status,
             loadingMessage,
             "Loading more results…");
+    }
+
+    public static VideoListStatus MapStatus(FeedEngineState state)
+    {
+        if (!state.IsSuccess || state.LastError != null)
+        {
+            var description = string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Search failed."
+                ? "Failed to load search results. Check your network connection and try again."
+                : state.StatusMessage;
+
+            return new VideoListStatus(
+                "Could not complete search",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        var emptyDescription = string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Search complete."
+            ? "Try different keywords or check spelling."
+            : state.StatusMessage;
+
+        return new VideoListStatus(
+            "No results found",
+            emptyDescription,
+            "system-search-symbolic");
+    }
+
+    public static VideoListStatus MapStatus(SearchViewState state)
+    {
+        if (!state.IsSuccess)
+        {
+            var description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search failed."
+                ? "Failed to load search results. Check your network connection and try again."
+                : state.Summary;
+
+            return new VideoListStatus(
+                "Could not complete search",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        var emptyDescription = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Search complete."
+            ? "Try different keywords or check spelling."
+            : state.Summary;
+
+        return new VideoListStatus(
+            "No results found",
+            emptyDescription,
+            "system-search-symbolic");
     }
 
     private void OnStateChanged(object? sender, SearchViewState state)
@@ -182,9 +206,7 @@ public sealed class HistoryVideoListSource : IVideoListSource
 
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
-            ? _viewModel.LoadMoreAsync(count)
-            : Task.CompletedTask;
+        return _viewModel.LoadMoreAsync(count);
     }
 
     public void Dispose()
@@ -194,54 +216,11 @@ public sealed class HistoryVideoListSource : IVideoListSource
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
-        _viewModel.Dispose();
     }
 
     public static VideoListPresentationState MapState(HistoryViewState state)
     {
-        VideoListStatus status;
-        switch (state.Status)
-        {
-            case AuthenticatedHistoryStatus.AuthenticationRequired:
-            case AuthenticatedHistoryStatus.AuthenticationRejected:
-                status = new VideoListStatus(
-                    "Sign in to see history",
-                    !string.IsNullOrWhiteSpace(state.Summary)
-                        ? state.Summary
-                        : "Watch history requires an active YouTube session.",
-                    "avatar-default-symbolic");
-                break;
-
-            case AuthenticatedHistoryStatus.TemporaryBackendFailure:
-                status = new VideoListStatus(
-                    "Could not load history",
-                    !string.IsNullOrWhiteSpace(state.Summary)
-                        ? state.Summary
-                        : "Failed to load your watch history. Check your network connection and try again.",
-                    "network-error-symbolic",
-                    true);
-                break;
-
-            case AuthenticatedHistoryStatus.Empty:
-            case AuthenticatedHistoryStatus.Success:
-            default:
-                if (!state.IsSuccess)
-                    status = new VideoListStatus(
-                        "Could not load history",
-                        !string.IsNullOrWhiteSpace(state.Summary)
-                            ? state.Summary
-                            : "Failed to load your watch history. Check your network connection and try again.",
-                        "network-error-symbolic",
-                        true);
-                else
-                    status = new VideoListStatus(
-                        "No watch history",
-                        !string.IsNullOrWhiteSpace(state.Summary)
-                            ? state.Summary
-                            : "Videos you watch on YouTube will appear here.",
-                        "document-open-recent-symbolic");
-                break;
-        }
+        var status = MapStatus(state.Status, state.IsSuccess, state.Summary);
 
         var loadingMessage = !string.IsNullOrWhiteSpace(state.Summary)
             ? state.Summary
@@ -254,6 +233,52 @@ public sealed class HistoryVideoListSource : IVideoListSource
             status,
             loadingMessage,
             "Loading more history…");
+    }
+
+    public static VideoListStatus MapStatus(AuthenticatedHistoryStatus historyStatus, FeedEngineState state)
+    {
+        return MapStatus(
+            state.LastError != null ? AuthenticatedHistoryStatus.TemporaryBackendFailure : historyStatus,
+            state.IsSuccess && state.LastError == null,
+            state.StatusMessage);
+    }
+
+    public static VideoListStatus MapStatus(AuthenticatedHistoryStatus status, bool isSuccess, string? summary)
+    {
+        return status switch
+        {
+            AuthenticatedHistoryStatus.AuthenticationRequired or AuthenticatedHistoryStatus.AuthenticationRejected =>
+                new VideoListStatus(
+                    "Sign in to see history",
+                    !string.IsNullOrWhiteSpace(summary)
+                        ? summary
+                        : "Watch history requires an active YouTube session.",
+                    "avatar-default-symbolic"),
+
+            AuthenticatedHistoryStatus.TemporaryBackendFailure =>
+                new VideoListStatus(
+                    "Could not load history",
+                    !string.IsNullOrWhiteSpace(summary)
+                        ? summary
+                        : "Failed to load your watch history. Check your network connection and try again.",
+                    "network-error-symbolic",
+                    true),
+
+            _ => !isSuccess
+                ? new VideoListStatus(
+                    "Could not load history",
+                    !string.IsNullOrWhiteSpace(summary)
+                        ? summary
+                        : "Failed to load your watch history. Check your network connection and try again.",
+                    "network-error-symbolic",
+                    true)
+                : new VideoListStatus(
+                    "No watch history",
+                    !string.IsNullOrWhiteSpace(summary)
+                        ? summary
+                        : "Videos you watch on YouTube will appear here.",
+                    "document-open-recent-symbolic")
+        };
     }
 
     private void OnStateChanged(object? sender, HistoryViewState state)
@@ -285,9 +310,7 @@ public sealed class ChannelVideoListSource : IVideoListSource
 
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
-            ? _viewModel.LoadMoreAsync(count)
-            : Task.CompletedTask;
+        return _viewModel.LoadMoreAsync(count);
     }
 
     public void Dispose()
@@ -297,35 +320,11 @@ public sealed class ChannelVideoListSource : IVideoListSource
 
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
-        _viewModel.Dispose();
     }
 
     public static VideoListPresentationState MapState(ChannelViewState state)
     {
-        VideoListStatus status;
-        if (!state.IsSuccess)
-        {
-            var description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Could not load channel."
-                ? "Failed to load channel details. Check your network connection and try again."
-                : state.Summary;
-
-            status = new VideoListStatus(
-                "Could not load channel",
-                description,
-                "network-error-symbolic",
-                true);
-        }
-        else
-        {
-            var description = string.IsNullOrWhiteSpace(state.Summary)
-                ? "This channel does not have any public videos available right now."
-                : state.Summary;
-
-            status = new VideoListStatus(
-                "No videos found",
-                description,
-                "applications-internet-symbolic");
-        }
+        var status = MapStatus(state);
 
         var loadingMessage = string.IsNullOrWhiteSpace(state.Summary)
             ? "Loading channel…"
@@ -337,6 +336,56 @@ public sealed class ChannelVideoListSource : IVideoListSource
             state.IsLoadingMore,
             status,
             loadingMessage);
+    }
+
+    public static VideoListStatus MapStatus(FeedEngineState state)
+    {
+        if (!state.IsSuccess || state.LastError != null)
+        {
+            var description = string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Could not load channel."
+                ? "Failed to load channel details. Check your network connection and try again."
+                : state.StatusMessage;
+
+            return new VideoListStatus(
+                "Could not load channel",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        var emptyDescription = string.IsNullOrWhiteSpace(state.StatusMessage)
+            ? "This channel does not have any public videos available right now."
+            : state.StatusMessage;
+
+        return new VideoListStatus(
+            "No videos found",
+            emptyDescription,
+            "applications-internet-symbolic");
+    }
+
+    public static VideoListStatus MapStatus(ChannelViewState state)
+    {
+        if (!state.IsSuccess)
+        {
+            var description = string.IsNullOrWhiteSpace(state.Summary) || state.Summary == "Could not load channel."
+                ? "Failed to load channel details. Check your network connection and try again."
+                : state.Summary;
+
+            return new VideoListStatus(
+                "Could not load channel",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        var emptyDescription = string.IsNullOrWhiteSpace(state.Summary)
+            ? "This channel does not have any public videos available right now."
+            : state.Summary;
+
+        return new VideoListStatus(
+            "No videos found",
+            emptyDescription,
+            "applications-internet-symbolic");
     }
 
     private void OnStateChanged(object? sender, ChannelViewState state)
@@ -370,9 +419,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
 
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        return _viewModel.State is { IsLoading: false, IsLoadingMore: false, HasMore: true }
-            ? _viewModel.LoadMoreAsync(count)
-            : Task.CompletedTask;
+        return _viewModel.LoadMoreAsync(count);
     }
 
     public void Dispose()
