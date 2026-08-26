@@ -1,132 +1,116 @@
 using Gtk;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
+/// <summary>
+///     Lightweight presentation controller that binds UI resume/restart prompt revealers
+///     and buttons to the underlying <see cref="PlaybackSession" /> resume state and events.
+/// </summary>
 internal sealed class PlayerResumeController : IDisposable
 {
     private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
-    private readonly IPreferencesService _preferences;
+    private readonly PlaybackSession _session;
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
     private readonly Revealer _restartRevealer;
     private readonly Button _resumeButton;
     private readonly Label _resumeLabel;
     private readonly Revealer _resumeRevealer;
-    private readonly Action<double> _seekAbsolute;
-    private readonly IWatchProgressService _watchProgress;
     private bool _disposed;
-    private bool _handledCurrentVideo;
-
-    private TimeSpan _lastKnownDuration;
     private uint _promptHideSource;
-    private double? _resumeFraction;
-    private string? _videoId;
 
     public PlayerResumeController(
-        IPreferencesService preferences,
-        IWatchProgressService watchProgress,
+        PlaybackSession session,
         Revealer resumeRevealer,
         Button resumeButton,
         Label resumeLabel,
         Revealer restartRevealer,
         Button restartButton,
-        Label restartLabel,
-        Action<double> seekAbsolute)
+        Label restartLabel)
     {
-        _preferences = preferences;
-        _watchProgress = watchProgress;
+        _session = session ?? throw new ArgumentNullException(nameof(session));
         _resumeRevealer = resumeRevealer;
         _resumeButton = resumeButton;
         _resumeLabel = resumeLabel;
         _restartRevealer = restartRevealer;
         _restartButton = restartButton;
         _restartLabel = restartLabel;
-        _seekAbsolute = seekAbsolute;
-        _preferences.PreferencesChanged += OnPreferencesChanged;
+
+        _session.ResumePromptChanged += OnResumePromptChanged;
+        _session.SessionEnded += OnSessionEnded;
+        _session.Failed += OnSessionFailed;
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
+        _session.ResumePromptChanged -= OnResumePromptChanged;
+        _session.SessionEnded -= OnSessionEnded;
+        _session.Failed -= OnSessionFailed;
         HidePrompt();
-    }
-
-    public void Load(VideoSummary video)
-    {
-        if (_disposed || string.Equals(_videoId, video.Id, StringComparison.Ordinal)) return;
-        HidePrompt();
-        _videoId = video.Id;
-        _resumeFraction = _watchProgress.GetResumeFraction(video.Id);
-        _handledCurrentVideo = false;
-    }
-
-    public void UpdatePlayback(LibMpvPlaybackState state, string videoId)
-    {
-        if (_disposed || _handledCurrentVideo || !state.HasMedia ||
-            !string.Equals(_videoId, videoId, StringComparison.Ordinal) || state.Duration <= TimeSpan.Zero)
-            return;
-
-        _handledCurrentVideo = true;
-        _lastKnownDuration = state.Duration;
-
-        var preferences = _preferences.GetPreferences();
-        var promptState = PlayerTimelineEngine.GetResumePromptState(
-            _resumeFraction,
-            state.Duration,
-            preferences.ResumePlaybackAutomatically,
-            preferences.ResumePlaybackOnDemand,
-            out var resumePosition);
-
-        switch (promptState)
-        {
-            case ResumePromptState.AutoResume:
-                _seekAbsolute(resumePosition.TotalSeconds);
-                ShowRestartPrompt();
-                break;
-            case ResumePromptState.ManualResume:
-                ShowResumePrompt(resumePosition);
-                break;
-            case ResumePromptState.None:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        HidePrompt();
-        _videoId = null;
-        _resumeFraction = null;
-        _handledCurrentVideo = false;
-        _lastKnownDuration = TimeSpan.Zero;
     }
 
     public bool TryResume()
     {
-        if (_disposed || !_resumeRevealer.RevealChild ||
-            !PlayerTimelineEngine.TryGetResumePosition(_resumeFraction, _lastKnownDuration, out var resumePosition))
-            return false;
-
-        _seekAbsolute(resumePosition.TotalSeconds);
-        HidePrompt();
-        return true;
+        if (_disposed) return false;
+        var handled = _session.TryResume();
+        if (handled) HidePrompt();
+        return handled;
     }
 
     public bool TryRestart()
     {
-        if (_disposed || !_restartRevealer.RevealChild) return false;
-        _seekAbsolute(0);
-        HidePrompt();
-        return true;
+        if (_disposed) return false;
+        var handled = _session.TryRestart();
+        if (handled) HidePrompt();
+        return handled;
+    }
+
+    private void OnResumePromptChanged(ResumePromptMode mode, TimeSpan position)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+
+            switch (mode)
+            {
+                case ResumePromptMode.Resume:
+                    ShowResumePrompt(position);
+                    break;
+                case ResumePromptMode.Restart:
+                    ShowRestartPrompt();
+                    break;
+                case ResumePromptMode.None:
+                default:
+                    HidePrompt();
+                    break;
+            }
+
+            return false;
+        });
+    }
+
+    private void OnSessionEnded()
+    {
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            HidePrompt();
+            return false;
+        });
+    }
+
+    private void OnSessionFailed(string detail)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            HidePrompt();
+            return false;
+        });
     }
 
     private void ShowResumePrompt(TimeSpan resumePosition)
@@ -153,7 +137,12 @@ internal sealed class PlayerResumeController : IDisposable
         _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (!_disposed) HidePrompt();
+            if (!_disposed)
+            {
+                _resumeRevealer.RevealChild = false;
+                _restartRevealer.RevealChild = false;
+                _session.DismissResumePrompt();
+            }
             return false;
         });
     }
@@ -169,16 +158,5 @@ internal sealed class PlayerResumeController : IDisposable
         if (_disposed) return;
         _resumeRevealer.RevealChild = false;
         _restartRevealer.RevealChild = false;
-    }
-
-    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
-    {
-        IdleAdd(0, () =>
-        {
-            if (_disposed || preferences.ResumePlaybackAutomatically || preferences.ResumePlaybackOnDemand)
-                return false;
-            HidePrompt();
-            return false;
-        });
     }
 }

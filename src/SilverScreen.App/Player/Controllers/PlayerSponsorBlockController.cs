@@ -1,283 +1,161 @@
 using Cairo;
 using Gtk;
-using Serilog;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
-using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
+/// <summary>
+///     Lightweight presentation controller that binds SponsorBlock segment rendering
+///     and skip prompt UI to the underlying <see cref="PlaybackSession" /> state and events.
+/// </summary>
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
     private const uint SkipPromptDurationMilliseconds = PlayerTimelineEngine.DefaultSkipPromptDurationMilliseconds;
-    private static readonly ILogger Logger = Log.ForContext<PlayerSponsorBlockController>();
-    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    private readonly PlaybackSession _session;
     private readonly IPreferencesService _preferences;
-    private readonly Action<double> _seekAbsolute;
     private readonly Button _skipButton;
     private readonly Label _skipLabel;
     private readonly Revealer _skipRevealer;
-    private readonly ISponsorBlockService _sponsorBlock;
     private readonly Scale _timeline;
     private readonly DrawingArea _timelineDrawingArea;
     private readonly Overlay _timelineOverlay;
-    private SponsorBlockSegment? _activeManualSegment;
-    private CancellationTokenSource? _cancellation;
-    private string _configurationKey = string.Empty;
     private bool _disposed;
-    private TimeSpan _duration;
-    private LibMpvPlaybackState? _lastPlaybackState;
-    private string? _lastPlaybackVideoId;
-    private long _loadVersion;
-    private bool _manualPromptAfterSeek;
-    private bool _manualWasPaused;
     private uint _promptHideSource;
-    private IReadOnlyList<SponsorBlockSegment> _segments = [];
     private string? _skipButtonColorClass;
-    private VideoSummary? _video;
-    private string? _videoId;
 
     public PlayerSponsorBlockController(
-        ISponsorBlockService sponsorBlock,
+        PlaybackSession session,
         IPreferencesService preferences,
         Scale timeline,
         Overlay timelineOverlay,
         Revealer skipRevealer,
         Button skipButton,
-        Label skipLabel,
-        Action<double> seekAbsolute)
+        Label skipLabel)
     {
-        _sponsorBlock = sponsorBlock;
-        _preferences = preferences;
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _timeline = timeline;
         _timelineOverlay = timelineOverlay;
         _skipRevealer = skipRevealer;
         _skipButton = skipButton;
         _skipLabel = skipLabel;
-        _seekAbsolute = seekAbsolute;
+
         _timelineDrawingArea = DrawingArea.New();
         _timelineDrawingArea.SetCanTarget(false);
         _timelineDrawingArea.Halign = Align.Fill;
         _timelineDrawingArea.Valign = Align.Fill;
         _timelineDrawingArea.SetDrawFunc(DrawTimeline);
         _timelineOverlay.AddOverlay(_timelineDrawingArea);
-        _preferences.PreferencesChanged += OnPreferencesChanged;
+
+        _session.SponsorBlockSegmentsChanged += OnSegmentsChanged;
+        _session.SponsorBlockPromptChanged += OnPromptChanged;
+        _session.SessionEnded += OnSessionEnded;
+        _session.Failed += OnSessionFailed;
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        CancelLoad();
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
-        ClearState();
+        _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged;
+        _session.SponsorBlockPromptChanged -= OnPromptChanged;
+        _session.SessionEnded -= OnSessionEnded;
+        _session.Failed -= OnSessionFailed;
+        HideManualPrompt();
         _timelineOverlay.RemoveOverlay(_timelineDrawingArea);
         _timelineDrawingArea.Dispose();
     }
 
-    public void Load(VideoSummary video)
-    {
-        if (_disposed) return;
-        CancelLoad();
-        ClearState();
-        _video = video;
-        _videoId = video.Id;
-        var preferences = _preferences.GetPreferences();
-        _configurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
-        if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled) ||
-            !PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
-            return;
-
-        var categories = preferences.SponsorBlockCategories.Where(SponsorBlockCategories.All.Contains)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        if (categories.Length == 0) return;
-
-        var cancellation = new CancellationTokenSource();
-        _cancellation = cancellation;
-        var loadVersion = ++_loadVersion;
-        LoadAsync(video.Id, categories, loadVersion, cancellation.Token).FireAndForget(Logger);
-    }
-
-    public void UpdatePlayback(LibMpvPlaybackState state, string videoId)
-    {
-        if (_disposed) return;
-        if (_lastPlaybackState is { } previous &&
-            string.Equals(_lastPlaybackVideoId, videoId, StringComparison.Ordinal) &&
-            Math.Abs((state.Position - previous.Position).TotalSeconds) > 1)
-            _manualPromptAfterSeek = true;
-        _lastPlaybackState = state;
-        _lastPlaybackVideoId = videoId;
-        if (!string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
-        _duration = state.Duration > TimeSpan.Zero ? state.Duration : _video?.Duration ?? TimeSpan.Zero;
-        _timelineDrawingArea.QueueDraw();
-        TryAutoSkip(state, videoId);
-        UpdateManualPrompt(state, videoId);
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        CancelLoad();
-        ClearState();
-        _video = null;
-        _videoId = null;
-        _configurationKey = string.Empty;
-    }
-
     public bool TrySkipManualSegment()
     {
-        if (_lastPlaybackState is not { } state ||
-            !PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(_preferences.GetPreferences()))
-            return false;
-        var segment = PlayerTimelineEngine.FindSponsorBlockSegmentAt(_segments, state.Position);
-        if (segment is null) return false;
-        _seekAbsolute(segment.End.TotalSeconds);
-        HideManualPrompt();
-        return true;
+        if (_disposed) return false;
+        var handled = _session.TrySkipManualSegment();
+        if (handled) HideManualPrompt();
+        return handled;
     }
 
-    private async Task LoadAsync(string videoId, IReadOnlyCollection<string> categories, long loadVersion,
-        CancellationToken cancellationToken)
+    public void Redraw()
     {
-        try
-        {
-            var segments = await _sponsorBlock.GetSegmentsAsync(videoId, categories, cancellationToken)
-                .ConfigureAwait(false);
-            IdleAdd(0, () =>
-            {
-                if (!_disposed && !cancellationToken.IsCancellationRequested && loadVersion == _loadVersion &&
-                    string.Equals(_videoId, videoId, StringComparison.Ordinal))
-                    SetSegments(segments);
-                return false;
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to load SponsorBlock segments for video {VideoId}", videoId);
-        }
+        if (!_disposed)
+            _timelineDrawingArea.QueueDraw();
     }
 
-    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
+    private void OnSegmentsChanged(IReadOnlyList<SponsorBlockSegment> segments)
     {
         IdleAdd(0, () =>
         {
-            if (_disposed || PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences) == _configurationKey)
-                return false;
-            if (!(preferences.SponsorBlockAutoSkipEnabled || preferences.SponsorBlockSegmentDisplayEnabled))
-            {
-                Clear();
-                return false;
-            }
-
-            if (_video is null) _configurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
-            else Load(_video);
+            if (_disposed) return false;
+            _timelineDrawingArea.QueueDraw();
             return false;
         });
     }
 
-    private void CancelLoad()
+    private void OnPromptChanged(SponsorBlockSegment? segment)
     {
-        _loadVersion++;
-        _cancellation?.Cancel();
-        _cancellation?.Dispose();
-        _cancellation = null;
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            if (segment is not null)
+                ShowManualPrompt(segment);
+            else
+                HideManualPrompt();
+            return false;
+        });
     }
 
-    private void ClearState()
+    private void OnSessionEnded()
     {
-        ResetManualPrompt();
-        _lastPlaybackState = null;
-        _lastPlaybackVideoId = null;
-        _segments = [];
-        _duration = TimeSpan.Zero;
-        _autoSkippedSegmentIds.Clear();
-        _timelineDrawingArea.QueueDraw();
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            HideManualPrompt();
+            _timelineDrawingArea.QueueDraw();
+            return false;
+        });
     }
 
-    private void SetSegments(IReadOnlyList<SponsorBlockSegment> segments)
+    private void OnSessionFailed(string detail)
     {
-        if (_segments.SequenceEqual(segments)) return;
-        _segments = segments;
-        if (_lastPlaybackState is { } state && string.Equals(_lastPlaybackVideoId, _videoId, StringComparison.Ordinal))
-            UpdateManualPrompt(state, _videoId!);
-        _timelineDrawingArea.QueueDraw();
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            HideManualPrompt();
+            _timelineDrawingArea.QueueDraw();
+            return false;
+        });
     }
 
     private void DrawTimeline(DrawingArea drawingArea, Context context, int width, int height)
     {
-        if (!_preferences.GetPreferences().SponsorBlockSegmentDisplayEnabled || _duration <= TimeSpan.Zero ||
-            width <= 0 || height <= 0)
+        var preferences = _preferences.GetPreferences();
+        if (!preferences.SponsorBlockSegmentDisplayEnabled || width <= 0 || height <= 0)
             return;
-        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(_timeline, drawingArea,
-            _lastPlaybackState?.Position ?? TimeSpan.Zero, _duration);
+
+        var duration = _session.LastPlaybackState?.Duration > TimeSpan.Zero
+            ? _session.LastPlaybackState.Duration
+            : _session.CurrentVideo?.Duration ?? TimeSpan.Zero;
+
+        if (duration <= TimeSpan.Zero) return;
+
+        var position = _session.LastPlaybackState?.Position ?? TimeSpan.Zero;
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(_timeline, drawingArea, position, duration);
         if (trackWidth <= 0) return;
+
         const double rangeHeight = 10;
         var rangeY = Math.Max(0, (height - rangeHeight) / 2);
-        foreach (var segment in _segments)
+
+        foreach (var segment in _session.SponsorBlockSegments)
         {
-            if (segment.Start >= _duration) continue;
-            var start = PlayerTimelineGeometry.GetTrackPosition(segment.Start, _duration, trackStart, trackWidth);
-            var end = PlayerTimelineGeometry.GetTrackPosition(segment.End, _duration, trackStart, trackWidth);
+            if (segment.Start >= duration) continue;
+            var start = PlayerTimelineGeometry.GetTrackPosition(segment.Start, duration, trackStart, trackWidth);
+            var end = PlayerTimelineGeometry.GetTrackPosition(segment.End, duration, trackStart, trackWidth);
             var color = SponsorBlockCategories.GetColor(segment.Category);
-            context.SetSourceRgba(color.Red / (double)byte.MaxValue, color.Green / (double)byte.MaxValue,
-                color.Blue / (double)byte.MaxValue, color.Opacity);
+            context.SetSourceRgba(color.Red / 255.0, color.Green / 255.0, color.Blue / 255.0, color.Opacity);
             context.Rectangle(start, rangeY, Math.Max(2, end - start), rangeHeight);
             context.Fill();
         }
-    }
-
-    private void TryAutoSkip(LibMpvPlaybackState state, string videoId)
-    {
-        var preferences = _preferences.GetPreferences();
-        if (!string.Equals(_videoId, videoId, StringComparison.Ordinal)) return;
-        if (!PlayerTimelineEngine.ShouldAutoSkip(state.Position, _segments, state.IsPaused,
-                preferences.SponsorBlockAutoSkipEnabled, _autoSkippedSegmentIds, out var segment))
-            return;
-
-        Logger.Information(
-            "Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s",
-            segment.Id, segment.Category, videoId, segment.End.TotalSeconds);
-        _seekAbsolute(segment.End.TotalSeconds);
-    }
-
-    private void UpdateManualPrompt(LibMpvPlaybackState state, string videoId)
-    {
-        var preferences = _preferences.GetPreferences();
-        if (!PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(preferences) ||
-            !string.Equals(_videoId, videoId, StringComparison.Ordinal))
-        {
-            ResetManualPrompt();
-            return;
-        }
-
-        var segment = PlayerTimelineEngine.FindSponsorBlockSegmentAt(_segments, state.Position);
-        if (segment is null)
-        {
-            _activeManualSegment = null;
-            _manualPromptAfterSeek = false;
-            _manualWasPaused = state.IsPaused;
-            HideManualPrompt();
-            return;
-        }
-
-        var shouldShow = PlayerTimelineEngine.ShouldShowManualPrompt(
-            _activeManualSegment,
-            segment,
-            state.IsPaused,
-            _manualWasPaused,
-            _manualPromptAfterSeek);
-
-        _activeManualSegment = segment;
-        _manualPromptAfterSeek = false;
-        _manualWasPaused = state.IsPaused;
-        if (shouldShow) ShowManualPrompt(segment);
     }
 
     private void ShowManualPrompt(SponsorBlockSegment segment)
@@ -291,7 +169,11 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _promptHideSource = TimeoutAdd(0, SkipPromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (!_disposed) _skipRevealer.RevealChild = false;
+            if (!_disposed)
+            {
+                _skipRevealer.RevealChild = false;
+                _session.DismissSponsorBlockPrompt();
+            }
             return false;
         });
     }
@@ -304,23 +186,23 @@ internal sealed class PlayerSponsorBlockController : IDisposable
             _promptHideSource = 0;
         }
 
-        if (!_disposed) _skipRevealer.RevealChild = false;
-    }
-
-    private void ResetManualPrompt()
-    {
-        _activeManualSegment = null;
-        _manualPromptAfterSeek = false;
-        _manualWasPaused = false;
-        HideManualPrompt();
+        if (_disposed) return;
+        _skipRevealer.RevealChild = false;
+        ClearSkipButtonColor();
     }
 
     private void SetSkipButtonColor(string category)
     {
+        ClearSkipButtonColor();
         var colorClass = PlayerTimelineEngine.GetSponsorBlockButtonColorClass(category);
-        if (string.Equals(_skipButtonColorClass, colorClass, StringComparison.Ordinal)) return;
-        if (_skipButtonColorClass is not null) _skipButton.RemoveCssClass(_skipButtonColorClass);
         _skipButton.AddCssClass(colorClass);
         _skipButtonColorClass = colorClass;
+    }
+
+    private void ClearSkipButtonColor()
+    {
+        if (_skipButtonColorClass is null) return;
+        _skipButton.RemoveCssClass(_skipButtonColorClass);
+        _skipButtonColorClass = null;
     }
 }

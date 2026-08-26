@@ -90,25 +90,24 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_scrub_time_label, player_scrub_delta_label, player_scrub_chapter_label, player_position_label,
             player_duration_label,
             (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity);
-        _engagement = new PlayerEngagementController(dependencies.VideoEngagement, dependencies.YouTubeRating,
-            dependencies.Session, player_like_button, player_like_image, player_likes_label, player_dislike_button,
-            player_dislike_image, player_dislikes_label);
-        _chapterOverlay = new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
-            () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
-        _sponsorBlockController = new PlayerSponsorBlockController(dependencies.SponsorBlock, _preferences,
-            player_timeline,
-            player_timeline_overlay, player_sponsorblock_revealer, player_sponsorblock_skip_button,
-            player_sponsorblock_label, pos => SeekAbsolute(pos));
-        _resumeController = new PlayerResumeController(_preferences, dependencies.WatchProgress,
-            player_resume_revealer, player_resume_button, player_resume_label,
-            player_restart_revealer, player_restart_button, player_restart_label,
-            pos => SeekAbsolute(pos));
         _desktopMedia = new DesktopMediaIntegration(_player, presentRequested);
-        _session = new PlaybackSession(dependencies.PlaybackCoordinator, _desktopMedia);
+        _session = new PlaybackSession(dependencies, _desktopMedia);
+        _session.SeekRequested += SeekAbsolute;
         _session.VideoChanged += OnSessionVideoChanged;
         _session.SessionEnded += OnSessionEnded;
         _session.Failed += OnSessionFailed;
-        _infoPanel = new VideoInfoPanelController(dependencies.VideoDetails, _channelRequested, player_info_backdrop,
+        _engagement = new PlayerEngagementController(_session, player_like_button, player_like_image,
+            player_likes_label, player_dislike_button, player_dislike_image, player_dislikes_label);
+        _chapterOverlay = new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
+            () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
+        _sponsorBlockController = new PlayerSponsorBlockController(_session, _preferences,
+            player_timeline,
+            player_timeline_overlay, player_sponsorblock_revealer, player_sponsorblock_skip_button,
+            player_sponsorblock_label);
+        _resumeController = new PlayerResumeController(_session,
+            player_resume_revealer, player_resume_button, player_resume_label,
+            player_restart_revealer, player_restart_button, player_restart_label);
+        _infoPanel = new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, player_info_backdrop,
             player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
             player_info_stats_label, player_info_status_label, player_info_description_scroller,
             player_info_description, player_info_close_button, () =>
@@ -234,9 +233,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         });
         _shortcutController.RegisterAction(PlayerShortcutActions.ResumeOrSkip, () =>
         {
-            if (_resumeController.TryResume())
+            if (_session.TryResume())
                 _osdController.ShowResumed();
-            else if (_sponsorBlockController.TrySkipManualSegment())
+            else if (_session.TrySkipManualSegment())
                 _osdController.ShowSkippedSponsor();
         });
         _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
@@ -273,6 +272,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.RenderRequested -= OnRenderRequested;
         _player.StateChanged -= OnStateChanged;
         _player.PlaybackFailed -= OnPlaybackFailed;
+        _session.SeekRequested -= SeekAbsolute;
         _session.VideoChanged -= OnSessionVideoChanged;
         _session.SessionEnded -= OnSessionEnded;
         _session.Failed -= OnSessionFailed;
@@ -465,12 +465,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnLikeButtonClicked(object? sender, EventArgs args)
     {
-        _engagement.SubmitVote(VideoVote.Like);
+        _session.SubmitVote(VideoVote.Like);
     }
-
     private void OnDislikeButtonClicked(object? sender, EventArgs args)
     {
-        _engagement.SubmitVote(VideoVote.Dislike);
+        _session.SubmitVote(VideoVote.Dislike);
     }
 
     private void OnPlayerChannelButtonClicked(object? sender, EventArgs args)
@@ -487,19 +486,18 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
     {
-        if (_sponsorBlockController.TrySkipManualSegment())
+        if (_session.TrySkipManualSegment())
             RegisterActivity();
     }
-
     private void OnResumeButtonClicked(object? sender, EventArgs args)
     {
-        if (_resumeController.TryResume())
+        if (_session.TryResume())
             RegisterActivity();
     }
 
     private void OnRestartButtonClicked(object? sender, EventArgs args)
     {
-        if (_resumeController.TryRestart())
+        if (_session.TryRestart())
             RegisterActivity();
     }
 
@@ -654,8 +652,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_previous_queue_button.Sensitive = state.PlaylistIndex > 0;
             player_next_queue_button.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
             var video = request.Videos[state.PlaylistIndex];
-            _sponsorBlockController.UpdatePlayback(state, video.Id);
-            _resumeController.UpdatePlayback(state, video.Id);
+            _sponsorBlockController.Redraw();
         }
         finally
         {
@@ -669,9 +666,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_title_label.SetText(video.Title);
         player_channel_label.SetText(video.ChannelName);
         if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
-        _engagement.Load(video);
-        _sponsorBlockController.Load(video);
-        _resumeController.Load(video);
+
         _commentsVideoId = video.Id;
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar)
@@ -694,9 +689,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timelineController.Reset();
         _osdController.HideImmediate();
         player_play_pause_button.SetIconName("media-playback-start-symbolic");
-        _engagement.Clear();
-        _sponsorBlockController.Clear();
-        _resumeController.Clear();
+
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
@@ -724,9 +717,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
-        _engagement.Clear();
-        _sponsorBlockController.Clear();
-        _resumeController.Clear();
+
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);

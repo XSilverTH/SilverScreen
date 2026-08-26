@@ -1,190 +1,154 @@
 using Gtk;
-using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Common;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
-internal sealed class PlayerEngagementController(
-    IVideoEngagementService videoEngagement,
-    IYouTubeRatingService youtubeRating,
-    ISessionService session,
-    Button likeButton,
-    Image likeImage,
-    Label likesLabel,
-    Button dislikeButton,
-    Image dislikeImage,
-    Label dislikesLabel)
-    : IDisposable
+/// <summary>
+///     Lightweight presentation controller that binds UI like/dislike buttons and labels
+///     to the underlying <see cref="PlaybackSession" /> engagement state and events.
+/// </summary>
+internal sealed class PlayerEngagementController : IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<PlayerEngagementController>();
-    private CancellationTokenSource? _cancellation;
+    private readonly PlaybackSession _session;
+    private readonly Button _likeButton;
+    private readonly Image _likeImage;
+    private readonly Label _likesLabel;
+    private readonly Button _dislikeButton;
+    private readonly Image _dislikeImage;
+    private readonly Label _dislikesLabel;
     private bool _disposed;
-    private long _loadVersion;
-    private YouTubeRatingState _ratingState;
-    private string? _videoId;
+
+    public PlayerEngagementController(
+        PlaybackSession session,
+        Button likeButton,
+        Image likeImage,
+        Label likesLabel,
+        Button dislikeButton,
+        Image dislikeImage,
+        Label dislikesLabel)
+    {
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _likeButton = likeButton;
+        _likeImage = likeImage;
+        _likesLabel = likesLabel;
+        _dislikeButton = dislikeButton;
+        _dislikeImage = dislikeImage;
+        _dislikesLabel = dislikesLabel;
+
+        _session.EngagementChanged += OnEngagementChanged;
+        _session.RatingStateChanged += OnRatingStateChanged;
+        _session.VideoChanged += OnVideoChanged;
+        _session.SessionEnded += OnSessionEnded;
+        _session.Failed += OnSessionFailed;
+
+        UpdateUi();
+    }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        CancelLoad();
-        _videoId = null;
+        _session.EngagementChanged -= OnEngagementChanged;
+        _session.RatingStateChanged -= OnRatingStateChanged;
+        _session.VideoChanged -= OnVideoChanged;
+        _session.SessionEnded -= OnSessionEnded;
+        _session.Failed -= OnSessionFailed;
         SetReactionSensitive(false);
-    }
-
-    public void Load(VideoSummary video)
-    {
-        if (_disposed) return;
-        CancelLoad();
-        _videoId = video.Id;
-        likesLabel.SetText("—");
-        dislikesLabel.SetText("—");
-        SetRatingState(YouTubeRatingState.None);
-        var validVideo = PlaybackRequest.LooksLikeYouTubeVideoId(video.Id);
-        SetReactionSensitive(validVideo && session.GetCurrentSession().IsSignedIn);
-        if (!validVideo) return;
-        var cancellation = new CancellationTokenSource();
-        _cancellation = cancellation;
-        var version = ++_loadVersion;
-        UpdateEngagementAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
-        UpdateRatingStateAsync(video.Id, version, cancellation.Token).FireAndForget(Logger);
-    }
-
-    public void Clear()
-    {
-        if (_disposed) return;
-        CancelLoad();
-        _videoId = null;
-        likesLabel.SetText("—");
-        dislikesLabel.SetText("—");
-        SetRatingState(YouTubeRatingState.None);
     }
 
     public void SubmitVote(VideoVote vote)
     {
-        if (_videoId is not { } videoId || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return;
-        var removeVote =
-            _ratingState == (vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
-        var version = _loadVersion;
-        var token = _cancellation?.Token ?? CancellationToken.None;
+        if (_disposed) return;
         SetReactionSensitive(false);
-        SubmitVoteAsync(videoId, vote, removeVote, version, token).FireAndForget(Logger);
+        _session.SubmitVote(vote);
     }
 
-    private async Task UpdateEngagementAsync(string videoId, long version, CancellationToken cancellationToken)
+    private void OnEngagementChanged(VideoEngagement? engagement)
     {
-        VideoEngagement? engagement;
-        try
-        {
-            engagement = await videoEngagement.GetEngagementAsync(videoId, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Logger.Debug(exception, "Unable to load engagement counts for {VideoId}", videoId);
-            return;
-        }
-
         IdleAdd(0, () =>
         {
-            if (!IsCurrent(videoId, version, cancellationToken)) return false;
-            likesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Likes));
-            dislikesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Dislikes));
+            if (_disposed) return false;
+            _likesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Likes));
+            _dislikesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Dislikes));
             return false;
         });
     }
 
-    private async Task UpdateRatingStateAsync(string videoId, long version, CancellationToken cancellationToken)
+    private void OnRatingStateChanged(YouTubeRatingState ratingState)
     {
-        YouTubeRatingState ratingState;
-        try
-        {
-            ratingState = await youtubeRating.GetRatingStateAsync(videoId, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Logger.Debug(exception, "Unable to load the native YouTube rating for {VideoId}", videoId);
-            return;
-        }
-
         IdleAdd(0, () =>
         {
-            if (!IsCurrent(videoId, version, cancellationToken)) return false;
+            if (_disposed) return false;
             SetRatingState(ratingState);
+            SetReactionSensitive(_session.CanVote);
             return false;
         });
     }
 
-    private async Task SubmitVoteAsync(string videoId, VideoVote vote, bool removeVote, long version,
-        CancellationToken cancellationToken)
+    private void OnVideoChanged(VideoSummary video, int playlistIndex)
     {
-        var succeeded = false;
-        try
-        {
-            succeeded = removeVote
-                ? await youtubeRating.RemoveVoteAsync(videoId, vote, cancellationToken).ConfigureAwait(false)
-                : await youtubeRating.SubmitVoteAsync(videoId, vote, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Logger.Debug(exception, "Unable to submit {Vote} for {VideoId}", vote, videoId);
-        }
-
         IdleAdd(0, () =>
         {
-            if (!IsCurrent(videoId, version, cancellationToken)) return false;
-            SetReactionSensitive(true);
-            if (!succeeded) return false;
-            SetRatingState(removeVote ? YouTubeRatingState.None :
-                vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
-            UpdateEngagementAsync(videoId, version, CancellationToken.None).FireAndForget(Logger);
+            if (_disposed) return false;
+            _likesLabel.SetText("—");
+            _dislikesLabel.SetText("—");
+            SetRatingState(YouTubeRatingState.None);
+            SetReactionSensitive(_session.CanVote);
             return false;
         });
     }
 
-    private bool IsCurrent(string videoId, long version, CancellationToken cancellationToken)
+    private void OnSessionEnded()
     {
-        return !_disposed && !cancellationToken.IsCancellationRequested && version == _loadVersion &&
-               _videoId == videoId;
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            Clear();
+            return false;
+        });
     }
 
-    private void CancelLoad()
+    private void OnSessionFailed(string detail)
     {
-        _loadVersion++;
-        _cancellation?.Cancel();
-        _cancellation?.Dispose();
-        _cancellation = null;
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            Clear();
+            return false;
+        });
+    }
+
+    private void Clear()
+    {
+        _likesLabel.SetText("—");
+        _dislikesLabel.SetText("—");
+        SetRatingState(YouTubeRatingState.None);
         SetReactionSensitive(false);
+    }
+
+    private void UpdateUi()
+    {
+        SetReactionSensitive(_session.CanVote);
+        SetRatingState(_session.RatingState);
+        _likesLabel.SetText(_session.Engagement is null ? "—" : FormatCount(_session.Engagement.Likes));
+        _dislikesLabel.SetText(_session.Engagement is null ? "—" : FormatCount(_session.Engagement.Dislikes));
     }
 
     private void SetReactionSensitive(bool sensitive)
     {
-        likeButton.SetSensitive(sensitive);
-        dislikeButton.SetSensitive(sensitive);
+        _likeButton.SetSensitive(sensitive);
+        _dislikeButton.SetSensitive(sensitive);
     }
 
     private void SetRatingState(YouTubeRatingState ratingState)
     {
-        _ratingState = ratingState;
-        likeImage.SetFromResource(ratingState == YouTubeRatingState.Like
+        _likeImage.SetFromResource(ratingState == YouTubeRatingState.Like
             ? "/SilverScreen/Assets/liked-symbolic.svg"
             : "/SilverScreen/Assets/like-symbolic.svg");
-        dislikeImage.SetFromResource(ratingState == YouTubeRatingState.Dislike
+        _dislikeImage.SetFromResource(ratingState == YouTubeRatingState.Dislike
             ? "/SilverScreen/Assets/disliked-symbolic.svg"
             : "/SilverScreen/Assets/dislike-symbolic.svg");
     }
