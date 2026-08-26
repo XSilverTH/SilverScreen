@@ -1,4 +1,5 @@
 using SilverScreen.Browsing.Subscriptions;
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
@@ -288,6 +289,65 @@ public sealed class SubscriptionsViewModelTests
         Assert.Empty(viewModel.State.Videos);
     }
 
+    [Fact]
+    public async Task RefreshAsync_WhileLoading_EmitsLoadingPresentationState()
+    {
+        var channels = new List<SubscribedChannel>
+        {
+            new("UC1", "Channel 1", "https://www.youtube.com/@chan1", null)
+        };
+        var videos = new List<VideoSummary>
+        {
+            CreateVideo("v1", "Video 1", "Channel 1", "https://www.youtube.com/@chan1")
+        };
+
+        var tcs = new TaskCompletionSource<AuthenticatedSubscriptionsFeedResult>();
+        var subsService = new DelayedFakeSubscriptionsService(channels, tcs.Task);
+        var channelService = new FakeChannelService();
+        var session = CreateSession();
+
+        using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
+        var source = (IVideoListSource)viewModel;
+
+        var states = new List<VideoListPresentationState>();
+        source.StateChanged += (_, s) => states.Add(s);
+
+        var refreshTask = viewModel.RefreshAsync(20);
+
+        Assert.True(viewModel.State.IsLoading);
+        Assert.True(source.State.IsLoading);
+        Assert.Equal("Loading subscriptions…", source.State.LoadingMessage);
+        Assert.Empty(source.State.Videos);
+        Assert.Contains(states, s => s.IsLoading && s.LoadingMessage == "Loading subscriptions…");
+
+        tcs.SetResult(new AuthenticatedSubscriptionsFeedResult(
+            AuthenticatedSubscriptionsStatus.Success,
+            new FeedPage(videos, null),
+            "Success"));
+
+        await refreshTask;
+
+        Assert.False(viewModel.State.IsLoading);
+        Assert.False(source.State.IsLoading);
+        Assert.Single(source.State.Videos);
+        Assert.Equal("v1", source.State.Videos[0].Id);
+    }
+
+    [Fact]
+    public void Constructor_WhenSignedOut_InitializesAuthenticationRequiredState()
+    {
+        var subsService = new FakeSubscriptionsService([], []);
+        var channelService = new FakeChannelService();
+        var session = new InMemorySessionService();
+
+        using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
+        var source = (IVideoListSource)viewModel;
+
+        Assert.Equal(AuthenticatedSubscriptionsStatus.AuthenticationRequired, viewModel.State.Status);
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Equal("Sign in to see subscriptions", source.State.Status.Title);
+    }
+
     private static InMemorySessionService CreateSession()
     {
         var session = new InMemorySessionService();
@@ -394,6 +454,37 @@ public sealed class SubscriptionsViewModelTests
             CancellationToken cancellationToken)
         {
             return task;
+        }
+    }
+
+    private sealed class DelayedFakeSubscriptionsService(
+        IReadOnlyList<SubscribedChannel> channels,
+        Task<AuthenticatedSubscriptionsFeedResult> feedTask) : IAuthenticatedSubscriptionsService
+    {
+        public Task<AuthenticatedSubscriptionsFeedResult> LoadFirstFeedPageAsync(
+            int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
+        {
+            return feedTask;
+        }
+
+        public Task<AuthenticatedSubscriptionsFeedResult> LoadNextFeedPageAsync(
+            int count = VideoFeedConstants.DefaultPageSize,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
+                AuthenticatedSubscriptionsStatus.Success,
+                new FeedPage([], null),
+                "Success"));
+        }
+
+        public Task<SubscribedChannelsResult> LoadSubscribedChannelsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new SubscribedChannelsResult(
+                AuthenticatedSubscriptionsStatus.Success,
+                channels,
+                "Success"));
         }
     }
 }

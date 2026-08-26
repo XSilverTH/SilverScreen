@@ -206,13 +206,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
                 "Could not load YouTube recommendations.",
                 "network-error-symbolic");
 
-        if (state.Videos.Count == 0 && !state.IsLoading)
-            return new VideoListStatus(
-                "Home",
-                "No recommendations are available right now.",
-                "applications-internet-symbolic");
-        //TODO: Loading indicator
-
         return new VideoListStatus(
             "Home",
             "No recommendations are available right now.",
