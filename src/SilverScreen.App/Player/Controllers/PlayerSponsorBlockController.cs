@@ -13,8 +13,8 @@ namespace SilverScreen.Player.Controllers;
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
     private const uint SkipPromptDurationMilliseconds = PlayerTimelineEngine.DefaultSkipPromptDurationMilliseconds;
-    private readonly PlaybackSession _session;
     private readonly IPreferencesService _preferences;
+    private readonly PlaybackSession _session;
     private readonly Button _skipButton;
     private readonly Label _skipLabel;
     private readonly Revealer _skipRevealer;
@@ -66,14 +66,6 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         HideManualPrompt();
         _timelineOverlay.RemoveOverlay(_timelineDrawingArea);
         _timelineDrawingArea.Dispose();
-    }
-
-    public bool TrySkipManualSegment()
-    {
-        if (_disposed) return false;
-        var handled = _session.TrySkipManualSegment();
-        if (handled) HideManualPrompt();
-        return handled;
     }
 
     public void Redraw()
@@ -169,11 +161,10 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _promptHideSource = TimeoutAdd(0, SkipPromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (!_disposed)
-            {
-                _skipRevealer.RevealChild = false;
-                _session.DismissSponsorBlockPrompt();
-            }
+            if (_disposed) return false;
+            _skipRevealer.RevealChild = false;
+            _session.DismissSponsorBlockPrompt();
+
             return false;
         });
     }

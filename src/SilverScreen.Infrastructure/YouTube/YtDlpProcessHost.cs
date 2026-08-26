@@ -4,23 +4,24 @@ using System.Globalization;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Infrastructure.Common;
+using Process = System.Diagnostics.Process;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 public sealed class YtDlpProcessHost : IYtDlpProcessHost
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpProcessHost>();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<ProcessResult>> _pendingRequests = new();
 
     private readonly SemaphoreSlim _startLock = new(1, 1);
     private readonly SemaphoreSlim _writeLock = new(1, 1);
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<ProcessResult>> _pendingRequests = new();
+    private string? _currentExecutablePath;
+    private bool _disposed;
+    private Task? _errorReadTask;
+    private Task? _outputReadTask;
 
     private Process? _process;
-    private Task? _outputReadTask;
-    private Task? _errorReadTask;
-    private string? _currentExecutablePath;
     private long _requestIdCounter;
-    private bool _disposed;
 
     public bool IsRunning => _process is { HasExited: false };
     public string? Version { get; private set; }
@@ -30,18 +31,12 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (IsRunning && string.Equals(_currentExecutablePath, executablePath, StringComparison.Ordinal))
-        {
-            return;
-        }
+        if (IsRunning && string.Equals(_currentExecutablePath, executablePath, StringComparison.Ordinal)) return;
 
         await _startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (IsRunning && string.Equals(_currentExecutablePath, executablePath, StringComparison.Ordinal))
-            {
-                return;
-            }
+            if (IsRunning && string.Equals(_currentExecutablePath, executablePath, StringComparison.Ordinal)) return;
 
             await StopInternalAsync().ConfigureAwait(false);
             await StartInternalAsync(executablePath, cancellationToken).ConfigureAwait(false);
@@ -104,14 +99,12 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
 
         await using var reg = timeoutCts.Token.Register(() =>
         {
-            if (_pendingRequests.TryRemove(requestId, out var removedTcs))
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    removedTcs.TrySetCanceled(cancellationToken);
-                else
-                    removedTcs.TrySetException(new TimeoutException(
-                        $"yt-dlp helper request timed out after {timeout.TotalSeconds:0} seconds."));
-            }
+            if (!_pendingRequests.TryRemove(requestId, out var removedTcs)) return;
+            if (cancellationToken.IsCancellationRequested)
+                removedTcs.TrySetCanceled(cancellationToken);
+            else
+                removedTcs.TrySetException(new TimeoutException(
+                    $"yt-dlp helper request timed out after {timeout.TotalSeconds:0} seconds."));
         });
 
         await _writeLock.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
@@ -126,6 +119,26 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         }
 
         return await tcs.Task.ConfigureAwait(false);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        StopInternalAsync().GetAwaiter().GetResult();
+        _startLock.Dispose();
+        _writeLock.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        await StopInternalAsync().ConfigureAwait(false);
+        _startLock.Dispose();
+        _writeLock.Dispose();
     }
 
     private async Task StartInternalAsync(string executablePath, CancellationToken cancellationToken)
@@ -156,9 +169,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
             startInfo.Environment["PYTHONUNBUFFERED"] = "1";
             startInfo.Environment["PYTHONIOENCODING"] = "utf-8";
             if (!string.IsNullOrWhiteSpace(resolvedExecutable))
-            {
                 startInfo.Environment["SILVERSCREEN_YT_DLP_PATH"] = resolvedExecutable;
-            }
 
             Process? process = null;
             try
@@ -201,9 +212,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
                 }
 
                 if (handshake is not null && string.Equals(handshake.Type, "error", StringComparison.OrdinalIgnoreCase))
-                {
                     Logger.Warning("yt-dlp helper startup returned error: {Message}", handshake.Message);
-                }
 
                 TryKill(process);
                 process.Dispose();
@@ -216,6 +225,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
                     TryKill(process);
                     process.Dispose();
                 }
+
                 Logger.Debug(ex, "Failed to start yt-dlp helper candidate '{Candidate}'", candidate);
             }
         }
@@ -265,12 +275,8 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         {
             var ex = new InvalidOperationException("yt-dlp helper process exited unexpectedly.");
             foreach (var kvp in _pendingRequests)
-            {
                 if (_pendingRequests.TryRemove(kvp.Key, out var tcs))
-                {
                     tcs.TrySetException(ex);
-                }
-            }
         }
     }
 
@@ -286,10 +292,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
                 var line = await process.StandardError.ReadLineAsync().ConfigureAwait(false);
                 if (line is null) break;
 
-                if (!string.IsNullOrWhiteSpace(line))
-                {
-                    Logger.Debug("[yt-dlp-helper-stderr] {Line}", line);
-                }
+                if (!string.IsNullOrWhiteSpace(line)) Logger.Debug("[yt-dlp-helper-stderr] {Line}", line);
             }
         }
         catch (Exception ex)
@@ -310,10 +313,10 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
             if (!process.HasExited)
             {
                 var shutdownRequest = new YtDlpIpcRequest { Action = "shutdown" };
-                var shutdownJson = JsonSerializer.Serialize(shutdownRequest, YtDlpIpcJsonContext.Default.YtDlpIpcRequest);
+                var shutdownJson =
+                    JsonSerializer.Serialize(shutdownRequest, YtDlpIpcJsonContext.Default.YtDlpIpcRequest);
 
                 if (await _writeLock.WaitAsync(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false))
-                {
                     try
                     {
                         await process.StandardInput.WriteLineAsync(shutdownJson).ConfigureAwait(false);
@@ -321,12 +324,12 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
                     }
                     catch
                     {
+                        // ignored
                     }
                     finally
                     {
                         _writeLock.Release();
                     }
-                }
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
                 await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
@@ -350,7 +353,9 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
             }
             catch
             {
+                // ignored
             }
+
             _outputReadTask = null;
         }
 
@@ -362,7 +367,9 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
             }
             catch
             {
+                // ignored
             }
+
             _errorReadTask = null;
         }
     }
@@ -385,7 +392,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         }
     }
 
-    private static IReadOnlyList<string> GetPythonCandidates(string executablePath)
+    private static List<string> GetPythonCandidates(string executablePath)
     {
         var candidates = new List<string>(4);
         var resolvedPath = ResolveExecutableFullPath(executablePath);
@@ -394,15 +401,13 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
             var shebang = TryReadShebang(resolvedPath);
             if (!string.IsNullOrWhiteSpace(shebang) &&
                 shebang.Contains("python", StringComparison.OrdinalIgnoreCase))
-            {
                 candidates.Add(shebang);
-            }
         }
 
         candidates.Add("python3");
         candidates.Add("python");
 
-        return candidates.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return [.. candidates.Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     private static string? TryReadShebang(string filePath)
@@ -439,9 +444,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         if (Path.IsPathFullyQualified(trimmed) ||
             trimmed.Contains(Path.DirectorySeparatorChar) ||
             trimmed.Contains(Path.AltDirectorySeparatorChar))
-        {
             return File.Exists(trimmed) ? Path.GetFullPath(trimmed) : null;
-        }
 
         var searchPath = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(searchPath)) return null;
@@ -449,18 +452,10 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         foreach (var dir in searchPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             var candidate = Path.Combine(dir, trimmed);
-            if (File.Exists(candidate))
-            {
-                return Path.GetFullPath(candidate);
-            }
-            if (OperatingSystem.IsWindows() && !trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                var exeCandidate = Path.Combine(dir, $"{trimmed}.exe");
-                if (File.Exists(exeCandidate))
-                {
-                    return Path.GetFullPath(exeCandidate);
-                }
-            }
+            if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+            if (!OperatingSystem.IsWindows() || trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
+            var exeCandidate = Path.Combine(dir, $"{trimmed}.exe");
+            if (File.Exists(exeCandidate)) return Path.GetFullPath(exeCandidate);
         }
 
         return null;
@@ -474,26 +469,7 @@ public sealed class YtDlpProcessHost : IYtDlpProcessHost
         }
         catch
         {
+            // ignored
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        StopInternalAsync().GetAwaiter().GetResult();
-        _startLock.Dispose();
-        _writeLock.Dispose();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        await StopInternalAsync().ConfigureAwait(false);
-        _startLock.Dispose();
-        _writeLock.Dispose();
     }
 }

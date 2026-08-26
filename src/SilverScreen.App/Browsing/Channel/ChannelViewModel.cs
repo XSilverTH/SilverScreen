@@ -25,29 +25,28 @@ public sealed record ChannelViewState(
         ChannelVideoSort.Newest, string.Empty, false, true);
 }
 
-public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
+public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private readonly IChannelService _channelService;
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
-    private bool _disposed;
-    private string? _url;
-    private string _name = string.Empty;
-    private string? _description;
     private string? _avatarUrl;
-    private long? _subscriberCount;
+    private string? _description;
+    private bool _disposed;
+    private string _name = string.Empty;
     private ChannelVideoSort _sort = ChannelVideoSort.Newest;
+    private long? _subscriberCount;
+    private string? _url;
 
     public ChannelViewModel(IChannelService channelService)
     {
         _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
 
         _engine = new PagedFeedEngine(
-            fetcher: FetchChannelPageAsync,
-            statusMapper: (_, _, state) => ChannelVideoListSource.MapStatus(state),
-            loadingMessage: "Loading channel…",
-            paginationLoadingMessage: "Loading more videos…",
+            FetchChannelPageAsync,
+            (_, _, state) => ChannelVideoListSource.MapStatus(state),
+            "Loading channel…",
             defaultTitle: "Channel",
             clearOnRefresh: true);
 
@@ -65,15 +64,37 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
         }
     } = ChannelViewState.Empty;
 
-    public VideoListPresentationState PresentationState => _engine.State;
-    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<ChannelViewState>? StateChanged;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
+    }
+
+    VideoListPresentationState IVideoListSource.State => _engine.State;
+
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
     }
+
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        return State.Url is null
+            ? Task.CompletedTask
+            : LoadAsync(State.Url, State.Name, State.Sort, count);
+    }
+
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        ThrowIfDisposed();
+        return _engine.LoadMoreAsync(count);
+    }
+
+    public event EventHandler<ChannelViewState>? StateChanged;
 
     public async Task OpenChannelAsync(string channelUrl, string fallbackName,
         int count = VideoFeedConstants.DefaultPageSize)
@@ -100,19 +121,6 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
         return State.Url is null ? Task.CompletedTask : LoadAsync(State.Url, State.Name, sort, count);
     }
 
-    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        return State.Url is null
-            ? Task.CompletedTask
-            : LoadAsync(State.Url, State.Name, State.Sort, count);
-    }
-
-    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        ThrowIfDisposed();
-        return _engine.LoadMoreAsync(count);
-    }
-
     public void Clear()
     {
         ThrowIfDisposed();
@@ -124,6 +132,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
             _avatarUrl = null;
             _subscriberCount = null;
         }
+
         _engine.Reset();
         State = ChannelViewState.Empty;
     }
@@ -161,16 +170,19 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
         var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
         var page = await _channelService.GetChannelAsync(url, name, sort, startIndex, count, ct).ConfigureAwait(false);
 
-        if (page.IsSuccess)
+        if (!page.IsSuccess)
+            return new FeedPageResult(
+                page.Videos,
+                page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+                page.IsSuccess,
+                page.StatusMessage);
+        lock (_lock)
         {
-            lock (_lock)
-            {
-                _url = page.Url;
-                _name = page.Name;
-                _description = page.Description;
-                _avatarUrl = page.AvatarUrl;
-                _subscriberCount = page.SubscriberCount;
-            }
+            _url = page.Url;
+            _name = page.Name;
+            _description = page.Description;
+            _avatarUrl = page.AvatarUrl;
+            _subscriberCount = page.SubscriberCount;
         }
 
         return new FeedPageResult(
@@ -204,7 +216,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
             : state.IsLoadingMore
                 ? "Loading more videos…"
                 : !state.IsSuccess || state.LastError != null
-                    ? (state.IsLoadingMore ? "Could not load more channel videos." : "Could not load channel.")
+                    ? state.IsLoadingMore ? "Could not load more channel videos." : "Could not load channel."
                     : state.StatusMessage ??
                       $"Showing {state.Videos.Count} video{(state.Videos.Count == 1 ? string.Empty : "s")} from {name}.";
 
@@ -218,16 +230,9 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IDisposable, IVid
             sort,
             summary,
             state.IsLoading,
-            state.IsSuccess && state.LastError == null,
+            state is { IsSuccess: true, LastError: null },
             state.IsLoadingMore,
             state.HasMore);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

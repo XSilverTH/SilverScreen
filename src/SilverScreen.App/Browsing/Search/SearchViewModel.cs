@@ -17,15 +17,14 @@ public sealed record SearchViewState(
     bool HasMore = false,
     bool IsSuccess = true);
 
-public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
+public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
-    private readonly ISearchService _searchService;
-    private readonly IPlaybackService _playbackService;
-    private readonly ISearchSuggestionService? _suggestionService;
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
-    private string? _currentQuery;
+    private readonly IPlaybackService _playbackService;
+    private readonly ISearchService _searchService;
+    private readonly ISearchSuggestionService? _suggestionService;
     private bool _disposed;
 
     public SearchViewModel(
@@ -38,12 +37,12 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
         _suggestionService = suggestionService;
 
         _engine = new PagedFeedEngine(
-            fetcher: FetchSearchPageAsync,
-            statusMapper: (_, _, state) => SearchVideoListSource.MapStatus(state),
-            loadingMessage: "Searching YouTube…",
-            paginationLoadingMessage: "Loading more results…",
-            initialStatus: new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
-            defaultTitle: "Search",
+            FetchSearchPageAsync,
+            (_, _, state) => SearchVideoListSource.MapStatus(state),
+            "Searching YouTube…",
+            "Loading more results…",
+            new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
+            "Search",
             clearOnRefresh: true);
 
         _engine.EngineStateChanged += OnEngineStateChanged;
@@ -67,37 +66,62 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
+
     public string? CurrentQuery
     {
         get
         {
             lock (_lock)
-                return _currentQuery;
+            {
+                return field;
+            }
         }
         private set
         {
             lock (_lock)
-                _currentQuery = value;
+            {
+                field = value;
+            }
         }
     }
 
-    public VideoListPresentationState PresentationState => _engine.State;
-    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<SearchViewState>? StateChanged;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
+    }
+
+    VideoListPresentationState IVideoListSource.State => _engine.State;
+
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
     }
 
+    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        return CurrentQuery is null ? Task.CompletedTask : _engine.RefreshAsync(count);
+    }
+
+    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        ThrowIfDisposed();
+        return _engine.LoadMoreAsync(count);
+    }
+
+    public event EventHandler<SearchViewState>? StateChanged;
+
     public void Reset()
     {
         ThrowIfDisposed();
         CurrentQuery = null;
         _engine.Reset(
-            status: new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
-            statusMessage: "Search results will appear here.");
+            new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
+            "Search results will appear here.");
     }
 
     public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text,
@@ -156,17 +180,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
         }
     }
 
-    public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        return CurrentQuery is null ? Task.CompletedTask : _engine.RefreshAsync(count);
-    }
-
-    public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        ThrowIfDisposed();
-        return _engine.LoadMoreAsync(count);
-    }
-
     private async Task SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
@@ -182,7 +195,8 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
             return FeedPageResult.Empty;
 
         var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
-        var result = await _searchService.SearchAsync(new SearchRequest(query, startIndex, count), ct).ConfigureAwait(false);
+        var result = await _searchService.SearchAsync(new SearchRequest(query, startIndex, count), ct)
+            .ConfigureAwait(false);
 
         return new FeedPageResult(
             result.Videos,
@@ -199,7 +213,9 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
             : state.IsLoadingMore
                 ? "Loading more results…"
                 : !state.IsSuccess || state.LastError != null
-                    ? (state.IsLoadingMore ? "Search could not be completed." : (state.StatusMessage ?? "Search could not be completed."))
+                    ? state.IsLoadingMore
+                        ? "Search could not be completed."
+                        : state.StatusMessage ?? "Search could not be completed."
                     : query is null
                         ? "Search results will appear here."
                         : state.StatusMessage ?? "Search complete.";
@@ -210,7 +226,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
             state.IsLoading,
             state.IsLoadingMore,
             state.HasMore,
-            state.IsSuccess && state.LastError == null);
+            state is { IsSuccess: true, LastError: null });
     }
 
     private async Task PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
@@ -220,13 +236,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IDisposable, IVide
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
         await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

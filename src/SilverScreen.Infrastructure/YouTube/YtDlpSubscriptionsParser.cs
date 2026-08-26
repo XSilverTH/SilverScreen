@@ -72,19 +72,21 @@ internal static class YtDlpSubscriptionsParser
     private static string NormalizeChannelUrl(string? rawUrl, string id)
     {
         if (!string.IsNullOrWhiteSpace(rawUrl))
-        {
-            if (rawUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-                rawUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-                return rawUrl;
-
-            if (rawUrl.StartsWith('/'))
-                return $"https://www.youtube.com{rawUrl}";
-
-            if (rawUrl.StartsWith('@'))
-                return $"https://www.youtube.com/{rawUrl}";
-
-            return $"https://www.youtube.com/{rawUrl}";
-        }
+            // if (rawUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            //     rawUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            //     return rawUrl;
+            //
+            // if (rawUrl.StartsWith('/'))
+            //     return $"https://www.youtube.com{rawUrl}";
+            //
+            // return $"https://www.youtube.com/{rawUrl}";
+            return
+                !(rawUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                  rawUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                    ? rawUrl.StartsWith('/')
+                        ? $"https://www.youtube.com{rawUrl}"
+                        : $"https://www.youtube.com/{rawUrl}"
+                    : rawUrl;
 
         if (id.StartsWith("UC", StringComparison.Ordinal))
             return $"https://www.youtube.com/channel/{Uri.EscapeDataString(id)}";
@@ -117,16 +119,20 @@ internal static class YtDlpSubscriptionsParser
                     ? p
                     : 0;
 
-                var width = thumbnail.TryGetProperty("width", out var widthProp) && widthProp.TryGetDouble(out var w) ? w : -1;
-                var height = thumbnail.TryGetProperty("height", out var heightProp) && heightProp.TryGetDouble(out var h) ? h : -1;
+                var width = thumbnail.TryGetProperty("width", out var widthProp) && widthProp.TryGetDouble(out var w)
+                    ? w
+                    : -1;
+                var height = thumbnail.TryGetProperty("height", out var heightProp) &&
+                             heightProp.TryGetDouble(out var h)
+                    ? h
+                    : -1;
                 var area = width > 0 && height > 0 ? width * height : -1;
 
-                if (highestUrl is null || preference > highestPreference || (preference == highestPreference && area > highestArea))
-                {
-                    highestPreference = preference;
-                    highestArea = area;
-                    highestUrl = url;
-                }
+                if (highestUrl is not null && preference <= highestPreference &&
+                    (preference != highestPreference || !(area > highestArea))) continue;
+                highestPreference = preference;
+                highestArea = area;
+                highestUrl = url;
             }
 
             if (!string.IsNullOrWhiteSpace(highestUrl))
@@ -139,9 +145,7 @@ internal static class YtDlpSubscriptionsParser
 
     private static string NormalizeUrl(string url)
     {
-        if (url.StartsWith("//", StringComparison.Ordinal))
-            return $"https:{url}";
-        return url;
+        return url.StartsWith("//", StringComparison.Ordinal) ? $"https:{url}" : url;
     }
 
     private static long? GetInt64(JsonElement element, params string[] propertyNames)
@@ -158,6 +162,15 @@ internal static class YtDlpSubscriptionsParser
                 case JsonValueKind.String when long.TryParse(property.GetString(), NumberStyles.Integer,
                     CultureInfo.InvariantCulture, out var value):
                     return value;
+                case JsonValueKind.Undefined:
+                case JsonValueKind.Object:
+                case JsonValueKind.Array:
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                case JsonValueKind.Null:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 

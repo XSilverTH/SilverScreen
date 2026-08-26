@@ -31,11 +31,9 @@ public static class PlayerShortcutActions
 internal sealed class PlayerShortcutController : IDisposable
 {
     private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
-    private readonly Func<bool> _hasMedia;
     private readonly Dictionary<uint, string> _shortcutMap = [];
     private readonly Widget _viewWidget;
     private bool _disposed;
-    public Func<uint, bool>? KeyInterceptor { get; set; }
 
 
     private EventControllerKey? _keyboardController;
@@ -44,13 +42,14 @@ internal sealed class PlayerShortcutController : IDisposable
     public PlayerShortcutController(Widget viewWidget, Func<bool> hasMedia)
     {
         _viewWidget = viewWidget;
-        _hasMedia = hasMedia;
 
         var key = EventControllerKey.New();
         key.SetPropagationPhase(PropagationPhase.Capture);
         key.OnKeyPressed += OnKeyPressed;
         _keyboardController = key;
     }
+
+    public Func<uint, bool>? KeyInterceptor { get; set; }
 
     public void Dispose()
     {

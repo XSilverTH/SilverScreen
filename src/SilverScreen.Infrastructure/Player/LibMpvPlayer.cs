@@ -622,6 +622,7 @@ public sealed class LibMpvPlayer : IDisposable
 
         return chapters;
     }
+
     public PlaybackStats? GetPlaybackStats()
     {
         if (!IsAvailable || IsDisposing || _handle == 0) return null;
@@ -634,39 +635,72 @@ public sealed class LibMpvPlayer : IDisposable
         try
         {
             // 1. File / Stream
-            var mediaTitle = _native.GetPropertyString(_handle, "media-title") ?? _request?.Videos.FirstOrDefault()?.Title;
+            var mediaTitle = _native.GetPropertyString(_handle, "media-title") ??
+                             _request?.Videos.FirstOrDefault()?.Title;
             var fileFormat = _native.GetPropertyString(_handle, "file-format");
             var demuxer = _native.GetPropertyString(_handle, "demuxer");
-            var path = _native.GetPropertyString(_handle, "path") ?? _native.GetPropertyString(_handle, "stream-open-filename");
+            var path = _native.GetPropertyString(_handle, "path") ??
+                       _native.GetPropertyString(_handle, "stream-open-filename");
             var fileSizeStr = _native.GetPropertyString(_handle, "file-size");
-            long? fileSize = long.TryParse(fileSizeStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs) ? fs : null;
+            long? fileSize = long.TryParse(fileSizeStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs)
+                ? fs
+                : null;
 
             // 2. Video
-            var videoCodec = _native.GetPropertyString(_handle, "video-codec") ?? _native.GetPropertyString(_handle, "video-format");
-            var videoDecoder = _native.GetPropertyString(_handle, "video-decoder-name") ?? _native.GetPropertyString(_handle, "video-codec");
-            var hwdec = _native.GetPropertyString(_handle, "hwdec-current") ?? _native.GetPropertyString(_handle, "hwdec-active");
+            var videoCodec = _native.GetPropertyString(_handle, "video-codec") ??
+                             _native.GetPropertyString(_handle, "video-format");
+            var videoDecoder = _native.GetPropertyString(_handle, "video-decoder-name") ??
+                               _native.GetPropertyString(_handle, "video-codec");
+            var hwdec = _native.GetPropertyString(_handle, "hwdec-current") ??
+                        _native.GetPropertyString(_handle, "hwdec-active");
 
             var vwStr = _native.GetPropertyString(_handle, "video-params/w");
             var vhStr = _native.GetPropertyString(_handle, "video-params/h");
-            int? videoWidth = int.TryParse(vwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vw) ? vw : null;
-            int? videoHeight = int.TryParse(vhStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vh) ? vh : null;
+            int? videoWidth = int.TryParse(vwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vw)
+                ? vw
+                : null;
+            int? videoHeight = int.TryParse(vhStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vh)
+                ? vh
+                : null;
 
-            var dwStr = _native.GetPropertyString(_handle, "dwidth") ?? _native.GetPropertyString(_handle, "video-params/dw");
-            var dhStr = _native.GetPropertyString(_handle, "dheight") ?? _native.GetPropertyString(_handle, "video-params/dh");
-            int? displayWidth = int.TryParse(dwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dw) ? dw : null;
-            int? displayHeight = int.TryParse(dhStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dh) ? dh : null;
+            var dwStr = _native.GetPropertyString(_handle, "dwidth") ??
+                        _native.GetPropertyString(_handle, "video-params/dw");
+            var dhStr = _native.GetPropertyString(_handle, "dheight") ??
+                        _native.GetPropertyString(_handle, "video-params/dh");
+            int? displayWidth = int.TryParse(dwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dw)
+                ? dw
+                : null;
+            int? displayHeight = int.TryParse(dhStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dh)
+                ? dh
+                : null;
 
             var aspectStr = _native.GetPropertyString(_handle, "video-params/aspect");
-            double? aspect = double.TryParse(aspectStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var asp) && !double.IsNaN(asp) ? asp : null;
+            double? aspect =
+                double.TryParse(aspectStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var asp) &&
+                !double.IsNaN(asp)
+                    ? asp
+                    : null;
 
             var contFpsStr = _native.GetPropertyString(_handle, "container-fps");
-            double? containerFps = double.TryParse(contFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cfps) && !double.IsNaN(cfps) ? cfps : null;
+            double? containerFps =
+                double.TryParse(contFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cfps) &&
+                !double.IsNaN(cfps)
+                    ? cfps
+                    : null;
 
             var estFpsStr = _native.GetPropertyString(_handle, "estimated-vf-fps");
-            double? estimatedFps = double.TryParse(estFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var efps) && !double.IsNaN(efps) ? efps : null;
+            double? estimatedFps =
+                double.TryParse(estFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var efps) &&
+                !double.IsNaN(efps)
+                    ? efps
+                    : null;
 
             var vBitrateStr = _native.GetPropertyString(_handle, "video-bitrate");
-            double? videoBitrate = double.TryParse(vBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vbr) && !double.IsNaN(vbr) ? vbr : null;
+            double? videoBitrate =
+                double.TryParse(vBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vbr) &&
+                !double.IsNaN(vbr)
+                    ? vbr
+                    : null;
 
             var pixelFormat = _native.GetPropertyString(_handle, "video-params/pixelformat");
             var colorMatrix = _native.GetPropertyString(_handle, "video-params/colormatrix");
@@ -675,55 +709,92 @@ public sealed class LibMpvPlayer : IDisposable
             var gamma = _native.GetPropertyString(_handle, "video-params/gamma");
 
             // 3. Audio
-            var audioCodec = _native.GetPropertyString(_handle, "audio-codec-name") ?? _native.GetPropertyString(_handle, "audio-codec") ?? _native.GetPropertyString(_handle, "audio-format");
+            var audioCodec = _native.GetPropertyString(_handle, "audio-codec-name") ??
+                             _native.GetPropertyString(_handle, "audio-codec") ??
+                             _native.GetPropertyString(_handle, "audio-format");
             var audioDecoder = _native.GetPropertyString(_handle, "audio-decoder-name") ?? audioCodec;
 
             var sampleRateStr = _native.GetPropertyString(_handle, "audio-params/samplerate");
-            int? sampleRate = int.TryParse(sampleRateStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sr) ? sr : null;
+            int? sampleRate =
+                int.TryParse(sampleRateStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sr) ? sr : null;
 
             var channelCountStr = _native.GetPropertyString(_handle, "audio-params/channel-count");
-            int? channelCount = int.TryParse(channelCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cc) ? cc : null;
+            int? channelCount =
+                int.TryParse(channelCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cc)
+                    ? cc
+                    : null;
 
             var channels = _native.GetPropertyString(_handle, "audio-params/channels");
             var audioFormat = _native.GetPropertyString(_handle, "audio-params/format");
 
             var aBitrateStr = _native.GetPropertyString(_handle, "audio-bitrate");
-            double? audioBitrate = double.TryParse(aBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var abr) && !double.IsNaN(abr) ? abr : null;
+            double? audioBitrate =
+                double.TryParse(aBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var abr) &&
+                !double.IsNaN(abr)
+                    ? abr
+                    : null;
 
             // 4. Performance & Sync
-            var dropCountStr = _native.GetPropertyString(_handle, "frame-drop-count") ?? _native.GetPropertyString(_handle, "decoder-frame-drop-count");
-            long? dropCount = long.TryParse(dropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dc) ? dc : null;
+            var dropCountStr = _native.GetPropertyString(_handle, "frame-drop-count") ??
+                               _native.GetPropertyString(_handle, "decoder-frame-drop-count");
+            long? dropCount =
+                long.TryParse(dropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dc) ? dc : null;
 
             var voDropCountStr = _native.GetPropertyString(_handle, "vo-drop-frame-count");
-            long? voDropCount = long.TryParse(voDropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vdc) ? vdc : null;
+            long? voDropCount =
+                long.TryParse(voDropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vdc)
+                    ? vdc
+                    : null;
 
             var mistimedStr = _native.GetPropertyString(_handle, "mistimed-frame-count");
-            long? mistimed = long.TryParse(mistimedStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mt) ? mt : null;
+            long? mistimed = long.TryParse(mistimedStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mt)
+                ? mt
+                : null;
 
             var vsyncRatioStr = _native.GetPropertyString(_handle, "vsync-ratio");
-            double? vsyncRatio = double.TryParse(vsyncRatioStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vr) && !double.IsNaN(vr) ? vr : null;
+            double? vsyncRatio =
+                double.TryParse(vsyncRatioStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vr) &&
+                !double.IsNaN(vr)
+                    ? vr
+                    : null;
 
             var avsyncStr = _native.GetPropertyString(_handle, "avsync");
-            double? avsync = double.TryParse(avsyncStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var avs) && !double.IsNaN(avs) ? avs : null;
+            double? avsync =
+                double.TryParse(avsyncStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var avs) &&
+                !double.IsNaN(avs)
+                    ? avs
+                    : null;
 
             var cacheDurStr = _native.GetPropertyString(_handle, "demuxer-cache-duration");
-            double? cacheDuration = double.TryParse(cacheDurStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cd) && !double.IsNaN(cd) ? cd : null;
+            double? cacheDuration =
+                double.TryParse(cacheDurStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cd) &&
+                !double.IsNaN(cd)
+                    ? cd
+                    : null;
 
             var cacheBytesStr = _native.GetPropertyString(_handle, "demuxer-cache-state/bytes");
-            long? cacheBytes = long.TryParse(cacheBytesStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cb) ? cb : null;
+            long? cacheBytes =
+                long.TryParse(cacheBytesStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cb)
+                    ? cb
+                    : null;
 
             // 5. Playback
             var percentStr = _native.GetPropertyString(_handle, "percent-pos");
-            double? percent = double.TryParse(percentStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pp) && !double.IsNaN(pp) ? pp : null;
+            double? percent =
+                double.TryParse(percentStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pp) &&
+                !double.IsNaN(pp)
+                    ? pp
+                    : null;
 
-            string? selectedSub;
             LibMpvPlaybackState stateSnapshot;
             lock (_gate)
             {
                 stateSnapshot = _state;
             }
-            selectedSub = stateSnapshot.SubtitleTracks.FirstOrDefault(t => t.IsSelected)?.Label;
-            var selectedAudio = _native.GetPropertyString(_handle, "current-tracks/audio/title") ?? _native.GetPropertyString(_handle, "current-tracks/audio/lang");
+
+            var selectedSub = stateSnapshot.SubtitleTracks.FirstOrDefault(t => t.IsSelected)?.Label;
+            var selectedAudio = _native.GetPropertyString(_handle, "current-tracks/audio/title") ??
+                                _native.GetPropertyString(_handle, "current-tracks/audio/lang");
 
             // 6. Tracks
             var tracks = ReadAllTracks();
@@ -733,54 +804,54 @@ public sealed class LibMpvPlayer : IDisposable
             var ffmpegVersion = _native.GetPropertyString(_handle, "ffmpeg-version");
 
             return new PlaybackStats(
-                Title: mediaTitle,
-                FileFormat: fileFormat,
-                Demuxer: demuxer,
-                ProtocolOrUrl: path,
-                FileSize: fileSize,
-                VideoCodec: videoCodec,
-                VideoDecoder: videoDecoder,
-                HwDec: hwdec,
-                VideoWidth: videoWidth,
-                VideoHeight: videoHeight,
-                DisplayWidth: displayWidth,
-                DisplayHeight: displayHeight,
-                AspectRatio: aspect,
-                ContainerFps: containerFps,
-                EstimatedFps: estimatedFps,
-                VideoBitrate: videoBitrate,
-                PixelFormat: pixelFormat,
-                ColorMatrix: colorMatrix,
-                ColorLevels: colorLevels,
-                Primaries: primaries,
-                Gamma: gamma,
-                AudioCodec: audioCodec,
-                AudioDecoder: audioDecoder,
-                AudioSampleRate: sampleRate,
-                AudioChannels: channelCount,
-                AudioChannelLayout: channels,
-                AudioFormat: audioFormat,
-                AudioBitrate: audioBitrate,
-                DroppedFrames: dropCount,
-                VoDroppedFrames: voDropCount,
-                MistimedFrames: mistimed,
-                VsyncRatio: vsyncRatio,
-                AvSyncDifference: avsync,
-                CacheDuration: cacheDuration,
-                CacheBytes: cacheBytes,
-                Position: stateSnapshot.Position,
-                Duration: stateSnapshot.Duration,
-                PercentPosition: percent,
-                Speed: stateSnapshot.Speed,
-                Volume: stateSnapshot.Volume,
-                IsMuted: stateSnapshot.IsMuted,
-                IsPaused: stateSnapshot.IsPaused,
-                SubtitleTrack: selectedSub,
-                AudioTrack: selectedAudio,
-                Tracks: tracks,
-                MpvVersion: mpvVersion,
-                FfmpegVersion: ffmpegVersion,
-                VoBackend: "libmpv (OpenGL)");
+                mediaTitle,
+                fileFormat,
+                demuxer,
+                path,
+                fileSize,
+                videoCodec,
+                videoDecoder,
+                hwdec,
+                videoWidth,
+                videoHeight,
+                displayWidth,
+                displayHeight,
+                aspect,
+                containerFps,
+                estimatedFps,
+                videoBitrate,
+                pixelFormat,
+                colorMatrix,
+                colorLevels,
+                primaries,
+                gamma,
+                audioCodec,
+                audioDecoder,
+                sampleRate,
+                channelCount,
+                channels,
+                audioFormat,
+                audioBitrate,
+                dropCount,
+                voDropCount,
+                mistimed,
+                vsyncRatio,
+                avsync,
+                cacheDuration,
+                cacheBytes,
+                stateSnapshot.Position,
+                stateSnapshot.Duration,
+                percent,
+                stateSnapshot.Speed,
+                stateSnapshot.Volume,
+                stateSnapshot.IsMuted,
+                stateSnapshot.IsPaused,
+                selectedSub,
+                selectedAudio,
+                tracks,
+                mpvVersion,
+                ffmpegVersion,
+                "libmpv (OpenGL)");
         }
         catch (Exception ex)
         {
@@ -801,25 +872,45 @@ public sealed class LibMpvPlayer : IDisposable
         {
             var prefix = $"track-list/{i}";
             var type = _native.GetPropertyString(_handle, $"{prefix}/type") ?? "unknown";
-            if (!long.TryParse(_native.GetPropertyString(_handle, $"{prefix}/id"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            if (!long.TryParse(_native.GetPropertyString(_handle, $"{prefix}/id"), NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var id))
                 continue;
 
             var title = _native.GetPropertyString(_handle, $"{prefix}/title");
             var lang = _native.GetPropertyString(_handle, $"{prefix}/lang");
             var codec = _native.GetPropertyString(_handle, $"{prefix}/codec");
 
-            int? w = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-w"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tw) ? tw : null;
-            int? h = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-h"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var th) ? th : null;
-            double? fps = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-fps"), NumberStyles.Float, CultureInfo.InvariantCulture, out var tfps) ? tfps : null;
-            int? sr = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-samplerate"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tsr) ? tsr : null;
+            int? w = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-w"), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var tw)
+                ? tw
+                : null;
+            int? h = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-h"), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var th)
+                ? th
+                : null;
+            double? fps = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-fps"), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var tfps)
+                ? tfps
+                : null;
+            int? sr = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-samplerate"),
+                NumberStyles.Integer, CultureInfo.InvariantCulture, out var tsr)
+                ? tsr
+                : null;
             var ch = _native.GetPropertyString(_handle, $"{prefix}/demux-channels");
-            double? br = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-bitrate"), NumberStyles.Float, CultureInfo.InvariantCulture, out var tbr) ? tbr : null;
+            double? br = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-bitrate"),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out var tbr)
+                ? tbr
+                : null;
 
-            var isSelected = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/selected"), "yes", StringComparison.OrdinalIgnoreCase);
-            var isDefault = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/default"), "yes", StringComparison.OrdinalIgnoreCase);
+            var isSelected = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/selected"), "yes",
+                StringComparison.OrdinalIgnoreCase);
+            var isDefault = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/default"), "yes",
+                StringComparison.OrdinalIgnoreCase);
 
-            tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br, isSelected, isDefault));
+            tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br, isSelected,
+                isDefault));
         }
+
         return tracks;
     }
 

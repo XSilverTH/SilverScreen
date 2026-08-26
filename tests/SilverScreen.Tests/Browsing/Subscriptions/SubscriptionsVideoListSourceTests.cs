@@ -18,7 +18,6 @@ public sealed class SubscriptionsVideoListSourceTests
             false,
             false,
             false,
-            false,
             AuthenticatedSubscriptionsStatus.AuthenticationRequired,
             "Sign in to see subscriptions.",
             false);
@@ -39,7 +38,6 @@ public sealed class SubscriptionsVideoListSourceTests
             [],
             null,
             [],
-            false,
             false,
             false,
             false,
@@ -64,7 +62,6 @@ public sealed class SubscriptionsVideoListSourceTests
             false,
             false,
             false,
-            false,
             AuthenticatedSubscriptionsStatus.Success,
             string.Empty,
             true);
@@ -84,7 +81,6 @@ public sealed class SubscriptionsVideoListSourceTests
             [channel],
             channel,
             [],
-            false,
             false,
             false,
             false,
@@ -112,7 +108,6 @@ public sealed class SubscriptionsVideoListSourceTests
             false,
             false,
             true,
-            false,
             AuthenticatedSubscriptionsStatus.Success,
             string.Empty,
             true);

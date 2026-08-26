@@ -8,10 +8,10 @@ namespace SilverScreen.Infrastructure.YouTube;
 public sealed class WarmYtDlpRunner : IYtDlpRunner, IAsyncDisposable, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<WarmYtDlpRunner>();
+    private readonly IYtDlpRunner _fallbackRunner;
 
     private readonly IPreferencesService _preferencesService;
     private readonly IYtDlpProcessHost _processHost;
-    private readonly IYtDlpRunner _fallbackRunner;
     private bool _disposed;
 
     public WarmYtDlpRunner(
@@ -26,6 +26,69 @@ public sealed class WarmYtDlpRunner : IYtDlpRunner, IAsyncDisposable, IDisposabl
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
 
         _ = WarmUpAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
+        await _processHost.DisposeAsync().ConfigureAwait(false);
+        switch (_fallbackRunner)
+        {
+            case IAsyncDisposable asyncDisposable:
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                break;
+            case IDisposable disposable:
+                disposable.Dispose();
+                break;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
+        _processHost.Dispose();
+        (_fallbackRunner as IDisposable)?.Dispose();
+    }
+
+    public async Task<ProcessResult> RunAsync(
+        ProcessStartInfo startInfo,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(startInfo);
+
+        if (_disposed)
+            return await _fallbackRunner.RunAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
+
+        var executablePath = startInfo.FileName;
+        var arguments = ExtractArguments(startInfo);
+
+        try
+        {
+            return await _processHost.RunAsync(executablePath, arguments, timeout, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (TimeoutException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex,
+                "Warm yt-dlp helper execution failed for '{ExecutablePath}'; falling back to direct process execution",
+                executablePath);
+            return await _fallbackRunner.RunAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
@@ -58,79 +121,12 @@ public sealed class WarmYtDlpRunner : IYtDlpRunner, IAsyncDisposable, IDisposabl
         }
     }
 
-    public async Task<ProcessResult> RunAsync(
-        ProcessStartInfo startInfo,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
+    private static string[] ExtractArguments(ProcessStartInfo startInfo)
     {
-        ArgumentNullException.ThrowIfNull(startInfo);
+        if (startInfo.ArgumentList.Count > 0) return [.. startInfo.ArgumentList];
 
-        if (_disposed)
-        {
-            return await _fallbackRunner.RunAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
-        }
-
-        var executablePath = startInfo.FileName;
-        var arguments = ExtractArguments(startInfo);
-
-        try
-        {
-            return await _processHost.RunAsync(executablePath, arguments, timeout, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (TimeoutException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Warm yt-dlp helper execution failed for '{ExecutablePath}'; falling back to direct process execution", executablePath);
-            return await _fallbackRunner.RunAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private static IReadOnlyList<string> ExtractArguments(ProcessStartInfo startInfo)
-    {
-        if (startInfo.ArgumentList.Count > 0)
-        {
-            return [.. startInfo.ArgumentList];
-        }
-
-        if (!string.IsNullOrWhiteSpace(startInfo.Arguments))
-        {
-            return startInfo.Arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        return [];
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
-        _processHost.Dispose();
-        (_fallbackRunner as IDisposable)?.Dispose();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
-        await _processHost.DisposeAsync().ConfigureAwait(false);
-        if (_fallbackRunner is IAsyncDisposable asyncDisposable)
-        {
-            await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-        }
-        else if (_fallbackRunner is IDisposable disposable)
-        {
-            disposable.Dispose();
-        }
+        return !string.IsNullOrWhiteSpace(startInfo.Arguments)
+            ? startInfo.Arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            : [];
     }
 }

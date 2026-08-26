@@ -10,42 +10,40 @@ using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
-public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
+public sealed class YtDlpMediaResolver(
+    ICookieFileProvider cookieFileProvider,
+    IPreferencesService preferencesService,
+    IYtDlpRunner runner,
+    TimeSpan? timeout = null,
+    TimeSpan? cacheDuration = null,
+    TimeProvider? timeProvider = null)
+    : IYouTubeMediaResolver, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpMediaResolver>();
 
-    private readonly ICookieFileProvider _cookieFileProvider;
-    private readonly IPreferencesService _preferencesService;
-    private readonly IYtDlpRunner _runner;
-    private readonly TimeSpan _timeout;
-    private readonly TimeSpan _cacheDuration;
-    private readonly TimeProvider _timeProvider;
-
     private readonly ConcurrentDictionary<string, CachedVideoEntry> _cache = new(StringComparer.Ordinal);
+    private readonly TimeSpan _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
+
+    private readonly ICookieFileProvider _cookieFileProvider =
+        cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _fetchLocks = new(StringComparer.Ordinal);
+
+    private readonly IPreferencesService _preferencesService =
+        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+
+    private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
     private bool _disposed;
 
-    private sealed record CachedVideoEntry(
-        string RawJsonOutput,
-        YouTubeVideoDetails Details,
-        DateTimeOffset CachedAt,
-        DateTimeOffset? MediaExpiresAt,
-        ConcurrentDictionary<string, ResolvedMedia> FormatsByQuality);
-
-    public YtDlpMediaResolver(
-        ICookieFileProvider cookieFileProvider,
-        IPreferencesService preferencesService,
-        IYtDlpRunner runner,
-        TimeSpan? timeout = null,
-        TimeSpan? cacheDuration = null,
-        TimeProvider? timeProvider = null)
+    public void Dispose()
     {
-        _cookieFileProvider = cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
-        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _timeout = timeout ?? TimeSpan.FromSeconds(30);
-        _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        if (_disposed) return;
+        _disposed = true;
+        _cache.Clear();
+        foreach (var sem in _fetchLocks.Values) sem.Dispose();
+        _fetchLocks.Clear();
     }
 
     public async Task<YouTubeMediaResolutionResult> ResolveMediaAsync(
@@ -88,7 +86,8 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
             cached = TryGetValidEntry(videoId, forceRefresh);
             if (cached is not null)
             {
-                if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia) && !IsMediaExpired(cachedMedia.ExpiresAt))
+                if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia) &&
+                    !IsMediaExpired(cachedMedia.ExpiresAt))
                     return YouTubeMediaResolutionResult.Success(cachedMedia);
 
                 var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality);
@@ -100,16 +99,13 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
             }
 
             var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) || fetchResult.Details is null)
-            {
-                return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ?? "Failed to extract video formats.");
-            }
+            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) ||
+                fetchResult.Details is null)
+                return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
+                                                            "Failed to extract video formats.");
 
             var resolvedMedia = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality);
-            if (resolvedMedia is null)
-            {
-                return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
-            }
+            if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
                 fetchResult.RawJsonOutput,
@@ -139,26 +135,20 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
             return new YouTubeVideoDetailsResult(null, false, "Video details are unavailable for this video.");
 
         var cached = TryGetValidEntry(videoId, forceRefresh);
-        if (cached is not null)
-        {
-            return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
-        }
+        if (cached is not null) return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
         var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
         await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             cached = TryGetValidEntry(videoId, forceRefresh);
-            if (cached is not null)
-            {
-                return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
-            }
+            if (cached is not null) return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
             var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) || fetchResult.Details is null)
-            {
-                return new YouTubeVideoDetailsResult(null, false, fetchResult.ErrorMessage ?? "Failed to extract video details.");
-            }
+            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) ||
+                fetchResult.Details is null)
+                return new YouTubeVideoDetailsResult(null, false,
+                    fetchResult.ErrorMessage ?? "Failed to extract video details.");
 
             var quality = _preferencesService.GetPreferences().VideoQuality;
             var media = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality);
@@ -169,7 +159,8 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
                 _timeProvider.GetUtcNow(),
                 media?.ExpiresAt,
                 media is not null
-                    ? new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase) { [quality] = media }
+                    ? new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase)
+                        { [quality] = media }
                     : new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
 
             _cache[videoId] = newEntry;
@@ -194,23 +185,10 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
             return null;
         }
 
-        if (_cache.TryGetValue(videoId, out var entry))
-        {
-            var now = _timeProvider.GetUtcNow();
-            if (now - entry.CachedAt > _cacheDuration)
-            {
-                _cache.TryRemove(videoId, out _);
-                return null;
-            }
-
-            if (IsMediaExpired(entry.MediaExpiresAt))
-            {
-                _cache.TryRemove(videoId, out _);
-                return null;
-            }
-
-            return entry;
-        }
+        if (!_cache.TryGetValue(videoId, out var entry)) return null;
+        var now = _timeProvider.GetUtcNow();
+        if (now - entry.CachedAt <= _cacheDuration && !IsMediaExpired(entry.MediaExpiresAt)) return entry;
+        _cache.TryRemove(videoId, out _);
 
         return null;
     }
@@ -220,12 +198,13 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
         if (expiresAt is null) return false;
         var now = _timeProvider.GetUtcNow();
         // Give 30s buffer before actual expiry
-        return now >= (expiresAt.Value - TimeSpan.FromSeconds(30));
+        return now >= expiresAt.Value - TimeSpan.FromSeconds(30);
     }
 
-    private async Task<(bool IsSuccess, string? RawJsonOutput, YouTubeVideoDetails? Details, string? ErrorMessage)> FetchFromYtDlpAsync(
-        string videoId,
-        CancellationToken cancellationToken)
+    private async Task<(bool IsSuccess, string? RawJsonOutput, YouTubeVideoDetails? Details, string? ErrorMessage)>
+        FetchFromYtDlpAsync(
+            string videoId,
+            CancellationToken cancellationToken)
     {
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
         Logger.Information("Extracting formats and details for video {VideoId}", videoId);
@@ -271,19 +250,15 @@ public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
         catch (JsonException ex)
         {
             Logger.Warning(ex, "Failed to parse video output JSON for {VideoId}", videoId);
-            return (false, null, null, RuntimeDependencyGuidance.YtDlpFailed("the video details output could not be read."));
+            return (false, null, null,
+                RuntimeDependencyGuidance.YtDlpFailed("the video details output could not be read."));
         }
     }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _cache.Clear();
-        foreach (var sem in _fetchLocks.Values)
-        {
-            sem.Dispose();
-        }
-        _fetchLocks.Clear();
-    }
+    private sealed record CachedVideoEntry(
+        string RawJsonOutput,
+        YouTubeVideoDetails Details,
+        DateTimeOffset CachedAt,
+        DateTimeOffset? MediaExpiresAt,
+        ConcurrentDictionary<string, ResolvedMedia> FormatsByQuality);
 }

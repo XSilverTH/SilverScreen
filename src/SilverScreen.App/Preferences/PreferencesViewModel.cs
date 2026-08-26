@@ -68,7 +68,7 @@ public sealed class PreferencesViewModel
 
         var normalizedState = Normalize(editorState, changedOption);
         _preferences = _preferencesService.GetPreferences();
-        var preferences = ToPreferences(normalizedState, _preferences);
+        var preferences = ToPreferences(normalizedState);
 
         try
         {
@@ -133,9 +133,8 @@ public sealed class PreferencesViewModel
         };
     }
 
-    private static AppPreferences ToPreferences(PreferencesEditorState state, AppPreferences current)
+    private static AppPreferences ToPreferences(PreferencesEditorState state)
     {
-
         return new AppPreferences
         {
             Theme = state.Theme,

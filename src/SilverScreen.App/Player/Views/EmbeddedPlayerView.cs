@@ -39,6 +39,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly DesktopMediaIntegration _desktopMedia;
     private readonly PlayerEngagementController _engagement;
     private readonly VideoInfoPanelController _infoPanel;
+    private readonly PlayerOsdController _osdController;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
 
@@ -50,20 +51,20 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlaybackSession _session;
     private readonly PlayerShortcutController _shortcutController;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
+    private readonly PlayerStatsController _statsController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
-    private readonly PlayerStatsController _statsController;
-    private readonly PlayerOsdController _osdController;
 
     private string? _commentsVideoId;
     private bool _disposed;
+    private bool _isMuted;
+    private bool _isPaused = true;
     private bool _rendererReady;
     private double _speed = 1;
-    private bool _isPaused = true;
-    private double _volume = 100;
-    private bool _isMuted;
     private bool _syncingQueue;
     private bool _updatingControls;
+    private double _volume = 100;
+
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
     {
@@ -197,10 +198,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _infoPanel.Toggle(_session.CurrentVideo);
             _osdController.ShowVideoInfo(_infoPanel.IsOpen);
         });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleStats, () =>
-        {
-            _statsController.Toggle();
-        });
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleStats, () => { _statsController.Toggle(); });
         _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () =>
         {
             var speed = AdjustSpeed(-1);
@@ -394,13 +392,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private bool ToggleFullscreen()
     {
-        if (Widget.GetRoot() is Window window)
-        {
-            window.Fullscreened = !window.Fullscreened;
-            return window.Fullscreened;
-        }
-
-        return false;
+        if (Widget.GetRoot() is not Window window) return false;
+        window.Fullscreened = !window.Fullscreened;
+        return window.Fullscreened;
     }
 
     private void RegisterActivity()
@@ -467,6 +461,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _session.SubmitVote(VideoVote.Like);
     }
+
     private void OnDislikeButtonClicked(object? sender, EventArgs args)
     {
         _session.SubmitVote(VideoVote.Dislike);
@@ -489,6 +484,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (_session.TrySkipManualSegment())
             RegisterActivity();
     }
+
     private void OnResumeButtonClicked(object? sender, EventArgs args)
     {
         if (_session.TryResume())
@@ -521,6 +517,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _infoPanel.OpenChannel();
     }
+
     private void OnSubtitleButtonClicked(object? sender, EventArgs args)
     {
         ShowPreferredSubtitle();
@@ -651,7 +648,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _queueViewModel.SetCurrentPlayingIndex(state.PlaylistIndex);
             player_previous_queue_button.Sensitive = state.PlaylistIndex > 0;
             player_next_queue_button.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
-            var video = request.Videos[state.PlaylistIndex];
             _sponsorBlockController.Redraw();
         }
         finally

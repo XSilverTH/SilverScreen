@@ -1,5 +1,4 @@
 using Adw;
-using Gtk;
 using SilverScreen.Core.Player.Comments;
 using XSTH.Blueprint.Helpers;
 

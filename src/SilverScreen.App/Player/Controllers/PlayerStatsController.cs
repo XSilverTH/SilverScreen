@@ -1,3 +1,4 @@
+using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
@@ -12,8 +13,8 @@ internal sealed class PlayerStatsController(
     Label label)
     : IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
     private const uint RefreshIntervalMilliseconds = 350;
+    private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
 
     private readonly Label _label = label ?? throw new ArgumentNullException(nameof(label));
     private readonly LibMpvPlayer _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -22,11 +23,22 @@ internal sealed class PlayerStatsController(
     private bool _disposed;
     private uint _refreshTimerSource;
 
+    public bool IsOpen { get; private set; }
+
+    private int CurrentPage { get; set; } = 1;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        StopTimer();
+    }
+
     private static string GetAccentColorHex()
     {
         try
         {
-            var sm = Adw.StyleManager.GetDefault();
+            var sm = StyleManager.GetDefault();
             var rgba = sm.AccentColorRgba;
             var r = (int)Math.Round(Math.Clamp(rgba.Red, 0, 1) * 255);
             var g = (int)Math.Round(Math.Clamp(rgba.Green, 0, 1) * 255);
@@ -38,10 +50,6 @@ internal sealed class PlayerStatsController(
             return "#78aeed";
         }
     }
-
-    public bool IsOpen { get; private set; }
-
-    private int CurrentPage { get; set; } = 1;
 
     private void Show()
     {
@@ -182,12 +190,5 @@ internal sealed class PlayerStatsController(
         if (_refreshTimerSource == 0) return;
         SourceRemove(_refreshTimerSource);
         _refreshTimerSource = 0;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        StopTimer();
     }
 }

@@ -17,7 +17,6 @@ public sealed record SubscriptionsViewState(
     bool IsLoading,
     bool IsLoadingMore,
     bool HasMore,
-    bool IsLoadingChannels,
     AuthenticatedSubscriptionsStatus Status,
     string Summary,
     bool IsSuccess)
@@ -29,36 +28,35 @@ public sealed record SubscriptionsViewState(
         false,
         false,
         false,
-        false,
         AuthenticatedSubscriptionsStatus.Success,
         string.Empty,
         true);
 }
 
-public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
+public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsViewModel>();
+    private readonly IChannelService _channelService;
+    private readonly List<VideoSummary> _channelVideos = [];
+    private readonly List<SubscribedChannel> _channels = [];
+    private readonly PagedFeedEngine _engine;
+    private readonly List<VideoSummary> _feedVideos = [];
+    private readonly Lock _lock = new();
+    private readonly ISessionService _sessionService;
 
     private readonly IAuthenticatedSubscriptionsService _subscriptionsService;
-    private readonly IChannelService _channelService;
-    private readonly ISessionService _sessionService;
-    private readonly PagedFeedEngine _engine;
-    private readonly List<SubscribedChannel> _channels = [];
-    private readonly List<VideoSummary> _feedVideos = [];
-    private readonly List<VideoSummary> _channelVideos = [];
-    private readonly Lock _lock = new();
-
-    private SubscribedChannel? _selectedChannel;
+    private bool _disposed;
+    private string? _feedContinuationToken;
     private AuthenticatedSubscriptionsStatus _feedStatus = AuthenticatedSubscriptionsStatus.Success;
     private bool _feedSuccess = true;
     private string _feedSummary = string.Empty;
     private bool _hasMoreFeed;
-    private string? _feedContinuationToken;
     private bool _isLoadingChannels;
-    private bool _loadedAtLeastOnce;
     private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
+    private bool _loadedAtLeastOnce;
     private Action? _openWebLogin;
-    private bool _disposed;
+
+    private SubscribedChannel? _selectedChannel;
 
     public SubscriptionsViewModel(
         IAuthenticatedSubscriptionsService subscriptionsService,
@@ -72,10 +70,9 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         _openWebLogin = openWebLogin;
 
         _engine = new PagedFeedEngine(
-            fetcher: FetchCurrentFeedPageAsync,
-            statusMapper: (_, _, _) => SubscriptionsVideoListSource.MapState(State, _openWebLogin).Status,
-            loadingMessage: "Loading subscriptions…",
-            paginationLoadingMessage: "Loading more videos…",
+            FetchCurrentFeedPageAsync,
+            (_, _, _) => SubscriptionsVideoListSource.MapState(State, _openWebLogin).Status,
+            "Loading subscriptions…",
             defaultTitle: "Subscriptions",
             clearOnRefresh: false);
 
@@ -104,37 +101,22 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         }
     } = SubscriptionsViewState.Empty;
 
-    public VideoListPresentationState PresentationState => _engine.State;
-    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<SubscriptionsViewState>? StateChanged;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _sessionService.SessionChanged -= OnSessionChanged;
+        _engine.Dispose();
+    }
+
+    VideoListPresentationState IVideoListSource.State => _engine.State;
+
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
-    }
-
-    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
-    {
-        if (openWebLogin != null)
-            _openWebLogin = openWebLogin;
-        return this;
-    }
-
-    public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        ThrowIfDisposed();
-
-        if (State.IsLoading || State.IsLoadingMore)
-            return Task.CompletedTask;
-
-        if (_loadedAtLeastOnce &&
-            State.Status is not (AuthenticatedSubscriptionsStatus.AuthenticationRequired
-                or AuthenticatedSubscriptionsStatus.AuthenticationRejected) &&
-            (State.Videos.Count > 0 || State.Channels.Count > 0 || State.IsSuccess))
-            return Task.CompletedTask;
-
-        return RefreshAsync(count);
     }
 
     public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
@@ -163,7 +145,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
                 false,
                 false,
                 false,
-                false,
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 "Sign in to YouTube to load your subscriptions.",
                 false);
@@ -178,7 +159,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         State = State with
         {
             IsLoading = true,
-            IsLoadingChannels = true,
             Summary = "Loading subscriptions…"
         };
 
@@ -245,7 +225,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
             State = State with
             {
                 IsLoading = false,
-                IsLoadingChannels = false,
                 HasMore = false,
                 Status = AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 Summary = "Failed to load subscriptions. Check your network connection and try again.",
@@ -262,6 +241,31 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
 
         _lastRequestedCount = Math.Max(count, 1);
         return _engine.LoadMoreAsync(count);
+    }
+
+    public event EventHandler<SubscriptionsViewState>? StateChanged;
+
+    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
+    {
+        if (openWebLogin != null)
+            _openWebLogin = openWebLogin;
+        return this;
+    }
+
+    public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        ThrowIfDisposed();
+
+        if (State.IsLoading || State.IsLoadingMore || (_loadedAtLeastOnce &&
+                                                       State.Status is not (AuthenticatedSubscriptionsStatus
+                                                               .AuthenticationRequired
+                                                           or AuthenticatedSubscriptionsStatus
+                                                               .AuthenticationRejected) &&
+                                                       (State.Videos.Count > 0 || State.Channels.Count > 0 ||
+                                                        State.IsSuccess)))
+            return Task.CompletedTask;
+
+        return RefreshAsync(count);
     }
 
     public async Task SelectChannelAsync(SubscribedChannel? channel, int batchSize = VideoFeedConstants.DefaultPageSize)
@@ -294,9 +298,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
             (ReferenceEquals(current, channel) ||
              (!string.IsNullOrWhiteSpace(channel.Id) && current.Id == channel.Id) ||
              (!string.IsNullOrWhiteSpace(channel.Url) && current.Url == channel.Url)))
-        {
             return;
-        }
 
         _selectedChannel = channel;
         var pageSize = Math.Max(batchSize, 1);
@@ -304,7 +306,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         List<VideoSummary> inMemoryMatches;
         lock (_lock)
         {
-            inMemoryMatches = _feedVideos.Where(v => IsMatchingChannel(v, channel)).ToList();
+            inMemoryMatches = [.. _feedVideos.Where(v => IsMatchingChannel(v, channel))];
             _channelVideos.Clear();
             _channelVideos.AddRange(inMemoryMatches);
         }
@@ -312,8 +314,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         // Configure engine for channel uploads
         _engine.SetVideos(
             inMemoryMatches,
-            continuationToken: null,
-            hasMore: true,
+            null,
+            true,
             statusMessage: inMemoryMatches.Count == 0 ? $"Loading {channel.Title} uploads…" : string.Empty,
             isSuccess: true);
 
@@ -410,19 +412,12 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         }
 
         if (!string.IsNullOrWhiteSpace(channel.Id))
-        {
             if (!string.IsNullOrWhiteSpace(video.ChannelUrl) &&
                 video.ChannelUrl.Contains(channel.Id, StringComparison.OrdinalIgnoreCase))
                 return true;
-        }
 
-        if (!string.IsNullOrWhiteSpace(video.ChannelName) && !string.IsNullOrWhiteSpace(channel.Title))
-        {
-            if (string.Equals(video.ChannelName, channel.Title, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
+        if (string.IsNullOrWhiteSpace(video.ChannelName) || string.IsNullOrWhiteSpace(channel.Title)) return false;
+        return string.Equals(video.ChannelName, channel.Title, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<FeedPageResult> FetchCurrentFeedPageAsync(string? token, int count, CancellationToken ct)
@@ -459,7 +454,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
         {
             _feedStatus = res.Status;
             _feedSummary = res.StatusMessage;
-            _feedSuccess = res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty;
+            _feedSuccess =
+                res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty;
             _feedContinuationToken = res.FeedPage.ContinuationToken;
             _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
         }
@@ -529,7 +525,9 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
     {
         var engineState = _engine.EngineState;
         var status = _selectedChannel != null
-            ? (engineState.IsSuccess ? AuthenticatedSubscriptionsStatus.Success : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure)
+            ? engineState.IsSuccess
+                ? AuthenticatedSubscriptionsStatus.Success
+                : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure
             : _feedStatus;
 
         State = new SubscriptionsViewState(
@@ -539,7 +537,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
             engineState.IsLoading,
             engineState.IsLoadingMore,
             engineState.HasMore,
-            _isLoadingChannels,
             status,
             engineState.StatusMessage ?? string.Empty,
             engineState.IsSuccess);
@@ -578,19 +575,10 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IDisposable
                 false,
                 false,
                 false,
-                false,
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 "Sign in to YouTube to load your subscriptions.",
                 false);
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _sessionService.SessionChanged -= OnSessionChanged;
-        _engine.Dispose();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

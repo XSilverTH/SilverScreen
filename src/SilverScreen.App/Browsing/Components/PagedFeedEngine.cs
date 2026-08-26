@@ -11,8 +11,11 @@ public sealed record FeedPageResult(
     bool ClearExistingOnFailure = false)
 {
     public static FeedPageResult Empty { get; } = new([]);
-    public static FeedPageResult Failed(string message, bool clearExisting = false) =>
-        new([], null, false, message, clearExisting);
+
+    public static FeedPageResult Failed(string message, bool clearExisting = false)
+    {
+        return new FeedPageResult([], null, false, message, clearExisting);
+    }
 }
 
 public delegate Task<FeedPageResult> FeedPageFetcher(
@@ -38,32 +41,32 @@ public sealed record FeedEngineState(
 public class PagedFeedEngine : IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<PagedFeedEngine>();
+    private readonly bool _clearOnRefresh;
+    private readonly string _defaultEmptyDescription;
+    private readonly string _defaultEmptyIcon;
+    private readonly string _defaultEmptyTitle;
+    private readonly string _defaultIcon;
+    private readonly string _defaultTitle;
 
     private readonly Lock _lock = new();
+    private readonly string _paginationLoadingMessage;
     private readonly List<VideoSummary> _videos = [];
-    private FeedPageFetcher? _fetcher;
-    private FeedStatusMapper? _statusMapper;
-    private string? _loadingMessage;
-    private string _paginationLoadingMessage = "Loading more videos…";
-    private string _defaultTitle = "Videos";
-    private string _defaultEmptyTitle = "No videos found";
-    private string _defaultEmptyDescription = "No videos are available right now.";
-    private string _defaultEmptyIcon = "applications-internet-symbolic";
-    private string _defaultIcon = "video-x-generic-symbolic";
-    private bool _clearOnRefresh = true;
+    private string? _continuationToken;
 
     private CancellationTokenSource? _cts;
     private long _currentGeneration;
-    private string? _continuationToken;
+    private bool _disposed;
+    private VideoListStatus? _explicitStatus;
+    private FeedPageFetcher? _fetcher;
+    private bool _hasMore;
     private bool _isLoading;
     private bool _isLoadingMore;
-    private bool _hasMore;
     private bool _isSuccess = true;
-    private string? _statusMessage;
-    private FeedPageResult? _lastResult;
     private Exception? _lastError;
-    private VideoListStatus? _explicitStatus;
-    private bool _disposed;
+    private FeedPageResult? _lastResult;
+    private string? _loadingMessage;
+    private FeedStatusMapper? _statusMapper;
+    private string? _statusMessage;
 
     public PagedFeedEngine(
         FeedPageFetcher? fetcher = null,
@@ -93,15 +96,16 @@ public class PagedFeedEngine : IVideoListSource
         UpdateStateUnsafe();
     }
 
-    public VideoListPresentationState State { get; private set; } = default!;
-    public FeedEngineState EngineState { get; private set; } = default!;
+    public FeedEngineState EngineState { get; private set; } = null!;
 
     public IReadOnlyList<VideoSummary> Videos
     {
         get
         {
             lock (_lock)
+            {
                 return [.. _videos];
+            }
         }
     }
 
@@ -110,7 +114,9 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _isLoading;
+            }
         }
     }
 
@@ -119,7 +125,9 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _isLoadingMore;
+            }
         }
     }
 
@@ -128,7 +136,9 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _hasMore;
+            }
         }
     }
 
@@ -137,7 +147,9 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _continuationToken;
+            }
         }
     }
 
@@ -146,7 +158,9 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _isSuccess;
+            }
         }
     }
 
@@ -155,11 +169,44 @@ public class PagedFeedEngine : IVideoListSource
         get
         {
             lock (_lock)
+            {
                 return _statusMessage;
+            }
         }
     }
 
+    public VideoListPresentationState State { get; private set; } = null!;
+
     public event EventHandler<VideoListPresentationState>? StateChanged;
+
+    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        if (_disposed) return;
+        await ExecuteFetchAsync(true, count).ConfigureAwait(false);
+    }
+
+    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
+    {
+        if (_disposed) return;
+        lock (_lock)
+        {
+            if (_isLoading || _isLoadingMore || !_hasMore || _fetcher is null)
+                return;
+        }
+
+        await ExecuteFetchAsync(false, count).ConfigureAwait(false);
+    }
+
+    public void Dispose()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            CancelPendingRequestsUnsafe();
+        }
+    }
+
     public event EventHandler<FeedEngineState>? EngineStateChanged;
 
     public static PagedFeedEngine Create<TPage>(
@@ -178,23 +225,23 @@ public class PagedFeedEngine : IVideoListSource
         bool clearOnRefresh = true)
     {
         return new PagedFeedEngine(
-            fetcher: async (token, count, ct) =>
+            async (token, count, ct) =>
             {
                 var page = token is null
                     ? await fetchFirstPage(count, ct).ConfigureAwait(false)
                     : await fetchNextPage(token, count, ct).ConfigureAwait(false);
                 return extractResult(page);
             },
-            statusMapper: statusMapper,
-            loadingMessage: loadingMessage,
-            paginationLoadingMessage: paginationLoadingMessage,
-            initialStatus: initialStatus,
-            defaultTitle: defaultTitle,
-            defaultEmptyTitle: defaultEmptyTitle,
-            defaultEmptyDescription: defaultEmptyDescription,
-            defaultEmptyIcon: defaultEmptyIcon,
-            defaultIcon: defaultIcon,
-            clearOnRefresh: clearOnRefresh);
+            statusMapper,
+            loadingMessage,
+            paginationLoadingMessage,
+            initialStatus,
+            defaultTitle,
+            defaultEmptyTitle,
+            defaultEmptyDescription,
+            defaultEmptyIcon,
+            defaultIcon,
+            clearOnRefresh);
     }
 
     public void Configure(
@@ -229,6 +276,7 @@ public class PagedFeedEngine : IVideoListSource
             _explicitStatus = status;
             UpdateStateUnsafe();
         }
+
         PublishState();
     }
 
@@ -252,6 +300,7 @@ public class PagedFeedEngine : IVideoListSource
             if (status != null) _explicitStatus = status;
             UpdateStateUnsafe();
         }
+
         PublishState();
     }
 
@@ -272,34 +321,8 @@ public class PagedFeedEngine : IVideoListSource
             _explicitStatus = status;
             UpdateStateUnsafe();
         }
+
         PublishState();
-    }
-
-    public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        if (_disposed) return;
-        await ExecuteFetchAsync(isRefresh: true, count).ConfigureAwait(false);
-    }
-
-    public async Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        if (_disposed) return;
-        lock (_lock)
-        {
-            if (_isLoading || _isLoadingMore || !_hasMore || _fetcher is null)
-                return;
-        }
-        await ExecuteFetchAsync(isRefresh: false, count).ConfigureAwait(false);
-    }
-
-    public void Dispose()
-    {
-        lock (_lock)
-        {
-            if (_disposed) return;
-            _disposed = true;
-            CancelPendingRequestsUnsafe();
-        }
     }
 
     private void CancelPendingRequestsUnsafe()
@@ -355,6 +378,7 @@ public class PagedFeedEngine : IVideoListSource
                 _isLoadingMore = false;
                 UpdateStateUnsafe();
             }
+
             PublishState();
             return;
         }
@@ -378,7 +402,7 @@ public class PagedFeedEngine : IVideoListSource
 
                 if (result.IsSuccess)
                 {
-                    var newVideos = (result.Videos ?? [])
+                    var newVideos = result.Videos
                         .Where(v => !v.IsShort)
                         .ToList();
 
@@ -389,11 +413,8 @@ public class PagedFeedEngine : IVideoListSource
                     }
                     else
                     {
-                        foreach (var video in newVideos)
-                        {
-                            if (_videos.All(v => v.Id != video.Id))
-                                _videos.Add(video);
-                        }
+                        foreach (var video in newVideos.Where(video => _videos.All(v => v.Id != video.Id)))
+                            _videos.Add(video);
                     }
 
                     _continuationToken = result.ContinuationToken;
@@ -406,6 +427,7 @@ public class PagedFeedEngine : IVideoListSource
                         _videos.Clear();
                         _continuationToken = null;
                     }
+
                     _hasMore = false;
                 }
 
@@ -457,7 +479,7 @@ public class PagedFeedEngine : IVideoListSource
 
         var status = _explicitStatus
                      ?? _statusMapper?.Invoke(_lastResult, _lastError, engineState)
-                     ?? ComputeDefaultStatus(_lastResult, _lastError, videosSnapshot, _isSuccess, _statusMessage);
+                     ?? ComputeDefaultStatus(_lastError, videosSnapshot, _isSuccess, _statusMessage);
 
         var presentationState = new VideoListPresentationState(
             videosSnapshot,
@@ -471,9 +493,7 @@ public class PagedFeedEngine : IVideoListSource
         State = presentationState;
     }
 
-    private VideoListStatus ComputeDefaultStatus(
-        FeedPageResult? result,
-        Exception? error,
+    private VideoListStatus ComputeDefaultStatus(Exception? error,
         VideoSummary[] videos,
         bool isSuccess,
         string? statusMessage)
@@ -488,10 +508,14 @@ public class PagedFeedEngine : IVideoListSource
                 _defaultTitle,
                 description,
                 "network-error-symbolic",
-                ShowRetry: true);
+                true);
         }
 
-        if (videos.Length == 0)
+        if (videos.Length != 0)
+            return new VideoListStatus(
+                _defaultTitle,
+                string.Empty,
+                _defaultIcon);
         {
             var description = !string.IsNullOrWhiteSpace(statusMessage)
                 ? statusMessage
@@ -502,11 +526,6 @@ public class PagedFeedEngine : IVideoListSource
                 description,
                 _defaultEmptyIcon);
         }
-
-        return new VideoListStatus(
-            _defaultTitle,
-            string.Empty,
-            _defaultIcon);
     }
 
     private void PublishState()

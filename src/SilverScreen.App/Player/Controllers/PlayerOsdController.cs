@@ -35,6 +35,14 @@ internal sealed class PlayerOsdController : IDisposable
         _preferences.PreferencesChanged += OnPreferencesChanged;
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _preferences.PreferencesChanged -= OnPreferencesChanged;
+        HideImmediate();
+    }
+
     public void ShowSeek(int deltaSeconds)
     {
         if (!_enabled || _disposed) return;
@@ -88,12 +96,6 @@ internal sealed class PlayerOsdController : IDisposable
     {
         if (!_enabled || _disposed) return;
         var model = _engine.ProcessVideoInfo(isOpen);
-        ApplyAndScheduleHide(model);
-    }
-    public void ShowStats(bool isOpen)
-    {
-        if (!_enabled || _disposed) return;
-        var model = _engine.ProcessStats(isOpen);
         ApplyAndScheduleHide(model);
     }
 
@@ -154,14 +156,6 @@ internal sealed class PlayerOsdController : IDisposable
         _engine.Reset();
     }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
-        HideImmediate();
-    }
-
     private void ApplyAndScheduleHide(OsdDisplayModel model)
     {
         _osdIcon.SetFromIconName(model.IconName);
@@ -177,11 +171,9 @@ internal sealed class PlayerOsdController : IDisposable
         _hideTimeoutSource = TimeoutAdd(0, _holdDurationMilliseconds, () =>
         {
             _hideTimeoutSource = 0;
-            if (!_disposed)
-            {
-                _osdRevealer.RevealChild = false;
-                _engine.Reset();
-            }
+            if (_disposed) return false;
+            _osdRevealer.RevealChild = false;
+            _engine.Reset();
 
             return false;
         });

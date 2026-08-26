@@ -1,4 +1,3 @@
-using SilverScreen.Browsing.Subscriptions;
 using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
@@ -7,6 +6,7 @@ using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
@@ -17,6 +17,8 @@ namespace SilverScreen.Browsing.Components;
 
 public partial class VideoListView : ViewBase<Bin>
 {
+    private const int RowsPerBatch = VideoFeedConstants.RowsPerBatch;
+    private const int CardWidthWithMargin = 330;
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly IVideoListSource _source;
@@ -27,9 +29,9 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private readonly IWatchProgressService _watchProgress;
+    private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
-    private Action? _currentStatusAction;
 
     private VideoListView(
         IVideoListSource source,
@@ -113,10 +115,7 @@ public partial class VideoListView : ViewBase<Bin>
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
-    public const int RowsPerBatch = VideoFeedConstants.RowsPerBatch;
-    private const int CardWidthWithMargin = 330;
-
-    public int GetColumnsPerRow()
+    private int GetColumnsPerRow()
     {
         var width = video_list_grid.GetWidth();
         if (width <= 0)
@@ -140,11 +139,9 @@ public partial class VideoListView : ViewBase<Bin>
         foreach (var card in _cardsByListItem)
         {
             card.Value.Widget.Measure(Orientation.Horizontal, -1, out _, out var nat, out _, out _);
-            if (nat > 0)
-            {
-                cardWidth = nat;
-                break;
-            }
+            if (nat <= 0) continue;
+            cardWidth = nat;
+            break;
         }
 
         var minColumns = (int)video_list_grid.MinColumns;
@@ -160,7 +157,8 @@ public partial class VideoListView : ViewBase<Bin>
     {
         return GetColumnsPerRow() * RowsPerBatch;
     }
-    public void ScrollToTop()
+
+    private void ScrollToTop()
     {
         if (_disposed || Vadjustment is null)
             return;
@@ -253,7 +251,8 @@ public partial class VideoListView : ViewBase<Bin>
         video_list_status_page.IconName = state.Status.IconName;
         _currentStatusAction = state.Status.Action;
         video_list_retry_button.Label = state.Status.ActionLabel ?? "Retry";
-        video_list_retry_button.Visible = state.Status.ShowRetry || state.Status.Action != null || !string.IsNullOrWhiteSpace(state.Status.ActionLabel);
+        video_list_retry_button.Visible = state.Status.ShowRetry || state.Status.Action != null ||
+                                          !string.IsNullOrWhiteSpace(state.Status.ActionLabel);
         video_list_stack.VisibleChildName = "status";
     }
 

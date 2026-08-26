@@ -45,13 +45,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly QueueViewModel _queueViewModel;
     private readonly SearchPopoverView _searchPopover;
     private readonly VideoListView _searchView;
-    private readonly SubscriptionsView _subscriptions;
-    private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private readonly SearchViewModel _searchViewModel;
     private readonly ApplicationServices _services;
+    private readonly SubscriptionsView _subscriptions;
+    private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private bool _closed;
-    private WebLoginWindow? _webLogin;
     private string? _lastVisibleChildName;
+    private WebLoginWindow? _webLogin;
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
     {
@@ -79,14 +79,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             services.Subscriptions,
             services.Channels,
             services.Session,
-            subscribeSessionEvents: true);
+            true);
         _subscriptions = new SubscriptionsView(
             _subscriptionsViewModel,
             services.Thumbnails,
             services.WatchProgress,
             actions,
             OpenWebLogin,
-            (url, name) => OpenChannelAsync(new VideoSummary("", "", name, TimeSpan.Zero, "", false, "", null, null, url)).FireAndForget(Logger));
+            (url, name) =>
+                OpenChannelAsync(new VideoSummary("", "", name, TimeSpan.Zero, "", false, "", null, null, url))
+                    .FireAndForget(Logger));
         _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged;
         subscriptions_host.Append(_subscriptions.Widget);
         history_host.Append(_history.Widget);
@@ -314,6 +316,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 break;
         }
     }
+
     private void UpdateHomeRefreshButton(bool isLoading)
     {
         home_refresh_button.Sensitive = !isLoading;

@@ -14,8 +14,8 @@ internal sealed class PlayerChromeController : IDisposable
 
     private readonly EventControllerMotion _motionController;
     private readonly Action? _onActivity;
-    private readonly Action<double, double>? _onPointerMoved;
     private readonly Action<bool>? _onControlsVisibilityChanged;
+    private readonly Action<double, double>? _onPointerMoved;
     private readonly Widget _playerControls;
 
     private readonly Widget _viewWidget;

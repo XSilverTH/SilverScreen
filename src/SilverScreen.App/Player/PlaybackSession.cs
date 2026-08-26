@@ -20,22 +20,21 @@ internal sealed class PlaybackSession : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
 
+    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+
     private readonly PlaybackCoordinator _coordinator;
     private readonly DesktopMediaIntegration? _desktopMedia;
     private readonly IPreferencesService _preferences;
-    private readonly ISponsorBlockService _sponsorBlock;
-    private readonly IWatchProgressService _watchProgress;
-    private readonly IVideoEngagementService _videoEngagement;
-    private readonly IYouTubeRatingService _youtubeRating;
     private readonly ISessionService _session;
-
-    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    private readonly ISponsorBlockService _sponsorBlock;
+    private readonly IVideoEngagementService _videoEngagement;
+    private readonly IWatchProgressService _watchProgress;
+    private readonly IYouTubeRatingService _youtubeRating;
     private SponsorBlockSegment? _activeManualSegment;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
-    private bool _handledResumeForCurrentVideo;
     private bool _hadSeek;
-    private TimeSpan _lastKnownDuration;
+    private bool _handledResumeForCurrentVideo;
     private string? _lastPlaybackVideoId;
     private CancellationTokenSource? _loadCts;
     private long _loadVersion;
@@ -90,6 +89,7 @@ internal sealed class PlaybackSession : IDisposable
 
     public VideoEngagement? Engagement { get; private set; }
     public YouTubeRatingState RatingState { get; private set; } = YouTubeRatingState.None;
+
     public bool CanVote => CurrentVideo is { } v &&
                            PlaybackRequest.LooksLikeYouTubeVideoId(v.Id) &&
                            _session.GetCurrentSession().IsSignedIn;
@@ -102,6 +102,14 @@ internal sealed class PlaybackSession : IDisposable
     public bool CanResume => ResumePrompt == ResumePromptMode.Resume;
     public bool CanRestart => ResumePrompt == ResumePromptMode.Restart;
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _preferences.PreferencesChanged -= OnPreferencesChanged;
+        Reset();
+    }
+
     public event Action<VideoSummary, int>? VideoChanged;
     public event Action? SessionEnded;
     public event Action<string>? Failed;
@@ -113,14 +121,6 @@ internal sealed class PlaybackSession : IDisposable
     public event Action<SponsorBlockSegment?>? SponsorBlockPromptChanged;
     public event Action<SponsorBlockSegment>? SponsorBlockAutoSkipped;
     public event Action<ResumePromptMode, TimeSpan>? ResumePromptChanged;
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
-        Reset();
-    }
 
     public void Start(PlaybackRequest request)
     {
@@ -135,11 +135,9 @@ internal sealed class PlaybackSession : IDisposable
         _playbackId = _coordinator.RegisterActivePlayback(request);
         _cookieFile = _coordinator.AcquireCookieFileLease();
 
-        if (CurrentVideo is not null)
-        {
-            LoadVideo(CurrentVideo);
-            VideoChanged?.Invoke(CurrentVideo, 0);
-        }
+        if (CurrentVideo is null) return;
+        LoadVideo(CurrentVideo);
+        VideoChanged?.Invoke(CurrentVideo, 0);
     }
 
     public void UpdatePlayback(LibMpvPlaybackState state)
@@ -298,12 +296,15 @@ internal sealed class PlaybackSession : IDisposable
             return false;
         }
 
-        if (!succeeded || _disposed || version != _loadVersion || !string.Equals(CurrentVideo?.Id, video.Id, StringComparison.Ordinal))
+        if (!succeeded || _disposed || version != _loadVersion ||
+            !string.Equals(CurrentVideo?.Id, video.Id, StringComparison.Ordinal))
             return succeeded;
 
         RatingState = removeVote
             ? YouTubeRatingState.None
-            : (vote == VideoVote.Like ? YouTubeRatingState.Like : YouTubeRatingState.Dislike);
+            : vote == VideoVote.Like
+                ? YouTubeRatingState.Like
+                : YouTubeRatingState.Dislike;
 
         RatingStateChanged?.Invoke(RatingState);
         FetchEngagementAsync(video.Id, version, CancellationToken.None).FireAndForget(Logger);
@@ -327,7 +328,6 @@ internal sealed class PlaybackSession : IDisposable
         _loadCts = cts;
 
         _handledResumeForCurrentVideo = false;
-        _lastKnownDuration = TimeSpan.Zero;
         _resumeFraction = _watchProgress.GetResumeFraction(video.Id);
         ResumePrompt = ResumePromptMode.None;
         ResumePosition = TimeSpan.Zero;
@@ -372,7 +372,6 @@ internal sealed class PlaybackSession : IDisposable
         if (_handledResumeForCurrentVideo || state.Duration <= TimeSpan.Zero) return;
 
         _handledResumeForCurrentVideo = true;
-        _lastKnownDuration = state.Duration;
 
         var prefs = _preferences.GetPreferences();
         var promptState = PlayerTimelineEngine.GetResumePromptState(
@@ -410,9 +409,7 @@ internal sealed class PlaybackSession : IDisposable
         if (LastPlaybackState is { } prev &&
             string.Equals(_lastPlaybackVideoId, CurrentVideo.Id, StringComparison.Ordinal) &&
             Math.Abs((state.Position - prev.Position).TotalSeconds) > 1)
-        {
             _hadSeek = true;
-        }
 
         var prefs = _preferences.GetPreferences();
 
@@ -437,14 +434,12 @@ internal sealed class PlaybackSession : IDisposable
             var candidate = PlayerTimelineEngine.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
             if (candidate is null)
             {
-                if (_activeManualSegment is not null)
-                {
-                    _activeManualSegment = null;
-                    ActiveManualSegment = null;
-                    _hadSeek = false;
-                    _wasPaused = state.IsPaused;
-                    SponsorBlockPromptChanged?.Invoke(null);
-                }
+                if (_activeManualSegment is null) return;
+                _activeManualSegment = null;
+                ActiveManualSegment = null;
+                _hadSeek = false;
+                _wasPaused = state.IsPaused;
+                SponsorBlockPromptChanged?.Invoke(null);
             }
             else
             {
@@ -561,16 +556,13 @@ internal sealed class PlaybackSession : IDisposable
     {
         if (_disposed) return;
 
-        if (!preferences.ResumePlaybackAutomatically && !preferences.ResumePlaybackOnDemand)
-        {
-            DismissResumePrompt();
-        }
+        if (preferences is { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: false }) DismissResumePrompt();
 
         var newKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
         if (newKey == _sponsorBlockConfigurationKey) return;
         _sponsorBlockConfigurationKey = newKey;
 
-        if (!preferences.SponsorBlockAutoSkipEnabled && !preferences.SponsorBlockSegmentDisplayEnabled)
+        if (preferences is { SponsorBlockAutoSkipEnabled: false, SponsorBlockSegmentDisplayEnabled: false })
         {
             SponsorBlockSegments = [];
             _activeManualSegment = null;
@@ -580,16 +572,14 @@ internal sealed class PlaybackSession : IDisposable
             return;
         }
 
-        if (CurrentVideo is not null && PlaybackRequest.LooksLikeYouTubeVideoId(CurrentVideo.Id))
-        {
-            var categories = preferences.SponsorBlockCategories
-                .Where(SponsorBlockCategories.All.Contains)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
+        if (CurrentVideo is null || !PlaybackRequest.LooksLikeYouTubeVideoId(CurrentVideo.Id)) return;
+        var categories = preferences.SponsorBlockCategories
+            .Where(SponsorBlockCategories.All.Contains)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
-            if (categories.Length > 0 && _loadCts is { } cts)
-                FetchSponsorBlockAsync(CurrentVideo.Id, categories, _loadVersion, cts.Token).FireAndForget(Logger);
-        }
+        if (categories.Length > 0 && _loadCts is { } cts)
+            FetchSponsorBlockAsync(CurrentVideo.Id, categories, _loadVersion, cts.Token).FireAndForget(Logger);
     }
 
     private void CancelVideoLoads()

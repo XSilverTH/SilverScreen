@@ -12,14 +12,13 @@ public static class PlaybackStatsFormatter
             return "—";
 
         var bps = bitsPerSec.Value;
-        if (bps >= 1_000_000_000)
-            return $"{(bps / 1_000_000_000):0.00} Gbps";
-        if (bps >= 1_000_000)
-            return $"{(bps / 1_000_000):0.00} Mbps";
-        if (bps >= 1_000)
-            return $"{(bps / 1_000):#,##0} kbps";
-
-        return $"{(int)bps} bps";
+        return bps switch
+        {
+            >= 1_000_000_000 => $"{bps / 1_000_000_000:0.00} Gbps",
+            >= 1_000_000 => $"{bps / 1_000_000:0.00} Mbps",
+            >= 1_000 => $"{bps / 1_000:#,##0} kbps",
+            _ => $"{(int)bps} bps"
+        };
     }
 
     public static string FormatBytes(long? bytes)
@@ -27,14 +26,13 @@ public static class PlaybackStatsFormatter
         if (bytes is null or <= 0) return "—";
 
         var b = bytes.Value;
-        if (b >= 1024L * 1024 * 1024)
-            return $"{(b / (1024.0 * 1024 * 1024)):0.00} GB";
-        if (b >= 1024L * 1024)
-            return $"{(b / (1024.0 * 1024)):0.0} MB";
-        if (b >= 1024)
-            return $"{(b / 1024.0):0.0} KB";
-
-        return $"{b} B";
+        return b switch
+        {
+            >= 1024L * 1024 * 1024 => $"{b / (1024.0 * 1024 * 1024):0.00} GB",
+            >= 1024L * 1024 => $"{b / (1024.0 * 1024):0.0} MB",
+            >= 1024 => $"{b / 1024.0:0.0} KB",
+            _ => $"{b} B"
+        };
     }
 
     public static string FormatFps(double? containerFps, double? estimatedFps)
@@ -42,15 +40,20 @@ public static class PlaybackStatsFormatter
         var hasContainer = containerFps is > 0 and not double.NaN and not double.PositiveInfinity;
         var hasEstimated = estimatedFps is > 0 and not double.NaN and not double.PositiveInfinity;
 
-        if (hasContainer && hasEstimated && containerFps.HasValue && estimatedFps.HasValue)
-            return $"{containerFps.Value:0.00} fps (container) / {estimatedFps.Value:0.00} fps (estimated)";
-        if (hasContainer && containerFps.HasValue)
-            return $"{containerFps.Value:0.00} fps";
+        switch (hasContainer)
+        {
+            case true when hasEstimated && containerFps.HasValue && estimatedFps.HasValue:
+                return $"{containerFps.Value:0.00} fps (container) / {estimatedFps.Value:0.00} fps (estimated)";
+            case true when containerFps.HasValue:
+                return $"{containerFps.Value:0.00} fps";
+        }
+
         if (hasEstimated && estimatedFps.HasValue)
             return $"{estimatedFps.Value:0.00} fps (estimated)";
 
         return "—";
     }
+
     public static string FormatResolution(int? w, int? h, int? dw, int? dh, double? aspect)
     {
         if (w is null or <= 0 || h is null or <= 0) return "—";
@@ -85,13 +88,12 @@ public static class PlaybackStatsFormatter
         var hasSec = seconds is >= 0 and not double.NaN and not double.PositiveInfinity;
         var hasBytes = bytes is > 0;
 
-        if (hasSec && hasBytes && seconds.HasValue)
-            return $"{seconds.Value:0.0} s ({FormatBytes(bytes)})";
-        if (hasSec && seconds.HasValue)
-            return $"{seconds.Value:0.0} s";
-        if (hasBytes)
-            return FormatBytes(bytes);
-        return "—";
+        return hasSec switch
+        {
+            true when hasBytes && seconds.HasValue => $"{seconds.Value:0.0} s ({FormatBytes(bytes)})",
+            true when seconds.HasValue => $"{seconds.Value:0.0} s",
+            _ => hasBytes ? FormatBytes(bytes) : "—"
+        };
     }
 
     public static string FormatTime(TimeSpan position, TimeSpan duration, double? percent)
@@ -110,26 +112,33 @@ public static class PlaybackStatsFormatter
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>File</b></span>");
         if (!string.IsNullOrWhiteSpace(stats.Title))
             sb.AppendLine($"  <span foreground=\"#9a9996\">Title:</span> <b>{Escape(stats.Title)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Format:</span> <b>{Escape(stats.FileFormat ?? "—")}</b> (Demuxer: <b>{Escape(stats.Demuxer ?? "—")}</b>)");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Format:</span> <b>{Escape(stats.FileFormat ?? "—")}</b> (Demuxer: <b>{Escape(stats.Demuxer ?? "—")}</b>)");
         if (stats.FileSize is > 0 || !string.IsNullOrWhiteSpace(stats.ProtocolOrUrl))
         {
             var sizeStr = stats.FileSize is > 0 ? FormatBytes(stats.FileSize) : null;
             var protoStr = !string.IsNullOrWhiteSpace(stats.ProtocolOrUrl)
-                ? (stats.ProtocolOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? "https/http stream" : "file/local")
+                ? stats.ProtocolOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                    ? "https/http stream"
+                    : "file/local"
                 : null;
             if (sizeStr != null && protoStr != null)
-                sb.AppendLine($"  <span foreground=\"#9a9996\">Size:</span> <b>{sizeStr}</b> • <span foreground=\"#9a9996\">Source:</span> <b>{protoStr}</b>");
+                sb.AppendLine(
+                    $"  <span foreground=\"#9a9996\">Size:</span> <b>{sizeStr}</b> • <span foreground=\"#9a9996\">Source:</span> <b>{protoStr}</b>");
             else if (sizeStr != null)
                 sb.AppendLine($"  <span foreground=\"#9a9996\">Size:</span> <b>{sizeStr}</b>");
             else if (protoStr != null)
                 sb.AppendLine($"  <span foreground=\"#9a9996\">Source:</span> <b>{protoStr}</b>");
         }
+
         sb.AppendLine();
 
         // 2. Video stream
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Video</b></span>");
         var vCodec = stats.VideoCodec ?? "—";
-        var vDec = stats.VideoDecoder != null && stats.VideoDecoder != stats.VideoCodec ? $" [Decoder: <b>{Escape(stats.VideoDecoder)}</b>]" : "";
+        var vDec = stats.VideoDecoder != null && stats.VideoDecoder != stats.VideoCodec
+            ? $" [Decoder: <b>{Escape(stats.VideoDecoder)}</b>]"
+            : "";
         sb.AppendLine($"  <span foreground=\"#9a9996\">Codec:</span> <b>{Escape(vCodec)}</b>{vDec}");
         if (!string.IsNullOrWhiteSpace(stats.HwDec))
         {
@@ -137,19 +146,25 @@ public static class PlaybackStatsFormatter
             var hwText = isHw ? $"{Escape(stats.HwDec)} (hw)" : "software (no)";
             sb.AppendLine($"  <span foreground=\"#9a9996\">Hardware Decoding:</span> <b>{hwText}</b>");
         }
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Resolution:</span> <b>{FormatResolution(stats.VideoWidth, stats.VideoHeight, stats.DisplayWidth, stats.DisplayHeight, stats.AspectRatio)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Frame Rate:</span> <b>{FormatFps(stats.ContainerFps, stats.EstimatedFps)}</b>");
+
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Resolution:</span> <b>{FormatResolution(stats.VideoWidth, stats.VideoHeight, stats.DisplayWidth, stats.DisplayHeight, stats.AspectRatio)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Frame Rate:</span> <b>{FormatFps(stats.ContainerFps, stats.EstimatedFps)}</b>");
         sb.AppendLine($"  <span foreground=\"#9a9996\">Bitrate:</span> <b>{FormatBitrate(stats.VideoBitrate)}</b>");
         if (!string.IsNullOrWhiteSpace(stats.PixelFormat))
             sb.AppendLine($"  <span foreground=\"#9a9996\">Pixel Format:</span> <b>{Escape(stats.PixelFormat)}</b>");
-        if (!string.IsNullOrWhiteSpace(stats.ColorMatrix) || !string.IsNullOrWhiteSpace(stats.ColorLevels) || !string.IsNullOrWhiteSpace(stats.Primaries))
+        if (!string.IsNullOrWhiteSpace(stats.ColorMatrix) || !string.IsNullOrWhiteSpace(stats.ColorLevels) ||
+            !string.IsNullOrWhiteSpace(stats.Primaries))
         {
             var matrix = stats.ColorMatrix ?? "—";
             var levels = stats.ColorLevels != null ? $" ({stats.ColorLevels})" : "";
             var prim = stats.Primaries != null ? $" • Primaries: <b>{Escape(stats.Primaries)}</b>" : "";
             var gam = stats.Gamma != null ? $" • Gamma: <b>{Escape(stats.Gamma)}</b>" : "";
-            sb.AppendLine($"  <span foreground=\"#9a9996\">Color Space:</span> <b>{Escape(matrix)}{levels}</b>{prim}{gam}");
+            sb.AppendLine(
+                $"  <span foreground=\"#9a9996\">Color Space:</span> <b>{Escape(matrix)}{levels}</b>{prim}{gam}");
         }
+
         sb.AppendLine();
 
         // 3. Audio stream
@@ -170,15 +185,19 @@ public static class PlaybackStatsFormatter
         // 4. Performance
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Performance</b></span>");
         sb.AppendLine($"  <span foreground=\"#9a9996\">A/V Sync:</span> <b>{FormatAvSync(stats.AvSyncDifference)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Dropped Frames:</span> <b>{FormatDroppedFrames(stats.DroppedFrames, stats.VoDroppedFrames, stats.MistimedFrames)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Demuxer Cache:</span> <b>{FormatCache(stats.CacheDuration, stats.CacheBytes)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Dropped Frames:</span> <b>{FormatDroppedFrames(stats.DroppedFrames, stats.VoDroppedFrames, stats.MistimedFrames)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Demuxer Cache:</span> <b>{FormatCache(stats.CacheDuration, stats.CacheBytes)}</b>");
         sb.AppendLine();
 
         // 5. Playback
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Playback</b></span>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Position:</span> <b>{FormatTime(stats.Position, stats.Duration, stats.PercentPosition)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Position:</span> <b>{FormatTime(stats.Position, stats.Duration, stats.PercentPosition)}</b>");
         var mutedStr = stats.IsMuted ? "<span foreground=\"#e01b24\"><b>Yes</b></span>" : "No";
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Speed:</span> <b>{stats.Speed:0.00}×</b> • <span foreground=\"#9a9996\">Volume:</span> <b>{(int)stats.Volume}%</b> (Muted: {mutedStr})");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Speed:</span> <b>{stats.Speed:0.00}×</b> • <span foreground=\"#9a9996\">Volume:</span> <b>{(int)stats.Volume}%</b> (Muted: {mutedStr})");
         if (!string.IsNullOrWhiteSpace(stats.SubtitleTrack))
             sb.AppendLine($"  <span foreground=\"#9a9996\">Subtitles:</span> <b>{Escape(stats.SubtitleTrack)}</b>");
 
@@ -188,32 +207,43 @@ public static class PlaybackStatsFormatter
     public static string FormatPerformancePageMarkup(PlaybackStats stats, string accentColor = "#78aeed")
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>[2/4] Performance and timings</b></span>\n");
+        sb.AppendLine(
+            $"<span weight=\"bold\" foreground=\"{accentColor}\"><b>[2/4] Performance and timings</b></span>\n");
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Rendering</b></span>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Estimated Output FPS:</span> <b>{(stats.EstimatedFps is > 0 ? $"{stats.EstimatedFps.Value:0.00} fps" : "—")}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Container Frame Rate:</span> <b>{(stats.ContainerFps is > 0 ? $"{stats.ContainerFps.Value:0.00} fps" : "—")}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Estimated Output FPS:</span> <b>{(stats.EstimatedFps is > 0 ? $"{stats.EstimatedFps.Value:0.00} fps" : "—")}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Container Frame Rate:</span> <b>{(stats.ContainerFps is > 0 ? $"{stats.ContainerFps.Value:0.00} fps" : "—")}</b>");
         if (stats.VsyncRatio is not null)
             sb.AppendLine($"  <span foreground=\"#9a9996\">Vsync Ratio:</span> <b>{stats.VsyncRatio.Value:0.000}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Decoder Dropped Frames:</span> <b>{stats.DroppedFrames ?? 0}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">VO Output Dropped Frames:</span> <b>{stats.VoDroppedFrames ?? 0}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Decoder Dropped Frames:</span> <b>{stats.DroppedFrames ?? 0}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">VO Output Dropped Frames:</span> <b>{stats.VoDroppedFrames ?? 0}</b>");
         sb.AppendLine($"  <span foreground=\"#9a9996\">Mistimed Frames:</span> <b>{stats.MistimedFrames ?? 0}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">A/V Sync Difference:</span> <b>{FormatAvSync(stats.AvSyncDifference)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">A/V Sync Difference:</span> <b>{FormatAvSync(stats.AvSyncDifference)}</b>");
         sb.AppendLine();
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Bitrate</b></span>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Current Video Bitrate:</span> <b>{FormatBitrate(stats.VideoBitrate)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Current Audio Bitrate:</span> <b>{FormatBitrate(stats.AudioBitrate)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Current Video Bitrate:</span> <b>{FormatBitrate(stats.VideoBitrate)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Current Audio Bitrate:</span> <b>{FormatBitrate(stats.AudioBitrate)}</b>");
         var totalBitrate = (stats.VideoBitrate ?? 0) + (stats.AudioBitrate ?? 0);
         if (totalBitrate > 0)
-            sb.AppendLine($"  <span foreground=\"#9a9996\">Total Stream Bitrate:</span> <b>{FormatBitrate(totalBitrate)}</b>");
+            sb.AppendLine(
+                $"  <span foreground=\"#9a9996\">Total Stream Bitrate:</span> <b>{FormatBitrate(totalBitrate)}</b>");
         sb.AppendLine();
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Cache</b></span>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Buffered Duration:</span> <b>{(stats.CacheDuration is > 0 ? $"{stats.CacheDuration.Value:0.0} s" : "—")}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Buffered Duration:</span> <b>{(stats.CacheDuration is > 0 ? $"{stats.CacheDuration.Value:0.0} s" : "—")}</b>");
         sb.AppendLine($"  <span foreground=\"#9a9996\">Buffered Data:</span> <b>{FormatBytes(stats.CacheBytes)}</b>");
         sb.AppendLine($"  <span foreground=\"#9a9996\">Demuxer Engine:</span> <b>{Escape(stats.Demuxer ?? "—")}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Container Format:</span> <b>{Escape(stats.FileFormat ?? "—")}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Container Format:</span> <b>{Escape(stats.FileFormat ?? "—")}</b>");
 
         return sb.ToString().TrimEnd();
     }
@@ -223,17 +253,23 @@ public static class PlaybackStatsFormatter
         var sb = new StringBuilder();
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>[3/4] Tracks</b></span>\n");
 
-        var videoTracks = stats.Tracks.Where(t => string.Equals(t.Type, "video", StringComparison.OrdinalIgnoreCase)).ToList();
-        var audioTracks = stats.Tracks.Where(t => string.Equals(t.Type, "audio", StringComparison.OrdinalIgnoreCase)).ToList();
-        var subTracks = stats.Tracks.Where(t => string.Equals(t.Type, "sub", StringComparison.OrdinalIgnoreCase)).ToList();
+        var videoTracks = stats.Tracks.Where(t => string.Equals(t.Type, "video", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var audioTracks = stats.Tracks.Where(t => string.Equals(t.Type, "audio", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var subTracks = stats.Tracks.Where(t => string.Equals(t.Type, "sub", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Video</b></span>");
         if (videoTracks.Count == 0)
         {
             var codec = stats.VideoCodec ?? "—";
-            var res = stats.VideoWidth is > 0 && stats.VideoHeight is > 0 ? $"{stats.VideoWidth}×{stats.VideoHeight}" : null;
+            var res = stats is { VideoWidth: > 0, VideoHeight: > 0 }
+                ? $"{stats.VideoWidth}×{stats.VideoHeight}"
+                : null;
             var fps = stats.ContainerFps is > 0 ? $"@{stats.ContainerFps.Value:0.00} fps" : null;
             var details = string.Join(" ", new[] { res, fps }.Where(s => s != null));
-            sb.AppendLine($"  <b>[#1]</b> <b>{Escape(codec)}</b> {details} <span foreground=\"#33d17a\"><b>[Active]</b></span>");
+            sb.AppendLine(
+                $"  <b>[#1]</b> <b>{Escape(codec)}</b> {details} <span foreground=\"#33d17a\"><b>[Active]</b></span>");
         }
         else
         {
@@ -241,12 +277,14 @@ public static class PlaybackStatsFormatter
             {
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
-                var dim = track.Width is > 0 && track.Height is > 0 ? $" ({track.Width}×{track.Height})" : "";
+                var dim = track is { Width: > 0, Height: > 0 } ? $" ({track.Width}×{track.Height})" : "";
                 var fps = track.Fps is > 0 ? $" @ {track.Fps.Value:0.00} fps" : "";
                 var br = track.Bitrate is > 0 ? $" • {FormatBitrate(track.Bitrate)}" : "";
-                sb.AppendLine($"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "video")}</b>{dim}{fps}{br}{def}{tag}");
+                sb.AppendLine(
+                    $"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "video")}</b>{dim}{fps}{br}{def}{tag}");
             }
         }
+
         sb.AppendLine();
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Audio</b></span>");
@@ -254,10 +292,12 @@ public static class PlaybackStatsFormatter
         {
             var codec = stats.AudioCodec ?? "—";
             var sr = stats.AudioSampleRate is > 0 ? $"{stats.AudioSampleRate.Value} Hz" : null;
-            var ch = stats.AudioChannelLayout ?? (stats.AudioChannels is > 0 ? $"{stats.AudioChannels.Value} ch" : null);
+            var ch = stats.AudioChannelLayout ??
+                     (stats.AudioChannels is > 0 ? $"{stats.AudioChannels.Value} ch" : null);
             var details = string.Join(", ", new[] { sr, ch }.Where(s => s != null));
             var detailsStr = details.Length > 0 ? $" ({details})" : "";
-            sb.AppendLine($"  <b>[#1]</b> <b>{Escape(codec)}</b>{detailsStr} <span foreground=\"#33d17a\"><b>[Active]</b></span>");
+            sb.AppendLine(
+                $"  <b>[#1]</b> <b>{Escape(codec)}</b>{detailsStr} <span foreground=\"#33d17a\"><b>[Active]</b></span>");
         }
         else
         {
@@ -265,31 +305,31 @@ public static class PlaybackStatsFormatter
             {
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
-                var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {Escape(track.Title)}" : (!string.IsNullOrWhiteSpace(track.Language) ? $" - {Escape(track.Language)}" : "");
+                var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {Escape(track.Title)}" :
+                    !string.IsNullOrWhiteSpace(track.Language) ? $" - {Escape(track.Language)}" : "";
                 var sr = track.SampleRate is > 0 ? $" {track.SampleRate.Value} Hz" : "";
                 var ch = !string.IsNullOrWhiteSpace(track.Channels) ? $" {Escape(track.Channels)}" : "";
                 var br = track.Bitrate is > 0 ? $" • {FormatBitrate(track.Bitrate)}" : "";
-                sb.AppendLine($"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "audio")}</b>{sr}{ch}{br}{title}{def}{tag}");
+                sb.AppendLine(
+                    $"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "audio")}</b>{sr}{ch}{br}{title}{def}{tag}");
             }
         }
+
         sb.AppendLine();
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Subtitle</b></span>");
         if (subTracks.Count == 0)
-        {
             sb.AppendLine("  <span foreground=\"#9a9996\">No subtitle tracks found</span>");
-        }
         else
-        {
             foreach (var track in subTracks)
             {
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
-                var title = !string.IsNullOrWhiteSpace(track.Title) ? Escape(track.Title) : (!string.IsNullOrWhiteSpace(track.Language) ? Escape(track.Language) : "Subtitle");
+                var title = !string.IsNullOrWhiteSpace(track.Title) ? Escape(track.Title) :
+                    !string.IsNullOrWhiteSpace(track.Language) ? Escape(track.Language) : "Subtitle";
                 var codec = !string.IsNullOrWhiteSpace(track.Codec) ? $" ({Escape(track.Codec)})" : "";
                 sb.AppendLine($"  <b>[#{track.Id}]</b> {title}{codec}{def}{tag}");
             }
-        }
 
         return sb.ToString().TrimEnd();
     }
@@ -304,8 +344,10 @@ public static class PlaybackStatsFormatter
         if (!string.IsNullOrWhiteSpace(stats.MpvVersion))
             sb.AppendLine($"  <span foreground=\"#9a9996\">mpv Version:</span> <b>{Escape(stats.MpvVersion)}</b>");
         if (!string.IsNullOrWhiteSpace(stats.FfmpegVersion))
-            sb.AppendLine($"  <span foreground=\"#9a9996\">FFmpeg / libavcodec:</span> <b>{Escape(stats.FfmpegVersion)}</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Video Output:</span> <b>{Escape(stats.VoBackend ?? "libmpv (OpenGL / libepoxy)")}</b>");
+            sb.AppendLine(
+                $"  <span foreground=\"#9a9996\">FFmpeg / libavcodec:</span> <b>{Escape(stats.FfmpegVersion)}</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Video Output:</span> <b>{Escape(stats.VoBackend ?? "libmpv (OpenGL / libepoxy)")}</b>");
         if (!string.IsNullOrWhiteSpace(stats.HwDec))
             sb.AppendLine($"  <span foreground=\"#9a9996\">Hardware Decoder:</span> <b>{Escape(stats.HwDec)}</b>");
         sb.AppendLine();
@@ -313,7 +355,8 @@ public static class PlaybackStatsFormatter
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Application</b></span>");
         sb.AppendLine("  <span foreground=\"#9a9996\">App:</span> <b>SilverScreen</b>");
         sb.AppendLine("  <span foreground=\"#9a9996\">Framework:</span> <b>GTK 4 / Libadwaita / .NET 10</b>");
-        sb.AppendLine($"  <span foreground=\"#9a9996\">Platform:</span> <b>{Escape(Environment.OSVersion.VersionString)} ({RuntimeInformation.ProcessArchitecture})</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Platform:</span> <b>{Escape(Environment.OSVersion.VersionString)} ({RuntimeInformation.ProcessArchitecture})</b>");
 
         return sb.ToString().TrimEnd();
     }
@@ -335,20 +378,25 @@ public static class PlaybackStatsFormatter
         sb.AppendLine();
 
         sb.AppendLine("[Video]");
-        sb.AppendLine($"Codec: {stats.VideoCodec ?? "—"}{(stats.VideoDecoder != null && stats.VideoDecoder != stats.VideoCodec ? $" (Decoder: {stats.VideoDecoder})" : "")}");
+        sb.AppendLine(
+            $"Codec: {stats.VideoCodec ?? "—"}{(stats.VideoDecoder != null && stats.VideoDecoder != stats.VideoCodec ? $" (Decoder: {stats.VideoDecoder})" : "")}");
         if (!string.IsNullOrWhiteSpace(stats.HwDec))
             sb.AppendLine($"Hardware Decoding: {stats.HwDec}");
-        sb.AppendLine($"Resolution: {FormatResolution(stats.VideoWidth, stats.VideoHeight, stats.DisplayWidth, stats.DisplayHeight, stats.AspectRatio)}");
+        sb.AppendLine(
+            $"Resolution: {FormatResolution(stats.VideoWidth, stats.VideoHeight, stats.DisplayWidth, stats.DisplayHeight, stats.AspectRatio)}");
         sb.AppendLine($"Frame Rate: {FormatFps(stats.ContainerFps, stats.EstimatedFps)}");
         sb.AppendLine($"Bitrate: {FormatBitrate(stats.VideoBitrate)}");
         if (!string.IsNullOrWhiteSpace(stats.PixelFormat))
             sb.AppendLine($"Pixel Format: {stats.PixelFormat}");
-        if (!string.IsNullOrWhiteSpace(stats.ColorMatrix) || !string.IsNullOrWhiteSpace(stats.ColorLevels) || !string.IsNullOrWhiteSpace(stats.Primaries))
-            sb.AppendLine($"Color Space: Matrix: {stats.ColorMatrix ?? "—"}{(stats.ColorLevels != null ? $" ({stats.ColorLevels})" : "")}, Primaries: {stats.Primaries ?? "—"}, Gamma: {stats.Gamma ?? "—"}");
+        if (!string.IsNullOrWhiteSpace(stats.ColorMatrix) || !string.IsNullOrWhiteSpace(stats.ColorLevels) ||
+            !string.IsNullOrWhiteSpace(stats.Primaries))
+            sb.AppendLine(
+                $"Color Space: Matrix: {stats.ColorMatrix ?? "—"}{(stats.ColorLevels != null ? $" ({stats.ColorLevels})" : "")}, Primaries: {stats.Primaries ?? "—"}, Gamma: {stats.Gamma ?? "—"}");
         sb.AppendLine();
 
         sb.AppendLine("[Audio]");
-        sb.AppendLine($"Codec: {stats.AudioCodec ?? "—"}{(stats.AudioDecoder != null && stats.AudioDecoder != stats.AudioCodec ? $" (Decoder: {stats.AudioDecoder})" : "")}");
+        sb.AppendLine(
+            $"Codec: {stats.AudioCodec ?? "—"}{(stats.AudioDecoder != null && stats.AudioDecoder != stats.AudioCodec ? $" (Decoder: {stats.AudioDecoder})" : "")}");
         if (stats.AudioSampleRate is > 0)
             sb.AppendLine($"Sample Rate: {stats.AudioSampleRate.Value:#,##0} Hz");
         if (stats.AudioChannels is > 0 || !string.IsNullOrWhiteSpace(stats.AudioChannelLayout))
@@ -360,7 +408,8 @@ public static class PlaybackStatsFormatter
 
         sb.AppendLine("[Performance]");
         sb.AppendLine($"A/V Sync: {FormatAvSync(stats.AvSyncDifference)}");
-        sb.AppendLine($"Dropped Frames: {FormatDroppedFrames(stats.DroppedFrames, stats.VoDroppedFrames, stats.MistimedFrames)}");
+        sb.AppendLine(
+            $"Dropped Frames: {FormatDroppedFrames(stats.DroppedFrames, stats.VoDroppedFrames, stats.MistimedFrames)}");
         if (stats.VsyncRatio is not null)
             sb.AppendLine($"Vsync Ratio: {stats.VsyncRatio.Value:0.000}");
         sb.AppendLine($"Demuxer Cache: {FormatCache(stats.CacheDuration, stats.CacheBytes)}");
@@ -381,9 +430,11 @@ public static class PlaybackStatsFormatter
             {
                 var sel = track.IsSelected ? " [Selected]" : "";
                 var def = track.IsDefault ? " [Default]" : "";
-                var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {track.Title}" : (!string.IsNullOrWhiteSpace(track.Language) ? $" - {track.Language}" : "");
+                var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {track.Title}" :
+                    !string.IsNullOrWhiteSpace(track.Language) ? $" - {track.Language}" : "";
                 sb.AppendLine($"- {track.Type} #{track.Id}: {track.Codec ?? "unknown"}{title}{def}{sel}");
             }
+
             sb.AppendLine();
         }
 

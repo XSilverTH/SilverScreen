@@ -80,20 +80,16 @@ internal sealed class PlayerSubtitleController(
         var preferredLanguage = preferences.GetPreferences().PreferredSubtitleLanguage;
         var track = _tracks.FirstOrDefault(track =>
             SubtitleLanguageMatches(track.Language, preferredLanguage));
-        if (track is not null)
+        if (track is null) return "Off";
+        if (track.IsSelected)
         {
-            if (track.IsSelected)
-            {
-                selectTrack(0);
-                return "Off";
-            }
-
-            selectTrack(track.Id);
-            return !string.IsNullOrWhiteSpace(track.Label) ? track.Label :
-                   !string.IsNullOrWhiteSpace(track.Language) ? track.Language : "On";
+            selectTrack(0);
+            return "Off";
         }
 
-        return "Off";
+        selectTrack(track.Id);
+        return !string.IsNullOrWhiteSpace(track.Label) ? track.Label :
+            !string.IsNullOrWhiteSpace(track.Language) ? track.Language : "On";
     }
 
     private static bool SubtitleLanguageMatches(string language, string preferredLanguage)

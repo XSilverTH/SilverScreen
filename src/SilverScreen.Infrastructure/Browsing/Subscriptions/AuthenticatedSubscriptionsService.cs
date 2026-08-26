@@ -22,9 +22,11 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
     private const string ChannelsEmptyMessage = "No subscribed channels were returned.";
 
     private static readonly ILogger Logger = Log.ForContext<AuthenticatedSubscriptionsService>();
+
     private readonly ICookieFileProvider _cookieFileProvider;
+
+    // private readonly List<SubscribedChannel> _loadedChannels = [];
     private readonly List<VideoSummary> _loadedVideos = [];
-    private readonly List<SubscribedChannel> _loadedChannels = [];
     private readonly Lock _lock = new();
     private readonly IPreferencesService _preferencesService;
     private readonly IYtDlpRunner _runner;
@@ -57,7 +59,7 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
                 FeedPage.Empty,
                 AuthenticationRequiredMessage);
 
-        return await FetchFeedPageAsync(1, count, isFirstPage: true, cancellationToken).ConfigureAwait(false);
+        return await FetchFeedPageAsync(1, count, true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AuthenticatedSubscriptionsFeedResult> LoadNextFeedPageAsync(
@@ -81,7 +83,7 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
                     NoContinuationMessage);
         }
 
-        return await FetchFeedPageAsync(startIndex, count, isFirstPage: false, cancellationToken).ConfigureAwait(false);
+        return await FetchFeedPageAsync(startIndex, count, false, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<SubscribedChannelsResult> LoadSubscribedChannelsAsync(
@@ -146,7 +148,8 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
 
         if (processResult.ExitCode != 0)
         {
-            Logger.Warning("yt-dlp exited with code {ExitCode} while loading subscribed channels", processResult.ExitCode);
+            Logger.Warning("yt-dlp exited with code {ExitCode} while loading subscribed channels",
+                processResult.ExitCode);
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 [],
@@ -154,27 +157,24 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
         }
 
         if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
-        {
-            lock (_lock)
-            {
-                _loadedChannels.Clear();
-            }
-
+            // lock (_lock)
+            // {
+            //     _loadedChannels.Clear();
+            // }
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.Empty,
                 [],
                 ChannelsEmptyMessage);
-        }
 
         try
         {
             var channels = YtDlpSubscriptionsParser.ParseChannels(processResult.StandardOutput);
 
-            lock (_lock)
-            {
-                _loadedChannels.Clear();
-                _loadedChannels.AddRange(channels);
-            }
+            // lock (_lock)
+            // {
+            //     _loadedChannels.Clear();
+            //     _loadedChannels.AddRange(channels);
+            // }
 
             return new SubscribedChannelsResult(
                 channels.Count > 0 ? AuthenticatedSubscriptionsStatus.Success : AuthenticatedSubscriptionsStatus.Empty,
@@ -271,7 +271,8 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
 
         if (processResult.ExitCode != 0)
         {
-            Logger.Warning("yt-dlp exited with code {ExitCode} while loading subscription feed", processResult.ExitCode);
+            Logger.Warning("yt-dlp exited with code {ExitCode} while loading subscription feed",
+                processResult.ExitCode);
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
@@ -352,7 +353,7 @@ public sealed class AuthenticatedSubscriptionsService : IAuthenticatedSubscripti
         lock (_lock)
         {
             _loadedVideos.Clear();
-            _loadedChannels.Clear();
+            // _loadedChannels.Clear();
             _continuationToken = null;
         }
     }

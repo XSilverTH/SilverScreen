@@ -11,45 +11,27 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
+    private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly Lock _gate = new();
 
     private readonly ICookieSecretStore _store;
-    private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly string? _tempRoot;
     private bool _isAvailable = true;
+    private bool _isValidating;
     private ManualSessionCookies? _manualCookies;
     private CancellationTokenSource? _validationCts;
-    private bool _isValidating;
-
-    public SecretServiceSessionService(string? tempRoot = null)
-        : this(new LibSecretCookieStore(), (Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
-    {
-    }
 
     public SecretServiceSessionService(Func<IAuthenticatedHomeFeedService>? feedServiceFactory, string? tempRoot = null)
         : this(new LibSecretCookieStore(), feedServiceFactory, tempRoot)
     {
     }
 
-    public SecretServiceSessionService(IAuthenticatedHomeFeedService feedService, string? tempRoot = null)
-        : this(new LibSecretCookieStore(), () => feedService, tempRoot)
-    {
-    }
-
     internal SecretServiceSessionService(ICookieSecretStore store, string? tempRoot = null)
-        : this(store, (Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
+        : this(store, null, tempRoot)
     {
     }
 
-    internal SecretServiceSessionService(
-        ICookieSecretStore store,
-        IAuthenticatedHomeFeedService feedService,
-        string? tempRoot = null)
-        : this(store, () => feedService, tempRoot)
-    {
-    }
-
-    internal SecretServiceSessionService(
+    private SecretServiceSessionService(
         ICookieSecretStore store,
         Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
         string? tempRoot = null)
@@ -71,6 +53,22 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             _isAvailable = false;
             _manualCookies = null;
         }
+    }
+
+    public bool IsValidating
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isValidating;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        CancelValidation();
     }
 
     public bool IsAvailable
@@ -134,17 +132,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 return null;
 
             return NetscapeCookieParser.CreateCookieContainer(_manualCookies.Content);
-        }
-    }
-
-    public bool IsValidating
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _isValidating;
-            }
         }
     }
 
@@ -226,11 +213,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             if (_isValidating && _validationCts != null)
                 _validationCts.Cancel();
         }
-    }
-
-    public void Dispose()
-    {
-        CancelValidation();
     }
 
 

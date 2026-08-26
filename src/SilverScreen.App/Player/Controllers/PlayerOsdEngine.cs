@@ -27,20 +27,20 @@ public sealed class PlayerOsdEngine(
     uint aggregationWindowMilliseconds = PlayerOsdEngine.DefaultAggregationWindowMilliseconds,
     Func<long>? tickCountProvider = null)
 {
-    public const uint DefaultAggregationWindowMilliseconds = 600;
+    private const uint DefaultAggregationWindowMilliseconds = 600;
     public const uint DefaultHoldDurationMilliseconds = 700;
 
     private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
 
     public OsdActionKind CurrentActionKind { get; private set; } = OsdActionKind.None;
     public int AccumulatedSeekDeltaSeconds { get; private set; }
-    public long LastKeypressTimestamp { get; private set; }
+    private long LastKeypressTimestamp { get; set; }
     public bool IsActive { get; private set; }
 
     public OsdDisplayModel ProcessSeek(int deltaSeconds)
     {
         var now = _getTickCount();
-        if (CurrentActionKind == OsdActionKind.Seek && (now - LastKeypressTimestamp) <= aggregationWindowMilliseconds)
+        if (CurrentActionKind == OsdActionKind.Seek && now - LastKeypressTimestamp <= aggregationWindowMilliseconds)
         {
             AccumulatedSeekDeltaSeconds += deltaSeconds;
         }
@@ -111,7 +111,8 @@ public sealed class PlayerOsdEngine(
     public OsdDisplayModel ProcessStats(bool isOpen)
     {
         RecordAction(OsdActionKind.Stats);
-        return new OsdDisplayModel("utilities-system-monitor-symbolic", isOpen ? "Playback Stats: Open" : "Playback Stats: Closed");
+        return new OsdDisplayModel("utilities-system-monitor-symbolic",
+            isOpen ? "Playback Stats: Open" : "Playback Stats: Closed");
     }
 
     public OsdDisplayModel ProcessFullscreen(bool isFullscreen)
@@ -184,8 +185,11 @@ public sealed class PlayerOsdEngine(
     public static string GetVolumeIcon(double volume, bool isMuted)
     {
         if (isMuted || volume <= 0) return "audio-volume-muted-symbolic";
-        if (volume <= 33) return "audio-volume-low-symbolic";
-        if (volume <= 66) return "audio-volume-medium-symbolic";
-        return "audio-volume-high-symbolic";
+        return volume switch
+        {
+            <= 33 => "audio-volume-low-symbolic",
+            <= 66 => "audio-volume-medium-symbolic",
+            _ => "audio-volume-high-symbolic"
+        };
     }
 }

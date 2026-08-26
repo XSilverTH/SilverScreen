@@ -5,30 +5,41 @@ using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
-public sealed class InMemorySessionService : ISessionService, IDisposable
+public sealed class InMemorySessionService(
+    Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
+    string? tempRoot = null)
+    : ISessionService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<InMemorySessionService>();
     private readonly Lock _gate = new();
-    private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
-    private readonly string? _tempRoot;
+    private bool _isValidating;
     private ManualSessionCookies? _manualCookies;
     private CancellationTokenSource? _validationCts;
-    private bool _isValidating;
 
     public InMemorySessionService(string? tempRoot = null)
         : this((Func<IAuthenticatedHomeFeedService>?)null, tempRoot)
     {
     }
 
-    public InMemorySessionService(Func<IAuthenticatedHomeFeedService>? feedServiceFactory, string? tempRoot = null)
-    {
-        _feedServiceFactory = feedServiceFactory;
-        _tempRoot = tempRoot;
-    }
-
     public InMemorySessionService(IAuthenticatedHomeFeedService feedService, string? tempRoot = null)
         : this(() => feedService, tempRoot)
     {
+    }
+
+    public bool IsValidating
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isValidating;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        CancelValidation();
     }
 
     public event EventHandler? SessionChanged;
@@ -63,7 +74,7 @@ public sealed class InMemorySessionService : ISessionService, IDisposable
                 string.IsNullOrWhiteSpace(_manualCookies.Content))
                 return null;
 
-            return TemporaryCookieFile.CreateLease(_manualCookies.Content, _tempRoot);
+            return TemporaryCookieFile.CreateLease(_manualCookies.Content, tempRoot);
         }
     }
 
@@ -84,17 +95,6 @@ public sealed class InMemorySessionService : ISessionService, IDisposable
         }
     }
 
-    public bool IsValidating
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _isValidating;
-            }
-        }
-    }
-
     public async Task<string> ValidateSessionAsync(CancellationToken cancellationToken = default)
     {
         Logger.Information("Starting YouTube session validation");
@@ -112,7 +112,7 @@ public sealed class InMemorySessionService : ISessionService, IDisposable
             _isValidating = true;
             _validationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             linkedCts = _validationCts;
-            feedService = _feedServiceFactory?.Invoke();
+            feedService = feedServiceFactory?.Invoke();
         }
 
         if (feedService is null)
@@ -200,10 +200,5 @@ public sealed class InMemorySessionService : ISessionService, IDisposable
 
         if (changed)
             SessionChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    public void Dispose()
-    {
-        CancelValidation();
     }
 }

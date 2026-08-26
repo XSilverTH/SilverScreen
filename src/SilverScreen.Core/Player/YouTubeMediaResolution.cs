@@ -28,11 +28,15 @@ public sealed record YouTubeMediaResolutionResult(
     bool IsSuccess,
     string StatusMessage)
 {
-    public static YouTubeMediaResolutionResult Success(ResolvedMedia media) =>
-        new(media, media.Details, true, "Media resolved successfully.");
+    public static YouTubeMediaResolutionResult Success(ResolvedMedia media)
+    {
+        return new YouTubeMediaResolutionResult(media, media.Details, true, "Media resolved successfully.");
+    }
 
-    public static YouTubeMediaResolutionResult Failure(string message) =>
-        new(null, null, false, message);
+    public static YouTubeMediaResolutionResult Failure(string message)
+    {
+        return new YouTubeMediaResolutionResult(null, null, false, message);
+    }
 }
 
 public static partial class YouTubeMediaExpiryParser
@@ -44,17 +48,16 @@ public static partial class YouTubeMediaExpiryParser
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
         var match = ExpireRegex().Match(url);
-        if (match.Success && long.TryParse(match.Groups[1].ValueSpan, out var unixSeconds))
+        if (!match.Success || !long.TryParse(match.Groups[1].ValueSpan, out var unixSeconds)) return null;
+        try
         {
-            try
-            {
-                return DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-                return null;
-            }
+            return DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
         }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+
         return null;
     }
 }

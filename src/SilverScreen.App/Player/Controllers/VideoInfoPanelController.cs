@@ -2,8 +2,8 @@ using System.Globalization;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Infrastructure.Common;
 using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
@@ -20,19 +20,20 @@ internal sealed class VideoInfoPanelController : IDisposable
     private readonly Revealer _cueRevealer;
     private readonly TextView _description;
     private readonly ScrolledWindow _descriptionScroller;
+    private readonly IYouTubeMediaResolver _mediaResolver;
     private readonly Revealer _revealer;
     private readonly Label _statsLabel;
     private readonly Label _statusLabel;
     private readonly Label _titleLabel;
-    private readonly IYouTubeMediaResolver _mediaResolver;
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
-    private YouTubeVideoDetails? _loadedDetails;
-    private string? _loadedError;
     private bool _disposed;
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
+    private YouTubeVideoDetails? _loadedDetails;
+    private string? _loadedError;
+
     public VideoInfoPanelController(
         IYouTubeMediaResolver mediaResolver,
         Action<VideoSummary> channelRequested,
@@ -111,15 +112,14 @@ internal sealed class VideoInfoPanelController : IDisposable
             _statusLabel.SetVisible(true);
             _descriptionScroller.SetVisible(false);
 
-            if (_infoLoadCancellation is null && PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
-            {
-                var cancellation = new CancellationTokenSource();
-                _infoLoadCancellation = cancellation;
-                var generation = ++_infoLoadGeneration;
-                LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
-            }
+            if (_infoLoadCancellation is not null || !PlaybackRequest.LooksLikeYouTubeVideoId(video.Id)) return;
+            var cancellation = new CancellationTokenSource();
+            _infoLoadCancellation = cancellation;
+            var generation = ++_infoLoadGeneration;
+            LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
         }
     }
+
     public void Close()
     {
         if (!IsOpen && !_revealer.RevealChild) return;
@@ -156,13 +156,11 @@ internal sealed class VideoInfoPanelController : IDisposable
         _currentVideo = video;
         if (!IsOpen) SetInfoContent(null);
 
-        if (video is not null && PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
-        {
-            var cancellation = new CancellationTokenSource();
-            _infoLoadCancellation = cancellation;
-            var generation = ++_infoLoadGeneration;
-            LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
-        }
+        if (video is null || !PlaybackRequest.LooksLikeYouTubeVideoId(video.Id)) return;
+        var cancellation = new CancellationTokenSource();
+        _infoLoadCancellation = cancellation;
+        var generation = ++_infoLoadGeneration;
+        LoadVideoInfoAsync(video.Id, generation, cancellation).FireAndForget(Logger);
     }
 
     public void UpdatePointer(double x, double y, double width, double height, bool hasMedia)
@@ -193,7 +191,8 @@ internal sealed class VideoInfoPanelController : IDisposable
         YouTubeVideoDetailsResult result;
         try
         {
-            result = await _mediaResolver.GetVideoDetailsAsync(videoId, forceRefresh: false, cancellation.Token).ConfigureAwait(false);
+            result = await _mediaResolver.GetVideoDetailsAsync(videoId, false, cancellation.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -215,10 +214,7 @@ internal sealed class VideoInfoPanelController : IDisposable
             {
                 _loadedDetails = details;
                 _loadedError = null;
-                if (IsOpen)
-                {
-                    SetInfoContent(details);
-                }
+                if (IsOpen) SetInfoContent(details);
             }
             else
             {
@@ -226,12 +222,10 @@ internal sealed class VideoInfoPanelController : IDisposable
                 _loadedError = string.IsNullOrWhiteSpace(result.StatusMessage)
                     ? "Video details could not be loaded."
                     : result.StatusMessage;
-                if (IsOpen)
-                {
-                    _statusLabel.SetText(_loadedError);
-                    _statusLabel.SetVisible(true);
-                    _descriptionScroller.SetVisible(false);
-                }
+                if (!IsOpen) return false;
+                _statusLabel.SetText(_loadedError);
+                _statusLabel.SetVisible(true);
+                _descriptionScroller.SetVisible(false);
             }
 
             return false;

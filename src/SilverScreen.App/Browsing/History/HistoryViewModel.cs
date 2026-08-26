@@ -20,21 +20,21 @@ public sealed record HistoryViewState(
         AuthenticatedHistoryStatus.Success);
 }
 
-public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVideoListSource
+public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
     private readonly PagedFeedEngine _engine;
-    private AuthenticatedHistoryStatus _historyStatus = AuthenticatedHistoryStatus.Success;
     private bool _disposed;
+    private AuthenticatedHistoryStatus _historyStatus = AuthenticatedHistoryStatus.Success;
 
     public HistoryViewModel(IAuthenticatedHistoryService historyService)
     {
         ArgumentNullException.ThrowIfNull(historyService);
 
         _engine = PagedFeedEngine.Create(
-            fetchFirstPage: (count, ct) => historyService.LoadFirstPageAsync(count, ct),
-            fetchNextPage: (_, count, ct) => historyService.LoadNextPageAsync(count, ct),
-            extractResult: res =>
+            historyService.LoadFirstPageAsync,
+            (_, count, ct) => historyService.LoadNextPageAsync(count, ct),
+            res =>
             {
                 _historyStatus = res.Status;
                 var isSuccess = res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
@@ -47,9 +47,9 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVid
                     isSuccess,
                     res.StatusMessage);
             },
-            statusMapper: (_, _, state) => HistoryVideoListSource.MapStatus(_historyStatus, state),
-            loadingMessage: "Loading watch history…",
-            paginationLoadingMessage: "Loading more history…",
+            (_, _, state) => HistoryVideoListSource.MapStatus(_historyStatus, state),
+            "Loading watch history…",
+            "Loading more history…",
             defaultTitle: "History",
             clearOnRefresh: true);
 
@@ -67,20 +67,21 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVid
         }
     } = HistoryViewState.Empty;
 
-    public VideoListPresentationState PresentationState => _engine.State;
-    VideoListPresentationState IVideoListSource.State => _engine.State;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler<HistoryViewState>? StateChanged;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _engine.Dispose();
+    }
+
+    VideoListPresentationState IVideoListSource.State => _engine.State;
+
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
-    }
-
-    public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
-    {
-        ThrowIfDisposed();
-        return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync(count) : Task.CompletedTask;
     }
 
     public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
@@ -96,11 +97,12 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVid
         return _engine.LoadMoreAsync(count);
     }
 
-    public void Dispose()
+    public event EventHandler<HistoryViewState>? StateChanged;
+
+    public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        if (_disposed) return;
-        _disposed = true;
-        _engine.Dispose();
+        ThrowIfDisposed();
+        return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync(count) : Task.CompletedTask;
     }
 
     private void OnEngineStateChanged(object? sender, FeedEngineState state)
@@ -110,7 +112,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVid
             : state.IsLoadingMore
                 ? "Loading more watch history…"
                 : !state.IsSuccess || state.LastError != null
-                    ? (state.IsLoadingMore ? "Could not load more watch history." : "Could not load watch history.")
+                    ? state.IsLoadingMore ? "Could not load more watch history." : "Could not load watch history."
                     : state.StatusMessage ?? string.Empty;
 
         var status = state.LastError != null
@@ -121,7 +123,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IDisposable, IVid
             state.Videos,
             summary,
             state.IsLoading,
-            state.IsSuccess && state.LastError == null,
+            state is { IsSuccess: true, LastError: null },
             status,
             state.IsLoadingMore,
             state.HasMore);

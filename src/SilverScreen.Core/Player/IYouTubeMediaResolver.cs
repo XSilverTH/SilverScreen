@@ -14,6 +14,4 @@ public interface IYouTubeMediaResolver
         string videoId,
         bool forceRefresh = false,
         CancellationToken cancellationToken = default);
-
-    void Invalidate(string videoId);
 }

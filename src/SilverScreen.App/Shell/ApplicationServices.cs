@@ -79,8 +79,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton(configuration);
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
-        services.AddSingleton<SecretServiceSessionService>(static provider => new SecretServiceSessionService(
-            () => provider.GetRequiredService<IAuthenticatedHomeFeedService>()));
+        services.AddSingleton<SecretServiceSessionService>(static provider =>
+            new SecretServiceSessionService(provider.GetRequiredService<IAuthenticatedHomeFeedService>));
         services.AddSingleton<ISessionService>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ISecretServiceAvailability>(static provider =>
@@ -118,7 +118,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
         services.AddSingleton<YtDlpMediaResolver>();
-        services.AddSingleton<IYouTubeMediaResolver>(static provider => provider.GetRequiredService<YtDlpMediaResolver>());
+        services.AddSingleton<IYouTubeMediaResolver>(static provider =>
+            provider.GetRequiredService<YtDlpMediaResolver>());
         services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
         services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
         services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();

@@ -11,13 +11,13 @@ namespace SilverScreen.Player.Controllers;
 internal sealed class PlayerResumeController : IDisposable
 {
     private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
-    private readonly PlaybackSession _session;
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
     private readonly Revealer _restartRevealer;
     private readonly Button _resumeButton;
     private readonly Label _resumeLabel;
     private readonly Revealer _resumeRevealer;
+    private readonly PlaybackSession _session;
     private bool _disposed;
     private uint _promptHideSource;
 
@@ -51,22 +51,6 @@ internal sealed class PlayerResumeController : IDisposable
         _session.SessionEnded -= OnSessionEnded;
         _session.Failed -= OnSessionFailed;
         HidePrompt();
-    }
-
-    public bool TryResume()
-    {
-        if (_disposed) return false;
-        var handled = _session.TryResume();
-        if (handled) HidePrompt();
-        return handled;
-    }
-
-    public bool TryRestart()
-    {
-        if (_disposed) return false;
-        var handled = _session.TryRestart();
-        if (handled) HidePrompt();
-        return handled;
     }
 
     private void OnResumePromptChanged(ResumePromptMode mode, TimeSpan position)
@@ -137,12 +121,11 @@ internal sealed class PlayerResumeController : IDisposable
         _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (!_disposed)
-            {
-                _resumeRevealer.RevealChild = false;
-                _restartRevealer.RevealChild = false;
-                _session.DismissResumePrompt();
-            }
+            if (_disposed) return false;
+            _resumeRevealer.RevealChild = false;
+            _restartRevealer.RevealChild = false;
+            _session.DismissResumePrompt();
+
             return false;
         });
     }

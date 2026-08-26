@@ -142,9 +142,10 @@ public sealed class SearchVideoListSource : IVideoListSource
                 true);
         }
 
-        var emptyDescription = string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Search complete."
-            ? "Try different keywords or check spelling."
-            : state.StatusMessage;
+        var emptyDescription =
+            string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Search complete."
+                ? "Try different keywords or check spelling."
+                : state.StatusMessage;
 
         return new VideoListStatus(
             "No results found",
@@ -342,7 +343,8 @@ public sealed class ChannelVideoListSource : IVideoListSource
     {
         if (!state.IsSuccess || state.LastError != null)
         {
-            var description = string.IsNullOrWhiteSpace(state.StatusMessage) || state.StatusMessage == "Could not load channel."
+            var description = string.IsNullOrWhiteSpace(state.StatusMessage) ||
+                              state.StatusMessage == "Could not load channel."
                 ? "Failed to load channel details. Check your network connection and try again."
                 : state.StatusMessage;
 
@@ -397,8 +399,8 @@ public sealed class ChannelVideoListSource : IVideoListSource
 
 public sealed class SubscriptionsVideoListSource : IVideoListSource
 {
-    private readonly SubscriptionsViewModel _viewModel;
     private readonly Action? _openWebLogin;
+    private readonly SubscriptionsViewModel _viewModel;
     private bool _disposed;
 
     public SubscriptionsVideoListSource(SubscriptionsViewModel viewModel, Action? openWebLogin = null)
@@ -475,21 +477,17 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                 else if (state.Videos.Count == 0)
                 {
                     if (state.SelectedChannel is not null)
-                    {
                         status = new VideoListStatus(
                             "No videos found",
                             $"No videos found for {state.SelectedChannel.Title}.",
                             "video-x-generic-symbolic");
-                    }
                     else
-                    {
                         status = new VideoListStatus(
                             "No subscriptions",
                             !string.IsNullOrWhiteSpace(state.Summary)
                                 ? state.Summary
                                 : "Channels you subscribe to on YouTube will appear here.",
                             "emblem-favorite-symbolic");
-                    }
                 }
                 else
                 {
@@ -498,6 +496,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                         string.Empty,
                         "emblem-favorite-symbolic");
                 }
+
                 break;
         }
 
@@ -510,8 +509,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
             state.IsLoading,
             state.IsLoadingMore,
             status,
-            loadingMessage,
-            "Loading more videos…");
+            loadingMessage);
     }
 
     private void OnStateChanged(object? sender, SubscriptionsViewState state)

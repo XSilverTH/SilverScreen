@@ -1,5 +1,4 @@
 using Gtk;
-using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using static GLib.Functions;
@@ -12,13 +11,13 @@ namespace SilverScreen.Player.Controllers;
 /// </summary>
 internal sealed class PlayerEngagementController : IDisposable
 {
-    private readonly PlaybackSession _session;
-    private readonly Button _likeButton;
-    private readonly Image _likeImage;
-    private readonly Label _likesLabel;
     private readonly Button _dislikeButton;
     private readonly Image _dislikeImage;
     private readonly Label _dislikesLabel;
+    private readonly Button _likeButton;
+    private readonly Image _likeImage;
+    private readonly Label _likesLabel;
+    private readonly PlaybackSession _session;
     private bool _disposed;
 
     public PlayerEngagementController(
@@ -57,13 +56,6 @@ internal sealed class PlayerEngagementController : IDisposable
         _session.SessionEnded -= OnSessionEnded;
         _session.Failed -= OnSessionFailed;
         SetReactionSensitive(false);
-    }
-
-    public void SubmitVote(VideoVote vote)
-    {
-        if (_disposed) return;
-        SetReactionSensitive(false);
-        _session.SubmitVote(vote);
     }
 
     private void OnEngagementChanged(VideoEngagement? engagement)

@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 
 namespace SilverScreen.Infrastructure.YouTube;
@@ -18,33 +17,25 @@ internal static class YtDlpFormatSelector
         if (formats.Count == 0)
         {
             // If there's a direct url at root
-            if (root.TryGetProperty("url", out var directUrlProp) && directUrlProp.GetString() is { } directUrl && !string.IsNullOrWhiteSpace(directUrl))
-            {
-                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(directUrl);
-                return new ResolvedMedia(directUrl, null, preferredQuality, expiry, details);
-            }
-            return null;
+            if (!root.TryGetProperty("url", out var directUrlProp) || directUrlProp.GetString() is not { } directUrl ||
+                string.IsNullOrWhiteSpace(directUrl)) return null;
+            var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(directUrl);
+            return new ResolvedMedia(directUrl, null, preferredQuality, expiry, details);
         }
 
         var maxTargetHeight = ParseTargetHeight(preferredQuality);
 
         // Separate formats into muxed, video-only, audio-only
-        var muxed = formats.Where(f => f.HasVideo && f.HasAudio).ToList();
-        var videoOnly = formats.Where(f => f.HasVideo && !f.HasAudio).ToList();
-        var audioOnly = formats.Where(f => !f.HasVideo && f.HasAudio).ToList();
+        var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true }).ToList();
+        var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false }).ToList();
+        var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true }).ToList();
 
         // 1. Try best video-only + best audio-only
         ResolvedMediaStream? selectedVideo = null;
-        if (videoOnly.Count > 0)
-        {
-            selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
-        }
+        if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
 
         ResolvedMediaStream? selectedAudio = null;
-        if (audioOnly.Count > 0)
-        {
-            selectedAudio = SelectBestAudioStream(audioOnly);
-        }
+        if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
 
         if (selectedVideo is not null && selectedAudio is not null)
         {
@@ -77,8 +68,8 @@ internal static class YtDlpFormatSelector
         }
 
         // 3. If only video or only audio or fallback
-        var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : (formats.Count > 0 ? formats[0] : null));
-        if (fallback is not null)
+        var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats.Count > 0 ? formats[0] : null);
+        if (fallback is null) return null;
         {
             var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(fallback.Url);
             return new ResolvedMedia(
@@ -88,8 +79,6 @@ internal static class YtDlpFormatSelector
                 expiry,
                 details);
         }
-
-        return null;
     }
 
     private static int? ParseTargetHeight(string quality)
@@ -107,7 +96,7 @@ internal static class YtDlpFormatSelector
     private static ResolvedMediaStream? SelectBestVideoStream(List<ResolvedMediaStream> videoStreams, int? maxHeight)
     {
         var eligible = maxHeight.HasValue
-            ? videoStreams.Where(v => v.Height.HasValue && v.Height.Value <= maxHeight.Value).ToList()
+            ? [.. videoStreams.Where(v => v.Height.HasValue && v.Height.Value <= maxHeight.Value)]
             : videoStreams;
 
         // If nothing matches the <= maxHeight constraint (e.g. video only has higher or unstated height), fallback to all videoStreams
@@ -141,7 +130,8 @@ internal static class YtDlpFormatSelector
             if (string.IsNullOrWhiteSpace(url)) continue;
 
             // Skip DRM or storyboards (mhtml, etc.)
-            if (format.TryGetProperty("has_drm", out var hasDrm) && hasDrm.ValueKind == JsonValueKind.True && hasDrm.GetBoolean())
+            if (format.TryGetProperty("has_drm", out var hasDrm) && hasDrm.ValueKind == JsonValueKind.True &&
+                hasDrm.GetBoolean())
                 continue;
 
             var formatNote = GetString(format, "format_note");
@@ -155,8 +145,10 @@ internal static class YtDlpFormatSelector
             var vcodec = GetString(format, "vcodec");
             var acodec = GetString(format, "acodec");
 
-            var hasVideo = !string.IsNullOrWhiteSpace(vcodec) && !string.Equals(vcodec, "none", StringComparison.OrdinalIgnoreCase);
-            var hasAudio = !string.IsNullOrWhiteSpace(acodec) && !string.Equals(acodec, "none", StringComparison.OrdinalIgnoreCase);
+            var hasVideo = !string.IsNullOrWhiteSpace(vcodec) &&
+                           !string.Equals(vcodec, "none", StringComparison.OrdinalIgnoreCase);
+            var hasAudio = !string.IsNullOrWhiteSpace(acodec) &&
+                           !string.Equals(acodec, "none", StringComparison.OrdinalIgnoreCase);
 
             // If neither hasVideo nor hasAudio is indicated by codec, check height / abr
             var height = GetInt(format, "height");
@@ -164,15 +156,22 @@ internal static class YtDlpFormatSelector
             var fps = GetInt(format, "fps");
             var tbr = GetDouble(format, "tbr") ?? GetDouble(format, "vbr") ?? GetDouble(format, "abr");
 
-            if (!hasVideo && height.HasValue && height > 0)
+            if (!hasVideo && height is > 0)
                 hasVideo = true;
 
             if (!hasVideo && !hasAudio)
             {
                 // Unspecified, check ext
                 var ext = GetString(format, "ext");
-                if (ext is "mp4" or "webm" or "mkv") hasVideo = true;
-                else if (ext is "m4a" or "opus" or "mp3" or "webm_audio") hasAudio = true;
+                switch (ext)
+                {
+                    case "mp4" or "webm" or "mkv":
+                        hasVideo = true;
+                        break;
+                    case "m4a" or "opus" or "mp3" or "webm_audio":
+                        hasAudio = true;
+                        break;
+                }
             }
 
             var formatId = GetString(format, "format_id");
@@ -204,7 +203,8 @@ internal static class YtDlpFormatSelector
     {
         if (!element.TryGetProperty(propertyName, out var prop)) return null;
         if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var num)) return num;
-        if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var strNum)) return strNum;
+        if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var strNum)) return strNum;
         return null;
     }
 
@@ -212,7 +212,8 @@ internal static class YtDlpFormatSelector
     {
         if (!element.TryGetProperty(propertyName, out var prop)) return null;
         if (prop.ValueKind == JsonValueKind.Number && prop.TryGetDouble(out var num)) return num;
-        if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var strNum)) return strNum;
+        if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var strNum)) return strNum;
         return null;
     }
 

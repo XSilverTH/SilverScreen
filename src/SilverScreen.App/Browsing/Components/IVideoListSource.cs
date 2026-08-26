@@ -8,7 +8,7 @@ public sealed record VideoListStatus(
     string IconName,
     bool ShowRetry = false,
     string? ActionLabel = null,
-    System.Action? Action = null);
+    Action? Action = null);
 
 public sealed record VideoListPresentationState(
     IReadOnlyList<VideoSummary> Videos,

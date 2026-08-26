@@ -47,6 +47,7 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
 
         _sessionService.SessionChanged += OnSessionChanged;
     }
+
     public async Task<AuthenticatedHomeFeedResult> LoadFirstPageAsync(int count = VideoFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
@@ -136,32 +137,40 @@ public sealed class AuthenticatedHomeFeedService : IAuthenticatedHomeFeedService
             await ExecuteYtDlpAsync(executablePath, cookieFile.Path, startIndex, count, cancellationToken)
                 .ConfigureAwait(false);
 
-        if (status == AuthenticatedHomeFeedStatus.TemporaryBackendFailure)
-            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
-
-        if (status == AuthenticatedHomeFeedStatus.Success && videos.Count == 0 && isFirstPage)
+        switch (status)
         {
-            Logger.Information(
-                "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
-            var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, count, cancellationToken)
-                .ConfigureAwait(false);
-            if (retry.Status != AuthenticatedHomeFeedStatus.Success)
-                return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
-
-            if (retry.Videos.Count > 0)
+            case AuthenticatedHomeFeedStatus.TemporaryBackendFailure:
+                return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+            case AuthenticatedHomeFeedStatus.Success when videos.Count == 0 && isFirstPage:
             {
-                var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, count);
-                return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
+                Logger.Information(
+                    "Authenticated home feed returned 0 videos; retrying without cookies for public recommendations");
+                var retry = await ExecuteYtDlpAsync(executablePath, null, startIndex, count, cancellationToken)
+                    .ConfigureAwait(false);
+                if (retry.Status != AuthenticatedHomeFeedStatus.Success)
+                    return new AuthenticatedHomeFeedResult(retry.Status, FeedPage.Empty, retry.StatusMessage);
+
+                if (retry.Videos.Count > 0)
+                {
+                    var retryToken = GetNextContinuationToken(startIndex, retry.PageEntriesLength, count);
+                    return CommitVideos(retry.Videos, retryToken, isFirstPage, PublicSuccessMessage);
+                }
+
+                break;
             }
+            case AuthenticatedHomeFeedStatus.Success:
+            case AuthenticatedHomeFeedStatus.AuthenticationRequired:
+            case AuthenticatedHomeFeedStatus.AuthenticationRejected:
+            case AuthenticatedHomeFeedStatus.Empty:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(status), status, null);
         }
 
-        if (status == AuthenticatedHomeFeedStatus.Success)
-        {
-            var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, count);
-            return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
-        }
-
-        return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+        if (status != AuthenticatedHomeFeedStatus.Success)
+            return new AuthenticatedHomeFeedResult(status, FeedPage.Empty, statusMessage);
+        var nextToken = GetNextContinuationToken(startIndex, pageEntriesLength, count);
+        return CommitVideos(videos, nextToken, isFirstPage, SuccessMessage);
     }
 
     private AuthenticatedHomeFeedResult CommitVideos(

@@ -23,8 +23,6 @@ public interface ISessionService : ICookieFileProvider
 
     CookieContainer? CreateCookieContainer();
 
-    bool IsValidating => false;
-
     Task<string> ValidateSessionAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(string.Empty);

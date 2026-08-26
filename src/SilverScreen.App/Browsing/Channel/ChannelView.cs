@@ -89,13 +89,6 @@ public partial class ChannelView : ViewBase<Box>
         return _videoList.GetBatchSize();
     }
 
-    public void ScrollToTop()
-    {
-        if (_disposed) return;
-        _videoList.ScrollToTop();
-        SetHeaderCollapsed(false);
-    }
-
     public async Task RefreshAsync()
     {
         try

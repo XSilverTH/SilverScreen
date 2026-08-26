@@ -25,8 +25,6 @@ public sealed class ExternalMpvPlaybackService(
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
 
-    private readonly IYouTubeMediaResolver? _mediaResolver = mediaResolver;
-
     private bool _disposed;
 
     internal ExternalMpvPlaybackService(
@@ -71,17 +69,17 @@ public sealed class ExternalMpvPlaybackService(
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
 
             IReadOnlyList<ResolvedMedia>? resolvedMediaList = null;
-            if (_mediaResolver is not null && !request.Videos.IsDefaultOrEmpty && PlaybackRequest.LooksLikeYouTubeVideoId(request.Videos[0].Id))
+            if (mediaResolver is not null && !request.Videos.IsDefaultOrEmpty &&
+                PlaybackRequest.LooksLikeYouTubeVideoId(request.Videos[0].Id))
             {
                 var firstVideoId = request.Videos[0].Id;
-                var res = await _mediaResolver.ResolveMediaAsync(firstVideoId, activeOptions.VideoQuality).ConfigureAwait(false);
-                if (res is { IsSuccess: true, Media: { } media })
-                {
-                    resolvedMediaList = [media];
-                }
+                var res = await mediaResolver.ResolveMediaAsync(firstVideoId, activeOptions.VideoQuality)
+                    .ConfigureAwait(false);
+                if (res is { IsSuccess: true, Media: { } media }) resolvedMediaList = [media];
             }
 
-            var command = MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, resolvedMediaList);
+            var command =
+                MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, resolvedMediaList);
             Logger.Information(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}; ResolvedDirectUrl: {ResolvedDirectUrl}",
                 command.ExecutablePath,

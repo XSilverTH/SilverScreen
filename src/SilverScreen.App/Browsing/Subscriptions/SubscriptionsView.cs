@@ -1,7 +1,8 @@
-using Gio;
 using Gdk;
 using GdkPixbuf;
+using Gio;
 using Gtk;
+using Pango;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
@@ -12,6 +13,7 @@ using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 using Action = System.Action;
+using Rectangle = Gdk.Rectangle;
 
 namespace SilverScreen.Browsing.Subscriptions;
 
@@ -62,12 +64,6 @@ public partial class SubscriptionsView : ViewBase<Box>
     public int GetBatchSize()
     {
         return _videoList.GetBatchSize();
-    }
-
-    public void ScrollToTop()
-    {
-        if (_disposed) return;
-        _videoList.ScrollToTop();
     }
 
     public async Task RefreshAsync()
@@ -130,11 +126,8 @@ public partial class SubscriptionsView : ViewBase<Box>
     {
         if (ReferenceEquals(a, b)) return true;
         if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-            if (a[i].Id != b[i].Id || a[i].Url != b[i].Url || a[i].Title != b[i].Title || a[i].AvatarUrl != b[i].AvatarUrl)
-                return false;
-
-        return true;
+        return !a.Where((t, i) =>
+            t.Id != b[i].Id || t.Url != b[i].Url || t.Title != b[i].Title || t.AvatarUrl != b[i].AvatarUrl).Any();
     }
 
     private void RebuildChannelItems(IReadOnlyList<SubscribedChannel> channels)
@@ -178,7 +171,7 @@ public partial class SubscriptionsView : ViewBase<Box>
         var nameLabel = Label.New(channel.Title);
         nameLabel.Halign = Align.Center;
         nameLabel.Xalign = 0.5f;
-        nameLabel.Ellipsize = Pango.EllipsizeMode.End;
+        nameLabel.Ellipsize = EllipsizeMode.End;
         nameLabel.Lines = 1;
         nameLabel.MaxWidthChars = 11;
         nameLabel.AddCssClass("subscriptions-channel-title");
@@ -196,15 +189,12 @@ public partial class SubscriptionsView : ViewBase<Box>
         itemBox.AddController(leftClick);
 
         // Secondary / context click: Go to channel page
-        var menu = Gio.Menu.New();
+        var menu = Menu.New();
         menu.Append("Go to Channel page", "channel-item.open-channel");
 
         var actionGroup = SimpleActionGroup.New();
         var openAction = SimpleAction.New("open-channel", null);
-        openAction.OnActivate += (_, _) =>
-        {
-            _openChannel(channel.Url, channel.Title);
-        };
+        openAction.OnActivate += (_, _) => { _openChannel(channel.Url, channel.Title); };
         actionGroup.AddAction(openAction);
 
         var popover = PopoverMenu.NewFromModel(menu);
@@ -355,7 +345,7 @@ public partial class SubscriptionsView : ViewBase<Box>
         public SubscribedChannel Channel { get; } = channel;
         public Box ItemBox { get; } = itemBox;
         public Overlay Overlay { get; } = overlay;
-        public PopoverMenu Popover { get; } = popover;
+        private PopoverMenu Popover { get; } = popover;
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }
 
