@@ -13,7 +13,7 @@
         <Authors>XSilverTH</Authors>
         <Copyright>Copyright © XSilverTH</Copyright>
         <Description>A GTK 4 and Libadwaita desktop app for YouTube</Description>
-        <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+        <PackageLicenseExpression>GPL-3.0</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/XSilverTH/SilverScreen</PackageProjectUrl>
         <RepositoryUrl>https://github.com/XSilverTH/SilverScreen.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
