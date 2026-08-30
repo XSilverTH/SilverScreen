@@ -1,3 +1,6 @@
 [submodule "lib/Hi3Helper.SharpDiscordRPC"]
 	path = lib/Hi3Helper.SharpDiscordRPC
 	url = https://github.com/CollapseLauncher/Hi3Helper.SharpDiscordRPC.git
+[submodule "lib/YoutubeAPI"]
+	path = lib/YoutubeAPI
+	url = https://github.com/XSilverTH/YoutubeAPI.git

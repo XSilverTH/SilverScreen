@@ -167,13 +167,12 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         if (url is null)
             return FeedPageResult.Empty;
 
-        var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
-        var page = await _channelService.GetChannelAsync(url, name, sort, startIndex, count, ct).ConfigureAwait(false);
+        var page = await _channelService.GetChannelAsync(url, name, sort, token, count, ct).ConfigureAwait(false);
 
         if (!page.IsSuccess)
             return new FeedPageResult(
                 page.Videos,
-                page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+                null,
                 page.IsSuccess,
                 page.StatusMessage);
         lock (_lock)
@@ -187,7 +186,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 
         return new FeedPageResult(
             page.Videos,
-            page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+            page.IsSuccess ? page.NextContinuationToken : null,
             page.IsSuccess,
             page.StatusMessage);
     }

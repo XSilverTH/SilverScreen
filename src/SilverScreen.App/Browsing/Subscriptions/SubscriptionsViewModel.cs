@@ -344,7 +344,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 channel.Url,
                 channel.Title,
                 ChannelVideoSort.Newest,
-                1,
+                null,
                 pageSize,
                 CancellationToken.None).ConfigureAwait(false);
 
@@ -362,8 +362,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
                 _engine.SetVideos(
                     _channelVideos,
-                    page.NextStartIndex?.ToString(),
-                    page.NextStartIndex.HasValue,
+                    page.NextContinuationToken,
+                    !string.IsNullOrEmpty(page.NextContinuationToken),
                     statusMessage: string.Empty,
                     isSuccess: true);
             }
@@ -437,18 +437,17 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
         if (selected is not null)
         {
-            var startIndex = token != null && int.TryParse(token, out var idx) ? idx : 1;
             var page = await _channelService.GetChannelAsync(
                 selected.Url,
                 selected.Title,
                 ChannelVideoSort.Newest,
-                startIndex,
+                token,
                 count,
                 ct).ConfigureAwait(false);
 
             return new FeedPageResult(
                 page.Videos,
-                page.IsSuccess ? page.NextStartIndex?.ToString() : null,
+                page.IsSuccess ? page.NextContinuationToken : null,
                 page.IsSuccess,
                 page.StatusMessage);
         }
@@ -487,7 +486,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             activeChannel.Url,
             activeChannel.Title,
             ChannelVideoSort.Newest,
-            1,
+            null,
             _lastRequestedCount,
             CancellationToken.None).ConfigureAwait(false);
 
@@ -505,8 +504,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
             _engine.SetVideos(
                 _channelVideos,
-                page.NextStartIndex?.ToString(),
-                page.NextStartIndex.HasValue,
+                page.NextContinuationToken,
+                !string.IsNullOrEmpty(page.NextContinuationToken),
                 statusMessage: string.Empty,
                 isSuccess: true);
         }

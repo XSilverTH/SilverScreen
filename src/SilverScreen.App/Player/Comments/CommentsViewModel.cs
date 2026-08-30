@@ -40,7 +40,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
     private readonly Lock _loadGate = new();
     private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
     private readonly List<string> _topLevelCommentIds = [];
-    private int _currentMaxComments = InitialPageSize;
     private bool _disposed;
     private bool _hasLoadedCurrentVideo;
     private bool _hasMore;
@@ -80,7 +79,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         CancelLoad();
         _videoId = validVideoId;
         _hasLoadedCurrentVideo = false;
-        _currentMaxComments = InitialPageSize;
         _hasMore = false;
         ClearComments();
         if (_videoId is null)
@@ -111,7 +109,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
             throw new ArgumentOutOfRangeException(nameof(sort), sort, null);
 
         _sort = sort;
-        _currentMaxComments = InitialPageSize;
         _hasMore = false;
         if (_videoId is not null)
             StartLoad();
@@ -135,7 +132,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
         CancellationTokenSource cancellation;
         long generation;
-        int nextMaxComments;
         string videoId;
         YouTubeCommentSort sort;
 
@@ -147,7 +143,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
             cancellation = new CancellationTokenSource();
             _loadMoreCancellation = cancellation;
             generation = ++_loadMoreGeneration;
-            nextMaxComments = _currentMaxComments + PageSizeIncrement;
             videoId = _videoId;
             sort = _sort;
         }
@@ -158,7 +153,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         YouTubeCommentsResult result;
         try
         {
-            result = await _comments.GetCommentsAsync(videoId, sort, nextMaxComments, cancellationToken)
+            result = await _comments.LoadNextPageAsync(PageSizeIncrement, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -185,7 +180,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
             if (result.IsSuccess)
             {
-                _currentMaxComments = nextMaxComments;
                 _hasMore = result.HasMore;
                 ApplyComments(result.Comments);
                 Publish(CommentsViewStatus.List, result.StatusMessage);
@@ -204,7 +198,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
         CancelLoad();
         _hasLoadedCurrentVideo = false;
-        _currentMaxComments = InitialPageSize;
         _hasMore = false;
         ClearComments();
         Publish(CommentsViewStatus.Loading, string.Empty);
@@ -221,7 +214,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         YouTubeCommentsResult result;
         try
         {
-            result = await _comments.GetCommentsAsync(videoId, sort, _currentMaxComments, cancellationToken)
+            result = await _comments.LoadFirstPageAsync(videoId, sort, InitialPageSize, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

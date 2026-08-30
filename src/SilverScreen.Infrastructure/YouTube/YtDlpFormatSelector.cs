@@ -1,18 +1,21 @@
 using System.Globalization;
 using System.Text.Json;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Browsing.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 internal static class YtDlpFormatSelector
 {
-    public static ResolvedMedia? SelectMedia(string output, string preferredQuality)
+    public static ResolvedMedia? SelectMedia(
+        string output,
+        string preferredQuality,
+        YouTubeVideoDetails? details = null)
     {
         using var document = JsonDocument.Parse(output);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object) return null;
 
-        var details = YtDlpVideoParser.ParseDetails(output);
         var formats = ParseFormats(root);
         if (formats.Count == 0)
         {

@@ -3,6 +3,7 @@ using Serilog;
 using SilverScreen.Account.Profile;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
+using YoutubeAPI;
 using WebKit;
 using XSTH.Blueprint.Helpers;
 using Window = Adw.Window;
@@ -105,10 +106,16 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         var snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri);
         if (_disposed)
             return null;
-
         var cookieText = WebLoginCookieReader.SerializeNetscape(snapshots);
-        if (YouTubeCredentials.ParseNetscape(cookieText) is null)
+
+        try
+        {
+            _ = YouTubeCookieAuthentication.FromNetscape(cookieText);
+        }
+        catch (FormatException)
+        {
             return null;
+        }
 
         web_login_status_label.SetText("Finishing sign-in…");
         return cookieText;

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
@@ -14,6 +13,7 @@ public sealed class YtDlpMediaResolver(
     ICookieFileProvider cookieFileProvider,
     IPreferencesService preferencesService,
     IYtDlpRunner runner,
+    IYouTubeClientProvider clientProvider,
     TimeSpan? timeout = null,
     TimeSpan? cacheDuration = null,
     TimeProvider? timeProvider = null)
@@ -21,6 +21,8 @@ public sealed class YtDlpMediaResolver(
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpMediaResolver>();
 
+    private readonly IYouTubeClientProvider _clientProvider =
+        clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
     private readonly ConcurrentDictionary<string, CachedVideoEntry> _cache = new(StringComparer.Ordinal);
     private readonly TimeSpan _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
 
@@ -68,7 +70,7 @@ public sealed class YtDlpMediaResolver(
             else
             {
                 // Format for this quality wasn't selected yet, but raw json is cached and not expired
-                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality);
+                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality, cached.Details);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
@@ -90,7 +92,7 @@ public sealed class YtDlpMediaResolver(
                     !IsMediaExpired(cachedMedia.ExpiresAt))
                     return YouTubeMediaResolutionResult.Success(cachedMedia);
 
-                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality);
+                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality, cached.Details);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
@@ -99,17 +101,20 @@ public sealed class YtDlpMediaResolver(
             }
 
             var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) ||
-                fetchResult.Details is null)
+            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
                 return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
                                                             "Failed to extract video formats.");
+            var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
+            if (!details.IsSuccess || details.Details is null)
+                return YouTubeMediaResolutionResult.Failure(details.ErrorMessage ??
+                                                            "Failed to load video details.");
 
-            var resolvedMedia = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality);
+            var resolvedMedia = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality, details.Details);
             if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
                 fetchResult.RawJsonOutput,
-                fetchResult.Details,
+                details.Details,
                 _timeProvider.GetUtcNow(),
                 resolvedMedia.ExpiresAt,
                 new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase)
@@ -135,36 +140,30 @@ public sealed class YtDlpMediaResolver(
             return new YouTubeVideoDetailsResult(null, false, "Video details are unavailable for this video.");
 
         var cached = TryGetValidEntry(videoId, forceRefresh);
-        if (cached is not null) return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
+        if (cached is not null)
+            return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
         var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
         await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             cached = TryGetValidEntry(videoId, forceRefresh);
-            if (cached is not null) return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
+            if (cached is not null)
+                return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
-            var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput) ||
-                fetchResult.Details is null)
+            var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
+            if (!details.IsSuccess || details.Details is null)
                 return new YouTubeVideoDetailsResult(null, false,
-                    fetchResult.ErrorMessage ?? "Failed to extract video details.");
+                    details.ErrorMessage ?? "Failed to load video details.");
 
-            var quality = _preferencesService.GetPreferences().VideoQuality;
-            var media = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality);
-
-            var newEntry = new CachedVideoEntry(
-                fetchResult.RawJsonOutput,
-                fetchResult.Details,
+            var entry = new CachedVideoEntry(
+                string.Empty,
+                details.Details,
                 _timeProvider.GetUtcNow(),
-                media?.ExpiresAt,
-                media is not null
-                    ? new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase)
-                        { [quality] = media }
-                    : new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
-
-            _cache[videoId] = newEntry;
-            return new YouTubeVideoDetailsResult(fetchResult.Details, true, "Video details loaded.");
+                null,
+                new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
+            _cache[videoId] = entry;
+            return new YouTubeVideoDetailsResult(details.Details, true, "Video details loaded.");
         }
         finally
         {
@@ -201,13 +200,12 @@ public sealed class YtDlpMediaResolver(
         return now >= expiresAt.Value - TimeSpan.FromSeconds(30);
     }
 
-    private async Task<(bool IsSuccess, string? RawJsonOutput, YouTubeVideoDetails? Details, string? ErrorMessage)>
-        FetchFromYtDlpAsync(
-            string videoId,
-            CancellationToken cancellationToken)
+    private async Task<(bool IsSuccess, string? RawJsonOutput, string? ErrorMessage)> FetchFromYtDlpAsync(
+        string videoId,
+        CancellationToken cancellationToken)
     {
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
-        Logger.Information("Extracting formats and details for video {VideoId}", videoId);
+        Logger.Information("Extracting media formats for video {VideoId}", videoId);
 
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         var cookieFilePath = string.IsNullOrWhiteSpace(cookieFile?.Path) ? null : cookieFile.Path;
@@ -216,7 +214,7 @@ public sealed class YtDlpMediaResolver(
         try
         {
             processResult = await _runner.RunAsync(
-                    YtDlpCommandBuilder.BuildVideoDetails(executablePath, videoId, cookieFilePath),
+                    YtDlpCommandBuilder.BuildMediaExtraction(executablePath, videoId, cookieFilePath),
                     _timeout,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -227,31 +225,44 @@ public sealed class YtDlpMediaResolver(
         }
         catch (TimeoutException ex)
         {
-            Logger.Warning(ex, "Timeout extracting video for {VideoId}", videoId);
-            return (false, null, null, RuntimeDependencyGuidance.YtDlpTimedOut);
+            Logger.Warning(ex, "Timeout extracting media for {VideoId}", videoId);
+            return (false, null, RuntimeDependencyGuidance.YtDlpTimedOut);
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Failed to execute yt-dlp to extract video {VideoId}", videoId);
-            return (false, null, null, RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
+            Logger.Warning(ex, "Failed to execute yt-dlp to extract media for {VideoId}", videoId);
+            return (false, null, RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
         }
 
         if (processResult.ExitCode != 0)
-            return (false, null, null, RuntimeDependencyGuidance.YtDlpFailed(
+            return (false, null, RuntimeDependencyGuidance.YtDlpFailed(
                 $"the process exited with error code {processResult.ExitCode}."));
-        if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
-            return (false, null, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
+        return string.IsNullOrWhiteSpace(processResult.StandardOutput)
+            ? (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."))
+            : (true, processResult.StandardOutput, null);
+    }
 
+
+    private async Task<(bool IsSuccess, YouTubeVideoDetails? Details, string? ErrorMessage)>
+        FetchVideoDetailsFromApiAsync(string videoId, CancellationToken cancellationToken)
+    {
         try
         {
-            var details = YtDlpVideoParser.ParseDetails(processResult.StandardOutput);
-            return (true, processResult.StandardOutput, details, null);
+            var video = await _clientProvider.GetClient().Videos
+                .GetAsync(YoutubeAPI.Models.ValueTypes.VideoId.Parse(videoId), cancellationToken)
+                .ConfigureAwait(false);
+            var summary = video.Summary;
+            return (true, new YouTubeVideoDetails(
+                video.Description,
+                summary.Statistics.ViewCount,
+                summary.PublishedAt,
+                summary.Title,
+                summary.Channel.Title), null);
         }
-        catch (JsonException ex)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.Warning(ex, "Failed to parse video output JSON for {VideoId}", videoId);
-            return (false, null, null,
-                RuntimeDependencyGuidance.YtDlpFailed("the video details output could not be read."));
+            Logger.Warning(exception, "YoutubeAPI failed to load details for {VideoId}", videoId);
+            return (false, null, $"YoutubeAPI could not load video details: {exception.Message}");
         }
     }
 

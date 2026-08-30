@@ -63,10 +63,10 @@ public sealed class ApplicationCompositionTests
         using var provider = ApplicationComposition.CreateServiceProvider(configuration);
 
         var accountProfile = provider.GetRequiredService<IAccountProfileService>();
-        Assert.IsType<YouTubeAccountProfileService>(accountProfile);
+        Assert.IsType<YoutubeApiAccountProfileService>(accountProfile);
 
         var ratingService = provider.GetRequiredService<IYouTubeRatingService>();
-        Assert.IsType<YouTubeRatingService>(ratingService);
+        Assert.IsType<YoutubeApiRatingService>(ratingService);
 
         var playerDeps = provider.GetRequiredService<PlayerDependencies>();
         Assert.NotNull(playerDeps);

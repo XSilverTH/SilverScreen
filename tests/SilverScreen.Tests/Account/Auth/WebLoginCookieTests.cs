@@ -1,5 +1,5 @@
 using SilverScreen.Account.Auth;
-using SilverScreen.Infrastructure.YouTube;
+using YoutubeAPI;
 
 namespace SilverScreen.Tests.Account.Auth;
 
@@ -25,11 +25,13 @@ public sealed class WebLoginCookieTests
                 2_147_483_647)
         };
 
-        var credentials = YouTubeCredentials.ParseNetscape(WebLoginCookieReader.SerializeNetscape(cookies));
+        var credentials = YouTubeCookieAuthentication.FromNetscape(
+            WebLoginCookieReader.SerializeNetscape(cookies));
 
         Assert.NotNull(credentials);
-        Assert.Equal("secure-sapisid", credentials.Sapisid);
-        Assert.Contains("SID=sid", credentials.CookieHeader, StringComparison.Ordinal);
-        Assert.Contains("__Secure-3PAPISID=secure-sapisid", credentials.CookieHeader, StringComparison.Ordinal);
+        Assert.Contains(credentials.Cookies, cookie =>
+            cookie.Name == "__Secure-3PAPISID" && cookie.Value == "secure-sapisid");
+        Assert.Contains(credentials.Cookies, cookie => cookie.Name == "SID" && cookie.Value == "sid");
+        Assert.Contains(credentials.Cookies, cookie => cookie.Name == "SAPISID" && cookie.Value == "sapisid");
     }
 }

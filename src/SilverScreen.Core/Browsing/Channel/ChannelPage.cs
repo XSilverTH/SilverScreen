@@ -19,7 +19,7 @@ public sealed record ChannelPage(
     ChannelVideoSort Sort,
     string? StatusMessage = null,
     bool IsSuccess = true,
-    int? NextStartIndex = null)
+    string? NextContinuationToken = null)
 {
     public static ChannelPage Failed(string url, string name, ChannelVideoSort sort, string message)
     {
