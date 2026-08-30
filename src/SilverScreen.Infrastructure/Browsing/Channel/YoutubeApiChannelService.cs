@@ -46,12 +46,16 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                 : await client.Channels.GetVideosPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
 
+            var channelName = string.IsNullOrWhiteSpace(metadata.Summary.Title)
+                ? fallbackName
+                : metadata.Summary.Title;
             var videos = videosPage.Items
                 .Where(video => !video.IsShort)
                 .DistinctBy(video => video.Id)
                 .Take(pageSize)
                 .Select(video => MapVideo(
                     video,
+                    channelName,
                     videosPage.PlaybackProgress?.GetValueOrDefault(video.Id)))
                 .ToArray();
             var nextContinuationToken = videosPage.Next?.Export();
@@ -60,7 +64,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
 
             return new ChannelPage(
                 channelUrl,
-                string.IsNullOrWhiteSpace(metadata.Summary.Title) ? fallbackName : metadata.Summary.Title,
+                channelName,
                 string.IsNullOrWhiteSpace(metadata.Description) ? null : metadata.Description,
                 SelectThumbnail(metadata.Summary.Thumbnails),
                 metadata.Summary.SubscriberCount,
@@ -144,6 +148,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
 
     private static VideoSummary MapVideo(
         ApiVideoSummary video,
+        string channelName,
         YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
     {
         var thumbnailUrl = SelectThumbnail(video.Thumbnails) ?? string.Empty;
@@ -155,7 +160,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         return new VideoSummary(
             video.Id.Value,
             video.Title,
-            video.Channel.Title,
+            channelName,
             video.Duration ?? TimeSpan.Zero,
             thumbnailUrl,
             video.IsShort,
