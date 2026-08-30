@@ -47,7 +47,6 @@ public partial class ChannelView : ViewBase<Box>
     public ChannelView(
         ChannelViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
@@ -56,9 +55,7 @@ public partial class ChannelView : ViewBase<Box>
         _videoList = new VideoListView(
             viewModel,
             thumbnails,
-            watchProgress ?? throw new ArgumentNullException(nameof(watchProgress)),
             videoActions ?? throw new ArgumentNullException(nameof(videoActions)));
-        _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged;
         channel_video_list_host.Append(_videoList.Widget);
 
         _vadjustment = _videoList.Vadjustment;

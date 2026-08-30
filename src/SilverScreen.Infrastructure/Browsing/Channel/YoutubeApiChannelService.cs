@@ -50,7 +50,9 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                 .Where(video => !video.IsShort)
                 .DistinctBy(video => video.Id)
                 .Take(pageSize)
-                .Select(MapVideo)
+                .Select(video => MapVideo(
+                    video,
+                    videosPage.PlaybackProgress?.GetValueOrDefault(video.Id)))
                 .ToArray();
             var nextContinuationToken = videosPage.Next?.Export();
             var resultSort = ToCoreSort(apiSort);
@@ -140,7 +142,9 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         };
     }
 
-    private static VideoSummary MapVideo(ApiVideoSummary video)
+    private static VideoSummary MapVideo(
+        ApiVideoSummary video,
+        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
     {
         var thumbnailUrl = SelectThumbnail(video.Thumbnails) ?? string.Empty;
         var publishedAt = video.PublishedAt;
@@ -158,7 +162,8 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             video.Url.ToString(),
             approximateUploadDate,
             publishedAt,
-            video.Channel.Url.ToString());
+            video.Channel.Url.ToString(),
+            YouTubePlaybackProgressMapper.Map(playbackProgress));
     }
 
     private static string? SelectThumbnail(IReadOnlyList<YoutubeAPI.Models.Common.Thumbnail> thumbnails)

@@ -35,7 +35,6 @@ public sealed class ApplicationCompositionTests
         Assert.NotNull(services.History);
         Assert.NotNull(services.Subscriptions);
         Assert.NotNull(services.RuntimeDependencyDiagnostics);
-        Assert.NotNull(services.WatchProgress);
 
         var player = services.Player;
         Assert.NotNull(player);
@@ -43,7 +42,7 @@ public sealed class ApplicationCompositionTests
         Assert.NotNull(player.CookieFiles);
         Assert.NotNull(player.PlaybackPresence);
         Assert.NotNull(player.PlaybackTelemetry);
-        Assert.NotNull(player.WatchProgress);
+        Assert.NotNull(player.PlaybackProgress);
         Assert.NotNull(player.VideoEngagement);
         Assert.NotNull(player.YouTubeRating);
         Assert.NotNull(player.SponsorBlock);

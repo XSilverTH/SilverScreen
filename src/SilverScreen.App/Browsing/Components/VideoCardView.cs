@@ -34,7 +34,6 @@ public partial class VideoCardView : ViewBase<Bin>
     private readonly SimpleActionGroup _menuActions;
     private readonly GestureClick _rightClick;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -43,12 +42,10 @@ public partial class VideoCardView : ViewBase<Bin>
     private CancellationTokenSource? _thumbnailCancellation;
     private VideoSummary? _video;
 
-    public VideoCardView(IThumbnailService thumbnails, IWatchProgressService watchProgress, VideoCardActions actions)
+    public VideoCardView(IThumbnailService thumbnails, VideoCardActions actions)
     {
         _thumbnails = thumbnails;
-        _watchProgress = watchProgress;
         _actions = actions;
-
 
         _menuActions = SimpleActionGroup.New();
         _menuActionItems =
@@ -86,9 +83,9 @@ public partial class VideoCardView : ViewBase<Bin>
         _channelClick.Button = 1;
         _channelClick.OnReleased += OnChannelReleased;
         channel.AddController(_channelClick);
-        _watchProgress.ProgressChanged += OnWatchProgressChanged;
-    }
 
+
+    }
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -115,9 +112,8 @@ public partial class VideoCardView : ViewBase<Bin>
         }
 
         duration.SetText(FormatDuration(video.Duration));
-        SetWatchProgress(_watchProgress.GetFraction(video.Id));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
-        menu.TooltipText = $"More actions for {video.Title}";
+        SetWatchProgress(video.PlaybackProgress?.WatchedFraction);
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
@@ -145,18 +141,6 @@ public partial class VideoCardView : ViewBase<Bin>
         ClearThumbnail();
     }
 
-    private void OnWatchProgressChanged(object? sender, WatchProgress progress)
-    {
-        if (_video?.Id != progress.VideoId)
-            return;
-
-        Functions.IdleAdd(0, () =>
-        {
-            if (!_disposed && _video?.Id == progress.VideoId)
-                SetWatchProgress(progress.Fraction);
-            return false;
-        });
-    }
 
     private void SetWatchProgress(double? fraction)
     {
@@ -449,7 +433,6 @@ public partial class VideoCardView : ViewBase<Bin>
         _rightClick.Dispose();
         _channelClick.OnReleased -= OnChannelReleased;
         channel.RemoveController(_channelClick);
-        _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         _channelClick.Dispose();
 
         _contextMenu.Popdown();

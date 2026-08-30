@@ -14,7 +14,7 @@ public sealed class PlaybackSessionTests : IDisposable
     private readonly TrackingCoordinator _coordinator;
     private readonly FakePreferencesService _preferences;
     private readonly FakeSponsorBlockService _sponsorBlock;
-    private readonly FakeWatchProgressService _watchProgress;
+    private readonly FakeYouTubePlaybackProgressService _playbackProgress;
     private readonly FakeVideoEngagementService _videoEngagement;
     private readonly FakeYouTubeRatingService _youtubeRating;
     private readonly FakeSessionService _sessionService;
@@ -25,7 +25,7 @@ public sealed class PlaybackSessionTests : IDisposable
         _coordinator = new TrackingCoordinator();
         _preferences = new FakePreferencesService();
         _sponsorBlock = new FakeSponsorBlockService();
-        _watchProgress = new FakeWatchProgressService();
+        _playbackProgress = new FakeYouTubePlaybackProgressService();
         _videoEngagement = new FakeVideoEngagementService();
         _youtubeRating = new FakeYouTubeRatingService();
         _sessionService = new FakeSessionService(new AccountSession(true, "Test User", "https://avatar", true));
@@ -34,7 +34,7 @@ public sealed class PlaybackSessionTests : IDisposable
             _coordinator.Coordinator,
             _preferences,
             _sponsorBlock,
-            _watchProgress,
+            _playbackProgress,
             _videoEngagement,
             _youtubeRating,
             _sessionService);
@@ -168,7 +168,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        _watchProgress.ResumeFractions[video.Id] = 0.5;
+        _playbackProgress.Progress[video.Id] =
+            new YouTubePlaybackProgress(null, TimeSpan.FromSeconds(60), false);
 
         double? soughtPosition = null;
         _session.SeekRequested += (pos, _) => soughtPosition = pos;
@@ -205,7 +206,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        _watchProgress.ResumeFractions[video.Id] = 0.25;
+        _playbackProgress.Progress[video.Id] =
+            new YouTubePlaybackProgress(null, TimeSpan.FromSeconds(50), false);
 
         double? soughtPosition = null;
         _session.SeekRequested += (pos, _) => soughtPosition = pos;
@@ -228,6 +230,31 @@ public sealed class PlaybackSessionTests : IDisposable
     }
 
     [Fact]
+    public void Resume_CompletedVideoDoesNotResumeEvenWhenYouTubeReturnsPosition()
+    {
+        _preferences.Current = _preferences.Current with
+        {
+            ResumePlaybackAutomatically = true,
+            ResumePlaybackOnDemand = false
+        };
+
+        var video = CreateVideo("dQw4w9WgXcQ", "Video");
+        _playbackProgress.Progress[video.Id] =
+            new YouTubePlaybackProgress(1, TimeSpan.FromSeconds(50), true);
+
+        var seekCount = 0;
+        _session.SeekRequested += (_, _) => seekCount++;
+
+        _session.Start(new PlaybackRequest([video]));
+        _session.UpdatePlayback(CreateState(0, 1, 200));
+
+        Assert.Equal(0, seekCount);
+        Assert.Equal(ResumePromptMode.None, _session.ResumePrompt);
+        Assert.False(_session.CanResume);
+        Assert.False(_session.CanRestart);
+    }
+
+    [Fact]
     public void Resume_DismissResumePrompt_ClearsPromptState()
     {
         _preferences.Current = _preferences.Current with
@@ -237,7 +264,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        _watchProgress.ResumeFractions[video.Id] = 0.3;
+        _playbackProgress.Progress[video.Id] =
+            new YouTubePlaybackProgress(null, TimeSpan.FromSeconds(30), false);
 
         _session.Start(new PlaybackRequest([video]));
         _session.UpdatePlayback(CreateState(0, 1, 100));
@@ -376,7 +404,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        _watchProgress.ResumeFractions[video.Id] = 0.3;
+        _playbackProgress.Progress[video.Id] =
+            new YouTubePlaybackProgress(null, TimeSpan.FromSeconds(30), false);
         _sponsorBlock.Segments[video.Id] = [new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), SponsorBlockCategories.Sponsor)];
 
         _session.Start(new PlaybackRequest([video]));
@@ -561,7 +590,6 @@ public sealed class PlaybackSessionTests : IDisposable
     {
         private readonly TrackingPresence _presence = new();
         private readonly TrackingTelemetry _telemetry = new();
-        private readonly TrackingWatchProgress _watchProgress = new();
         private readonly TrackingCookieProvider _cookieProvider = new();
 
         public PlaybackCoordinator Coordinator { get; }
@@ -569,7 +597,7 @@ public sealed class PlaybackSessionTests : IDisposable
 
         public TrackingCoordinator()
         {
-            Coordinator = new PlaybackCoordinator(_cookieProvider, _presence, _telemetry, _watchProgress);
+            Coordinator = new PlaybackCoordinator(_cookieProvider, _presence, _telemetry);
         }
 
         public void Dispose()
@@ -610,34 +638,18 @@ public sealed class PlaybackSessionTests : IDisposable
         }
     }
 
-    private sealed class FakeWatchProgressService : IWatchProgressService
+    private sealed class FakeYouTubePlaybackProgressService : IYouTubePlaybackProgressService
     {
-        public Dictionary<string, double?> ResumeFractions { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, double> Fractions { get; } = new(StringComparer.Ordinal);
-        public List<(PlaybackRequest Request, PlaybackPresenceState State)> Updates { get; } = [];
+        public Dictionary<string, YouTubePlaybackProgress?> Progress { get; } = new(StringComparer.Ordinal);
 
-        public event EventHandler<WatchProgress>? ProgressChanged;
-
-        public double? GetFraction(string videoId) => Fractions.TryGetValue(videoId, out var f) ? f : null;
-
-        public double? GetResumeFraction(string videoId) => ResumeFractions.TryGetValue(videoId, out var f) ? f : null;
-
-        public void Update(PlaybackRequest request, PlaybackPresenceState state)
+        public Task<YouTubePlaybackProgress?> GetAsync(
+            string videoId,
+            CancellationToken cancellationToken = default)
         {
-            Updates.Add((request, state));
-            if (request.Videos.Length > state.PlaylistIndex && state.PlaylistIndex >= 0)
-            {
-                var video = request.Videos[state.PlaylistIndex];
-                if (state.Duration > TimeSpan.Zero)
-                {
-                    var frac = state.Position.TotalSeconds / state.Duration.TotalSeconds;
-                    Fractions[video.Id] = frac;
-                    ProgressChanged?.Invoke(this, new WatchProgress(video.Id, frac));
-                }
-            }
+            Progress.TryGetValue(videoId, out var progress);
+            return Task.FromResult(progress);
         }
     }
-
     private sealed class FakeVideoEngagementService : IVideoEngagementService
     {
         public Dictionary<string, VideoEngagement> Engagements { get; } = new(StringComparer.Ordinal);
@@ -727,15 +739,6 @@ public sealed class PlaybackSessionTests : IDisposable
         }
     }
 
-    private sealed class TrackingWatchProgress : IWatchProgressService
-    {
-        public List<(PlaybackRequest Request, PlaybackPresenceState State)> Updates { get; } = [];
-        public event EventHandler<WatchProgress>? ProgressChanged { add { } remove { } }
-
-        public double? GetFraction(string videoId) => null;
-        public double? GetResumeFraction(string videoId) => null;
-        public void Update(PlaybackRequest request, PlaybackPresenceState state) => Updates.Add((request, state));
-    }
 
     private sealed class TrackingCookieProvider : ICookieFileProvider
     {

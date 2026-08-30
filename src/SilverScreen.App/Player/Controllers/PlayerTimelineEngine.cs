@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
@@ -331,31 +332,34 @@ public sealed class PlayerTimelineEngine(
         return $"{autoSkipEnabled}:{segmentDisplayEnabled}:{string.Join(',', filtered)}";
     }
 
-    // --- Resume Threshold Evaluation ---
+    // --- Resume State Evaluation ---
 
     public static bool TryGetResumePosition(
-        double? fraction,
+        YouTubePlaybackProgress? progress,
         TimeSpan duration,
         out TimeSpan position,
         double minimumSeconds = MinimumResumeSeconds)
     {
         position = TimeSpan.Zero;
-        if (fraction is not > 0 or >= 1 || duration <= TimeSpan.Zero) return false;
-        var candidate = TimeSpan.FromSeconds(duration.TotalSeconds * fraction.Value);
-        if (candidate < TimeSpan.FromSeconds(minimumSeconds) || candidate >= duration) return false;
-        position = candidate;
+        if (progress is null || progress.IsCompleted || !progress.HasResumePosition ||
+            progress.ResumePosition is not { } savedPosition ||
+            savedPosition < TimeSpan.FromSeconds(minimumSeconds) ||
+            savedPosition >= duration || duration <= TimeSpan.Zero)
+            return false;
+
+        position = savedPosition;
         return true;
     }
 
     public static ResumePromptState GetResumePromptState(
-        double? savedFraction,
+        YouTubePlaybackProgress? progress,
         TimeSpan duration,
         bool resumeAutomatically,
         bool resumeOnDemand,
         out TimeSpan resumePosition,
         double minimumSeconds = MinimumResumeSeconds)
     {
-        if (!TryGetResumePosition(savedFraction, duration, out resumePosition, minimumSeconds))
+        if (!TryGetResumePosition(progress, duration, out resumePosition, minimumSeconds))
             return ResumePromptState.None;
 
         if (resumeAutomatically) return ResumePromptState.AutoResume;

@@ -32,12 +32,10 @@ public sealed class ExternalMpvPlaybackService(
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
         IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-        IWatchProgressService? watchProgressService = null,
         IYouTubeMediaResolver? mediaResolver = null)
         : this(
             preferencesService,
-            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService,
-                watchProgressService),
+            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService),
             mediaResolver)
     {
     }

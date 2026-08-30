@@ -10,4 +10,5 @@ public sealed record VideoSummary(
     string? WatchUrl = null,
     DateOnly? ApproximateUploadDate = null,
     DateTimeOffset? PublishedAt = null,
-    string? ChannelUrl = null);
+    string? ChannelUrl = null,
+    YouTubePlaybackProgress? PlaybackProgress = null);

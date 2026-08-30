@@ -108,10 +108,9 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             var videos = page.Items
                 .Select(entry => entry.Item)
                 .OfType<VideoFeedItem>()
-                .Select(item => item.Video)
-                .Where(video => !video.IsShort)
+                .Where(item => !item.Video.IsShort)
                 .Take(pageSize)
-                .Select(MapVideo)
+                .Select(item => MapVideo(item.Video, item.PlaybackProgress))
                 .ToArray();
             var nextToken = page.Next?.Export();
 
@@ -201,7 +200,8 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         exception is AuthenticationRequiredException or AuthenticationExpiredException or PermissionDeniedException;
 
     private static SilverScreen.Core.Browsing.Common.VideoSummary MapVideo(
-        YoutubeAPI.Models.Videos.VideoSummary video)
+        YoutubeAPI.Models.Videos.VideoSummary video,
+        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
     {
         var thumbnail = video.Thumbnails
             .OrderBy(item => (long)item.Width * item.Height)
@@ -217,6 +217,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             video.Url.ToString(),
             video.PublishedAt is { } publishedAt ? DateOnly.FromDateTime(publishedAt.UtcDateTime) : null,
             video.PublishedAt,
-            channel.Url.ToString());
+            channel.Url.ToString(),
+            YouTubePlaybackProgressMapper.Map(playbackProgress));
     }
 }

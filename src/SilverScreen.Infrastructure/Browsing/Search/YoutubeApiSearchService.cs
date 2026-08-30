@@ -39,10 +39,9 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
 
             var videos = page.Items
                 .OfType<VideoSearchResult>()
-                .Select(result => result.Video)
-                .Where(video => !video.IsShort)
+                .Where(result => !result.Video.IsShort)
                 .Take(pageSize)
-                .Select(MapVideo)
+                .Select(result => MapVideo(result.Video, result.PlaybackProgress))
                 .ToArray();
             var continuationToken = page.Next?.Export();
 
@@ -90,7 +89,9 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         }
     }
 
-    private static VideoSummary MapVideo(ApiVideoSummary video)
+    private static VideoSummary MapVideo(
+        ApiVideoSummary video,
+        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
     {
         var thumbnailUrl = video.Thumbnails
             .OrderBy(thumbnail => (long)thumbnail.Width * thumbnail.Height)
@@ -110,6 +111,7 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
             video.Url.ToString(),
             approximateUploadDate,
             publishedAt,
-            video.Channel.Url.ToString());
+            video.Channel.Url.ToString(),
+            YouTubePlaybackProgressMapper.Map(playbackProgress));
     }
 }

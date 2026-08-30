@@ -14,7 +14,7 @@ public sealed record PlayerDependencies(
     ICookieFileProvider CookieFiles,
     IPlaybackPresenceService PlaybackPresence,
     IYouTubePlaybackTelemetryService PlaybackTelemetry,
-    IWatchProgressService WatchProgress,
+    IYouTubePlaybackProgressService PlaybackProgress,
     IVideoEngagementService VideoEngagement,
     IYouTubeRatingService YouTubeRating,
     ISponsorBlockService SponsorBlock,

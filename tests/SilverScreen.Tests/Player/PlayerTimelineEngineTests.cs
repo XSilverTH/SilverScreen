@@ -1,3 +1,4 @@
+using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Controllers;
@@ -334,37 +335,32 @@ public class PlayerTimelineEngineTests
     }
 
     [Fact]
-    public void ResumeThreshold_Evaluation()
+    public void ResumeEvaluation_UsesYouTubeResumePositionAndCompletion()
     {
-        var duration = TimeSpan.FromMinutes(10); // 600s
+        var duration = TimeSpan.FromMinutes(10);
 
-        // Invalid fractions (<= 0, >= 1, null) -> false
         Assert.False(PlayerTimelineEngine.TryGetResumePosition(null, duration, out _));
-        Assert.False(PlayerTimelineEngine.TryGetResumePosition(0, duration, out _));
-        Assert.False(PlayerTimelineEngine.TryGetResumePosition(-0.5, duration, out _));
-        Assert.False(PlayerTimelineEngine.TryGetResumePosition(1.0, duration, out _));
-        Assert.False(PlayerTimelineEngine.TryGetResumePosition(1.2, duration, out _));
+        Assert.False(PlayerTimelineEngine.TryGetResumePosition(
+            new YouTubePlaybackProgress(0.5, null, false), duration, out _));
+        Assert.False(PlayerTimelineEngine.TryGetResumePosition(
+            new YouTubePlaybackProgress(1, TimeSpan.FromSeconds(300), true), duration, out _));
+        Assert.False(PlayerTimelineEngine.TryGetResumePosition(
+            new YouTubePlaybackProgress(null, TimeSpan.Zero, false), duration, out _));
 
-        // Less than minimum resume seconds (5s in 600s is fraction < 0.00833)
-        Assert.False(PlayerTimelineEngine.TryGetResumePosition(0.005, duration, out _)); // 3 seconds -> false
+        var progress = new YouTubePlaybackProgress(0.5, TimeSpan.FromSeconds(73), false);
+        Assert.True(PlayerTimelineEngine.TryGetResumePosition(progress, duration, out var position));
+        Assert.Equal(TimeSpan.FromSeconds(73), position);
 
-        // Valid fraction 50% -> 300s
-        Assert.True(PlayerTimelineEngine.TryGetResumePosition(0.5, duration, out var pos));
-        Assert.Equal(TimeSpan.FromSeconds(300), pos);
-
-        // Resume prompt state resolution
         Assert.Equal(ResumePromptState.None,
             PlayerTimelineEngine.GetResumePromptState(null, duration, true, true, out _));
         Assert.Equal(ResumePromptState.AutoResume,
-            PlayerTimelineEngine.GetResumePromptState(0.5, duration, true, false, out var autoPos));
-        Assert.Equal(TimeSpan.FromSeconds(300), autoPos);
-
+            PlayerTimelineEngine.GetResumePromptState(progress, duration, true, false, out var autoPosition));
+        Assert.Equal(TimeSpan.FromSeconds(73), autoPosition);
         Assert.Equal(ResumePromptState.ManualResume,
-            PlayerTimelineEngine.GetResumePromptState(0.5, duration, false, true, out var manualPos));
-        Assert.Equal(TimeSpan.FromSeconds(300), manualPos);
-
+            PlayerTimelineEngine.GetResumePromptState(progress, duration, false, true, out var manualPosition));
+        Assert.Equal(TimeSpan.FromSeconds(73), manualPosition);
         Assert.Equal(ResumePromptState.None,
-            PlayerTimelineEngine.GetResumePromptState(0.5, duration, false, false, out _));
+            PlayerTimelineEngine.GetResumePromptState(progress, duration, false, false, out _));
     }
 
     [Fact]

@@ -27,8 +27,8 @@ internal sealed class PlaybackSession : IDisposable
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _session;
     private readonly ISponsorBlockService _sponsorBlock;
+    private readonly IYouTubePlaybackProgressService _playbackProgress;
     private readonly IVideoEngagementService _videoEngagement;
-    private readonly IWatchProgressService _watchProgress;
     private readonly IYouTubeRatingService _youtubeRating;
     private SponsorBlockSegment? _activeManualSegment;
     private CookieFileLease? _cookieFile;
@@ -39,7 +39,8 @@ internal sealed class PlaybackSession : IDisposable
     private CancellationTokenSource? _loadCts;
     private long _loadVersion;
     private long _playbackId;
-    private double? _resumeFraction;
+    private bool _playbackProgressLoaded;
+    private YouTubePlaybackProgress? _youtubePlaybackProgress;
     private string _sponsorBlockConfigurationKey = string.Empty;
     private bool _wasPaused;
 
@@ -47,7 +48,7 @@ internal sealed class PlaybackSession : IDisposable
         PlaybackCoordinator coordinator,
         IPreferencesService preferences,
         ISponsorBlockService sponsorBlock,
-        IWatchProgressService watchProgress,
+        IYouTubePlaybackProgressService playbackProgress,
         IVideoEngagementService videoEngagement,
         IYouTubeRatingService youtubeRating,
         ISessionService session,
@@ -56,7 +57,7 @@ internal sealed class PlaybackSession : IDisposable
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _sponsorBlock = sponsorBlock ?? throw new ArgumentNullException(nameof(sponsorBlock));
-        _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
+        _playbackProgress = playbackProgress ?? throw new ArgumentNullException(nameof(playbackProgress));
         _videoEngagement = videoEngagement ?? throw new ArgumentNullException(nameof(videoEngagement));
         _youtubeRating = youtubeRating ?? throw new ArgumentNullException(nameof(youtubeRating));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -72,7 +73,7 @@ internal sealed class PlaybackSession : IDisposable
             (dependencies ?? throw new ArgumentNullException(nameof(dependencies))).PlaybackCoordinator,
             dependencies.Preferences,
             dependencies.SponsorBlock,
-            dependencies.WatchProgress,
+            dependencies.PlaybackProgress,
             dependencies.VideoEngagement,
             dependencies.YouTubeRating,
             dependencies.Session,
@@ -328,7 +329,8 @@ internal sealed class PlaybackSession : IDisposable
         _loadCts = cts;
 
         _handledResumeForCurrentVideo = false;
-        _resumeFraction = _watchProgress.GetResumeFraction(video.Id);
+        _youtubePlaybackProgress = video.PlaybackProgress;
+        _playbackProgressLoaded = video.PlaybackProgress is { HasResumePosition: true } or { IsCompleted: true };
         ResumePrompt = ResumePromptMode.None;
         ResumePosition = TimeSpan.Zero;
         ResumePromptChanged?.Invoke(ResumePromptMode.None, TimeSpan.Zero);
@@ -346,8 +348,14 @@ internal sealed class PlaybackSession : IDisposable
         RatingState = YouTubeRatingState.None;
         EngagementChanged?.Invoke(null);
         RatingStateChanged?.Invoke(YouTubeRatingState.None);
+        if (!PlaybackRequest.LooksLikeYouTubeVideoId(video.Id))
+        {
+            _playbackProgressLoaded = true;
+            return;
+        }
 
-        if (!PlaybackRequest.LooksLikeYouTubeVideoId(video.Id)) return;
+        if (!_playbackProgressLoaded)
+            FetchPlaybackProgressAsync(video.Id, version, cts.Token).FireAndForget(Logger);
 
         var prefs = _preferences.GetPreferences();
         _sponsorBlockConfigurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(prefs);
@@ -367,15 +375,46 @@ internal sealed class PlaybackSession : IDisposable
         FetchRatingAsync(video.Id, version, cts.Token).FireAndForget(Logger);
     }
 
+    private async Task FetchPlaybackProgressAsync(
+        string videoId,
+        long version,
+        CancellationToken cancellationToken)
+    {
+        YouTubePlaybackProgress? progress;
+        try
+        {
+            progress = await _playbackProgress.GetAsync(videoId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Unable to load YouTube playback progress for {VideoId}", videoId);
+            progress = null;
+        }
+
+        if (_disposed || cancellationToken.IsCancellationRequested || version != _loadVersion ||
+            !string.Equals(CurrentVideo?.Id, videoId, StringComparison.Ordinal))
+            return;
+
+        _youtubePlaybackProgress = progress ?? _youtubePlaybackProgress;
+        _playbackProgressLoaded = true;
+        if (LastPlaybackState is { HasMedia: true } state &&
+            string.Equals(_lastPlaybackVideoId, videoId, StringComparison.Ordinal))
+            EvaluateResume(state);
+    }
+
     private void EvaluateResume(LibMpvPlaybackState state)
     {
-        if (_handledResumeForCurrentVideo || state.Duration <= TimeSpan.Zero) return;
+        if (_handledResumeForCurrentVideo || !_playbackProgressLoaded || state.Duration <= TimeSpan.Zero) return;
 
         _handledResumeForCurrentVideo = true;
 
         var prefs = _preferences.GetPreferences();
         var promptState = PlayerTimelineEngine.GetResumePromptState(
-            _resumeFraction,
+            _youtubePlaybackProgress,
             state.Duration,
             prefs.ResumePlaybackAutomatically,
             prefs.ResumePlaybackOnDemand,
@@ -608,7 +647,8 @@ internal sealed class PlaybackSession : IDisposable
         _autoSkippedSegmentIds.Clear();
         ResumePrompt = ResumePromptMode.None;
         ResumePosition = TimeSpan.Zero;
-        _resumeFraction = null;
+        _youtubePlaybackProgress = null;
+        _playbackProgressLoaded = false;
         _handledResumeForCurrentVideo = false;
     }
 

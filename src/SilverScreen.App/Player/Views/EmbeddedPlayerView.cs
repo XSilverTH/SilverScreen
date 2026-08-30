@@ -76,7 +76,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         comments_sidebar_host.Append(_commentsView.Widget);
         _queueService = dependencies.Queue;
         _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
-        _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, dependencies.WatchProgress, CloseQueue,
+        _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
             OnTrackJumpRequested);
         player_queue_sidebar_host.Append(_queueView.Widget);
         player_queue_button.BindProperty("active", player_queue_split_view, "show-sidebar",

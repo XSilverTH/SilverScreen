@@ -45,7 +45,6 @@ public sealed class ApplicationServices(
     IAuthenticatedHistoryService history,
     IAuthenticatedSubscriptionsService subscriptions,
     RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
-    IWatchProgressService watchProgress,
     PlayerDependencies player)
 {
     public IPreferencesService Preferences { get; } = preferences;
@@ -61,7 +60,6 @@ public sealed class ApplicationServices(
     public IAuthenticatedHistoryService History { get; } = history;
     public IAuthenticatedSubscriptionsService Subscriptions { get; } = subscriptions;
     public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
-    public IWatchProgressService WatchProgress { get; } = watchProgress;
     public PlayerDependencies Player { get; } = player;
 }
 
@@ -97,8 +95,8 @@ public static class ApplicationServiceCollectionExtensions
                 provider.GetRequiredService<ApplicationConfiguration>().DiscordApplicationId));
         services.AddSingleton<IYouTubePlaybackTelemetryService, YouTubePlaybackTelemetryService>();
         services.AddSingleton<PlaybackCoordinator>();
+        services.AddSingleton<IYouTubePlaybackProgressService, YoutubeApiPlaybackProgressService>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
-        services.AddSingleton<IWatchProgressService, FileWatchProgressService>();
         // yt-dlp is retained only for raw media stream extraction used by MPV.
         services.AddSingleton<IYtDlpRunner, YtDlpRunner>();
         services.AddSingleton<ISearchService, YoutubeApiSearchService>();

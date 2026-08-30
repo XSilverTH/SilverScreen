@@ -6,14 +6,12 @@ namespace SilverScreen.Core.Player;
 
 /// <summary>
 ///     Headless coordinator that unifies the shared playback lifecycle:
-///     telemetry sessions, presence pulsing, watch progress threshold tracking,
-///     cookie file leasing, and playlist/queue synchronization.
+///     telemetry sessions, presence pulsing, cookie file leasing, and playlist/queue synchronization.
 /// </summary>
 public sealed class PlaybackCoordinator(
     ICookieFileProvider? cookieFiles = null,
     IPlaybackPresenceService? playbackPresence = null,
-    IYouTubePlaybackTelemetryService? playbackTelemetry = null,
-    IWatchProgressService? watchProgress = null)
+    IYouTubePlaybackTelemetryService? playbackTelemetry = null)
     : IDisposable
 {
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
@@ -61,14 +59,6 @@ public sealed class PlaybackCoordinator(
 
             playback.State = state;
             SetTelemetryQuietly(playback.Telemetry, state);
-            try
-            {
-                watchProgress?.Update(playback.Request, state);
-            }
-            catch
-            {
-                // Watch progress update failures should not interrupt playback
-            }
 
             if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
         }

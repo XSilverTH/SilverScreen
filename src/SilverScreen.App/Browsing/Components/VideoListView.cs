@@ -28,7 +28,6 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly StringList _videoIds;
     private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
-    private readonly IWatchProgressService _watchProgress;
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
@@ -36,12 +35,10 @@ public partial class VideoListView : ViewBase<Bin>
     private VideoListView(
         IVideoListSource source,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
-        _watchProgress = watchProgress ?? throw new ArgumentNullException(nameof(watchProgress));
         _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
 
         Vadjustment = video_list_scrolled_window.Vadjustment;
@@ -64,46 +61,41 @@ public partial class VideoListView : ViewBase<Bin>
     public VideoListView(
         HomeFeedCoordinator coordinator,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this((IVideoListSource)coordinator, thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)coordinator, thumbnails, videoActions)
     {
     }
 
     public VideoListView(
         SearchViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, videoActions)
     {
     }
 
     public VideoListView(
         HistoryViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, videoActions)
     {
     }
 
     public VideoListView(
         ChannelViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, watchProgress, videoActions)
+        : this((IVideoListSource)viewModel, thumbnails, videoActions)
     {
     }
 
     public VideoListView(
         SubscriptionsViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions,
         Action? openWebLogin = null)
-        : this(viewModel.GetVideoListSource(openWebLogin), thumbnails, watchProgress, videoActions)
+        : this(viewModel.GetVideoListSource(openWebLogin), thumbnails, videoActions)
     {
     }
 
@@ -290,7 +282,7 @@ public partial class VideoListView : ViewBase<Bin>
         if (args.Object is not ListItem listItem)
             return;
 
-        var card = new VideoCardView(_thumbnails, _watchProgress, _videoActions);
+        var card = new VideoCardView(_thumbnails, _videoActions);
         listItem.Child = card.Widget;
         _cardsByListItem.Add(listItem, card);
     }

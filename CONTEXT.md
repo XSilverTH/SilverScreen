@@ -29,5 +29,5 @@ The record of previously viewed videos associated with an authenticated user ses
 ### Queue
 An in-memory, ordered playlist of videos queued for back-to-back playback.
 
-### Watch Progress
-The persisted record of a user's playback position and completion fraction for previously watched videos.
+### YouTube Playback Progress
+The viewer playback state supplied by YouTube, including display watch progress, a separate resume position, and YouTube's completed status. It is unavailable when YouTube does not include viewer-specific state.

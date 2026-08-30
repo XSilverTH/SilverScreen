@@ -50,8 +50,7 @@ public sealed class PlaybackTests
     {
         var presence = new TrackingPresence();
         var telemetry = new TrackingTelemetry();
-        var watchProgress = new TrackingWatchProgress();
-        using var coordinator = new PlaybackCoordinator(null, presence, telemetry, watchProgress);
+        using var coordinator = new PlaybackCoordinator(null, presence, telemetry);
 
         var request = new PlaybackRequest([CreateVideo("vid1"), CreateVideo("vid2")]);
         var playbackId = coordinator.RegisterActivePlayback(request);
@@ -69,9 +68,6 @@ public sealed class PlaybackTests
         Assert.Single(telemetry.Sessions[0].Session.Updates);
         Assert.Equal(state, telemetry.Sessions[0].Session.Updates[0]);
 
-        Assert.Single(watchProgress.Updates);
-        Assert.Equal(request, watchProgress.Updates[0].Request);
-        Assert.Equal(state, watchProgress.Updates[0].State);
     }
 
     [Fact]
@@ -321,31 +317,6 @@ public sealed class PlaybackTests
         }
     }
 
-    private sealed class TrackingWatchProgress : IWatchProgressService
-    {
-        public List<(PlaybackRequest Request, PlaybackPresenceState State)> Updates { get; } = [];
-
-        public event EventHandler<WatchProgress>? ProgressChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public double? GetFraction(string videoId)
-        {
-            return null;
-        }
-
-        public double? GetResumeFraction(string videoId)
-        {
-            return null;
-        }
-
-        public void Update(PlaybackRequest request, PlaybackPresenceState state)
-        {
-            Updates.Add((request, state));
-        }
-    }
 
     private sealed class TrackingCookieProvider(CookieFileLease? lease = null) : ICookieFileProvider
     {

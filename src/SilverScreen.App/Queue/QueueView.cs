@@ -21,16 +21,14 @@ public partial class QueueView : ViewBase<Box>
     private readonly IThumbnailService _thumbnails;
     private readonly Action<int>? _trackJumpRequested;
     private readonly QueueViewModel _viewModel;
-    private readonly IWatchProgressService _watchProgress;
     private QueueItem[] _displayedItems = [];
     private bool _disposed;
 
-    public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails, IWatchProgressService watchProgress,
+    public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails,
         Action closeRequested, Action<int>? trackJumpRequested = null)
     {
         _viewModel = viewModel;
         _thumbnails = thumbnails;
-        _watchProgress = watchProgress;
         _closeRequested = closeRequested;
         _trackJumpRequested = trackJumpRequested;
 
@@ -141,9 +139,8 @@ public partial class QueueView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new QueueItemRowView(_thumbnails, _watchProgress, _viewModel.Move, RequestDrop, _viewModel.Remove,
+        var row = new QueueItemRowView(_thumbnails, _viewModel.Move, RequestDrop, _viewModel.Remove,
             OnRowPlayRequested);
-        listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
 

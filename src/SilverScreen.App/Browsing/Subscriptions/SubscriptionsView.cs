@@ -35,7 +35,6 @@ public partial class SubscriptionsView : ViewBase<Box>
     public SubscriptionsView(
         SubscriptionsViewModel viewModel,
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         VideoCardActions videoActions,
         Action openWebLogin,
         Action<string, string> openChannel)
@@ -47,10 +46,8 @@ public partial class SubscriptionsView : ViewBase<Box>
         _videoList = new VideoListView(
             viewModel,
             thumbnails,
-            watchProgress ?? throw new ArgumentNullException(nameof(watchProgress)),
             videoActions ?? throw new ArgumentNullException(nameof(videoActions)),
             openWebLogin);
-        _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged;
         subscriptions_video_list_host.Append(_videoList.Widget);
 
         _viewModel.StateChanged += OnStateChanged;

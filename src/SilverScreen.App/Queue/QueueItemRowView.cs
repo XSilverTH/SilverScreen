@@ -34,7 +34,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly SimpleAction _removeAction;
     private readonly Action<Guid> _removeRequested;
     private readonly IThumbnailService _thumbnails;
-    private readonly IWatchProgressService _watchProgress;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
@@ -44,14 +43,12 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     public QueueItemRowView(
         IThumbnailService thumbnails,
-        IWatchProgressService watchProgress,
         Action<Guid, int> moveRequested,
         Action<Guid, int> dropRequested,
         Action<Guid> removeRequested,
         Action<Guid, int>? playRequested = null)
     {
         _thumbnails = thumbnails;
-        _watchProgress = watchProgress;
         _moveRequested = moveRequested;
         _dropRequested = dropRequested;
         _removeRequested = removeRequested;
@@ -110,7 +107,6 @@ public partial class QueueItemRowView : ViewBase<Box>
                 _playRequested?.Invoke(item.Id, _index);
         };
         thumbnail.AddController(thumbnailClick);
-        _watchProgress.ProgressChanged += OnWatchProgressChanged;
     }
 
     public QueueItem? Item { get; private set; }
@@ -133,7 +129,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         var formattedDuration = FormatDuration(item.Video.Duration);
         duration.SetText(formattedDuration);
         duration_pill.SetText(formattedDuration);
-        SetWatchProgress(_watchProgress.GetFraction(item.Video.Id));
+        SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
         _playNowAction.Enabled = _playRequested is not null && index != currentPlayingIndex;
         _moveUpAction.Enabled = index > 0;
         _moveDownAction.Enabled = index < itemCount - 1;
@@ -187,18 +183,6 @@ public partial class QueueItemRowView : ViewBase<Box>
         SetWatchProgress(null);
     }
 
-    private void OnWatchProgressChanged(object? sender, WatchProgress progress)
-    {
-        if (Item?.Video.Id != progress.VideoId)
-            return;
-
-        Functions.IdleAdd(0, () =>
-        {
-            if (!_disposed && Item?.Video.Id == progress.VideoId)
-                SetWatchProgress(progress.Fraction);
-            return false;
-        });
-    }
 
     private void SetWatchProgress(double? fraction)
     {
@@ -339,7 +323,6 @@ public partial class QueueItemRowView : ViewBase<Box>
 
         _disposed = true;
         Unbind();
-        _watchProgress.ProgressChanged -= OnWatchProgressChanged;
         grip.RemoveController(_dragSource);
         Widget.RemoveController(_dropTarget);
         _dragPaintable.Dispose();

@@ -64,16 +64,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(services.Channels);
-        _channel = new ChannelView(_channelViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         _home = new VideoListView(
             services.HomeFeed,
             services.Thumbnails,
-            services.WatchProgress,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
         _historyViewModel = new HistoryViewModel(services.History);
-        _history = new VideoListView(_historyViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _history = new VideoListView(_historyViewModel, services.Thumbnails, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         _subscriptionsViewModel = new SubscriptionsViewModel(
             services.Subscriptions,
@@ -83,7 +82,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _subscriptions = new SubscriptionsView(
             _subscriptionsViewModel,
             services.Thumbnails,
-            services.WatchProgress,
             actions,
             OpenWebLogin,
             (url, name) =>
@@ -105,12 +103,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 _searchPopover.OnOpened();
         };
 
-        _searchView = new VideoListView(_searchViewModel, services.Thumbnails, services.WatchProgress, actions);
+        _searchView = new VideoListView(_searchViewModel, services.Thumbnails, actions);
         _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
 
         _queueViewModel = new QueueViewModel(services.Queue, _playback);
-        _queueView = new QueueView(_queueViewModel, services.Thumbnails, services.WatchProgress, CloseQueue);
-        queue_sidebar_host.Append(_queueView.Widget);
+        _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
         _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
