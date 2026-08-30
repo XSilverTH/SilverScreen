@@ -15,7 +15,7 @@ public static class RuntimeDependencyGuidance
     public static string YtDlpUnavailable(string executablePath)
     {
         return
-            $"yt-dlp could not be started from '{FormatExecutablePath(executablePath)}'. Install yt-dlp, then set its executable path in Preferences → Search (yt-dlp).";
+            $"yt-dlp could not be started from '{FormatExecutablePath(executablePath)}'. Install yt-dlp, then set its executable path in Preferences → Dependencies.";
     }
 
     public static string YtDlpFailed(string detail)

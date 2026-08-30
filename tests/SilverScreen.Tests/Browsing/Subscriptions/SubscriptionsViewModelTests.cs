@@ -101,7 +101,7 @@ public sealed class SubscriptionsViewModelTests
         };
 
         var subsService = new FakeSubscriptionsService([targetChannel], feedVideos);
-        var channelService = new FakeChannelService(channelUploads, nextStartIndex: 21);
+        var channelService = new FakeChannelService(channelUploads, nextContinuationToken: "next");
         var session = CreateSession();
 
         using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
@@ -240,7 +240,7 @@ public sealed class SubscriptionsViewModelTests
         var moreUploads = new List<VideoSummary> { CreateVideo("v2", "V2", "Channel 1", "https://www.youtube.com/@chan1") };
 
         var subsService = new FakeSubscriptionsService([channel], []);
-        var channelService = new FakeChannelService(initialUploads, nextStartIndex: 21, secondPage: moreUploads);
+        var channelService = new FakeChannelService(initialUploads, nextContinuationToken: "next", secondPage: moreUploads);
         var session = CreateSession();
 
         using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
@@ -413,7 +413,7 @@ public sealed class SubscriptionsViewModelTests
 
     private sealed class FakeChannelService(
         IReadOnlyList<VideoSummary>? uploads = null,
-        int? nextStartIndex = null,
+        string? nextContinuationToken = null,
         IReadOnlyList<VideoSummary>? secondPage = null) : IChannelService
     {
         private int _calls;
@@ -422,13 +422,13 @@ public sealed class SubscriptionsViewModelTests
             string channelUrl,
             string fallbackName,
             ChannelVideoSort sort,
-            int startIndex,
+            string? continuationToken,
             int count,
             CancellationToken cancellationToken)
         {
             _calls++;
             var list = _calls > 1 && secondPage != null ? secondPage : (uploads ?? []);
-            var next = _calls > 1 ? null : nextStartIndex;
+            var next = _calls > 1 ? null : nextContinuationToken;
             return Task.FromResult(new ChannelPage(
                 channelUrl,
                 fallbackName,
@@ -449,7 +449,7 @@ public sealed class SubscriptionsViewModelTests
             string channelUrl,
             string fallbackName,
             ChannelVideoSort sort,
-            int startIndex,
+            string? continuationToken,
             int count,
             CancellationToken cancellationToken)
         {

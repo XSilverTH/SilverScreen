@@ -73,7 +73,7 @@ public sealed class CommentsViewModelTests
     }
 
     [Fact]
-    public async Task LoadMoreAsync_WhenHasMore_RequestsNextBatchAndAppendsComments()
+    public async Task LoadMoreAsync_WhenHasMore_RequestsOnlyTheNextContinuationPage()
     {
         var service = new ControlledCommentService();
         using var viewModel = new CommentsViewModel(service);
@@ -81,7 +81,8 @@ public sealed class CommentsViewModelTests
         viewModel.EnsureLoaded();
 
         var firstRequest = Assert.Single(service.Requests);
-        Assert.Equal(CommentsViewModel.InitialPageSize, firstRequest.MaxComments);
+        Assert.Equal(CommentsViewModel.InitialPageSize, firstRequest.Count);
+        Assert.True(firstRequest.IsFirstPage);
         var initialComments = Enumerable.Range(1, CommentsViewModel.InitialPageSize)
             .Select(i => Comment($"c_{i}"))
             .ToArray();
@@ -97,8 +98,8 @@ public sealed class CommentsViewModelTests
 
         Assert.Equal(2, service.Requests.Count);
         var secondRequest = service.Requests[1];
-        Assert.Equal(CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement,
-            secondRequest.MaxComments);
+        Assert.Equal(CommentsViewModel.PageSizeIncrement, secondRequest.Count);
+        Assert.False(secondRequest.IsFirstPage);
 
         var expandedComments = Enumerable
             .Range(1, CommentsViewModel.InitialPageSize + CommentsViewModel.PageSizeIncrement)
@@ -142,7 +143,7 @@ public sealed class CommentsViewModelTests
 
         var request = Assert.Single(service.Requests);
         Assert.Equal(YouTubeCommentSort.Top, request.Sort);
-        Assert.Equal(CommentsViewModel.InitialPageSize, request.MaxComments);
+        Assert.Equal(CommentsViewModel.InitialPageSize, request.Count);
         Assert.Equal(CommentsViewStatus.Loading, viewModel.State.Status);
 
         var root = Comment("root");
@@ -221,19 +222,38 @@ public sealed class CommentsViewModelTests
     {
         public List<Pending> Requests { get; } = [];
 
-        public Task<YouTubeCommentsResult> GetCommentsAsync(string videoId, YouTubeCommentSort sort,
-            int maxComments = 20, CancellationToken cancellationToken = default)
+        public Task<YouTubeCommentsResult> LoadFirstPageAsync(
+            string videoId,
+            YouTubeCommentSort sort,
+            int count = 20,
+            CancellationToken cancellationToken = default)
         {
-            var pending = new Pending(sort, maxComments, cancellationToken);
+            var pending = new Pending(videoId, sort, count, cancellationToken, true);
             Requests.Add(pending);
             return pending.Completion.Task;
         }
 
-        public sealed class Pending(YouTubeCommentSort sort, int maxComments, CancellationToken token)
+        public Task<YouTubeCommentsResult> LoadNextPageAsync(
+            int count = 20,
+            CancellationToken cancellationToken = default)
         {
+            var pending = new Pending(null, YouTubeCommentSort.Top, count, cancellationToken, false);
+            Requests.Add(pending);
+            return pending.Completion.Task;
+        }
+
+        public sealed class Pending(
+            string? videoId,
+            YouTubeCommentSort sort,
+            int count,
+            CancellationToken token,
+            bool isFirstPage)
+        {
+            public string? VideoId { get; } = videoId;
             public YouTubeCommentSort Sort { get; } = sort;
-            public int MaxComments { get; } = maxComments;
+            public int Count { get; } = count;
             public CancellationToken Token { get; } = token;
+            public bool IsFirstPage { get; } = isFirstPage;
 
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);

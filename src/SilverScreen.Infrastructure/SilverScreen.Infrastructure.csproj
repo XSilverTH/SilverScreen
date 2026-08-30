@@ -12,6 +12,7 @@
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11"/>
         <ProjectReference Include="..\..\lib\Hi3Helper.SharpDiscordRPC\DiscordRPC\DiscordRPC.csproj"/>
         <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>
+        <ProjectReference Include="..\..\..\YoutubeAPI\YoutubeAPI\YoutubeAPI.csproj"/>
         <InternalsVisibleTo Include="SilverScreen.Tests"/>
     </ItemGroup>
 

@@ -14,7 +14,8 @@ public sealed class ChannelViewModelTests
 
         await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
 
-        Assert.Equal(("https://www.youtube.com/@example", "Example", ChannelVideoSort.Newest, 1, VideoFeedConstants.DefaultPageSize), service.LastRequest);
+        Assert.Equal(("https://www.youtube.com/@example", "Example", ChannelVideoSort.Newest, null,
+            VideoFeedConstants.DefaultPageSize), service.LastRequest);
         Assert.Equal("Example Channel", viewModel.State.Name);
         Assert.Single(viewModel.State.Videos);
         Assert.False(viewModel.State.IsLoading);
@@ -30,8 +31,8 @@ public sealed class ChannelViewModelTests
 
         await viewModel.SetSortSelection(2);
 
-        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Popular, 1, VideoFeedConstants.DefaultPageSize),
-            service.LastRequest);
+        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Popular, null,
+            VideoFeedConstants.DefaultPageSize), service.LastRequest);
         Assert.Equal(ChannelVideoSort.Popular, viewModel.State.Sort);
     }
 
@@ -44,8 +45,8 @@ public sealed class ChannelViewModelTests
 
         await viewModel.LoadMoreAsync();
 
-        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, 21, VideoFeedConstants.DefaultPageSize),
-            service.LastRequest);
+        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, "next",
+            VideoFeedConstants.DefaultPageSize), service.LastRequest);
         Assert.Equal(["dQw4w9WgXcQ", "abc123def45"], viewModel.State.Videos.Select(video => video.Id));
         Assert.False(viewModel.State.HasMore);
     }
@@ -56,33 +57,35 @@ public sealed class ChannelViewModelTests
         using var viewModel = new ChannelViewModel(service);
         await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example", count: 40);
 
-        Assert.Equal(("https://www.youtube.com/@example", "Example", ChannelVideoSort.Newest, 1, 40), service.LastRequest);
+        Assert.Equal(("https://www.youtube.com/@example", "Example", ChannelVideoSort.Newest, null, 40),
+            service.LastRequest);
 
         await viewModel.LoadMoreAsync(count: 40);
 
-        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, 21, 40), service.LastRequest);
+        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, "next", 40),
+            service.LastRequest);
     }
 
 
     private sealed class FakeChannelService : IChannelService
     {
-        public (string Url, string FallbackName, ChannelVideoSort Sort, int StartIndex, int Count)? LastRequest
+        public (string Url, string FallbackName, ChannelVideoSort Sort, string? ContinuationToken, int Count)? LastRequest
         {
             get;
             private set;
         }
 
         public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
-            int startIndex, int count, CancellationToken cancellationToken)
+            string? continuationToken, int count, CancellationToken cancellationToken)
         {
-            LastRequest = (channelUrl, fallbackName, sort, startIndex, count);
-            var video = startIndex == 1
+            LastRequest = (channelUrl, fallbackName, sort, continuationToken, count);
+            var video = continuationToken is null
                 ? new VideoSummary("dQw4w9WgXcQ", "Video", "Example Channel", TimeSpan.FromSeconds(42),
                     string.Empty, false, ChannelUrl: channelUrl)
                 : new VideoSummary("abc123def45", "More Video", "Example Channel", TimeSpan.FromSeconds(42),
                     string.Empty, false, ChannelUrl: channelUrl);
             return Task.FromResult(new ChannelPage(channelUrl, "Example Channel", "Description", null, 1,
-                [video], sort, "Loaded Example Channel.", NextStartIndex: startIndex == 1 ? 21 : null));
+                [video], sort, "Loaded Example Channel.", NextContinuationToken: continuationToken is null ? "next" : null));
         }
     }
 }

@@ -7,11 +7,12 @@ Search YouTube or paste a video link, then play it with your local MPV install. 
 
 - The .NET 10 SDK.
 - GTK 4, Libadwaita, WebKitGTK 6 (`libwebkitgtk-6.0`), and libsoup 3 native libraries compatible with the GirCore bindings used by the app.
-- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) on `PATH` for search and Home recommendations.
+- The sibling [`YoutubeAPI`](../YoutubeAPI/) project for typed YouTube metadata, search, feeds, comments, ratings, and account operations.
+- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) on `PATH` for MPV's raw media stream extraction.
 - The `libsecret` shared library and an unlocked Freedesktop Secret Service provider, such as GNOME Keyring or KWallet configured with Secret Service support. `secret-tool` is optional for manual diagnostics and is not an application dependency.
 - [`mpv`](https://mpv.io/) on `PATH` for playback.
 
-The app checks the configured `yt-dlp`, `mpv`, and Secret Service dependencies when its main window opens. If setup is incomplete, the status area explains what is unavailable and how to recover; hover it to read the full guidance. Install the missing executable or keyring provider, unlock the keyring, and use **Preferences** to correct a custom executable path before retrying the related action.
+The app uses YoutubeAPI for YouTube operations and checks the configured media extractor, MPV, and Secret Service dependencies when its main window opens. If setup is incomplete, the status area explains what is unavailable and how to recover; hover it to read the full guidance. Install the missing executable or keyring provider, unlock the keyring, and use **Preferences** to correct the media extractor or MPV path before retrying the related action.
 
 ## Run it
 
@@ -27,7 +28,7 @@ dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
 2. Enter a normal YouTube search or paste a supported YouTube video URL.
 3. Select a result to play it in MPV, or open its menu to add it to the queue.
 
-Text searches use `yt-dlp` and show non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
+Text searches use YoutubeAPI and show non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video in MPV.
 
 The queue is a small in-memory list. **Add to queue** appends a video to the end of the queue (or middle-click a video card); you can remove items or clear the list from the floating queue button. It does nothing for now. in the future I hope to turn it into something used in place of opening multiple tabs to watch back to back.
 
@@ -40,7 +41,7 @@ Home is opt-in because it needs a YouTube session.
 3. SilverScreen captures the resulting YouTube cookies, closes the sign-in window, and validates the session automatically.
 4. Refresh Home.
 
-If embedded Google sign-in is unavailable, choose **Add manual session** instead and paste a browser-exported Netscape-format `cookies.txt` file. SilverScreen stores either session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. The embedded window uses a fresh ephemeral WebKit session for every attempt; its browser storage is discarded after closing, and refreshing never clears the previous saved session unless a new capture succeeds. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes the keyring entry. When `yt-dlp` or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
+If embedded Google sign-in is unavailable, choose **Add manual session** instead and paste a browser-exported Netscape-format `cookies.txt` file. SilverScreen stores either session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. The embedded window uses a fresh ephemeral WebKit session for every attempt; its browser storage is discarded after closing, and refreshing never clears the previous saved session unless a new capture succeeds. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes the keyring entry. When the media extractor or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
 
 ## Important details
 
@@ -60,7 +61,7 @@ If embedded Google sign-in is unavailable, choose **Add manual session** instead
 | `src/SilverScreen.App/Views/Components`, `Views/Popovers` | Reusable video cards plus independent queue and account popover roots. |
 | `src/SilverScreen.App/ViewModels` | GTK-free shell, Home, search, queue, and account presentation state/adapters. |
 | `src/SilverScreen.App/Features` | Search, playback, queue, session, feed, and thumbnail behavior. |
-| `src/SilverScreen.App/Infrastructure/YouTube` | The `yt-dlp`-backed Home feed client. |
+| `src/SilverScreen.Infrastructure/YouTube` | YoutubeAPI client/session integration and the isolated media-extraction adapter used by MPV. |
 | `tests/SilverScreen.Tests` | Unit tests for feature and presentation-state behavior. |
 
 

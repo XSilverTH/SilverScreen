@@ -58,6 +58,5 @@ public static partial class YouTubeMediaExpiryParser
             return null;
         }
 
-        return null;
     }
 }

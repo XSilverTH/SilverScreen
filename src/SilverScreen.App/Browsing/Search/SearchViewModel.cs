@@ -194,8 +194,8 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         if (query is null)
             return FeedPageResult.Empty;
 
-        var startIndex = token is not null && int.TryParse(token, out var idx) ? idx : 1;
-        var result = await _searchService.SearchAsync(new SearchRequest(query, startIndex, count), ct)
+        var result = await _searchService.SearchAsync(
+                new SearchRequest(query, count, token), ct)
             .ConfigureAwait(false);
 
         return new FeedPageResult(

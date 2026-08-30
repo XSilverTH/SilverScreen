@@ -12,7 +12,6 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
-using SilverScreen.Infrastructure.Account.Auth;
 using SilverScreen.Infrastructure.Account.Profile;
 using SilverScreen.Infrastructure.Account.Session;
 using SilverScreen.Infrastructure.Browsing.Channel;
@@ -87,13 +86,10 @@ public static class ApplicationServiceCollectionExtensions
             provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ICookieFileProvider>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
-        services.AddKeyedSingleton<HttpClient>("youtube-account", static (_, _) => new HttpClient());
-        services.AddKeyedSingleton<HttpClient>("youtube-rating", static (_, _) => new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        });
-        services.AddSingleton<YouTubeAuthenticationService>();
-        services.AddSingleton<IAccountProfileService, YouTubeAccountProfileService>();
+        services.AddSingleton<YouTubeClientProvider>();
+        services.AddSingleton<IYouTubeClientProvider>(static provider =>
+            provider.GetRequiredService<YouTubeClientProvider>());
+        services.AddSingleton<IAccountProfileService, YoutubeApiAccountProfileService>();
         services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
             new DiscordPresenceService(
@@ -103,27 +99,22 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
         services.AddSingleton<IWatchProgressService, FileWatchProgressService>();
-        services.AddSingleton<YtDlpRunner>();
-        services.AddSingleton<IYtDlpProcessHost, YtDlpProcessHost>();
-        services.AddSingleton<WarmYtDlpRunner>(static provider => new WarmYtDlpRunner(
-            provider.GetRequiredService<IPreferencesService>(),
-            provider.GetRequiredService<IYtDlpProcessHost>(),
-            provider.GetRequiredService<YtDlpRunner>()));
-        services.AddSingleton<IYtDlpRunner>(static provider => provider.GetRequiredService<WarmYtDlpRunner>());
-        services.AddSingleton<ISearchService, YtDlpSearchService>();
-        services.AddSingleton<ISearchSuggestionService, YouTubeSearchSuggestionService>();
-        services.AddSingleton<IChannelService, YtDlpChannelService>();
+        // yt-dlp is retained only for raw media stream extraction used by MPV.
+        services.AddSingleton<IYtDlpRunner, YtDlpRunner>();
+        services.AddSingleton<ISearchService, YoutubeApiSearchService>();
+        services.AddSingleton<ISearchSuggestionService, YoutubeApiSearchSuggestionService>();
+        services.AddSingleton<IChannelService, YoutubeApiChannelService>();
         services.AddSingleton<IVideoEngagementService, ReturnYouTubeDislikeService>();
-        services.AddSingleton<IYouTubeRatingService, YouTubeRatingService>();
+        services.AddSingleton<IYouTubeRatingService, YoutubeApiRatingService>();
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
         services.AddSingleton<YtDlpMediaResolver>();
         services.AddSingleton<IYouTubeMediaResolver>(static provider =>
             provider.GetRequiredService<YtDlpMediaResolver>());
-        services.AddSingleton<IYouTubeCommentService, YtDlpCommentService>();
-        services.AddSingleton<IAuthenticatedHomeFeedService, AuthenticatedHomeFeedService>();
-        services.AddSingleton<IAuthenticatedHistoryService, AuthenticatedHistoryService>();
-        services.AddSingleton<IAuthenticatedSubscriptionsService, AuthenticatedSubscriptionsService>();
+        services.AddSingleton<IYouTubeCommentService, YoutubeApiCommentService>();
+        services.AddSingleton<IAuthenticatedHomeFeedService, YoutubeApiHomeFeedService>();
+        services.AddSingleton<IAuthenticatedHistoryService, YoutubeApiHistoryService>();
+        services.AddSingleton<IAuthenticatedSubscriptionsService, YoutubeApiSubscriptionsService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
         services.AddSingleton<PlayerDependencies>();

@@ -245,7 +245,7 @@ public sealed class ViewModelTests
 
         var loadMore = viewModel.LoadMoreAsync();
         Assert.Equal(2, service.Requests.Count);
-        Assert.Equal(21, service.Requests[1].Request.StartIndex);
+        Assert.Equal("21", service.Requests[1].Request.ContinuationToken);
         service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
         await loadMore;
 
@@ -267,7 +267,7 @@ public sealed class ViewModelTests
 
         var loadMore = viewModel.LoadMoreAsync(count: 40);
         Assert.Equal(2, service.Requests.Count);
-        Assert.Equal(41, service.Requests[1].Request.StartIndex);
+        Assert.Equal("41", service.Requests[1].Request.ContinuationToken);
         Assert.Equal(40, service.Requests[1].Request.Count);
         service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
         await loadMore;
