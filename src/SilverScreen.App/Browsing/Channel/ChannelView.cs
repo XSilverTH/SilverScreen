@@ -72,6 +72,7 @@ public partial class ChannelView : ViewBase<Box>
         _videoMotionController.OnEnter += OnVideoPointerEnter;
         _videoMotionController.OnMotion += OnVideoPointerMotion;
         _videoList.ScrolledWindow.AddController(_videoMotionController);
+        _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged;
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
