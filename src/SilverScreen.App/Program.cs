@@ -3,10 +3,11 @@ using Serilog;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
-var stateHome = Environment.GetEnvironmentVariable("XDG_STATE_HOME");
-var applicationStateDirectory = string.IsNullOrWhiteSpace(stateHome)
-    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state", "SilverScreen")
-    : Path.Combine(stateHome, "SilverScreen");
+var applicationStateDirectory = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+    ".local",
+    "state",
+    "SilverScreen");
 var logDirectory = Path.Combine(applicationStateDirectory, "logs");
 Directory.CreateDirectory(logDirectory);
 
