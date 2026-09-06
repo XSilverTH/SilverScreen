@@ -35,15 +35,17 @@ stages the tarball below, and uploads it to the GitHub Release.
 
 ## Tarball layout
 
-`silverscreen-<version>-linux-x64.tar.gz` contains a single top-level
-directory with:
+`silverscreen-<version>-linux-x64.tar.gz` contains a standard Unix hierarchy
+and an installation script:
 
-- `SilverScreen` — the published binary
-- `io.github.silverscreen.SilverScreen.desktop`
-- `io.github.silverscreen.SilverScreen.metainfo.xml`
-- `silverscreen.svg` — application icon
+- `install.sh` — installation script supporting `--user` (`~/.local`), custom prefixes (`PREFIX=...`), or uninstall
+- `bin/SilverScreen` — the published binary
+- `share/applications/io.github.silverscreen.SilverScreen.desktop`
+- `share/metainfo/io.github.silverscreen.SilverScreen.metainfo.xml`
+- `share/icons/hicolor/scalable/apps/io.github.silverscreen.SilverScreen.svg` — application icon
+- `share/licenses/silverscreen/LICENSE`
+- `share/doc/silverscreen/THIRD-PARTY.md`
 - `LICENSE`, `THIRD-PARTY.md`
-
 ## AUR notes
 
 `packaging/PKGBUILD` is a `silverscreen-git` package tracking `main` via a

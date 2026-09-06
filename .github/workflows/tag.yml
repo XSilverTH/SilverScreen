@@ -40,12 +40,25 @@ jobs:
         run: |
           ver="${GITHUB_REF_NAME#v}"
           dist="silverscreen-${ver}-linux-x64"
-          mkdir "${dist}"
-          cp publish/linux-x64/SilverScreen "${dist}/"
-          cp packaging/io.github.silverscreen.SilverScreen.desktop "${dist}/"
-          cp packaging/io.github.silverscreen.SilverScreen.metainfo.xml "${dist}/"
-          cp src/SilverScreen.App/Assets/silverscreen.svg "${dist}/"
+          mkdir -p "${dist}/bin"
+          mkdir -p "${dist}/share/applications"
+          mkdir -p "${dist}/share/metainfo"
+          mkdir -p "${dist}/share/icons/hicolor/scalable/apps"
+          mkdir -p "${dist}/share/licenses/silverscreen"
+          mkdir -p "${dist}/share/doc/silverscreen"
+
+          cp publish/linux-x64/SilverScreen "${dist}/bin/"
+          cp packaging/io.github.silverscreen.SilverScreen.desktop "${dist}/share/applications/"
+          cp packaging/io.github.silverscreen.SilverScreen.metainfo.xml "${dist}/share/metainfo/"
+          cp packaging/io.github.silverscreen.SilverScreen.svg "${dist}/share/icons/hicolor/scalable/apps/" 2>/dev/null || \
+            cp src/SilverScreen.App/Assets/silverscreen.svg "${dist}/share/icons/hicolor/scalable/apps/io.github.silverscreen.SilverScreen.svg"
+          cp LICENSE "${dist}/share/licenses/silverscreen/"
+          cp THIRD-PARTY.md "${dist}/share/doc/silverscreen/"
+
+          cp packaging/install.sh "${dist}/"
+          chmod +x "${dist}/install.sh"
           cp LICENSE THIRD-PARTY.md "${dist}/"
+
           tar -czf "${dist}.tar.gz" "${dist}"
           sha256sum "${dist}.tar.gz" > "${dist}.tar.gz.sha256"
 
