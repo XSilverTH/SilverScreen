@@ -31,7 +31,10 @@ internal static partial class WebLoginCookieReader
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentException.ThrowIfNullOrWhiteSpace(uri);
 
-        var completion = new TaskCompletionSource<IReadOnlyList<WebCookieSnapshot>>();
+        // Run continuations asynchronously so drain logic never executes on the
+        // native WebKit async-callback thread.
+        var completion = new TaskCompletionSource<IReadOnlyList<WebCookieSnapshot>>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         var callbackHandler = new AsyncReadyCallbackAsyncHandler((sourceObject, result, _) =>
         {
             if (sourceObject is null)

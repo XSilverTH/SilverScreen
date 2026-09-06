@@ -6,6 +6,7 @@ using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI;
 using WebKit;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 using Window = Adw.Window;
 
 namespace SilverScreen.Account.Auth;
@@ -28,17 +29,21 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     private readonly CookieManager _cookieManager;
     private readonly NetworkSession _networkSession;
     private readonly WebView _webView;
+    private readonly int _uiThreadId;
+    private int _disposeState;
+    private int _terminalState;
     private bool _closedInvoked;
-    private bool _disposed;
     private bool _nativeDisposed;
 
     internal WebLoginWindow(Gtk.Window parent, AccountViewModel account, Action closed)
     {
         Logger.Information("Opening WebLoginWindow for YouTube authentication");
+        _uiThreadId = Environment.CurrentManagedThreadId;
         _account = account;
         _closed = closed;
         Widget.TransientFor = parent;
 
+        // Ephemeral WebKit session per login attempt; discarded in TearDownNativeObjects.
         _networkSession = NetworkSession.NewEphemeral();
         _cookieManager = _networkSession.GetCookieManager();
         _webView = CreateWebView(_networkSession);
@@ -50,7 +55,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
         _capture = new WebLoginCaptureCoordinator(
             ReadReadyCookiesAsync,
-            cookieText => !_disposed && _account.SaveWebSession(cookieText),
+            TryPersistSession,
             OnPersisted,
             OnReadFailed,
             OnPersistenceFailed);
@@ -63,14 +68,55 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     public new void Dispose()
     {
-        if (_disposed)
+        // Double-dispose guard: exactly one thread wins disposal.
+        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
             return;
 
-        _disposed = true;
+        if (Environment.CurrentManagedThreadId == _uiThreadId)
+        {
+            DisposeOnMainThread();
+            return;
+        }
+
+        // WebKit/GTK natives must be torn down on the UI thread, never on a
+        // threadpool thread. Marshal synchronously so the caller never
+        // outlives the teardown ordering (capture stopped before natives go).
+        using var completed = new ManualResetEventSlim(false);
+        Functions.IdleAdd(0, () =>
+        {
+            try
+            {
+                DisposeOnMainThread();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow UI-thread disposal failed");
+            }
+            finally
+            {
+                completed.Set();
+            }
+
+            return false;
+        });
+
+        if (!completed.Wait(TimeSpan.FromSeconds(10)))
+            Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
+    }
+
+    private void DisposeOnMainThread()
+    {
         _cookieManager.OnChanged -= OnCookieChanged;
         _webView.OnLoadChanged -= OnLoadChanged;
         Widget.OnCloseRequest -= OnCloseRequest;
-        Widget.Hide();
+        try
+        {
+            Widget.Hide();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow hide during disposal failed");
+        }
 
         if (!_closedInvoked)
         {
@@ -81,16 +127,30 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         var stopped = _capture.StopAsync();
         if (stopped.IsCompleted)
         {
+            if (stopped.IsFaulted && stopped.Exception is not null)
+                Logger.Warning(stopped.Exception, "WebLoginWindow capture drain faulted during disposal");
             TearDownNativeObjects();
             return;
         }
 
-        FinishDisposalAsync(stopped).FireAndForget(Logger);
+        // In-flight cookie read holds native handles: tear down on the UI
+        // thread only after the drain finishes, never by blocking it.
+        _ = stopped.ContinueWith(static (task, state) =>
+        {
+            var self = (WebLoginWindow)state!;
+            if (task.IsFaulted && task.Exception is not null)
+                Logger.Warning(task.Exception, "WebLoginWindow capture drain faulted during disposal");
+            Functions.IdleAdd(0, () =>
+            {
+                self.TearDownNativeObjects();
+                return false;
+            });
+        }, this, CancellationToken.None, TaskContinuationOptions.DenyChildAttach, TaskScheduler.Default);
     }
 
     internal void Present()
     {
-        if (!_disposed)
+        if (Volatile.Read(ref _disposeState) == 0)
             Widget.Present();
     }
 
@@ -103,8 +163,8 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     private async Task<string?> ReadReadyCookiesAsync()
     {
-        var snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri);
-        if (_disposed)
+        var snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri).ConfigureAwait(false);
+        if (Volatile.Read(ref _disposeState) != 0)
             return null;
         var cookieText = WebLoginCookieReader.SerializeNetscape(snapshots);
 
@@ -117,19 +177,31 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             return null;
         }
 
-        web_login_status_label.SetText("Finishing sign-in…");
+        PostStatus("Finishing sign-in…");
         return cookieText;
+    }
+
+    private bool TryPersistSession(string cookieText)
+    {
+        if (Volatile.Read(ref _disposeState) != 0)
+            return false;
+
+        // Failed saves return false without touching the stored session, so a
+        // refresh never clears the previous session unless a new capture
+        // succeeds; failures stay retryable while terminal completion below
+        // fires exactly once.
+        return _account.SaveWebSession(cookieText);
     }
 
     private void OnCookieChanged(CookieManager sender, EventArgs args)
     {
-        if (!_disposed)
+        if (Volatile.Read(ref _disposeState) == 0)
             _capture.RequestCapture();
     }
 
     private void OnLoadChanged(WebView sender, WebView.LoadChangedSignalArgs args)
     {
-        if (!_disposed && args.LoadEvent == LoadEvent.Finished)
+        if (Volatile.Read(ref _disposeState) == 0 && args.LoadEvent == LoadEvent.Finished)
             _capture.RequestCapture();
     }
 
@@ -141,8 +213,12 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     private void OnPersisted()
     {
+        // Terminal capture completion: exactly once across racing drains.
+        if (Interlocked.Exchange(ref _terminalState, 1) != 0)
+            return;
+
         Logger.Information("WebLoginWindow captured and persisted YouTube session");
-        if (_disposed)
+        if (Volatile.Read(ref _disposeState) != 0)
             return;
 
         _account.ValidateAsync().FireAndForget(Logger);
@@ -152,41 +228,82 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     private void OnReadFailed(Exception exception)
     {
         Logger.Warning(exception, "WebLoginWindow failed to read cookies");
-        if (!_disposed)
-            web_login_status_label.SetText(
-                "Could not read the YouTube session. Continue signing in or close this window to cancel.");
+        PostStatus("Could not read the YouTube session. Continue signing in or close this window to cancel.");
     }
 
     private void OnPersistenceFailed()
     {
         Logger.Warning("WebLoginWindow failed to save session to secret store");
-        if (!_disposed)
-            web_login_status_label.SetText(
-                "Could not save the YouTube session because the system keyring is unavailable.");
+        PostStatus("Could not save the YouTube session because the system keyring is unavailable.");
     }
 
-    private async Task FinishDisposalAsync(Task stopped)
+    private void PostStatus(string message)
     {
-        try
+        if (Volatile.Read(ref _disposeState) != 0)
+            return;
+
+        // Capture callbacks run on the drain (threadpool) thread; widgets are
+        // UI-thread only.
+        Functions.IdleAdd(0, () =>
         {
-            await stopped;
-        }
-        finally
-        {
-            TearDownNativeObjects();
-        }
+            if (Volatile.Read(ref _disposeState) == 0)
+                web_login_status_label.SetText(message);
+            return false;
+        });
     }
 
     private void TearDownNativeObjects()
     {
+        // UI thread only. Disposing WebView/NetworkSession/CookieManager from
+        // the threadpool tears down WebKit natives off the main loop.
         if (_nativeDisposed)
             return;
 
         _nativeDisposed = true;
-        _webView.Unparent();
-        _webView.Dispose();
-        _cookieManager.Dispose();
-        _networkSession.Dispose();
-        Widget.Dispose();
+        try
+        {
+            _webView.Unparent();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow WebView unparent failed");
+        }
+
+        try
+        {
+            _webView.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow WebView dispose failed");
+        }
+
+        try
+        {
+            _cookieManager.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow CookieManager dispose failed");
+        }
+
+        try
+        {
+            _networkSession.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow NetworkSession dispose failed");
+        }
+
+        try
+        {
+            Widget.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow widget dispose failed");
+        }
     }
+
 }
