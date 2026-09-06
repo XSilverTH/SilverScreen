@@ -1,0 +1,13 @@
+<Project>
+  <!-- Shared build defaults (Wave 0). Nearest-wins discovery: lib/YoutubeAPI/ has its
+       own Directory.Build.props and is unaffected by this file.
+       Per-project TargetFrameworks are intentionally NOT centralized: vendored
+       DiscordRPC.Example targets net9 and lib/YoutubeAPI pins net10.0 in its own scope. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <Authors Condition="'$(Authors)' == ''">XSilverTH</Authors>
+  </PropertyGroup>
+</Project>

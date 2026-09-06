@@ -8,8 +8,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Serilog" Version="4.4.0"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11"/>
+        <PackageReference Include="Serilog"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
         <ProjectReference Include="..\..\lib\Hi3Helper.SharpDiscordRPC\DiscordRPC\DiscordRPC.csproj"/>
         <ProjectReference Include="..\..\lib\YoutubeAPI\YoutubeAPI\YoutubeAPI.csproj" />
         <ProjectReference Include="..\SilverScreen.Core\SilverScreen.Core.csproj"/>

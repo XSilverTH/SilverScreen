@@ -1,0 +1,36 @@
+<Project>
+  <!-- Central package management for the SilverScreen repo (Wave 0).
+       Nearest-wins discovery: lib/YoutubeAPI/ has its own Directory.Packages.props,
+       so vendored YoutubeAPI projects keep their own pins and are unaffected by this file.
+       lib/Hi3Helper.SharpDiscordRPC/ is a submodule with explicit per-reference versions
+       and is intentionally NOT converted (see commit body); only src/* and tests/* use
+       the centralized versions below. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <!-- Explicit exclusion: lib/Hi3Helper.SharpDiscordRPC is a submodule whose
+         PackageReferences carry explicit versions. It has no local
+         Directory.Packages.props to shadow this file, and submodule contents are
+         intentionally untouched, so CPM is disabled for its projects (explicit
+         versions keep working). Everything under src/* and tests/* stays central. -->
+    <ManagePackageVersionsCentrally Condition="'$(MSBuildProjectName)' == 'DiscordRPC' or '$(MSBuildProjectName)' == 'DiscordRPC.Example'">false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Versions pinned from the existing src/*/tests/* csprojs at centralization time. -->
+    <PackageVersion Include="GirCore.Adw-1" Version="0.8.1" />
+    <PackageVersion Include="GirCore.Soup-3.0" Version="0.8.1" />
+    <PackageVersion Include="GirCore.WebKit-6.0" Version="0.8.1" />
+    <PackageVersion Include="XSTH.Blueprint.Helpers" Version="3.0.0" />
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Tmds.DBus.Generator" Version="0.95.0" />
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+</Project>
