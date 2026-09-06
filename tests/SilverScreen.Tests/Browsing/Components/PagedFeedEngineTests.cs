@@ -258,6 +258,92 @@ public sealed class PagedFeedEngineTests
     }
 
     [Fact]
+    public async Task FailedRefresh_WithDefaultSettings_PreservesExistingVideosOnResultFailure()
+    {
+        var page = 1;
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) =>
+            {
+                if (page == 1)
+                {
+                    page++;
+                    return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
+                }
+
+                return Task.FromResult(FeedPageResult.Failed("Server error", clearExisting: false));
+            });
+
+        await engine.RefreshAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.True(engine.IsSuccess);
+
+        // Second refresh fails but preserves videos
+        await engine.RefreshAsync();
+        Assert.False(engine.IsSuccess);
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+    }
+
+    [Fact]
+    public async Task FailedRefresh_OnNetworkException_PreservesExistingVideosAndSetsPaginationError()
+    {
+        var page = 1;
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) =>
+            {
+                if (page == 1)
+                {
+                    page++;
+                    return Task.FromResult(new FeedPageResult(
+                        [CreateVideo("1"), CreateVideo("2")],
+                        ContinuationToken: "token_1"));
+                }
+
+                throw new InvalidOperationException("Network down");
+            });
+
+        await engine.RefreshAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.True(engine.IsSuccess);
+        Assert.Equal("token_1", engine.ContinuationToken);
+
+        // Second refresh throws exception but preserves videos and token
+        await engine.RefreshAsync();
+        Assert.False(engine.IsSuccess);
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.Equal("token_1", engine.ContinuationToken);
+        Assert.True(engine.HasMore);
+        Assert.NotNull(engine.PaginationError);
+        Assert.NotNull(engine.State.PaginationError);
+    }
+
+    [Fact]
+    public async Task FailedRefresh_WithClearOnRefreshTrue_RetainsVideosUntilSuccess()
+    {
+        var page = 1;
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) =>
+            {
+                if (page == 1)
+                {
+                    page++;
+                    return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
+                }
+
+                return Task.FromResult(FeedPageResult.Failed("Server error", clearExisting: false));
+            },
+            clearOnRefresh: true);
+
+        await engine.RefreshAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.True(engine.IsSuccess);
+
+        // Second refresh fails with clearOnRefresh: true, still preserves videos
+        await engine.RefreshAsync();
+        Assert.False(engine.IsSuccess);
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+    }
+
+    [Fact]
     public async Task Reset_ClearsVideos_CancelsPendingRequest_AndResetsState()
     {
         var tcs = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);

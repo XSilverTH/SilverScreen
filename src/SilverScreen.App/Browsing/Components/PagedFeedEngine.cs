@@ -81,7 +81,7 @@ public class PagedFeedEngine : IVideoListSource
         string defaultEmptyDescription = "No videos are available right now.",
         string defaultEmptyIcon = "applications-internet-symbolic",
         string defaultIcon = "video-x-generic-symbolic",
-        bool clearOnRefresh = true)
+        bool clearOnRefresh = false)
     {
         _fetcher = fetcher;
         _statusMapper = statusMapper;
@@ -235,7 +235,7 @@ public class PagedFeedEngine : IVideoListSource
         string defaultEmptyDescription = "No videos are available right now.",
         string defaultEmptyIcon = "applications-internet-symbolic",
         string defaultIcon = "video-x-generic-symbolic",
-        bool clearOnRefresh = true)
+        bool clearOnRefresh = false)
     {
         return new PagedFeedEngine(
             async (token, count, ct) =>
@@ -379,8 +379,6 @@ public class PagedFeedEngine : IVideoListSource
             if (isRefresh)
             {
                 _continuationToken = null;
-                if (_clearOnRefresh)
-                    _videos.Clear();
             }
 
             tokenForFetch = isRefresh ? null : _continuationToken;
