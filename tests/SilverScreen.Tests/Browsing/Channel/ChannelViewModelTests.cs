@@ -23,6 +23,17 @@ public sealed class ChannelViewModelTests
     }
 
     [Fact]
+    public async Task OpenChannelAsync_WithPlaceholderId_DoesNotLoadChannel()
+    {
+        var service = new FakeChannelService();
+        using var viewModel = new ChannelViewModel(service);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/channel/UC0000000000000000000000", "Fallback");
+
+        Assert.Null(service.LastRequest);
+    }
+
+    [Fact]
     public async Task SetSortSelection_ReloadsCurrentChannelWithChosenSort()
     {
         var service = new FakeChannelService();

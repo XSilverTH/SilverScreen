@@ -107,6 +107,12 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         int count = VideoFeedConstants.DefaultPageSize)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
+        if (channelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
+        {
+            Logger.Warning("Cannot open channel with dummy placeholder ID: {ChannelUrl} ({FallbackName})", channelUrl, fallbackName);
+            return;
+        }
+
         Logger.Information("Opening channel {ChannelUrl} (FallbackName: {FallbackName})", channelUrl, fallbackName);
         await LoadAsync(channelUrl, fallbackName, ChannelVideoSort.Newest, count).ConfigureAwait(false);
     }

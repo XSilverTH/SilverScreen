@@ -33,5 +33,23 @@ public sealed class WebLoginCookieTests
             cookie.Name == "__Secure-3PAPISID" && cookie.Value == "secure-sapisid");
         Assert.Contains(credentials.Cookies, cookie => cookie.Name == "SID" && cookie.Value == "sid");
         Assert.Contains(credentials.Cookies, cookie => cookie.Name == "SAPISID" && cookie.Value == "sapisid");
+        Assert.True(credentials.HasAuthenticationCookies);
+    }
+
+    [Fact]
+    public void SerializeNetscape_WithGuestCookiesOnly_HasAuthenticationCookiesIsFalse()
+    {
+        var cookies = new[]
+        {
+            new WebCookieSnapshot("VISITOR_INFO1_LIVE", "visitor123", ".youtube.com", "/", true, true, 2_147_483_647),
+            new WebCookieSnapshot("YSC", "ysc123", ".youtube.com", "/", true, true, 2_147_483_647),
+            new WebCookieSnapshot("GPS", "1", ".youtube.com", "/", true, true, 2_147_483_647)
+        };
+
+        var credentials = YouTubeCookieAuthentication.FromNetscape(
+            WebLoginCookieReader.SerializeNetscape(cookies));
+
+        Assert.NotNull(credentials);
+        Assert.False(credentials.HasAuthenticationCookies);
     }
 }

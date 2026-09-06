@@ -178,8 +178,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private async Task OpenChannelAsync(VideoSummary video)
     {
-        if (string.IsNullOrWhiteSpace(video.ChannelUrl))
+        if (string.IsNullOrWhiteSpace(video.ChannelUrl) ||
+            video.ChannelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
+        {
+            Logger.Warning("Cannot open channel with missing or placeholder URL for video {VideoId} ({ChannelName})", video.Id, video.ChannelName);
             return;
+        }
 
         if (_navigationService.CurrentPage == NavigationPage.Player)
             Widget.Unfullscreen();

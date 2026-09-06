@@ -64,6 +64,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool _syncingQueue;
     private bool _updatingControls;
     private double _volume = 100;
+    private PlaybackRequest? _loadedRequest;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
@@ -325,7 +326,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _presentRequested();
             _shortcutController.Attach();
             Widget.GrabFocus();
-            if (_rendererReady) _player.Load(request, preferences, _session.CookieFilePath);
+            if (_rendererReady)
+            {
+                _player.Load(request, preferences, _session.CookieFilePath);
+                _loadedRequest = request;
+            }
             return false;
         });
 
@@ -350,8 +355,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _rendererReady = true;
         _shortcutController.Attach();
 
-        if (_session.Request is not null)
+        if (_session.Request is not null && !ReferenceEquals(_loadedRequest, _session.Request))
+        {
             _player.Load(_session.Request, _preferences.GetPreferences(), _session.CookieFilePath);
+            _loadedRequest = _session.Request;
+        }
     }
 
     private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
@@ -696,6 +704,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _player.Stop();
+        _loadedRequest = null;
     }
 
     private void EndSession(bool stop)
@@ -708,6 +717,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _timelineController.Reset();
         _osdController.HideImmediate();
+        _loadedRequest = null;
         _infoPanel.Close();
         _infoPanel.SetVideo(null);
         player_queue_controls.SetVisible(false);

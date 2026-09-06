@@ -170,7 +170,9 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
         try
         {
-            _ = YouTubeCookieAuthentication.FromNetscape(cookieText);
+            var auth = YouTubeCookieAuthentication.FromNetscape(cookieText);
+            if (!auth.HasAuthenticationCookies)
+                return null;
         }
         catch (FormatException)
         {

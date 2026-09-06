@@ -248,10 +248,21 @@ internal sealed class DesktopMediaIntegration : IDisposable
             var portalRequest = new DBusService(connection, PortalServiceName).CreateRequest(request);
             await portalRequest.CloseAsync().ConfigureAwait(false);
         }
+        catch (DBusErrorReplyException exception) when (IsObjectNotFound(exception))
+        {
+            Logger.Debug("Portal idle-inhibit request at {Path} was already released or removed.", request);
+        }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Could not release the portal idle-inhibit request.");
         }
+    }
+
+    private static bool IsObjectNotFound(DBusErrorReplyException exception)
+    {
+        return string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownMethod", StringComparison.Ordinal)
+               || string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownObject", StringComparison.Ordinal)
+               || (exception.Message?.Contains("Object does not exist", StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
     private sealed class MprisHandler(DesktopMediaIntegration owner, DBusConnection connection) : DBusHandler(
