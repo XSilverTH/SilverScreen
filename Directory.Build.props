@@ -9,5 +9,12 @@
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <Authors Condition="'$(Authors)' == ''">XSilverTH</Authors>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+
+  <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('Tests')) and '$(IsTestProject)' != 'true'">
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
 </Project>
