@@ -155,6 +155,7 @@ public partial class QueueView : ViewBase<Box>
 
         var row = new QueueItemRowView(_thumbnails, _viewModel.Move, RequestDrop, _viewModel.Remove,
             OnRowPlayRequested);
+        listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
 
@@ -197,11 +198,16 @@ public partial class QueueView : ViewBase<Box>
 
     private void OnRowTeardown(object? sender, SignalListItemFactory.TeardownSignalArgs args)
     {
-        if (args.Object is not ListItem { Child: { } child } || !_rowsByCell.Remove(child, out var row))
+        if (args.Object is not ListItem listItem)
             return;
 
-        row.Unbind();
-        row.Dispose();
+        if (listItem.Child is { } child && _rowsByCell.Remove(child, out var row))
+        {
+            row.Unbind();
+            row.Dispose();
+        }
+
+        listItem.Child = null;
     }
 
     private void RequestDrop(Guid itemId, int insertionIndex)
