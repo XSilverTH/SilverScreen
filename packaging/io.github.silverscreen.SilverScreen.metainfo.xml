@@ -20,13 +20,6 @@
     </ul>
   </description>
   <launchable type="desktop-id">io.github.silverscreen.SilverScreen.desktop</launchable>
-  <screenshots>
-    <screenshot type="default">
-      <!-- TODO: replace with hosted release screenshots after 0.1.0. -->
-      <caption>SilverScreen browsing YouTube</caption>
-      <image>https://raw.githubusercontent.com/XSilverTH/SilverScreen/v0.1.0/Screenshots/placeholder.png</image>
-    </screenshot>
-  </screenshots>
   <url type="homepage">https://github.com/XSilverTH/SilverScreen</url>
   <url type="bugtracker">https://github.com/XSilverTH/SilverScreen/issues</url>
   <releases>

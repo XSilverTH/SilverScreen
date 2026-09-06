@@ -15,7 +15,7 @@ arch=('x86_64')
 url='https://github.com/XSilverTH/SilverScreen'
 license=('GPL-3.0-or-later')
 depends=('gtk4' 'libadwaita' 'webkitgtk-6.0' 'libsoup3' 'libsecret' 'mpv' 'yt-dlp' 'hicolor-icon-theme')
-makedepends=('git' 'dotnet-sdk>=10')
+makedepends=('git' 'dotnet-sdk>=10' 'blueprint-compiler' 'glib2' 'clang')
 provides=('silverscreen')
 conflicts=('silverscreen')
 source=("git+$url.git")
@@ -31,6 +31,11 @@ pkgver() {
   fi
 }
 
+prepare() {
+  cd SilverScreen
+  git submodule update --init --recursive
+}
+
 build() {
   cd SilverScreen
   export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -42,6 +47,7 @@ build() {
 package() {
   cd SilverScreen
   install -Dm755 "publish/SilverScreen" "$pkgdir/usr/bin/SilverScreen"
+  ln -s SilverScreen "$pkgdir/usr/bin/silverscreen"
   install -Dm644 packaging/io.github.silverscreen.SilverScreen.desktop \
     "$pkgdir/usr/share/applications/io.github.silverscreen.SilverScreen.desktop"
   install -Dm644 packaging/io.github.silverscreen.SilverScreen.metainfo.xml \
@@ -50,35 +56,9 @@ package() {
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/silverscreen.svg"
 }
 
-# Stable-tarball alternative (silverscreen, from the GitHub Release tarball
-# staged by .github/workflows/tag.yml on tag v$pkgver). Uncomment and use as
-# packaging/PKGBUILD.stable once the current tag is published, then verify in
-# a clean chroot and fill in sha256sums before any AUR upload.
-#pkgname=silverscreen
-#pkgver=0.1.0
-#pkgrel=1
-#pkgdesc='Native GTK4 YouTube client that plays videos with MPV'
-#arch=('x86_64')
-#url='https://github.com/XSilverTH/SilverScreen'
-#license=('GPL-3.0-or-later')
-#depends=('gtk4' 'libadwaita' 'webkitgtk-6.0' 'libsoup3' 'libsecret' 'mpv' 'yt-dlp' 'hicolor-icon-theme')
-#makedepends=('dotnet-sdk>=10')
-#source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-#sha256sums=('SKIP') # TODO: fill in once the v0.1.0 tag tarball is published.
-#build() {
-#  cd "$pkgname-$pkgver"
-#  export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
-#  dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
-#    -c Release -r linux-x64 --self-contained \
-#    -o "$srcdir/$pkgname-$pkgver/publish"
-#}
-#package() {
-#  cd "$pkgname-$pkgver"
-#  install -Dm755 "publish/SilverScreen" "$pkgdir/usr/bin/SilverScreen"
-#  install -Dm644 packaging/io.github.silverscreen.SilverScreen.desktop \
-#    "$pkgdir/usr/share/applications/io.github.silverscreen.SilverScreen.desktop"
-#  install -Dm644 packaging/io.github.silverscreen.SilverScreen.metainfo.xml \
-#    "$pkgdir/usr/share/metainfo/io.github.silverscreen.SilverScreen.metainfo.xml"
-#  install -Dm644 src/SilverScreen.App/Assets/silverscreen.svg \
-#    "$pkgdir/usr/share/icons/hicolor/scalable/apps/silverscreen.svg"
-#}
+# Stable-tarball note:
+# Source builds require git submodules (lib/YoutubeAPI and lib/Hi3Helper.SharpDiscordRPC).
+# GitHub's auto-generated archive tarballs (/archive/refs/tags/v$pkgver.tar.gz) do NOT include
+# submodules and cannot be used directly for building from source.
+# A source tarball must either be generated with submodules bundled, or git source with
+# submodules must be used.
