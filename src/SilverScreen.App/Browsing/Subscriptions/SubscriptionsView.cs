@@ -27,7 +27,7 @@ public partial class SubscriptionsView : ViewBase<Box>
     private readonly IThumbnailService _thumbnails;
     private readonly VideoListView _videoList;
     private readonly SubscriptionsViewModel _viewModel;
-
+    private readonly EventControllerKey _allKeyController;
     private CancellationTokenSource? _avatarsCancellation;
     private bool _disposed;
     private IReadOnlyList<SubscribedChannel> _renderedChannels = [];
@@ -50,18 +50,9 @@ public partial class SubscriptionsView : ViewBase<Box>
             openWebLogin);
         subscriptions_video_list_host.Append(_videoList.Widget);
 
-        var allKeyController = EventControllerKey.New();
-        allKeyController.OnKeyPressed += (_, args) =>
-        {
-            if (args.Keyval == (uint)Gdk.Constants.KEY_Right && _channelItems.Count > 0)
-            {
-                _channelItems[0].ItemBox.GrabFocus();
-                return true;
-            }
-
-            return false;
-        };
-        all_channel_button.AddController(allKeyController);
+        _allKeyController = EventControllerKey.New();
+        _allKeyController.OnKeyPressed += OnAllKeyControllerKeyPressed;
+        all_channel_button.AddController(_allKeyController);
 
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
@@ -282,7 +273,17 @@ public partial class SubscriptionsView : ViewBase<Box>
         };
         itemBox.AddController(rightClick);
 
-        var holder = new ChannelItemHolder(channel, itemBox, avatarOverlay, popover);
+        var holder = new ChannelItemHolder(
+            channel,
+            itemBox,
+            avatarOverlay,
+            popover,
+            leftClick,
+            keyController,
+            rightClick,
+            actionGroup,
+            openAction,
+            menu);
 
         // Asynchronously load circular avatar
         if (!string.IsNullOrWhiteSpace(channel.AvatarUrl))
@@ -383,6 +384,17 @@ public partial class SubscriptionsView : ViewBase<Box>
         _viewModel.SelectChannelAsync(null, _videoList.GetBatchSize()).FireAndForget(Logger);
     }
 
+    private bool OnAllKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+    {
+        if (args.Keyval == (uint)Gdk.Constants.KEY_Right && _channelItems.Count > 0)
+        {
+            _channelItems[0].ItemBox.GrabFocus();
+            return true;
+        }
+
+        return false;
+    }
+
     public new void Dispose()
     {
         if (_disposed) return;
@@ -394,9 +406,15 @@ public partial class SubscriptionsView : ViewBase<Box>
         _avatarsCancellation?.Dispose();
         _avatarsCancellation = null;
 
+        _allKeyController.OnKeyPressed -= OnAllKeyControllerKeyPressed;
+        all_channel_button.RemoveController(_allKeyController);
+        _allKeyController.Dispose();
+
         ClearChannelItems();
         _videoList.Dispose();
         base.Dispose();
+        Builder.Dispose();
+        Widget.Dispose();
     }
 
     private static string FormatChannelTooltip(SubscribedChannel channel)
@@ -421,28 +439,81 @@ public partial class SubscriptionsView : ViewBase<Box>
         return slashIndex > 0 ? handle[..slashIndex] : handle;
     }
 
-    private sealed class ChannelItemHolder(
-        SubscribedChannel channel,
-        Box itemBox,
-        Overlay overlay,
-        PopoverMenu popover) : IDisposable
+    private sealed class ChannelItemHolder : IDisposable
     {
-        public SubscribedChannel Channel { get; } = channel;
-        public Box ItemBox { get; } = itemBox;
-        public Overlay Overlay { get; } = overlay;
-        private PopoverMenu Popover { get; } = popover;
+        private readonly SubscribedChannel _channel;
+        private readonly Box _itemBox;
+        private readonly Overlay _overlay;
+        private readonly PopoverMenu _popover;
+        private readonly GestureClick _leftClick;
+        private readonly EventControllerKey _keyController;
+        private readonly GestureClick _rightClick;
+        private readonly SimpleActionGroup _actionGroup;
+        private readonly SimpleAction _openAction;
+        private readonly Menu _menu;
+        private bool _disposed;
+
+        public ChannelItemHolder(
+            SubscribedChannel channel,
+            Box itemBox,
+            Overlay overlay,
+            PopoverMenu popover,
+            GestureClick leftClick,
+            EventControllerKey keyController,
+            GestureClick rightClick,
+            SimpleActionGroup actionGroup,
+            SimpleAction openAction,
+            Menu menu)
+        {
+            _channel = channel;
+            _itemBox = itemBox;
+            _overlay = overlay;
+            _popover = popover;
+            _leftClick = leftClick;
+            _keyController = keyController;
+            _rightClick = rightClick;
+            _actionGroup = actionGroup;
+            _openAction = openAction;
+            _menu = menu;
+        }
+
+        public SubscribedChannel Channel => _channel;
+        public Box ItemBox => _itemBox;
+        public Overlay Overlay => _overlay;
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
+
             BoundPicture?.Dispose();
             BoundPicture = null;
             BoundTexture?.Dispose();
             BoundTexture = null;
-            Popover.Dispose();
-            Overlay.Dispose();
-            ItemBox.Dispose();
+
+            _itemBox.RemoveController(_leftClick);
+            _leftClick.Dispose();
+
+            _itemBox.RemoveController(_keyController);
+            _keyController.Dispose();
+
+            _itemBox.RemoveController(_rightClick);
+            _rightClick.Dispose();
+
+            _popover.Popdown();
+            _popover.Unparent();
+            _popover.InsertActionGroup("channel-item", null);
+            _popover.Dispose();
+
+            _actionGroup.RemoveAction(_openAction.Name!);
+            _openAction.Dispose();
+            _actionGroup.Dispose();
+            _menu.Dispose();
+
+            _overlay.Dispose();
+            _itemBox.Dispose();
         }
     }
 }

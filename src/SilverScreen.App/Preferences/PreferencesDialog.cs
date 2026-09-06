@@ -8,7 +8,7 @@ using Functions = Gdk.Functions;
 
 namespace SilverScreen.Preferences;
 
-public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
+public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
@@ -17,6 +17,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
     private bool _loading;
+    private readonly EventControllerKey _keyController;
+    private bool _disposed;
     public event EventHandler<string>? SaveFailed;
 
     public PreferencesDialog(IPreferencesService preferencesService)
@@ -61,10 +63,11 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         foreach (var button in _shortcutRows.Values)
             button.OnClicked += OnShortcutButtonClicked;
 
-        var keyController = EventControllerKey.New();
-        keyController.SetPropagationPhase(PropagationPhase.Capture);
-        keyController.OnKeyPressed += (_, args) => CaptureShortcut(args.Keyval);
-        Widget.AddController(keyController);
+        _keyController = EventControllerKey.New();
+        _keyController.SetPropagationPhase(PropagationPhase.Capture);
+        _keyController.OnKeyPressed += OnKeyPressed;
+        Widget.AddController(_keyController);
+        Widget.OnClosed += OnClosed;
 
         InitializeFields();
     }
@@ -369,5 +372,37 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private string[] ReadShortcut(string name)
     {
         return _shortcutValues.TryGetValue(name, out var values) ? [.. values] : [];
+    }
+
+    private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+    {
+        return CaptureShortcut(args.Keyval);
+    }
+
+    private void OnClosed(Adw.Dialog sender, EventArgs args)
+    {
+        Dispose();
+    }
+
+    public new void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        Widget.OnClosed -= OnClosed;
+
+        _keyController.OnKeyPressed -= OnKeyPressed;
+        Widget.RemoveController(_keyController);
+        _keyController.Dispose();
+
+        foreach (var button in _shortcutRows.Values)
+            button.OnClicked -= OnShortcutButtonClicked;
+
+        _capturingShortcut = null;
+        SaveFailed = null;
+
+        base.Dispose();
+        Builder.Dispose();
+        Widget.Dispose();
     }
 }
