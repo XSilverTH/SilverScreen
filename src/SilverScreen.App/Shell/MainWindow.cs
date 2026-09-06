@@ -711,6 +711,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _webLogin = null;
         _accountPopover.Dispose();
         _embeddedPlayer.Dispose();
+        _disposeApplicationServices();
         Dispose();
 
         return false;
