@@ -13,12 +13,14 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
+    private Action? _openWebLogin;
     private bool _disposed;
     private AuthenticatedHomeFeedStatus _lastStatus = AuthenticatedHomeFeedStatus.Success;
 
-    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService)
+    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService, Action? openWebLogin = null)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _openWebLogin = openWebLogin;
         ArgumentNullException.ThrowIfNull(feedService);
 
         _engine = PagedFeedEngine.Create(
@@ -33,7 +35,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
                 if (res.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
                     or AuthenticatedHomeFeedStatus.AuthenticationRejected)
-                    return FeedPageResult.Failed("Your YouTube session is no longer valid.", true);
+                    return FeedPageResult.Failed("Your YouTube sign-in is no longer valid.", true);
 
                 var isSuccess = res.Status is AuthenticatedHomeFeedStatus.Success or AuthenticatedHomeFeedStatus.Empty;
                 var hasContinuation = res.Status == AuthenticatedHomeFeedStatus.Success &&
@@ -103,6 +105,16 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         Logger.Information("HomeFeedCoordinator loading more home feed items");
         return !IsSessionActive() ? Task.CompletedTask : _engine.LoadMoreAsync(count);
     }
+
+    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
+    {
+        if (openWebLogin != null)
+            _openWebLogin = openWebLogin;
+        if (!IsSessionActive())
+            _engine.Reset(MapSignedOutStatus());
+        return this;
+    }
+
 
     public event EventHandler<HomeFeedState>? StateChanged;
 
@@ -190,21 +202,41 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         }
     }
 
-    private static VideoListStatus MapSignedOutStatus()
+    private VideoListStatus MapSignedOutStatus()
     {
         return new VideoListStatus(
             "Home",
-            "Sign in to see your YouTube recommendations.",
-            "avatar-default-symbolic");
+            "Sign in with Google or use cookies.txt to see your Home feed.",
+            "avatar-default-symbolic",
+            false,
+            _openWebLogin is null ? null : "Sign In",
+            _openWebLogin);
     }
 
-    private static VideoListStatus MapHomeStatus(FeedEngineState state)
+    private VideoListStatus MapHomeStatus(FeedEngineState state)
     {
+        AuthenticatedHomeFeedStatus lastStatus;
+        lock (_lock)
+        {
+            lastStatus = _lastStatus;
+        }
+
+        if (lastStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired
+            or AuthenticatedHomeFeedStatus.AuthenticationRejected)
+            return new VideoListStatus(
+                "Home",
+                "Your YouTube sign-in is no longer valid.",
+                "dialog-password-symbolic",
+                false,
+                _openWebLogin is null ? null : "Sign In",
+                _openWebLogin);
+
         if (state.LastError != null || !state.IsSuccess)
             return new VideoListStatus(
                 "Home",
                 "Could not load YouTube recommendations.",
-                "network-error-symbolic");
+                "network-error-symbolic",
+                true);
 
         return new VideoListStatus(
             "Home",
