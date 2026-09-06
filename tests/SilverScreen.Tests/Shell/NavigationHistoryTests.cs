@@ -162,4 +162,21 @@ public sealed class NavigationHistoryTests
         nav.SyncFromViewStack("subscriptions");
         Assert.Equal(NavigationPage.Home, nav.PreviousPage);
     }
+
+    [Fact]
+    public void DirectVideoPlayback_FromHome_PushesOnlyHomeBeforePlayer()
+    {
+        using var nav = new NavigationService();
+        nav.Initialize(NavigationPage.Home);
+
+        // Direct playback navigates straight to Player without Search intermediate page
+        Assert.True(nav.NavigateTo(NavigationPage.Player));
+        Assert.Equal(NavigationPage.Player, nav.CurrentPage);
+        Assert.Equal(NavigationPage.Home, nav.PreviousPage);
+
+        // Closing player returns directly to Home
+        Assert.True(nav.GoBack());
+        Assert.Equal(NavigationPage.Home, nav.CurrentPage);
+        Assert.False(nav.CanGoBack);
+    }
 }

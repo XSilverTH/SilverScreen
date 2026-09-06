@@ -334,6 +334,49 @@ public sealed class ViewModelTests
         Assert.Null(handleNotice);
         Assert.Equal("@veritasium", requestedTarget);
     }
+    [Theory]
+    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ", true)]
+    [InlineData("https://youtu.be/dQw4w9WgXcQ", true)]
+    [InlineData("https://www.youtube.com/shorts/0123456789A", true)]
+    [InlineData("https://www.youtube.com/@channel", false)]
+    [InlineData("@veritasium", false)]
+    [InlineData("plain search text", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void SearchViewModel_IsDirectVideoUrl_IdentifiesDirectVideoUrls(string? url, bool expected)
+    {
+        Assert.Equal(expected, SearchViewModel.IsDirectVideoUrl(url));
+    }
+
+    [Theory]
+    [InlineData("https://www.youtube.com/@channel", true)]
+    [InlineData("@veritasium", true)]
+    [InlineData("https://www.youtube.com/channel/UC1234567890", true)]
+    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ", false)]
+    [InlineData("plain search text", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void SearchViewModel_IsChannelTarget_IdentifiesChannels(string? input, bool expected)
+    {
+        Assert.Equal(expected, SearchViewModel.IsChannelTarget(input));
+    }
+
+    [Fact]
+    public async Task SearchViewModel_SubmitAsync_WithDirectVideoUrl_PlaysVideoDirectly()
+    {
+        var service = new ControlledSearchService();
+        var playback = new ControlledPlaybackService();
+        using var viewModel = new SearchViewModel(service, playback);
+
+        var submitTask = viewModel.SubmitAsync("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        playback.Completion.SetResult("Playback started.");
+        var notice = await submitTask;
+
+        Assert.Null(notice);
+        Assert.Single(playback.Requests);
+        Assert.Equal("dQw4w9WgXcQ", playback.Requests[0].Videos[0].Id);
+        Assert.Empty(service.Requests);
+    }
 
 
 

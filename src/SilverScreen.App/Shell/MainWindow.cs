@@ -272,8 +272,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnSearchSubmitted(string query)
     {
-        _navigationService.NavigateTo(NavigationPage.Search);
-        SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
+        var trimmed = query.Trim();
+        if (SearchViewModel.IsDirectVideoUrl(trimmed) || SearchViewModel.IsChannelTarget(trimmed))
+        {
+            SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
+            return;
+        }
+
+        _navigationService.NavigateTo(NavigationPage.Search, trimmed);
+        SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
     }
 
     private async Task SubmitSearchAsync(string query, int batchSize)

@@ -83,6 +83,34 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
 
+    /// <summary>
+    /// Checks if the provided text represents a direct YouTube video or Shorts URL.
+    /// </summary>
+    public static bool IsDirectVideoUrl(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var parsed = YouTubeUrlParser.Parse(text.Trim());
+        return parsed.Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts;
+    }
+
+    /// <summary>
+    /// Checks if the provided text represents a YouTube channel URL or handle.
+    /// </summary>
+    public static bool IsChannelTarget(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith('@') && !trimmed.Contains(' '))
+            return true;
+
+        var parsed = YouTubeUrlParser.Parse(trimmed);
+        return parsed.Kind == YouTubeUrlKind.Channel;
+    }
+
     public string? CurrentQuery
     {
         get
