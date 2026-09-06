@@ -29,10 +29,22 @@ internal static class YtDlpFormatSelector
         string preferredQuality,
         YouTubeVideoDetails? details = null)
     {
-        using var document = JsonDocument.Parse(output);
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object) return null;
+        if (string.IsNullOrWhiteSpace(output)) return null;
 
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(output);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
         var formats = ParseFormats(root);
         if (formats.Count == 0)
         {
@@ -99,6 +111,7 @@ internal static class YtDlpFormatSelector
                 expiry,
                 details);
         }
+    }
     }
 
     private static int? ParseTargetHeight(string quality)
