@@ -136,6 +136,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private readonly delegate* unmanaged[Cdecl]<nint, nint, nint, void> _setRenderUpdateCallback;
     private readonly delegate* unmanaged[Cdecl]<nint, double, LibMpvEvent*> _waitEvent;
     private readonly delegate* unmanaged[Cdecl]<nint, void> _wakeup;
+    private delegate* unmanaged[Cdecl]<uint, int*, void> _glGetIntegerv;
     private nint _epoxyLibrary;
     private nint _mpvLibrary;
 
@@ -183,6 +184,11 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
             _eglGetProcAddress = GetEpoxyResolver("epoxy_eglGetProcAddress");
             _glxGetProcAddress = GetEpoxyResolver("epoxy_glXGetProcAddress");
             _currentForOpenGl = this;
+            fixed (byte* functionNamePointer = "glGetIntegerv\0"u8)
+            {
+                _glGetIntegerv =
+                    (delegate* unmanaged[Cdecl]<uint, int*, void>)ResolveOpenGlProcAddress(functionNamePointer);
+            }
             IsLoaded = true;
         }
         catch (Exception exception)
@@ -349,15 +355,22 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 
     public int GetFramebufferBinding()
     {
-        var functionName = Utf8("glGetIntegerv");
-        fixed (byte* functionNamePointer = functionName)
+        var function = _glGetIntegerv;
+        if (function == null)
         {
-            var function = (delegate* unmanaged[Cdecl]<uint, int*, void>)ResolveOpenGlProcAddress(functionNamePointer);
+            fixed (byte* functionNamePointer = "glGetIntegerv\0"u8)
+            {
+                function =
+                    (delegate* unmanaged[Cdecl]<uint, int*, void>)ResolveOpenGlProcAddress(functionNamePointer);
+            }
+
             if (function == null) throw new InvalidOperationException("libepoxy could not resolve glGetIntegerv.");
-            var framebuffer = 0;
-            function(0x8CA6, &framebuffer);
-            return framebuffer;
+            _glGetIntegerv = function;
         }
+
+        var framebuffer = 0;
+        function(0x8CA6, &framebuffer);
+        return framebuffer;
     }
 
     public int Render(nint context, int framebuffer, int width, int height)
@@ -384,6 +397,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     public void Dispose()
     {
         if (ReferenceEquals(_currentForOpenGl, this)) _currentForOpenGl = null;
+        _glGetIntegerv = null;
         if (_epoxyLibrary != 0)
         {
             NativeLibrary.Free(_epoxyLibrary);
