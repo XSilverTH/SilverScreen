@@ -102,18 +102,56 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     {
         try
         {
-            var page = continuation is null
-                ? await _clientProvider.GetClient().Feeds.GetHomePageAsync(cancellationToken).ConfigureAwait(false)
-                : await _clientProvider.GetClient().Feeds.GetHomePageAsync(continuation, cancellationToken)
-                    .ConfigureAwait(false);
-            var videos = page.Items
-                .OfType<VideoFeedItem>()
-                .Where(item => !item.Video.IsShort)
-                .Select(item => MapVideo(item.Video, item.PlaybackProgress))
-                .ToArray();
-            var nextToken = page.Next?.Export();
+            var videos = new List<SilverScreen.Core.Browsing.Common.VideoSummary>();
+            var knownVideoIds = new HashSet<string>(StringComparer.Ordinal);
+            if (!isFirstPage)
+            {
+                lock (_lock)
+                {
+                    foreach (var video in _loadedVideos)
+                        knownVideoIds.Add(video.Id);
+                }
+            }
 
-            if (videos.Length == 0 && isFirstPage)
+            var currentContinuation = continuation;
+            string? nextToken;
+            do
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var currentToken = currentContinuation?.Export();
+                var page = currentContinuation is null
+                    ? await _clientProvider.GetClient().Feeds.GetHomePageAsync(cancellationToken)
+                        .ConfigureAwait(false)
+                    : await _clientProvider.GetClient().Feeds.GetHomePageAsync(currentContinuation, cancellationToken)
+                        .ConfigureAwait(false);
+
+                foreach (var item in page.Items.OfType<VideoFeedItem>().Where(item => !item.Video.IsShort))
+                {
+                    var video = MapVideo(item.Video, item.PlaybackProgress);
+                    if (knownVideoIds.Add(video.Id))
+                        videos.Add(video);
+                }
+
+                nextToken = page.Next?.Export();
+                if (!isFirstPage || videos.Count >= pageSize || string.IsNullOrWhiteSpace(nextToken))
+                {
+                    if (string.IsNullOrWhiteSpace(nextToken))
+                        nextToken = null;
+                    break;
+                }
+
+                // A repeated continuation cannot produce any more progress and would otherwise
+                // make a malformed response spin forever.
+                if (string.Equals(nextToken, currentToken, StringComparison.Ordinal))
+                {
+                    nextToken = null;
+                    break;
+                }
+
+                currentContinuation = page.Next;
+            } while (true);
+
+            if (videos.Count == 0 && isFirstPage)
             {
                 ClearCachedResults();
                 return new AuthenticatedHomeFeedResult(
