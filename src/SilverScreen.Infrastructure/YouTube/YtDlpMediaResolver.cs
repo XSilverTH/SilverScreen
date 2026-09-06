@@ -59,7 +59,9 @@ public sealed class YtDlpMediaResolver(
 
         var quality = preferredQuality ?? _preferencesService.GetPreferences().VideoQuality;
 
-        var cached = TryGetValidEntry(videoId, forceRefresh);
+        // Details-only entries carry no yt-dlp payload and must never satisfy media resolve.
+        // They are a media-miss here; the fresh fetch below re-resolves via yt-dlp.
+        var cached = TryGetValidEntry(videoId, forceRefresh, requireMedia: true);
         if (cached is not null)
         {
             if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia))
@@ -70,7 +72,7 @@ public sealed class YtDlpMediaResolver(
             else
             {
                 // Format for this quality wasn't selected yet, but raw json is cached and not expired
-                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality, cached.Details);
+                var media = TrySelectMedia(cached.RawJsonOutput, quality, cached.Details, videoId);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
@@ -85,14 +87,14 @@ public sealed class YtDlpMediaResolver(
         try
         {
             // Double check cache
-            cached = TryGetValidEntry(videoId, forceRefresh);
+            cached = TryGetValidEntry(videoId, forceRefresh, requireMedia: true);
             if (cached is not null)
             {
                 if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia) &&
                     !IsMediaExpired(cachedMedia.ExpiresAt))
                     return YouTubeMediaResolutionResult.Success(cachedMedia);
 
-                var media = YtDlpFormatSelector.SelectMedia(cached.RawJsonOutput, quality, cached.Details);
+                var media = TrySelectMedia(cached.RawJsonOutput, quality, cached.Details, videoId);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
@@ -109,7 +111,7 @@ public sealed class YtDlpMediaResolver(
                 return YouTubeMediaResolutionResult.Failure(details.ErrorMessage ??
                                                             "Failed to load video details.");
 
-            var resolvedMedia = YtDlpFormatSelector.SelectMedia(fetchResult.RawJsonOutput, quality, details.Details);
+            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details.Details, videoId);
             if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
@@ -176,7 +178,7 @@ public sealed class YtDlpMediaResolver(
         _cache.TryRemove(videoId, out _);
     }
 
-    private CachedVideoEntry? TryGetValidEntry(string videoId, bool forceRefresh)
+    private CachedVideoEntry? TryGetValidEntry(string videoId, bool forceRefresh, bool requireMedia = false)
     {
         if (forceRefresh)
         {
@@ -185,11 +187,35 @@ public sealed class YtDlpMediaResolver(
         }
 
         if (!_cache.TryGetValue(videoId, out var entry)) return null;
+        // Details fetch and media resolve share the entry but use independent payloads:
+        // a details-only entry has no yt-dlp JSON and must never satisfy media resolve.
+        // Report it as a media-miss without evicting so details stay cached.
+        if (requireMedia && string.IsNullOrWhiteSpace(entry.RawJsonOutput)) return null;
         var now = _timeProvider.GetUtcNow();
         if (now - entry.CachedAt <= _cacheDuration && !IsMediaExpired(entry.MediaExpiresAt)) return entry;
         _cache.TryRemove(videoId, out _);
 
         return null;
+    }
+
+    // Missing/unparseable media fields are a miss, never a throw: log and let the caller
+    // fall through to a fresh fetch (cached path) or return a miss status (fresh path).
+    private static ResolvedMedia? TrySelectMedia(
+        string rawJson,
+        string quality,
+        YouTubeVideoDetails? details,
+        string videoId)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return null;
+        try
+        {
+            return YtDlpFormatSelector.SelectMedia(rawJson, quality, details);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.Warning(exception, "Ignoring unparseable media payload for {VideoId}", videoId);
+            return null;
+        }
     }
 
     private bool IsMediaExpired(DateTimeOffset? expiresAt)

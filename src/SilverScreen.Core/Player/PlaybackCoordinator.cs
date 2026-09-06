@@ -88,6 +88,18 @@ public sealed class PlaybackCoordinator(
         if (request is null || index < 0 || index >= request.Videos.Length) return null;
         return request.Videos[index];
     }
+    // Coordinator entry guard: null videoId / empty request is a guidance string, never a throw.
+    // Returns null when the request is playable; PlayAsync surfaces the message otherwise.
+    public static string? GetInvalidRequestReason(PlaybackRequest? request)
+    {
+        if (request is null || request.Videos.IsDefaultOrEmpty)
+            return "Nothing to play. Add a video to the queue first.";
+        var first = request.Videos[0];
+        if (first is null || string.IsNullOrWhiteSpace(first.Id) ||
+            !PlaybackRequest.LooksLikeYouTubeVideoId(first.Id))
+            return "Media is unavailable for this video.";
+        return null;
+    }
 
     public static bool TryResolveVideoChange(
         PlaybackRequest? request,
@@ -110,7 +122,7 @@ public sealed class PlaybackCoordinator(
 
     public static PlaybackRequest UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
-        return new PlaybackRequest(newVideos);
+        return new PlaybackRequest(newVideos.IsDefault ? ImmutableArray<VideoSummary>.Empty : newVideos);
     }
 
     private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
