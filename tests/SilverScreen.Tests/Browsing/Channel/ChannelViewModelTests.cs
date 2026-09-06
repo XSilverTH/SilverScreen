@@ -21,6 +21,24 @@ public sealed class ChannelViewModelTests
         Assert.False(viewModel.State.IsLoading);
         Assert.True(viewModel.State.IsSuccess);
     }
+    [Fact]
+    public void BackLabel_IsAlwaysConciseBack()
+    {
+        var service = new FakeChannelService();
+        using var viewModel = new ChannelViewModel(service);
+        Assert.Equal("Back", viewModel.BackLabel);
+    }
+
+    [Fact]
+    public async Task BackTooltip_ShowsChannelNameWhenLoaded()
+    {
+        var service = new FakeChannelService();
+        using var viewModel = new ChannelViewModel(service);
+        Assert.Equal("Back", viewModel.BackTooltip);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        Assert.Equal("Back from Example Channel", viewModel.BackTooltip);
+    }
 
     [Fact]
     public async Task OpenChannelAsync_WithPlaceholderId_DoesNotLoadChannel()

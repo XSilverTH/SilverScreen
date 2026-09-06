@@ -566,17 +566,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateBackButton()
     {
-        var (visible, label) = _navigationService.CurrentPage switch
+        var (visible, label, tooltip) = _navigationService.CurrentPage switch
         {
-            NavigationPage.Search => (true, _searchViewModel.BackLabel),
-            NavigationPage.Channel => (true, _channelViewModel.BackLabel),
-            _ => (false, "Back"),
+            NavigationPage.Search => (true, _searchViewModel.BackLabel, "Exit Search"),
+            NavigationPage.Channel => (true, _channelViewModel.BackLabel, _channelViewModel.BackTooltip),
+            _ => (false, "Back", "Back"),
         };
 
         var text = string.IsNullOrWhiteSpace(label) ? "Back" : label;
         navigation_back_button.Visible = visible;
         navigation_back_button.SetLabel(text);
-        navigation_back_button.TooltipText = "Back";
+        navigation_back_button.TooltipText = tooltip;
     }
 
     private void OnNowPlayingToggleClicked(object? sender = null, EventArgs? args = null)
@@ -619,9 +619,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnBackLabelChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (!string.Equals(args.PropertyName, "BackLabel", StringComparison.Ordinal))
+        if (!string.Equals(args.PropertyName, "BackLabel", StringComparison.Ordinal) &&
+            !string.Equals(args.PropertyName, "BackTooltip", StringComparison.Ordinal))
             return;
-
         Functions.IdleAdd(0, () =>
         {
             if (!_closed)
