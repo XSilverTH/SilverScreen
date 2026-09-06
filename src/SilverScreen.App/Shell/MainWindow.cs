@@ -349,7 +349,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         dialog.Developers = [ApplicationMetadata.DeveloperName];
         dialog.Comments = "A GTK 4 and Libadwaita desktop app for YouTube.";
         dialog.Copyright = ApplicationMetadata.Copyright;
-        dialog.LicenseType = License.Gpl30Only;
+        dialog.LicenseType = License.Gpl30;
         dialog.Website = ApplicationMetadata.SourceUrl;
         dialog.IssueUrl = ApplicationMetadata.IssueUrl;
         dialog.Present(Widget);
