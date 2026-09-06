@@ -559,6 +559,17 @@ public sealed class LibMpvPlayer : IDisposable
                 },
                 _ => _state
             };
+            if (_reload is not null)
+            {
+                _reload = _reload with
+                {
+                    PlaylistIndex = _state.PlaylistIndex,
+                    Position = _state.Position,
+                    IsPaused = _state.IsPaused,
+                    Volume = _state.Volume,
+                    Speed = _state.Speed
+                };
+            }
         }
 
         PublishState();
