@@ -31,6 +31,9 @@ public partial class VideoListView : ViewBase<Bin>
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
+    private Revealer? _paginationErrorRevealer;
+    private Label? _paginationErrorLabel;
+    private Button? _paginationErrorRetryButton;
 
     private VideoListView(
         IVideoListSource source,
@@ -55,6 +58,7 @@ public partial class VideoListView : ViewBase<Bin>
         video_list_grid.Model = _videoSelection;
         video_list_grid.Factory = _videoFactory;
         _source.StateChanged += OnStateChanged;
+        EnsurePaginationErrorFooter();
         Render(_source.State);
     }
 
@@ -187,6 +191,58 @@ public partial class VideoListView : ViewBase<Bin>
         RefreshAsync().FireAndForget(Logger);
     }
 
+    private void OnPaginationRetryClicked(object? sender, EventArgs args)
+    {
+        // The engine preserved the continuation token on a flaky page, so this
+        // re-attempts the SAME page instead of restarting or stalling the feed.
+        _source.LoadMoreAsync(GetBatchSize()).FireAndForget(Logger);
+    }
+
+    private void EnsurePaginationErrorFooter()
+    {
+        if (_paginationErrorRevealer is not null)
+            return;
+
+        var revealer = Revealer.New();
+        revealer.Halign = Align.Center;
+        revealer.Valign = Align.End;
+        revealer.MarginBottom = 24;
+
+        var box = Box.New(Orientation.Horizontal, 10);
+        box.Halign = Align.Center;
+        box.Valign = Align.Center;
+
+        var label = Label.New(null);
+        label.Wrap = true;
+        label.MaxWidthChars = 60;
+        label.Xalign = 0;
+        box.Append(label);
+
+        var retry = Button.NewWithLabel("Retry");
+        retry.OnClicked += OnPaginationRetryClicked;
+        box.Append(retry);
+
+        revealer.Child = box;
+        video_list_content_overlay.AddOverlay(revealer);
+
+        _paginationErrorRevealer = revealer;
+        _paginationErrorLabel = label;
+        _paginationErrorRetryButton = retry;
+    }
+
+    private void UpdatePaginationErrorFooter(VideoListPresentationState state)
+    {
+        if (_paginationErrorRevealer is null || _paginationErrorLabel is null)
+            return;
+
+        var show = !string.IsNullOrWhiteSpace(state.PaginationError)
+                   && !state.IsLoadingMore
+                   && _displayedVideos.Length > 0;
+        if (show)
+            _paginationErrorLabel.SetText(state.PaginationError!);
+        _paginationErrorRevealer.RevealChild = show;
+    }
+
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
         if (_disposed || Vadjustment is null ||
@@ -226,6 +282,7 @@ public partial class VideoListView : ViewBase<Bin>
                 video_list_loading_label.Visible = true;
             }
 
+            UpdatePaginationErrorFooter(state);
             video_list_stack.VisibleChildName = "loading";
             return;
         }
@@ -234,6 +291,7 @@ public partial class VideoListView : ViewBase<Bin>
         {
             video_list_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
             video_list_pagination_loading_label.SetText(state.PaginationLoadingMessage);
+            UpdatePaginationErrorFooter(state);
             video_list_stack.VisibleChildName = "content";
             return;
         }
@@ -245,6 +303,7 @@ public partial class VideoListView : ViewBase<Bin>
         video_list_retry_button.Label = state.Status.ActionLabel ?? "Retry";
         video_list_retry_button.Visible = state.Status.ShowRetry || state.Status.Action != null ||
                                           !string.IsNullOrWhiteSpace(state.Status.ActionLabel);
+        UpdatePaginationErrorFooter(state);
         video_list_stack.VisibleChildName = "status";
     }
 
@@ -339,6 +398,16 @@ public partial class VideoListView : ViewBase<Bin>
         _videoFactory.OnTeardown -= OnVideoCardTeardown;
 
         video_list_scrolled_window.Child = null;
+        if (_paginationErrorRevealer is not null)
+        {
+            if (_paginationErrorRetryButton is not null)
+                _paginationErrorRetryButton.OnClicked -= OnPaginationRetryClicked;
+            video_list_content_overlay.RemoveOverlay(_paginationErrorRevealer);
+            _paginationErrorRevealer.Dispose();
+            _paginationErrorRevealer = null;
+            _paginationErrorLabel = null;
+            _paginationErrorRetryButton = null;
+        }
         video_list_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();

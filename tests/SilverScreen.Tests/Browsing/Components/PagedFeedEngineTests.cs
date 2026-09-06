@@ -353,6 +353,85 @@ public sealed class PagedFeedEngineTests
     }
 
     [Fact]
+    public async Task LoadMoreAsync_Exception_PreservesTokenAndHasMore_RetrySameTokenSucceeds()
+    {
+        var requestedTokens = new List<string?>();
+        var failNextPageTwo = true;
+
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) =>
+            {
+                requestedTokens.Add(token);
+                if (token is null)
+                    return Task.FromResult(new FeedPageResult(
+                        [CreateVideo("1"), CreateVideo("2")],
+                        ContinuationToken: "token_2"));
+                if (failNextPageTwo)
+                    throw new InvalidOperationException("Flaky page");
+                return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
+            });
+
+        await engine.RefreshAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.Equal("token_2", engine.ContinuationToken);
+        Assert.True(engine.HasMore);
+
+        // Flaky second page throws: items, token, and HasMore must survive.
+        await engine.LoadMoreAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.True(engine.HasMore);
+        Assert.Equal("token_2", engine.ContinuationToken);
+        Assert.False(engine.IsLoadingMore);
+        Assert.NotNull(engine.EngineState.LastError);
+        Assert.NotNull(engine.State.PaginationError);
+        Assert.NotNull(engine.EngineState.PaginationError);
+
+        // Footer retry re-attempts the SAME token and succeeds.
+        failNextPageTwo = false;
+        await engine.LoadMoreAsync();
+        Assert.Equal([null, "token_2", "token_2"], requestedTokens);
+        Assert.Equal(["1", "2", "3"], engine.Videos.Select(v => v.Id));
+        Assert.False(engine.HasMore);
+        Assert.Null(engine.ContinuationToken);
+        Assert.Null(engine.State.PaginationError);
+    }
+
+    [Fact]
+    public async Task LoadMoreAsync_FailedResult_PreservesTokenAndHasMore()
+    {
+        var requestedTokens = new List<string?>();
+        var failNextPageTwo = true;
+
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) =>
+            {
+                requestedTokens.Add(token);
+                if (token is null)
+                    return Task.FromResult(new FeedPageResult(
+                        [CreateVideo("1"), CreateVideo("2")],
+                        ContinuationToken: "token_2"));
+                if (failNextPageTwo)
+                    return Task.FromResult(FeedPageResult.Failed("Server error"));
+                return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
+            });
+
+        await engine.RefreshAsync();
+        Assert.True(engine.HasMore);
+
+        await engine.LoadMoreAsync();
+        Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
+        Assert.True(engine.HasMore);
+        Assert.Equal("token_2", engine.ContinuationToken);
+        Assert.Equal("Server error", engine.State.PaginationError);
+
+        failNextPageTwo = false;
+        await engine.LoadMoreAsync();
+        Assert.Equal([null, "token_2", "token_2"], requestedTokens);
+        Assert.Equal(["1", "2", "3"], engine.Videos.Select(v => v.Id));
+        Assert.Null(engine.State.PaginationError);
+    }
+
+    [Fact]
     public void Dispose_CancelsOngoingRequest_AndPreventsFurtherOperations()
     {
         var tcs = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);

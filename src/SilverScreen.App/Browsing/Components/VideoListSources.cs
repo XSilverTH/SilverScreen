@@ -110,7 +110,7 @@ public sealed class SearchVideoListSource : IVideoListSource
         _viewModel.StateChanged -= OnStateChanged;
     }
 
-    public static VideoListPresentationState MapState(SearchViewState state)
+    public static VideoListPresentationState MapState(SearchViewState state, string? paginationError = null)
     {
         var status = MapStatus(state);
 
@@ -124,7 +124,8 @@ public sealed class SearchVideoListSource : IVideoListSource
             state.IsLoadingMore,
             status,
             loadingMessage,
-            "Loading more results…");
+            "Loading more results…",
+            paginationError);
     }
 
     public static VideoListStatus MapStatus(FeedEngineState state)
@@ -219,7 +220,7 @@ public sealed class HistoryVideoListSource : IVideoListSource
         _viewModel.StateChanged -= OnStateChanged;
     }
 
-    public static VideoListPresentationState MapState(HistoryViewState state)
+    public static VideoListPresentationState MapState(HistoryViewState state, string? paginationError = null)
     {
         var status = MapStatus(state.Status, state.IsSuccess, state.Summary);
 
@@ -233,7 +234,8 @@ public sealed class HistoryVideoListSource : IVideoListSource
             state.IsLoadingMore,
             status,
             loadingMessage,
-            "Loading more history…");
+            "Loading more history…",
+            paginationError);
     }
 
     public static VideoListStatus MapStatus(AuthenticatedHistoryStatus historyStatus, FeedEngineState state)
@@ -322,8 +324,7 @@ public sealed class ChannelVideoListSource : IVideoListSource
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
     }
-
-    public static VideoListPresentationState MapState(ChannelViewState state)
+    public static VideoListPresentationState MapState(ChannelViewState state, string? paginationError = null)
     {
         var status = MapStatus(state);
 
@@ -336,7 +337,9 @@ public sealed class ChannelVideoListSource : IVideoListSource
             state.IsLoading,
             state.IsLoadingMore,
             status,
-            loadingMessage);
+            loadingMessage,
+            "Loading more videos…",
+            paginationError);
     }
 
     public static VideoListStatus MapStatus(FeedEngineState state)
@@ -433,7 +436,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
         _viewModel.StateChanged -= OnStateChanged;
     }
 
-    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null)
+    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null, string? paginationError = null)
     {
         VideoListStatus status;
         switch (state.Status)
@@ -509,7 +512,9 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
             state.IsLoading,
             state.IsLoadingMore,
             status,
-            loadingMessage);
+            loadingMessage,
+            "Loading more videos…",
+            paginationError);
     }
 
     private void OnStateChanged(object? sender, SubscriptionsViewState state)

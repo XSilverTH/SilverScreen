@@ -16,7 +16,8 @@ public sealed record VideoListPresentationState(
     bool IsLoadingMore,
     VideoListStatus Status,
     string? LoadingMessage = null,
-    string PaginationLoadingMessage = "Loading more videos…");
+    string PaginationLoadingMessage = "Loading more videos…",
+    string? PaginationError = null);
 
 public interface IVideoListSource : IDisposable
 {

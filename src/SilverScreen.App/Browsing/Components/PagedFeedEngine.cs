@@ -36,7 +36,8 @@ public sealed record FeedEngineState(
     string? ContinuationToken,
     string? StatusMessage,
     bool IsSuccess,
-    Exception? LastError);
+    Exception? LastError,
+    string? PaginationError = null);
 
 public class PagedFeedEngine : IVideoListSource
 {
@@ -65,6 +66,7 @@ public class PagedFeedEngine : IVideoListSource
     private Exception? _lastError;
     private FeedPageResult? _lastResult;
     private string? _loadingMessage;
+    private string? _paginationError;
     private FeedStatusMapper? _statusMapper;
     private string? _statusMessage;
 
@@ -171,6 +173,17 @@ public class PagedFeedEngine : IVideoListSource
             lock (_lock)
             {
                 return _statusMessage;
+            }
+        }
+    }
+
+    public string? PaginationError
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _paginationError;
             }
         }
     }
@@ -297,6 +310,7 @@ public class PagedFeedEngine : IVideoListSource
             _isSuccess = isSuccess;
             _statusMessage = statusMessage;
             _lastError = null;
+            _paginationError = null;
             if (status != null) _explicitStatus = status;
             UpdateStateUnsafe();
         }
@@ -314,10 +328,10 @@ public class PagedFeedEngine : IVideoListSource
             _isLoading = false;
             _isLoadingMore = false;
             _hasMore = false;
-            _isSuccess = true;
             _statusMessage = statusMessage;
             _lastResult = null;
             _lastError = null;
+            _paginationError = null;
             _explicitStatus = status;
             UpdateStateUnsafe();
         }
@@ -339,6 +353,8 @@ public class PagedFeedEngine : IVideoListSource
         long generation;
         string? tokenForFetch;
         FeedPageFetcher? fetcher;
+        string? priorToken;
+        bool priorHasMore;
 
         lock (_lock)
         {
@@ -352,6 +368,10 @@ public class PagedFeedEngine : IVideoListSource
 
             _isLoading = isRefresh;
             _isLoadingMore = !isRefresh;
+            _paginationError = null;
+
+            priorToken = _continuationToken;
+            priorHasMore = _hasMore;
 
             if (isRefresh)
             {
@@ -419,16 +439,38 @@ public class PagedFeedEngine : IVideoListSource
 
                     _continuationToken = result.ContinuationToken;
                     _hasMore = !string.IsNullOrEmpty(_continuationToken);
+                    _paginationError = null;
                 }
-                else
+                else if (isRefresh)
                 {
                     if (result.ClearExistingOnFailure)
                     {
                         _videos.Clear();
                         _continuationToken = null;
+                        _hasMore = false;
+                        _paginationError = null;
                     }
-
-                    _hasMore = false;
+                    else if (_videos.Count > 0)
+                    {
+                        // Refresh failed but prior items survived: keep paging alive
+                        // so the footer retry can re-attempt from the prior token.
+                        _continuationToken = priorToken;
+                        _hasMore = priorHasMore;
+                        _paginationError = ResolvePaginationError(result.StatusMessage);
+                    }
+                    else
+                    {
+                        _hasMore = false;
+                        _paginationError = null;
+                    }
+                }
+                else
+                {
+                    // Pagination fetch returned a failure result: never clear loaded
+                    // items, never advance the token, and keep HasMore so infinite
+                    // scroll (and the footer retry, which re-uses the same token)
+                    // stays alive.
+                    _paginationError = ResolvePaginationError(result.StatusMessage);
                 }
 
                 _isLoading = false;
@@ -453,7 +495,25 @@ public class PagedFeedEngine : IVideoListSource
                 Logger.Warning(ex, "Feed page fetch failed");
                 _lastError = ex;
                 _isSuccess = false;
-                _hasMore = false;
+                if (!isRefresh || _videos.Count > 0)
+                {
+                    // Flaky page (pagination, or a refresh whose items survived):
+                    // keep the prior token + HasMore so scrolling and the footer
+                    // retry re-attempt the SAME token instead of killing the feed.
+                    if (isRefresh)
+                    {
+                        _continuationToken = priorToken;
+                        _hasMore = priorHasMore;
+                    }
+
+                    _paginationError = ResolvePaginationError(null);
+                }
+                else
+                {
+                    _hasMore = false;
+                    _paginationError = null;
+                }
+
                 _isLoading = false;
                 _isLoadingMore = false;
 
@@ -475,7 +535,8 @@ public class PagedFeedEngine : IVideoListSource
             _continuationToken,
             _statusMessage,
             _isSuccess,
-            _lastError);
+            _lastError,
+            _paginationError);
 
         var status = _explicitStatus
                      ?? _statusMapper?.Invoke(_lastResult, _lastError, engineState)
@@ -487,10 +548,18 @@ public class PagedFeedEngine : IVideoListSource
             _isLoadingMore,
             status,
             _isLoading ? _loadingMessage : null,
-            _paginationLoadingMessage);
+            _paginationLoadingMessage,
+            _paginationError);
 
         EngineState = engineState;
         State = presentationState;
+    }
+
+    private static string ResolvePaginationError(string? detail)
+    {
+        return !string.IsNullOrWhiteSpace(detail)
+            ? detail
+            : "Could not load more videos. Check your connection and try again.";
     }
 
     private VideoListStatus ComputeDefaultStatus(Exception? error,
