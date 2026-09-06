@@ -1,30 +1,46 @@
 # Maintainer: XSilverTH
-# NOTE: Packaging sketch for 0.1.0 — NOT yet tested by the maintainer.
+# NOTE: AUR -git package — NOT yet tested by the maintainer.
 # Do not upload to the AUR until build() and package() have been verified
-# in a clean Arch x86_64 chroot and the sha256sums below have been filled in.
+# in a clean Arch x86_64 chroot.
+# A stable-tarball package (silverscreen, from the vX.Y.Z tag tarball built
+# by .github/workflows/tag.yml) is next once the current tag is published;
+# see the commented alternative at the bottom of this file. Both variants
+# need a maintainer chroot test before any AUR upload.
 
-pkgname=silverscreen
-pkgver=0.1.0
+pkgname=silverscreen-git
+pkgver=0.1.0.r0.g0000000
 pkgrel=1
 pkgdesc='Native GTK4 YouTube client that plays videos with MPV'
 arch=('x86_64')
 url='https://github.com/XSilverTH/SilverScreen'
 license=('GPL-3.0-or-later')
 depends=('gtk4' 'libadwaita' 'webkitgtk-6.0' 'libsoup3' 'libsecret' 'mpv' 'yt-dlp' 'hicolor-icon-theme')
-makedepends=('dotnet-sdk>=10')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP') # TODO: fill in once the v0.1.0 tag tarball is published.
+makedepends=('git' 'dotnet-sdk>=10')
+provides=('silverscreen')
+conflicts=('silverscreen')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd SilverScreen
+  local desc
+  if desc=$(git describe --long --tags 2>/dev/null); then
+    printf '%s' "$desc" | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
+    printf '0.1.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  fi
+}
 
 build() {
-  cd "$pkgname-$pkgver"
+  cd SilverScreen
   export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
   dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
     -c Release -r linux-x64 --self-contained \
-    -o "$srcdir/$pkgname-$pkgver/publish"
+    -o "$srcdir/SilverScreen/publish"
 }
 
 package() {
-  cd "$pkgname-$pkgver"
+  cd SilverScreen
   install -Dm755 "publish/SilverScreen" "$pkgdir/usr/bin/SilverScreen"
   install -Dm644 packaging/io.github.silverscreen.SilverScreen.desktop \
     "$pkgdir/usr/share/applications/io.github.silverscreen.SilverScreen.desktop"
@@ -34,6 +50,35 @@ package() {
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/silverscreen.svg"
 }
 
-# -git variant sketch: use pkgname=silverscreen-git with
-# source=("git+$url.git"), makedepends+=(git), and a pkgver() based on
-# `git describe --long --tags`; build() and package() stay the same.
+# Stable-tarball alternative (silverscreen, from the GitHub Release tarball
+# staged by .github/workflows/tag.yml on tag v$pkgver). Uncomment and use as
+# packaging/PKGBUILD.stable once the current tag is published, then verify in
+# a clean chroot and fill in sha256sums before any AUR upload.
+#pkgname=silverscreen
+#pkgver=0.1.0
+#pkgrel=1
+#pkgdesc='Native GTK4 YouTube client that plays videos with MPV'
+#arch=('x86_64')
+#url='https://github.com/XSilverTH/SilverScreen'
+#license=('GPL-3.0-or-later')
+#depends=('gtk4' 'libadwaita' 'webkitgtk-6.0' 'libsoup3' 'libsecret' 'mpv' 'yt-dlp' 'hicolor-icon-theme')
+#makedepends=('dotnet-sdk>=10')
+#source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+#sha256sums=('SKIP') # TODO: fill in once the v0.1.0 tag tarball is published.
+#build() {
+#  cd "$pkgname-$pkgver"
+#  export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+#  dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
+#    -c Release -r linux-x64 --self-contained \
+#    -o "$srcdir/$pkgname-$pkgver/publish"
+#}
+#package() {
+#  cd "$pkgname-$pkgver"
+#  install -Dm755 "publish/SilverScreen" "$pkgdir/usr/bin/SilverScreen"
+#  install -Dm644 packaging/io.github.silverscreen.SilverScreen.desktop \
+#    "$pkgdir/usr/share/applications/io.github.silverscreen.SilverScreen.desktop"
+#  install -Dm644 packaging/io.github.silverscreen.SilverScreen.metainfo.xml \
+#    "$pkgdir/usr/share/metainfo/io.github.silverscreen.SilverScreen.metainfo.xml"
+#  install -Dm644 src/SilverScreen.App/Assets/silverscreen.svg \
+#    "$pkgdir/usr/share/icons/hicolor/scalable/apps/silverscreen.svg"
+#}

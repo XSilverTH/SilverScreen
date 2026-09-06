@@ -46,8 +46,13 @@ directory with:
 
 ## AUR notes
 
-`packaging/PKGBUILD` is a sketch for a `silverscreen` release package
-(`pkgver=0.1.0`, `arch=(x86_64)`). It is marked as needing maintainer testing
-in a clean chroot before any AUR upload, including filling in `sha256sums`.
-A `-git` variant would track `main` via a `git+` source and a
-`git describe`-based `pkgver()`; see the comment at the bottom of the file.
+`packaging/PKGBUILD` is a `silverscreen-git` package tracking `main` via a
+`git+` source and a `git describe`-based `pkgver()` (`arch=(x86_64)`,
+`provides`/`conflicts` `silverscreen`). It needs a maintainer test in a
+clean chroot before any AUR upload.
+
+A stable `silverscreen` release package from the tag tarball staged by
+`.github/workflows/tag.yml` is next once the current tag is published; a
+commented sketch is kept at the bottom of `packaging/PKGBUILD`. It likewise
+needs a maintainer chroot test, including filling in `sha256sums`, before
+any AUR upload.
