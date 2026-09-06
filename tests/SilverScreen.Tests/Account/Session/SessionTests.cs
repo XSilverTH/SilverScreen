@@ -77,7 +77,7 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public void SecretServiceSessionPreservesActiveCookiesWhenPersistenceFails()
+    public void SecretServiceSessionPreservesActiveCookiesWhenSaveFails()
     {
         var store = new FakeCookieSecretStore();
         var service = new SecretServiceSessionService(store);
@@ -92,20 +92,29 @@ public sealed class SessionTests
         Assert.Equal(FakeCookieContent, service.GetManualSessionCookies()?.Content);
         Assert.Equal(FakeCookieContent, store.StoredContent);
         Assert.Equal(0, changes);
+    }
 
-        store.FailSave = false;
+    [Fact]
+    public void SecretServiceSessionRecoversLocalSignOutWhenKeyringDeletionFails()
+    {
+        var store = new FakeCookieSecretStore();
+        var service = new SecretServiceSessionService(store);
+        service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        var changes = 0;
+        service.SessionChanged += (_, _) => changes++;
+
         store.FailDelete = true;
-        Assert.Throws<SessionPersistenceException>(service.ClearSession);
-        Assert.False(service.IsAvailable);
-        Assert.Equal(FakeCookieContent, service.GetManualSessionCookies()?.Content);
-        Assert.Equal(FakeCookieContent, store.StoredContent);
-        Assert.Equal(0, changes);
-
-        store.FailDelete = false;
+        // Local sign-out must succeed in-memory, mark unavailable, and raise state change without throwing
         service.ClearSession();
-        Assert.True(service.IsAvailable);
+
+        Assert.False(service.IsAvailable);
+        Assert.Null(service.GetManualSessionCookies());
         Assert.False(service.GetCurrentSession().IsSignedIn);
-        Assert.Null(store.StoredContent);
+        Assert.Equal(FakeCookieContent, store.StoredContent);
+        Assert.Equal(1, changes);
+
+        // Subsequent clear when already cleared succeeds without throwing
+        service.ClearSession();
         Assert.Equal(1, changes);
     }
 

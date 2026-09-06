@@ -271,7 +271,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 Logger.Information("Cleared YouTube session and secret store");
             }
         }
-        catch (SessionPersistenceException ex)
+        catch (Exception ex)
         {
             lock (_gate)
             {
@@ -285,9 +285,10 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 }
                 else
                 {
-                    Logger.Error(ex, "Failed to clear YouTube session in Secret Service");
+                    Logger.Warning(ex, "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
                     _isAvailable = false;
-                    throw;
+                    changed = true;
+                    _manualCookies = null;
                 }
             }
         }
