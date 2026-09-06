@@ -78,7 +78,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
         services.AddSingleton<SecretServiceSessionService>(static provider =>
-            new SecretServiceSessionService(provider.GetRequiredService<IAuthenticatedHomeFeedService>));
+            new SecretServiceSessionService(provider.GetRequiredService<IAccountProfileService>));
         services.AddSingleton<ISessionService>(static provider =>
             provider.GetRequiredService<SecretServiceSessionService>());
         services.AddSingleton<ISecretServiceAvailability>(static provider =>

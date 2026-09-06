@@ -1,4 +1,6 @@
 using System.Text;
+using SilverScreen.Core.Account.Profile;
+
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Account.Session;
@@ -116,6 +118,26 @@ public sealed class SessionTests
         // Subsequent clear when already cleared succeeds without throwing
         service.ClearSession();
         Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public async Task SecretServiceSessionValidation_UsesLightweightProfileCheck()
+    {
+        var store = new FakeCookieSecretStore();
+        var profileCalls = 0;
+        var profile = new FakeProfileService(() =>
+        {
+            profileCalls++;
+            return Task.FromResult<AccountProfile?>(new AccountProfile("Test account"));
+        });
+        var service = new SecretServiceSessionService(() => profile, tempRoot: null);
+        service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+
+        var result = await service.ValidateSessionAsync();
+
+        Assert.Contains("Validation succeeded.", result);
+        Assert.Contains("Usable videos: 0", result);
+        Assert.Equal(1, profileCalls);
     }
 
     [Fact]
@@ -333,6 +355,15 @@ public sealed class SessionTests
         Assert.NotNull(store);
     }
 
+
+    private sealed class FakeProfileService(
+        Func<Task<AccountProfile?>> getProfile) : IAccountProfileService
+    {
+        public AccountProfile? GetCachedProfile() => null;
+
+        public Task<AccountProfile?> GetCurrentProfileAsync(
+            CancellationToken cancellationToken = default) => getProfile();
+    }
 
     private sealed class FakeCookieSecretStore : ICookieSecretStore
     {

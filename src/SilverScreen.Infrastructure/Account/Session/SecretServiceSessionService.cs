@@ -2,9 +2,9 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Serilog;
+using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Home;
-
 namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
@@ -16,6 +16,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
+    private readonly Func<IAccountProfileService>? _profileServiceFactory;
     private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly Lock _gate = new();
 
@@ -26,22 +27,33 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     private ManualSessionCookies? _manualCookies;
     private CancellationTokenSource? _validationCts;
 
-    public SecretServiceSessionService(Func<IAuthenticatedHomeFeedService>? feedServiceFactory, string? tempRoot = null)
-        : this(new LibSecretCookieStore(), feedServiceFactory, tempRoot)
+    public SecretServiceSessionService(
+        Func<IAccountProfileService>? profileServiceFactory,
+        string? tempRoot = null)
+        : this(new LibSecretCookieStore(), profileServiceFactory, null, tempRoot)
+    {
+    }
+
+    public SecretServiceSessionService(
+        Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
+        string? tempRoot = null)
+        : this(new LibSecretCookieStore(), null, feedServiceFactory, tempRoot)
     {
     }
 
     internal SecretServiceSessionService(ICookieSecretStore store, string? tempRoot = null)
-        : this(store, null, tempRoot)
+        : this(store, null, null, tempRoot)
     {
     }
 
     private SecretServiceSessionService(
         ICookieSecretStore store,
+        Func<IAccountProfileService>? profileServiceFactory,
         Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
         string? tempRoot = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _profileServiceFactory = profileServiceFactory;
         _feedServiceFactory = feedServiceFactory;
         _tempRoot = tempRoot;
         try
@@ -144,6 +156,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
         Logger.Information("Starting YouTube session validation");
         CancellationTokenSource linkedCts;
+        IAccountProfileService? profileService;
         IAuthenticatedHomeFeedService? feedService;
         lock (_gate)
         {
@@ -157,23 +170,33 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             _isValidating = true;
             _validationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             linkedCts = _validationCts;
+            profileService = _profileServiceFactory?.Invoke();
             feedService = _feedServiceFactory?.Invoke();
-        }
-
-        if (feedService is null)
-        {
-            lock (_gate)
-            {
-                _isValidating = false;
-                _validationCts?.Dispose();
-                _validationCts = null;
-            }
-
-            return SessionValidationFormatter.FormatUnexpectedError();
         }
 
         try
         {
+            if (profileService is not null)
+            {
+                var profile = await profileService.GetCurrentProfileAsync(linkedCts.Token)
+                    .ConfigureAwait(false);
+                var result = new HomeSessionValidationResult(
+                    profile is not null,
+                    0,
+                    false,
+                    profile is null,
+                    profile is null
+                        ? AuthenticatedHomeFeedStatus.AuthenticationRejected
+                        : AuthenticatedHomeFeedStatus.Success,
+                    profile is null
+                        ? "The YouTube session was rejected or has expired."
+                        : "Account profile loaded.");
+                return SessionValidationFormatter.FormatResult(result);
+            }
+
+            if (feedService is null)
+                return SessionValidationFormatter.FormatUnexpectedError();
+
             var feedResult = await feedService.LoadFirstPageAsync(cancellationToken: linkedCts.Token)
                 .ConfigureAwait(false);
             var isSuccess = feedResult.Status == AuthenticatedHomeFeedStatus.Success;
@@ -182,14 +205,14 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             var requiresAuth = feedResult.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
                 or AuthenticatedHomeFeedStatus.AuthenticationRejected;
 
-            var result = new HomeSessionValidationResult(
+            var homeResult = new HomeSessionValidationResult(
                 isSuccess,
                 videoCount,
                 hasContinuation,
                 requiresAuth,
                 feedResult.Status,
                 feedResult.StatusMessage);
-            return SessionValidationFormatter.FormatResult(result);
+            return SessionValidationFormatter.FormatResult(homeResult);
         }
         catch (OperationCanceledException)
         {
