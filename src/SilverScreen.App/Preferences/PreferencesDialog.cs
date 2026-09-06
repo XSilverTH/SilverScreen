@@ -134,6 +134,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private void SetShortcut(string name, IEnumerable<string> shortcuts)
     {
         var values = shortcuts.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        _shortcutValues[name] = values;
         _shortcutRows[name].SetLabel(values.Length == 0 ? "Unassigned" : string.Join(" / ", values.Select(GetShortcutLabel)));
     }
 
