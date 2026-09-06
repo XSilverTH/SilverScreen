@@ -215,7 +215,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         try
         {
-            await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            var result = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            if (!PlaybackResult.IsSuccessStatus(result))
+            {
+                Logger.Warning("Playback reported failure for video {VideoId}: {Result}", video.Id, result);
+                ShowToast(result);
+            }
         }
         catch (Exception exception)
         {
@@ -228,7 +233,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         try
         {
-            await _playback.PlayAlternateAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            var result = await _playback.PlayAlternateAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            if (!PlaybackResult.IsSuccessStatus(result))
+            {
+                Logger.Warning("Alternate playback reported failure for video {VideoId}: {Result}", video.Id, result);
+                ShowToast(result);
+            }
         }
         catch (Exception exception)
         {

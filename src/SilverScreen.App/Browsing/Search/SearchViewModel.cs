@@ -297,7 +297,13 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
         try
         {
-            await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            var result = await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            if (!PlaybackResult.IsSuccessStatus(result))
+            {
+                Logger.Warning("Playback failed for pasted URL {VideoId}: {Result}", parsedUrl.VideoId, result);
+                return result;
+            }
+
             return null;
         }
         catch (Exception exception)
