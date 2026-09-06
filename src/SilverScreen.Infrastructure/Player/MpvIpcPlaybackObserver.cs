@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 

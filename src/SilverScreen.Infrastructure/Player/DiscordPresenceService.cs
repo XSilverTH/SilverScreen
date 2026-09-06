@@ -3,7 +3,7 @@ using DiscordRPC.Entities;
 using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 

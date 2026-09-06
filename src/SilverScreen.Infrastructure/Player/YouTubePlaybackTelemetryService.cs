@@ -6,7 +6,7 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 

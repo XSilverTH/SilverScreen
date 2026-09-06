@@ -3,7 +3,7 @@ using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Queue;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 

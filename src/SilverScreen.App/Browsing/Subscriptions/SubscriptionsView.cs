@@ -8,7 +8,7 @@ using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;

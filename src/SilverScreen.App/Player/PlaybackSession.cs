@@ -4,7 +4,7 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Controllers;
 using SilverScreen.Shell;

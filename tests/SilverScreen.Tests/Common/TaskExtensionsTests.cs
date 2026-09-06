@@ -1,7 +1,7 @@
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Tests.Common;
 

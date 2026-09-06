@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Account.Profile;
 

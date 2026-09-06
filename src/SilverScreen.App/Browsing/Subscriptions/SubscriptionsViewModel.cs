@@ -6,7 +6,7 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Browsing.Subscriptions;
 

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Serilog;
 
-namespace SilverScreen.Infrastructure.Common;
+namespace SilverScreen.Core.Common;
 
 public static class TaskExtensions
 {

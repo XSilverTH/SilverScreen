@@ -3,7 +3,7 @@ using GLib;
 using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.DBus;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Player;
 using Tmds.DBus.Protocol;
 using TimeSpan = System.TimeSpan;

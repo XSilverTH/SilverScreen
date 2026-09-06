@@ -6,7 +6,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;

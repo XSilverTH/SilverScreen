@@ -15,6 +15,7 @@ using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using SilverScreen.Player;
 using SilverScreen.Player.Views;
 using SilverScreen.Queue;

@@ -1,7 +1,7 @@
 using GObject;
 using Serilog;
 using SilverScreen.Account.Profile;
-using SilverScreen.Infrastructure.Common;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI;
 using WebKit;
