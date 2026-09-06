@@ -7,6 +7,23 @@ namespace SilverScreen.Infrastructure.YouTube;
 
 internal static class YtDlpFormatSelector
 {
+    /// <summary>
+    /// Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
+    /// Null means "Best" (leave the player default in place). Pure: no I/O.
+    /// </summary>
+    public static string? ToMpvFormat(string preferredQuality)
+    {
+        return preferredQuality switch
+        {
+            "Best" => null,
+            "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "480p" => "bestvideo[height<=480]+bestaudio/best[height<=480]",
+            "360p" => "bestvideo[height<=360]+bestaudio/best[height<=360]",
+            _ => null
+        };
+    }
+
     public static ResolvedMedia? SelectMedia(
         string output,
         string preferredQuality,

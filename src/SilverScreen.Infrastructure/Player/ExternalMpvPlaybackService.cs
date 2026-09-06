@@ -11,8 +11,7 @@ namespace SilverScreen.Infrastructure.Player;
 
 public sealed class ExternalMpvPlaybackService(
     IPreferencesService preferencesService,
-    PlaybackCoordinator playbackCoordinator,
-    IYouTubeMediaResolver? mediaResolver = null)
+    PlaybackCoordinator playbackCoordinator)
     : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
@@ -31,12 +30,10 @@ public sealed class ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
-        IYouTubeMediaResolver? mediaResolver = null)
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
         : this(
             preferencesService,
-            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService),
-            mediaResolver)
+            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService))
     {
     }
 
@@ -53,38 +50,39 @@ public sealed class ExternalMpvPlaybackService(
         _coordinator.Dispose();
     }
 
+    /// <summary>
+    /// Launches external mpv with the FULL queue snapshot as watch URLs plus cookie lease,
+    /// ytdl-format, and IPC endpoint. mpv+yt-dlp fetch formats and advance the playlist;
+    /// resolved direct URLs are never used here. Returns a status string, never throws for
+    /// empty requests or temporary-file failures (only ArgumentNullException for a null request).
+    /// </summary>
     public async Task<string> PlayAsync(PlaybackRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Videos.IsDefaultOrEmpty)
+            return PlaybackRequest.EmptyQueueMessage;
+
         CookieFileLease? cookieFile = null;
         DirectoryInfo? ipcDirectory = null;
         var activeOptions = GetActiveOptions();
 
         try
         {
+            // Never throws: TemporaryCookieFile.CreateLease returns null on temp-create failure.
             cookieFile = _coordinator.AcquireCookieFileLease();
             activeOptions = GetActiveOptions();
             ipcDirectory = Directory.CreateTempSubdirectory("silverscreen-mpv-");
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
 
-            IReadOnlyList<ResolvedMedia>? resolvedMediaList = null;
-            if (mediaResolver is not null && !request.Videos.IsDefaultOrEmpty &&
-                PlaybackRequest.LooksLikeYouTubeVideoId(request.Videos[0].Id))
-            {
-                var firstVideoId = request.Videos[0].Id;
-                var res = await mediaResolver.ResolveMediaAsync(firstVideoId, activeOptions.VideoQuality)
-                    .ConfigureAwait(false);
-                if (res is { IsSuccess: true, Media: { } media }) resolvedMediaList = [media];
-            }
-
             var command =
-                MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, resolvedMediaList);
+                MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint);
             Logger.Information(
-                "Launching MPV. ExecutablePath: {ExecutablePath}; ManualSessionActive: {ManualSessionActive}; TempCookiesProvided: {TempCookiesProvided}; YtdlCookiesOption: {YtdlCookiesOption}; ResolvedDirectUrl: {ResolvedDirectUrl}",
+                "Launching MPV. ExecutablePath: {ExecutablePath}; TempCookiesProvided: {TempCookiesProvided}; CookiesOption: {CookiesOption}; VideoCount: {VideoCount}; StartIndex: {StartIndex}",
                 command.ExecutablePath,
                 cookieFile is not null,
-                cookieFile is not null,
-                CommandUsesYtdlCookiesOption(command),
-                resolvedMediaList is not null && resolvedMediaList.Count > 0);
+                CommandUsesCookiesOption(command),
+                request.Videos.Length,
+                request.EffectiveStartIndex);
 
             var startInfo = MpvCommandBuilder.BuildStartInfo(command);
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
@@ -122,6 +120,20 @@ public sealed class ExternalMpvPlaybackService(
             CleanupCookieLeaseQuietly(cookieFile, "MPV playback request rejected");
             CleanupIpcDirectoryQuietly(ipcDirectory);
             return ex.Message;
+        }
+        catch (IOException ex)
+        {
+            Logger.Warning(ex, "MPV temporary file setup failed");
+            CleanupCookieLeaseQuietly(cookieFile, "MPV temporary file setup failed");
+            CleanupIpcDirectoryQuietly(ipcDirectory);
+            return "Could not prepare temporary files for MPV playback. Try again.";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger.Warning(ex, "MPV temporary file setup denied");
+            CleanupCookieLeaseQuietly(cookieFile, "MPV temporary file setup denied");
+            CleanupIpcDirectoryQuietly(ipcDirectory);
+            return "Could not prepare temporary files for MPV playback. Try again.";
         }
     }
 
@@ -258,10 +270,11 @@ public sealed class ExternalMpvPlaybackService(
         }
     }
 
-    private static bool CommandUsesYtdlCookiesOption(MpvPlaybackCommand command)
+    private static bool CommandUsesCookiesOption(MpvPlaybackCommand command)
     {
         return command.Arguments.Any(argument =>
-            argument.StartsWith("--ytdl-raw-options=", StringComparison.OrdinalIgnoreCase));
+            argument.Equals("--cookies", StringComparison.OrdinalIgnoreCase)
+            || argument.StartsWith("--cookies-file=", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void CleanupIpcDirectoryQuietly(DirectoryInfo? directory)
