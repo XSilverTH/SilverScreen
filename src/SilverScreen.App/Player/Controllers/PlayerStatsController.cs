@@ -2,24 +2,41 @@ using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Player;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
-internal sealed class PlayerStatsController(
-    LibMpvPlayer player,
-    Revealer revealer,
-    Label label)
-    : IDisposable
+internal interface IPlayerStatsProvider
+{
+    PlaybackStats? GetPlaybackStats();
+}
+
+internal sealed class PlayerStatsController : IDisposable
 {
     private const uint RefreshIntervalMilliseconds = 350;
     private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
 
-    private readonly Label _label = label ?? throw new ArgumentNullException(nameof(label));
-    private readonly LibMpvPlayer _player = player ?? throw new ArgumentNullException(nameof(player));
-    private readonly Revealer _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
+    private readonly Label _label;
+    private readonly Revealer _revealer;
+    private readonly Func<PlaybackStats?> _statsProvider;
 
+    public PlayerStatsController(
+        IPlayerStatsProvider statsProvider,
+        Revealer revealer,
+        Label label)
+        : this((statsProvider ?? throw new ArgumentNullException(nameof(statsProvider))).GetPlaybackStats, revealer, label)
+    {
+    }
+
+    public PlayerStatsController(
+        Func<PlaybackStats?> statsProvider,
+        Revealer revealer,
+        Label label)
+    {
+        _statsProvider = statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
+        _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
+        _label = label ?? throw new ArgumentNullException(nameof(label));
+    }
     private bool _disposed;
     private uint _refreshTimerSource;
 
@@ -144,7 +161,7 @@ internal sealed class PlayerStatsController(
 
         try
         {
-            var stats = _player.GetPlaybackStats();
+            var stats = _statsProvider();
             if (stats is null)
             {
                 _label.SetMarkup("<span foreground=\"#9a9996\">No media loaded or playback inactive.</span>");

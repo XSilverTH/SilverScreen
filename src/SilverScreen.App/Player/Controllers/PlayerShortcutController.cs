@@ -39,9 +39,9 @@ internal sealed class PlayerShortcutController : IDisposable
     private EventControllerKey? _keyboardController;
     private Widget? _keyboardRoot;
 
-    public PlayerShortcutController(Widget viewWidget, Func<bool> hasMedia)
+    public PlayerShortcutController(Widget viewWidget)
     {
-        _viewWidget = viewWidget;
+        _viewWidget = viewWidget ?? throw new ArgumentNullException(nameof(viewWidget));
 
         var key = EventControllerKey.New();
         key.SetPropagationPhase(PropagationPhase.Capture);

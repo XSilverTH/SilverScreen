@@ -123,7 +123,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
         _osdController = new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label);
-        _statsController = new PlayerStatsController(_player, player_stats_revealer, player_stats_label);
+        _statsController = new PlayerStatsController(new PlayerStatsProvider(_player), player_stats_revealer, player_stats_label);
         _chromeController = new PlayerChromeController(
             Widget,
             player_header_bar,
@@ -134,7 +134,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             UpdatePointer,
             visible => _osdController.SetChromeVisible(visible));
         _osdController.SetChromeVisible(true);
-        _shortcutController = new PlayerShortcutController(Widget, () => _session.HasMedia);
+        _shortcutController = new PlayerShortcutController(Widget);
         _shortcutController.KeyInterceptor = keyval => _statsController.HandleKeyPress(keyval);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
         {
@@ -851,5 +851,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             return player.PresentAsync(request);
         }
+    }
+
+    private sealed class PlayerStatsProvider(LibMpvPlayer player) : IPlayerStatsProvider
+    {
+        public PlaybackStats? GetPlaybackStats() => player.GetPlaybackStats();
     }
 }
