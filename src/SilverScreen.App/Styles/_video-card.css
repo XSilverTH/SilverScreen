@@ -73,7 +73,8 @@ gridview > child:focus .video-card {
 }
 
 
-.video-card .channel-link:hover {
+.video-card .channel-link:hover,
+.video-card .channel-link:focus {
     color: @accent_color;
     text-decoration: underline;
 }

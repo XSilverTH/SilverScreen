@@ -206,7 +206,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         {
             PlayAsync = PlayVideoAsync,
             OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
-            AddToQueue = video => { _services.Queue.Add(video); },
+            AddToQueue = video =>
+            {
+                _services.Queue.Add(video);
+                ShowToast($"Added “{video.Title}” to queue");
+            },
             OpenChannelAsync = OpenChannelAsync
         };
     }
@@ -271,8 +275,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     }
 
     private void OnSearchSubmitted(string query)
-    {
         var trimmed = query.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
+            return;
+        }
+
         if (SearchViewModel.IsDirectVideoUrl(trimmed) || SearchViewModel.IsChannelTarget(trimmed))
         {
             SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);

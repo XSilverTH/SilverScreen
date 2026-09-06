@@ -31,6 +31,7 @@ public partial class VideoCardView : ViewBase<Bin>
     private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
     private readonly EventControllerKey _keyController;
+    private readonly EventControllerKey _channelKeyController;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly GestureClick _rightClick;
@@ -84,6 +85,10 @@ public partial class VideoCardView : ViewBase<Bin>
         _channelClick.Button = 1;
         _channelClick.OnReleased += OnChannelReleased;
         channel.AddController(_channelClick);
+
+        _channelKeyController = EventControllerKey.New();
+        _channelKeyController.OnKeyPressed += OnChannelKeyPressed;
+        channel.AddController(_channelKeyController);
 
         _keyController = EventControllerKey.New();
         _keyController.OnKeyPressed += OnKeyPressed;
@@ -266,22 +271,31 @@ public partial class VideoCardView : ViewBase<Bin>
             _actions.AddToQueue(video);
     }
 
-    private void OnCardRightClicked(GestureClick sender, GestureClick.PressedSignalArgs args)
+    private void ShowContextMenu(int x = -1, int y = -1)
     {
         if (_video is null)
             return;
 
-        sender.SetState(EventSequenceState.Claimed);
         var rect = new Rectangle
         {
-            X = (int)args.X,
-            Y = (int)args.Y,
+            X = x >= 0 ? x : Math.Max(0, card.GetWidth() / 2),
+            Y = y >= 0 ? y : Math.Max(0, card.GetHeight() / 2),
             Width = 1,
             Height = 1
         };
         _contextMenu.SetPointingTo(rect);
         _contextMenu.Popup();
     }
+
+    private void OnCardRightClicked(GestureClick sender, GestureClick.PressedSignalArgs args)
+    {
+        if (_video is null)
+            return;
+
+        sender.SetState(EventSequenceState.Claimed);
+        ShowContextMenu((int)args.X, (int)args.Y);
+    }
+
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
         if (_disposed || _video is null)
@@ -290,6 +304,46 @@ public partial class VideoCardView : ViewBase<Bin>
         if (args.Keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
         {
             StartPlay(_video);
+            return true;
+        }
+
+        if (args.Keyval is (uint)Gdk.Constants.KEY_Menu ||
+            (args.Keyval == (uint)Gdk.Constants.KEY_F10 && (args.State & ModifierType.ShiftMask) != 0))
+        {
+            ShowContextMenu();
+            return true;
+        }
+
+        if (args.Keyval is (uint)Gdk.Constants.KEY_c or (uint)Gdk.Constants.KEY_C)
+        {
+            if (_actions.OpenChannelAsync is { } openChannel)
+            {
+                openChannel(_video).FireAndForget(Logger);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool OnChannelKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+    {
+        if (_disposed || _video is null)
+            return false;
+
+        if (args.Keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+        {
+            if (_actions.OpenChannelAsync is { } openChannel)
+            {
+                openChannel(_video).FireAndForget(Logger);
+                return true;
+            }
+        }
+
+        if (args.Keyval is (uint)Gdk.Constants.KEY_Menu ||
+            (args.Keyval == (uint)Gdk.Constants.KEY_F10 && (args.State & ModifierType.ShiftMask) != 0))
+        {
+            ShowContextMenu();
             return true;
         }
 
@@ -501,6 +555,9 @@ public partial class VideoCardView : ViewBase<Bin>
         _channelClick.OnReleased -= OnChannelReleased;
         channel.RemoveController(_channelClick);
         _channelClick.Dispose();
+        _channelKeyController.OnKeyPressed -= OnChannelKeyPressed;
+        channel.RemoveController(_channelKeyController);
+        _channelKeyController.Dispose();
         _keyController.OnKeyPressed -= OnKeyPressed;
         card.RemoveController(_keyController);
         _keyController.Dispose();
