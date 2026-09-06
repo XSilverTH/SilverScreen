@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,6 +26,8 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private readonly bool _disposeHttpClient;
 
+    // Bounded LRU index: every add/hit path evicts oldest entries past _maxFileCount,
+    // so in-memory growth stays flat no matter how many distinct thumbnails are requested.
     private readonly Dictionary<string, LinkedListNode<string>> _entryLookup =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
@@ -242,20 +245,28 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private static async Task<bool> CopyWithLimitAsync(Stream source, Stream target, long maxBytes,
         CancellationToken cancellationToken)
     {
-        var buffer = new byte[81920];
-        long totalBytes = 0;
-
-        while (true)
+        // Rented per download instead of allocating; always returned below.
+        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        try
         {
-            var bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (bytesRead == 0)
-                return true;
+            long totalBytes = 0;
 
-            totalBytes += bytesRead;
-            if (totalBytes > maxBytes)
-                return false;
+            while (true)
+            {
+                var bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                    return true;
 
-            await target.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+                totalBytes += bytesRead;
+                if (totalBytes > maxBytes)
+                    return false;
+
+                await target.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

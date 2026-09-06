@@ -18,6 +18,9 @@ public sealed class YouTubePlaybackTelemetryService(
     : IYouTubePlaybackTelemetryService
 {
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
+    // Bounded live-session set: Start-without-Dispose callers must not grow memory without limit,
+    // so the oldest-tracked session is evicted (disposed) past the cap.
+    private const int MaxActiveSessions = 200;
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
     private bool _disposed;
@@ -26,6 +29,7 @@ public sealed class YouTubePlaybackTelemetryService(
     {
         ArgumentNullException.ThrowIfNull(request);
         var session = new TelemetrySession(this, request);
+        TelemetrySession? evicted = null;
         lock (_sessionsLock)
         {
             if (_disposed)
@@ -34,9 +38,22 @@ public sealed class YouTubePlaybackTelemetryService(
                 return NoopTelemetrySession.Instance;
             }
 
+            if (_sessions.Count >= MaxActiveSessions)
+            {
+                foreach (var tracked in _sessions)
+                {
+                    evicted = tracked;
+                    break;
+                }
+
+                if (evicted is not null)
+                    _sessions.Remove(evicted);
+            }
+
             _sessions.Add(session);
         }
 
+        evicted?.Dispose();
         return session;
     }
 
@@ -99,6 +116,10 @@ public sealed class YouTubePlaybackTelemetryService(
         : IYouTubePlaybackTelemetrySession
     {
         private readonly Lock _lock = new();
+        // Bounded per-video map: keys are playlist indices (already playlist-bounded), capped as
+        // defense in depth so an adversarial playlist length cannot grow this dict without limit.
+        // The evicted entry is never the index being added, which is absent by construction.
+        private const int MaxVideosPerSession = 200;
         private readonly Dictionary<int, VideoTelemetrySession> _videos = [];
         private bool _disposed;
 
@@ -106,17 +127,33 @@ public sealed class YouTubePlaybackTelemetryService(
         {
             if (!owner.IsEnabled() || state.PlaylistIndex < 0 || state.PlaylistIndex >= request.Videos.Length) return;
 
+            VideoTelemetrySession? evicted = null;
+            VideoTelemetrySession video;
             lock (_lock)
             {
                 if (_disposed) return;
-                if (!_videos.TryGetValue(state.PlaylistIndex, out var video))
+                if (!_videos.TryGetValue(state.PlaylistIndex, out var existing))
                 {
+                    if (_videos.Count >= MaxVideosPerSession)
+                    {
+                        using var entries = _videos.GetEnumerator();
+                        entries.MoveNext();
+                        evicted = entries.Current.Value;
+                        _videos.Remove(entries.Current.Key);
+                    }
+
                     video = new VideoTelemetrySession(owner, request.Videos[state.PlaylistIndex].Id);
                     _videos.Add(state.PlaylistIndex, video);
+                }
+                else
+                {
+                    video = existing;
                 }
 
                 video.UpdateState(state);
             }
+
+            evicted?.Dispose();
         }
 
         public void Dispose()
