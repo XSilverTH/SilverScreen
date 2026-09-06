@@ -77,6 +77,58 @@ public sealed class ChannelViewModelTests
             service.LastRequest);
     }
 
+    [Fact]
+    public async Task LoadMoreAsync_DoesNotOverwriteExistingMetadataWithNullOrEmpty()
+    {
+        var service = new FakeMetadataPaginatingChannelService();
+        using var viewModel = new ChannelViewModel(service);
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+
+        Assert.Equal("Original Channel", viewModel.State.Name);
+        Assert.Equal("Original Description", viewModel.State.Description);
+        Assert.Equal("https://example.com/avatar.jpg", viewModel.State.AvatarUrl);
+        Assert.Equal(42000L, viewModel.State.SubscriberCount);
+
+        await viewModel.LoadMoreAsync();
+
+        Assert.Equal("Original Channel", viewModel.State.Name);
+        Assert.Equal("Original Description", viewModel.State.Description);
+        Assert.Equal("https://example.com/avatar.jpg", viewModel.State.AvatarUrl);
+        Assert.Equal(42000L, viewModel.State.SubscriberCount);
+    }
+
+    private sealed class FakeMetadataPaginatingChannelService : IChannelService
+    {
+        public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
+            string? continuationToken, int count, CancellationToken cancellationToken)
+        {
+            if (continuationToken is null)
+            {
+                return Task.FromResult(new ChannelPage(
+                    channelUrl,
+                    "Original Channel",
+                    "Original Description",
+                    "https://example.com/avatar.jpg",
+                    42000L,
+                    [new VideoSummary("v1", "V1", "Original Channel", TimeSpan.FromMinutes(1), "", false, ChannelUrl: channelUrl)],
+                    sort,
+                    "Loaded",
+                    NextContinuationToken: "page2"));
+            }
+
+            return Task.FromResult(new ChannelPage(
+                channelUrl,
+                fallbackName,
+                null,
+                null,
+                null,
+                [new VideoSummary("v2", "V2", fallbackName, TimeSpan.FromMinutes(1), "", false, ChannelUrl: channelUrl)],
+                sort,
+                "Loaded page 2",
+                NextContinuationToken: null));
+        }
+    }
+
 
     private sealed class FakeChannelService : IChannelService
     {

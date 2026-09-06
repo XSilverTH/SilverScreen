@@ -303,6 +303,9 @@ public class PagedFeedEngine : IVideoListSource
     {
         lock (_lock)
         {
+            CancelPendingRequestsUnsafe();
+            _isLoading = false;
+            _isLoadingMore = false;
             _videos.Clear();
             _videos.AddRange(videos.Where(v => !v.IsShort).DistinctBy(v => v.Id));
             _continuationToken = continuationToken;

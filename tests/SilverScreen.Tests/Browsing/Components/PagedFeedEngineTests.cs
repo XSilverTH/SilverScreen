@@ -301,6 +301,30 @@ public sealed class PagedFeedEngineTests
     }
 
     [Fact]
+    public async Task SetVideos_CancelsPendingRequests_AndOverwritesWithGivenVideos()
+    {
+        var tcs = new TaskCompletionSource<FeedPageResult>();
+        using var engine = new PagedFeedEngine(
+            fetcher: (token, count, ct) => tcs.Task);
+
+        var refreshTask = engine.RefreshAsync();
+        Assert.True(engine.IsLoading);
+
+        var directVideos = new[] { CreateVideo("direct1") };
+        engine.SetVideos(directVideos);
+
+        Assert.False(engine.IsLoading);
+        Assert.Equal(["direct1"], engine.Videos.Select(v => v.Id));
+
+        // Now complete the pending fetch; its result must be ignored because of cancellation / generation bump
+        tcs.SetResult(new FeedPageResult([CreateVideo("stale")]));
+        await refreshTask;
+
+        Assert.False(engine.IsLoading);
+        Assert.Equal(["direct1"], engine.Videos.Select(v => v.Id));
+    }
+
+    [Fact]
     public async Task CustomStatusMapper_OverridesPresentationStatus()
     {
         using var engine = new PagedFeedEngine(

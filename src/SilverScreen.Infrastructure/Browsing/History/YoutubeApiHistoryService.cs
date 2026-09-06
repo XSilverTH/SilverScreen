@@ -109,7 +109,6 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
                 .Select(entry => entry.Item)
                 .OfType<VideoFeedItem>()
                 .Where(item => !item.Video.IsShort)
-                .Take(pageSize)
                 .Select(item => MapVideo(item.Video, item.PlaybackProgress))
                 .ToArray();
             var nextToken = page.Next?.Export();

@@ -109,7 +109,6 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             var videos = page.Items
                 .OfType<VideoFeedItem>()
                 .Where(item => !item.Video.IsShort)
-                .Take(pageSize)
                 .Select(item => MapVideo(item.Video, item.PlaybackProgress))
                 .ToArray();
             var nextToken = page.Next?.Export();

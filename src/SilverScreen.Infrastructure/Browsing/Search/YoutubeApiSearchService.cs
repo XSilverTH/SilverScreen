@@ -25,7 +25,6 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         if (string.IsNullOrWhiteSpace(request.Query))
             return SearchResultPage.Empty;
 
-        var pageSize = Math.Max(request.Count, 1);
         try
         {
             var client = _clientProvider.GetClient();
@@ -40,7 +39,6 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
             var videos = page.Items
                 .OfType<VideoSearchResult>()
                 .Where(result => !result.Video.IsShort)
-                .Take(pageSize)
                 .Select(result => MapVideo(result.Video, result.PlaybackProgress))
                 .ToArray();
             var continuationToken = page.Next?.Export();

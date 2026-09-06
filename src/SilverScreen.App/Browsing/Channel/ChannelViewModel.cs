@@ -190,11 +190,27 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
                 page.StatusMessage);
         lock (_lock)
         {
-            _url = page.Url;
-            _name = page.Name;
-            _description = page.Description;
-            _avatarUrl = page.AvatarUrl;
-            _subscriberCount = page.SubscriberCount;
+            if (!string.IsNullOrWhiteSpace(page.Url))
+                _url = page.Url;
+
+            if (token is null)
+            {
+                _name = page.Name;
+                _description = page.Description;
+                _avatarUrl = page.AvatarUrl;
+                _subscriberCount = page.SubscriberCount;
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(page.Name))
+                    _name = page.Name;
+                if (!string.IsNullOrWhiteSpace(page.Description))
+                    _description = page.Description;
+                if (!string.IsNullOrWhiteSpace(page.AvatarUrl))
+                    _avatarUrl = page.AvatarUrl;
+                if (page.SubscriberCount.HasValue)
+                    _subscriberCount = page.SubscriberCount;
+            }
         }
 
         return new FeedPageResult(

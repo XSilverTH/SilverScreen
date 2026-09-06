@@ -30,7 +30,6 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         try
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
-            var pageSize = Math.Max(count, 1);
             var channelReference = ChannelReference.Parse(channelUrl);
             var client = _clientProvider.GetClient();
             var continuation = continuationToken is null
@@ -38,21 +37,39 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                 : ChannelVideosContinuation.Import(continuationToken);
             var apiSort = continuation is null ? ToApiSort(sort) : continuation.Sort;
 
-            var metadata = await client.Channels.GetAsync(channelReference, cancellationToken)
-                .ConfigureAwait(false);
+            string channelName;
+            string? description;
+            string? avatarUrl;
+            long? subscriberCount;
+
+            if (continuation is null)
+            {
+                var metadata = await client.Channels.GetAsync(channelReference, cancellationToken)
+                    .ConfigureAwait(false);
+                channelName = string.IsNullOrWhiteSpace(metadata.Summary.Title)
+                    ? fallbackName
+                    : metadata.Summary.Title;
+                description = string.IsNullOrWhiteSpace(metadata.Description) ? null : metadata.Description;
+                avatarUrl = SelectThumbnail(metadata.Summary.Thumbnails);
+                subscriberCount = metadata.Summary.SubscriberCount;
+            }
+            else
+            {
+                channelName = fallbackName;
+                description = null;
+                avatarUrl = null;
+                subscriberCount = null;
+            }
+
             var videosPage = continuation is null
                 ? await client.Channels.GetVideosPageAsync(channelReference, apiSort, cancellationToken)
                     .ConfigureAwait(false)
                 : await client.Channels.GetVideosPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
 
-            var channelName = string.IsNullOrWhiteSpace(metadata.Summary.Title)
-                ? fallbackName
-                : metadata.Summary.Title;
             var videos = videosPage.Items
                 .Where(video => !video.IsShort)
                 .DistinctBy(video => video.Id)
-                .Take(pageSize)
                 .Select(video => MapVideo(
                     video,
                     channelName,
@@ -65,9 +82,9 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             return new ChannelPage(
                 channelUrl,
                 channelName,
-                string.IsNullOrWhiteSpace(metadata.Description) ? null : metadata.Description,
-                SelectThumbnail(metadata.Summary.Thumbnails),
-                metadata.Summary.SubscriberCount,
+                description,
+                avatarUrl,
+                subscriberCount,
                 videos,
                 resultSort,
                 status,
