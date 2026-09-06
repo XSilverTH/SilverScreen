@@ -1,7 +1,10 @@
+using Adw;
 using Gdk;
 using Gio;
 using GObject;
+using Gtk;
 using Serilog;
+using System.ComponentModel;
 using SilverScreen.Account.Auth;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Channel;
@@ -66,12 +69,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channelViewModel = new ChannelViewModel(services.Channels);
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
+        _ = services.HomeFeed.GetVideoListSource(OpenWebLogin);
         _home = new VideoListView(
             services.HomeFeed,
             services.Thumbnails,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
-        _historyViewModel = new HistoryViewModel(services.History);
+        _historyViewModel = new HistoryViewModel(services.History, services.Session, OpenWebLogin);
         _history = new VideoListView(_historyViewModel, services.Thumbnails, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         _subscriptionsViewModel = new SubscriptionsViewModel(
@@ -108,6 +112,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         _queueViewModel = new QueueViewModel(services.Queue, _playback);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
+        queue_sidebar_host.Append(_queueView.Widget);
+        _queueView.PlayFailed += OnQueuePlayFailed;
         _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
@@ -123,6 +129,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         view_stack.VisibleChildName = "home";
 
         account_popover.Child = _accountPopover.Widget;
+        _searchViewModel.PropertyChanged += OnBackLabelChanged;
+        _channelViewModel.PropertyChanged += OnBackLabelChanged;
         queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         RegisterApplicationActions();
@@ -136,22 +144,42 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         return new VideoCardActions
         {
-            PlayAsync = async video =>
-                await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false),
+            PlayAsync = PlayVideoAsync,
             OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
             AddToQueue = video => { _services.Queue.Add(video); },
             OpenChannelAsync = OpenChannelAsync
         };
     }
 
+    private async Task PlayVideoAsync(VideoSummary video)
+    {
+        try
+        {
+            await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to start playback for video {VideoId}", video.Id);
+            ShowToast($"Could not start playback for “{video.Title}”.");
+        }
+    }
+
     private async Task OpenInAlternatePlayerAsync(VideoSummary video)
     {
-        var request = new PlaybackRequest([video]);
-        var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
-        if (PlaybackBackends.IsEmbedded(playbackBackend))
-            await _services.Playback.PlayAsync(request).ConfigureAwait(false);
-        else
-            await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
+        try
+        {
+            var request = new PlaybackRequest([video]);
+            var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
+            if (PlaybackBackends.IsEmbedded(playbackBackend))
+                await _services.Playback.PlayAsync(request).ConfigureAwait(false);
+            else
+                await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to start alternate playback for video {VideoId}", video.Id);
+            ShowToast($"Could not play “{video.Title}” in the alternate player.");
+        }
     }
 
     private async Task OpenChannelAsync(VideoSummary video)
@@ -160,6 +188,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             return;
 
         view_stack.VisibleChildName = "channel";
+        UpdateBackButton();
         UpdateHomeRefreshButton(_channel.IsLoading);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
             .ConfigureAwait(false);
@@ -169,24 +198,31 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         _channelViewModel.Clear();
         view_stack.VisibleChildName = "home";
-        navigation_back_button.Visible = false;
+        UpdateBackButton();
         UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OnSearchSubmitted(string query)
     {
         view_stack.VisibleChildName = "search";
-        navigation_back_button.Visible = true;
+        UpdateBackButton();
         UpdateHomeRefreshButton(_searchView.IsLoading);
-        _searchViewModel.SubmitAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
+        SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
+    }
+
+    private async Task SubmitSearchAsync(string query, int batchSize)
+    {
+        var notice = await _searchViewModel.SubmitAsync(query, batchSize).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(notice))
+            ShowToast(notice);
     }
 
     private void CloseSearch()
     {
         _searchViewModel.Reset();
         view_stack.VisibleChildName = "home";
-        navigation_back_button.Visible = false;
         UpdateHomeRefreshButton(_home.IsLoading);
+        UpdateBackButton();
     }
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
@@ -201,7 +237,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 break;
             default:
                 view_stack.VisibleChildName = "home";
-                navigation_back_button.Visible = false;
+                UpdateBackButton();
                 break;
         }
     }
@@ -226,6 +262,37 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             return;
 
         Logger.Warning("Runtime setup needed: {Warnings}", string.Join(" ", warnings));
+
+        var popoverContent = Box.New(Orientation.Vertical, 12);
+        popoverContent.MarginTop = 16;
+        popoverContent.MarginBottom = 16;
+        popoverContent.MarginStart = 16;
+        popoverContent.MarginEnd = 16;
+
+        var heading = Label.New("Runtime setup needed");
+        heading.AddCssClass("heading");
+        heading.Xalign = 0;
+        popoverContent.Append(heading);
+
+        foreach (var warning in warnings)
+        {
+            var warningLabel = Label.New(warning);
+            warningLabel.Wrap = true;
+            warningLabel.MaxWidthChars = 48;
+            warningLabel.Xalign = 0;
+            popoverContent.Append(warningLabel);
+        }
+
+        var preferencesButton = Button.NewWithLabel("Open Preferences");
+        preferencesButton.OnClicked += (_, _) =>
+        {
+            deps_popover.Popdown();
+            ShowPreferences();
+        };
+        popoverContent.Append(preferencesButton);
+
+        deps_popover.Child = popoverContent;
+        deps_button.Visible = true;
     }
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
@@ -284,7 +351,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
         if (_closed) return;
-        navigation_back_button.Visible = view_stack.VisibleChildName is "search" or "channel";
+        UpdateBackButton();
 
         var currentChildName = view_stack.VisibleChildName;
         var childChanged = currentChildName != _lastVisibleChildName;
@@ -324,11 +391,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void RegisterApplicationActions()
     {
         var preferencesAction = SimpleAction.New("preferences", null);
-        preferencesAction.OnActivate += (_, _) =>
-        {
-            var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences);
-            preferencesDialogWrapper.Widget.Present(Widget);
-        };
+        preferencesAction.OnActivate += (_, _) => ShowPreferences();
         Widget.AddAction(preferencesAction);
 
         var aboutAction = SimpleAction.New("about", null);
@@ -338,6 +401,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var quitAction = SimpleAction.New("quit", null);
         quitAction.OnActivate += (_, _) => Widget.Close();
         Widget.AddAction(quitAction);
+    }
+
+    private void ShowPreferences()
+    {
+        var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences);
+        preferencesDialogWrapper.SaveFailed += OnPreferencesSaveFailed;
+        preferencesDialogWrapper.Widget.Present(Widget);
+    }
+
+    private void OnPreferencesSaveFailed(object? sender, string message)
+    {
+        ShowToast(message);
     }
 
     private void PresentAboutDialog()
@@ -369,17 +444,67 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateQueueButton(QueuePresentationState state)
     {
-        var hasItems = state.Items.Count > 0;
-        queue_button.Visible = hasItems;
-        queue_button.Active = hasItems && queue_button.Active;
-
-        if (hasItems)
-            queue_button_label.SetText(state.Items.Count.ToString());
+        queue_button.Visible = true;
+        queue_button_label.SetText(state.Items.Count.ToString());
     }
 
     private void CloseQueue()
     {
         queue_button.Active = false;
+    }
+
+    /// <summary>
+    ///     Shows a transient toast for one-shot failures (play, paste, queue, save).
+    ///     Kept as a plain shell method so a future notification bus can take over without touching callers.
+    ///     Safe to call from any thread.
+    /// </summary>
+    public void ShowToast(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var text = message.Trim();
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_closed)
+                toast_overlay.AddToast(Toast.New(text));
+
+            return false;
+        });
+    }
+
+    private void UpdateBackButton()
+    {
+        var (visible, label) = view_stack.VisibleChildName switch
+        {
+            "search" => (true, _searchViewModel.BackLabel),
+            "channel" => (true, _channelViewModel.BackLabel),
+            _ => (false, "Back"),
+        };
+
+        var text = string.IsNullOrWhiteSpace(label) ? "Back" : label;
+        navigation_back_button.Visible = visible;
+        navigation_back_button.SetLabel(text);
+        navigation_back_button.TooltipText = text;
+    }
+
+    private void OnBackLabelChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (!string.Equals(args.PropertyName, "BackLabel", StringComparison.Ordinal))
+            return;
+
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_closed)
+                UpdateBackButton();
+
+            return false;
+        });
+    }
+
+    private void OnQueuePlayFailed(object? sender, string error)
+    {
+        ShowToast(error);
     }
 
     private void OpenWebLogin()
@@ -410,6 +535,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
         _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
         _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
+        _searchViewModel.PropertyChanged -= OnBackLabelChanged;
+        _channelViewModel.PropertyChanged -= OnBackLabelChanged;
+        _queueView.PlayFailed -= OnQueuePlayFailed;
         _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged;
         _subscriptions.Dispose();
         _subscriptionsViewModel.Dispose();
