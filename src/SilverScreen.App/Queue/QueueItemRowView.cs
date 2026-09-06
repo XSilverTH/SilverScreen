@@ -198,7 +198,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
         Widget.RemoveCssClass("queue-drop-before");
         Widget.RemoveCssClass("queue-drop-after");
-        _dropRequested(itemId, y < Widget.HeightRequest / 2.0 ? _index : _index + 1);
+        _dropRequested(itemId, y < Widget.GetAllocatedHeight() / 2.0 ? _index : _index + 1);
         return true;
     }
 

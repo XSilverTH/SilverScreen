@@ -47,6 +47,8 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public bool HasManualSession => Session.HasManualSession;
 
+    public string? ManualSessionError { get; private set; }
+
     public string DisplayName => _profile?.DisplayName ?? (string.IsNullOrWhiteSpace(Session.DisplayName)
         ? "YouTube session"
         : Session.DisplayName);
@@ -71,10 +73,30 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     public bool SaveManualSession(string cookieContent)
     {
         Logger.Information("SaveManualSession called");
-        if (!string.IsNullOrWhiteSpace(cookieContent))
-            return PersistSession(cookieContent.Trim());
-        Logger.Warning("Manual session save aborted: empty cookie content");
-        return false;
+        if (string.IsNullOrWhiteSpace(cookieContent))
+        {
+            Logger.Warning("Manual session save aborted: empty cookie content");
+            SetManualSessionError("Nothing to save — paste the contents of your cookies.txt file first.");
+            return false;
+        }
+
+        var trimmed = cookieContent.Trim();
+        if (!ContainsUsableCookies(trimmed))
+        {
+            Logger.Warning("Manual session save aborted: content is not Netscape cookies.txt format");
+            SetManualSessionError(
+                "That doesn't look like a cookies.txt file — export Netscape-format cookies from your browser and paste the whole file contents.");
+            return false;
+        }
+
+        if (!PersistSession(trimmed, out var persistError))
+        {
+            SetManualSessionError(persistError);
+            return false;
+        }
+
+        SetManualSessionError(null);
+        return true;
     }
 
     public bool SaveWebSession(string cookieContent)
@@ -84,16 +106,52 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     private bool PersistSession(string cookieContent)
     {
+        return PersistSession(cookieContent, out _);
+    }
+
+    private bool PersistSession(string cookieContent, out string? error)
+    {
         try
         {
             _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
+            error = null;
             return true;
         }
         catch (SessionPersistenceException exception)
         {
             Logger.Warning(exception, "Failed to persist YouTube session");
+            error = "Could not save the session — the system keyring (Secret Service) is unavailable.";
             return false;
         }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            Logger.Warning(exception, "Manual session content was rejected");
+            error =
+                "That doesn't look like a cookies.txt file — export Netscape-format cookies from your browser and paste the whole file contents.";
+            return false;
+        }
+    }
+
+    private static bool ContainsUsableCookies(string cookieContent)
+    {
+        try
+        {
+            return NetscapeCookieParser.CreateCookieContainer(cookieContent)?.Count > 0;
+        }
+        catch (Exception exception) when (exception is ArgumentException or ArgumentOutOfRangeException)
+        {
+            Logger.Warning(exception, "Manual session content failed cookie parsing");
+            return false;
+        }
+    }
+
+    private void SetManualSessionError(string? error)
+    {
+        if (string.Equals(ManualSessionError, error, StringComparison.Ordinal))
+            return;
+
+        ManualSessionError = error;
+        OnPropertyChanged(nameof(ManualSessionError));
     }
 
     public void ClearSession()

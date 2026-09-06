@@ -58,9 +58,23 @@ public partial class QueueView : ViewBase<Box>
         _viewModel.Clear();
     }
 
+    public event EventHandler<string>? PlayFailed;
+
+    public string? LastPlayError { get; private set; }
+
     private void OnPlayButtonClicked(object? sender, EventArgs args)
     {
-        _viewModel.PlayAllAsync().FireAndForget(Logger);
+        PlayAllAndReportAsync().FireAndForget(Logger);
+    }
+
+    private async Task PlayAllAndReportAsync()
+    {
+        var error = await _viewModel.PlayAllAsync().ConfigureAwait(false);
+        if (string.IsNullOrEmpty(error))
+            return;
+
+        LastPlayError = error;
+        PlayFailed?.Invoke(this, error);
     }
 
     private void OnStateChanged(object? sender, QueuePresentationState state)
@@ -172,10 +186,9 @@ public partial class QueueView : ViewBase<Box>
         else
         {
             _viewModel.Move(itemId, 0);
-            _viewModel.PlayAllAsync().FireAndForget(Logger);
+            PlayAllAndReportAsync().FireAndForget(Logger);
         }
     }
-
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
     {
         if (args.Object is ListItem { Child: { } child } && _rowsByCell.TryGetValue(child, out var row))

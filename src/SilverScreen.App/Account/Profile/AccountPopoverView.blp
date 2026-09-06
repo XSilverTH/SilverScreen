@@ -29,7 +29,7 @@ Adw.Bin AccountPopoverView {
 
         Gtk.Button signed_out_google_button {
           clicked => $OnWebLoginClicked();
-          label: "Google login";
+          label: "Sign in with Google";
           halign: fill;
 
           styles [
@@ -39,7 +39,7 @@ Adw.Bin AccountPopoverView {
 
         Gtk.Button signed_out_manual_button {
           clicked => $OnOpenManualEditorClicked();
-          label: "Cookie login";
+          label: "Use cookies.txt";
           halign: fill;
         }
       };
@@ -133,6 +133,16 @@ Adw.Bin AccountPopoverView {
             wrap-mode: char;
             height-request: 180;
           }
+        }
+
+        Gtk.Label manual_error_label {
+          visible: false;
+          xalign: 0;
+          wrap: true;
+
+          styles [
+            "error",
+          ]
         }
 
         Gtk.Box manual_editor_actions {

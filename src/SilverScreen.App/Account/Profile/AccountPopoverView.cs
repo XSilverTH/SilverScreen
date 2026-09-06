@@ -149,6 +149,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private void OpenManualEditor()
     {
         _editing = true;
+        manual_error_label.SetVisible(false);
         Render();
     }
 
@@ -169,16 +170,23 @@ public partial class AccountPopoverView : ViewBase<Bin>
         Logger.Information("AccountPopoverView clear session button clicked");
         _viewModel.ClearSession();
     }
-
     private void OnManualCancelButtonClicked(object? sender, EventArgs args)
     {
         _editing = false;
+        manual_error_label.SetVisible(false);
         Render();
     }
 
     private void OnManualSaveButtonClicked(object? sender, EventArgs args)
     {
-        if (!_viewModel.SaveManualSession(GetText(manual_editor))) return;
+        if (!_viewModel.SaveManualSession(GetText(manual_editor)))
+        {
+            manual_error_label.SetText(_viewModel.ManualSessionError ?? "Could not save the session. Try again.");
+            manual_error_label.SetVisible(true);
+            return;
+        }
+
+        manual_error_label.SetVisible(false);
         _editing = false;
         Render();
     }

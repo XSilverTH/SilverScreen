@@ -84,10 +84,10 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
         State = Snapshot();
     }
 
-    public async Task PlayAllAsync()
+    public async Task<string?> PlayAllAsync()
     {
         if (_disposed || _isLaunching || _queue.Items.Count == 0)
-            return;
+            return null;
 
         _isLaunching = true;
         State = Snapshot();
@@ -95,11 +95,13 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            await _playback.PlayAsync(new PlaybackRequest(videos));
+            await _playback.PlayAsync(new PlaybackRequest(videos)).ConfigureAwait(false);
+            return null;
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to start playback for queue items");
+            return "Could not start playback from the queue. Try again.";
         }
         finally
         {
