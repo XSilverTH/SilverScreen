@@ -185,6 +185,38 @@ public sealed class CommentsViewModelTests
         Assert.Single(service.Requests);
     }
 
+    [Fact]
+    public async Task Retry_AfterFailure_ReloadsCommentsForCurrentVideo()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.SetVideo("aaaaaaaaaaa");
+        Assert.Single(service.Requests);
+
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult([], false, "Network error"));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.Error);
+        Assert.Equal(CommentsViewStatus.Error, viewModel.State.Status);
+
+        viewModel.Retry();
+        Assert.Equal(2, service.Requests.Count);
+
+        service.Requests[1].Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, ""));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.Equal(CommentsViewStatus.List, viewModel.State.Status);
+    }
+
+    [Fact]
+    public void Retry_WithoutVideo_DoesNothing()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.Retry();
+        Assert.Empty(service.Requests);
+        Assert.Equal(CommentsViewStatus.Unavailable, viewModel.State.Status);
+    }
+
     private static YouTubeComment Comment(string id, string? parentId = null)
     {
         return new YouTubeComment(id, id, id, "", 0, parentId);

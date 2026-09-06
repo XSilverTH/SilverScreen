@@ -98,6 +98,14 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         StartLoad();
     }
 
+    public void Retry()
+    {
+        if (_disposed || _videoId is null)
+            return;
+
+        StartLoad();
+    }
+
     public void SetSortSelection(uint selected)
     {
         SetSort(selected == 1 ? YouTubeCommentSort.Newest : YouTubeCommentSort.Top);

@@ -60,6 +60,11 @@ public partial class CommentsView : ViewBase<Box>
         _closeRequested();
     }
 
+    private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
+    {
+        _viewModel.Retry();
+    }
+
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
         if (_disposed || _vadjustment is null ||
