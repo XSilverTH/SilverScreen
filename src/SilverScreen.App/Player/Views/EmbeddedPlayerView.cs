@@ -22,8 +22,11 @@ namespace SilverScreen.Player.Views;
 internal interface IEmbeddedPlayerPresenter
 {
     Task<string> PresentAsync(PlaybackRequest request);
+    bool HasMedia { get; }
+    bool IsPaused { get; }
+    event EventHandler? PlaybackStateChanged;
+    Task TogglePauseAsync();
 }
-
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
     private const double MinimumPlaybackSpeed = 0.25;
@@ -61,6 +64,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private bool _isPaused = true;
     private bool _rendererReady;
     private double _speed = 1;
+
+    public bool HasMedia => _session.HasMedia;
+    public bool IsPaused => _isPaused;
+    public event EventHandler? PlaybackStateChanged;
+
+    public Task TogglePauseAsync()
+    {
+        _player.TogglePause();
+        return Task.CompletedTask;
+    }
     private bool _syncingQueue;
     private bool _updatingControls;
     private double _volume = 100;
@@ -238,7 +251,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 _osdController.ShowSkippedSponsor();
         });
         _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
-        _shortcutController.Attach();
+        Widget.OnNotify += (_, e) =>
+        {
+            if (e.Pspec.GetName() == "visible")
+            {
+                if (Widget.GetVisible())
+                    _shortcutController.Attach();
+                else
+                    _shortcutController.Detach();
+            }
+        };
     }
 
     public new void Dispose()
@@ -422,6 +444,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void ReturnToShell()
     {
+        _shortcutController.Detach();
         EndSession(true);
         _backRequested();
     }
@@ -484,9 +507,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OpenCurrentChannel()
     {
         if (_session.CurrentVideo is { } video)
+        {
+            _shortcutController.Detach();
             _channelRequested(video);
+        }
     }
-
     private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
     {
         if (_session.TrySkipManualSegment())
@@ -631,6 +656,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _volume = state.Volume;
         _isMuted = state.IsMuted;
         _session.UpdatePlayback(state);
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
 
         SetLoading(state.IsLoading);
         _updatingControls = true;
@@ -705,12 +731,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _player.Stop();
         _loadedRequest = null;
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void EndSession(bool stop)
     {
         if (stop) _player.Stop();
         _session.EndSession();
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSessionEnded()
@@ -718,7 +746,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timelineController.Reset();
         _osdController.HideImmediate();
         _loadedRequest = null;
-        _infoPanel.Close();
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
         _infoPanel.SetVideo(null);
         player_queue_controls.SetVisible(false);
         player_queue_button.Active = false;

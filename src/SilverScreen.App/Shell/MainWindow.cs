@@ -98,8 +98,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
-
         _searchViewModel = new SearchViewModel(services.Search, _playback, services.SearchSuggestions);
+        _searchViewModel.OpenChannelRequested = channelTarget =>
+            OpenChannelAsync(new VideoSummary("", "", channelTarget, TimeSpan.Zero, "", false, "", null, null,
+                channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? channelTarget : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
         _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
         search_popover.Child = _searchPopover.Widget;
         search_popover.OnClosed += (_, _) => _searchPopover.OnClosed();
@@ -123,21 +125,80 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             OpenWebLogin,
             UpdateAccountAppearance);
 
-        view_switcher.Stack = view_stack;
+        view_switcher_title.Stack = view_stack;
+        view_switcher_bar.Stack = view_stack;
+        view_switcher_title.BindProperty("title-visible", view_switcher_bar, "reveal", BindingFlags.SyncCreate);
+
+        var startupPrefs = services.Preferences.GetPreferences();
+        if (startupPrefs.WindowWidth > 0 && startupPrefs.WindowHeight > 0)
+            Widget.SetDefaultSize(startupPrefs.WindowWidth, startupPrefs.WindowHeight);
+        if (startupPrefs.WindowMaximized)
+            Widget.Maximize();
+
+        SetupDesktopBackShortcuts();
         _navigationService = new NavigationService(main_stack, view_stack);
         _navigationService.PageChanged += OnNavigationPageChanged;
         _navigationService.Initialize(NavigationPage.Home);
         account_popover.Child = _accountPopover.Widget;
         _searchViewModel.PropertyChanged += OnBackLabelChanged;
         _channelViewModel.PropertyChanged += OnBackLabelChanged;
+        _playback.PlaybackStateChanged += OnPlaybackStateChanged;
         queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         RegisterApplicationActions();
         _queueViewModel.StateChanged += OnQueueStateChanged;
         UpdateQueueButton(_queueViewModel.State);
+        UpdateNowPlayingBar();
         Widget.OnCloseRequest += OnCloseRequest;
         ReportStartupDependencyWarnings();
     }
+    private void SetupDesktopBackShortcuts()
+    {
+        var keyController = EventControllerKey.New();
+        keyController.SetPropagationPhase(PropagationPhase.Bubble);
+        keyController.OnKeyPressed += (_, args) =>
+        {
+            if (Widget.GetFocus() is Gtk.Editable or Gtk.TextView)
+                return false;
+
+            if ((args.State & Gdk.ModifierType.AltMask) != 0 && args.Keyval == Gdk.Constants.KEY_Left)
+            {
+                if (_navigationService.CanGoBack)
+                {
+                    OnNavigationBackButtonClicked();
+                    return true;
+                }
+            }
+
+            if (args.Keyval == Gdk.Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
+            {
+                if (_navigationService.CanGoBack)
+                {
+                    OnNavigationBackButtonClicked();
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        Widget.AddController(keyController);
+
+        var mouseController = GestureClick.New();
+        mouseController.SetButton(0);
+        mouseController.OnPressed += (sender, _) =>
+        {
+            if (sender.GetCurrentButton() == 8)
+            {
+                if (_navigationService.CanGoBack)
+                {
+                    OnNavigationBackButtonClicked();
+                    sender.SetState(EventSequenceState.Claimed);
+                }
+            }
+        };
+        Widget.AddController(mouseController);
+    }
+
 
     private VideoCardActions CreateVideoActions()
     {
@@ -223,17 +284,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         switch (_navigationService.CurrentPage)
         {
             case NavigationPage.Search:
-                CloseSearch();
+                _searchViewModel.Reset();
                 break;
             case NavigationPage.Channel:
-                CloseChannel();
-                break;
-            default:
-                _navigationService.NavigateTo(NavigationPage.Home);
+                _channelViewModel.Clear();
                 break;
         }
-    }
 
+        if (!_navigationService.GoBack())
+        {
+            _navigationService.NavigateTo(NavigationPage.Home);
+        }
+    }
     private void OpenEmbeddedPlayer()
     {
         _navigationService.NavigateTo(NavigationPage.Player);
@@ -244,11 +306,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseEmbeddedPlayer()
     {
         Widget.Unfullscreen();
-        _navigationService.NavigateTo(_navigationService.PreviousPage is NavigationPage prev && prev != NavigationPage.Player
-            ? prev
-            : NavigationPage.Home);
+        if (!_navigationService.GoBack())
+        {
+            _navigationService.NavigateTo(NavigationPage.Home);
+        }
     }
-
     private void ReportStartupDependencyWarnings()
     {
         var warnings = _services.RuntimeDependencyDiagnostics.GetStartupWarnings();
@@ -351,6 +413,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_closed) return;
         UpdateBackButton();
+        UpdateNowPlayingBar();
 
         var childChanged = e.CurrentPage != e.PreviousPage;
 
@@ -484,7 +547,45 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var text = string.IsNullOrWhiteSpace(label) ? "Back" : label;
         navigation_back_button.Visible = visible;
         navigation_back_button.SetLabel(text);
-        navigation_back_button.TooltipText = text;
+        navigation_back_button.TooltipText = "Back";
+    }
+
+    private void OnNowPlayingToggleClicked(object? sender = null, EventArgs? args = null)
+    {
+        _playback.TogglePauseAsync().FireAndForget(Logger);
+    }
+
+    private void OnNowPlayingReturnButtonClicked(object? sender = null, EventArgs? args = null)
+    {
+        OpenEmbeddedPlayer();
+    }
+
+    private void OnPlaybackStateChanged(object? sender, EventArgs e)
+    {
+        Functions.IdleAdd(0, () =>
+        {
+            if (!_closed)
+                UpdateNowPlayingBar();
+
+            return false;
+        });
+    }
+
+    private void UpdateNowPlayingBar()
+    {
+        var hasMedia = _playback.HasMedia;
+        var notInPlayer = _navigationService.CurrentPage != NavigationPage.Player;
+        var show = hasMedia && notInPlayer;
+
+        now_playing_box.Visible = show;
+        if (show)
+        {
+            var isPaused = _playback.IsPaused;
+            now_playing_toggle.IconName = isPaused
+                ? "media-playback-start-symbolic"
+                : "media-playback-pause-symbolic";
+            now_playing_toggle.TooltipText = isPaused ? "Play" : "Pause";
+        }
     }
 
     private void OnBackLabelChanged(object? sender, PropertyChangedEventArgs args)
@@ -531,10 +632,23 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_closed) return false;
         _closed = true;
+
+        var prefs = _services.Preferences.GetPreferences();
+        var isMaximized = Widget.Maximized;
+        prefs.WindowMaximized = isMaximized;
+        if (!isMaximized)
+        {
+            Widget.GetDefaultSize(out var width, out var height);
+            if (width > 0 && height > 0)
+            {
+                prefs.WindowWidth = width;
+                prefs.WindowHeight = height;
+            }
+        }
+        _services.Preferences.SavePreferences(prefs);
+        _playback.PlaybackStateChanged -= OnPlaybackStateChanged;
         _navigationService.PageChanged -= OnNavigationPageChanged;
         _navigationService.Dispose();
-        _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
-        _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
         _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
         _searchViewModel.PropertyChanged -= OnBackLabelChanged;
         _channelViewModel.PropertyChanged -= OnBackLabelChanged;

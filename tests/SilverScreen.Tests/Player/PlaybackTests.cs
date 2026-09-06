@@ -352,11 +352,21 @@ public sealed class PlaybackTests
     private sealed class TrackingEmbeddedPresenter : IEmbeddedPlayerPresenter
     {
         public List<PlaybackRequest> Requests { get; } = [];
+        public bool HasMedia { get; set; }
+        public bool IsPaused { get; set; }
+        public event EventHandler? PlaybackStateChanged;
 
         public Task<string> PresentAsync(PlaybackRequest request)
         {
             Requests.Add(request);
             return Task.FromResult("Embedded presenter called.");
+        }
+
+        public Task TogglePauseAsync()
+        {
+            IsPaused = !IsPaused;
+            PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
         }
     }
 

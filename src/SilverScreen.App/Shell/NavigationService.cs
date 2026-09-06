@@ -64,8 +64,10 @@ public interface INavigationService
 {
     NavigationPage CurrentPage { get; }
     NavigationPage? PreviousPage { get; }
+    bool CanGoBack { get; }
     event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
     bool NavigateTo(NavigationPage page);
+    bool GoBack();
     bool CanNavigateTo(NavigationPage page);
     void SyncFromViewStack(string? childName);
 }
@@ -82,12 +84,13 @@ public sealed class NavigationService : INavigationService, IDisposable
     private readonly Dictionary<NavigationPage, NavigationPageRegistration> _registry = new();
     private readonly Dictionary<string, NavigationPage> _viewStackNameToPage = new(StringComparer.Ordinal);
     private NavigationPage _currentPage = NavigationPage.Home;
-    private NavigationPage? _previousPage;
+    private readonly Stack<NavigationPage> _backStack = new();
     private bool _isNavigating;
     private bool _disposed;
 
     public NavigationPage CurrentPage => _currentPage;
-    public NavigationPage? PreviousPage => _previousPage;
+    public NavigationPage? PreviousPage => _backStack.Count > 0 ? _backStack.Peek() : null;
+    public bool CanGoBack => _backStack.Count > 0;
 
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
 
@@ -145,6 +148,22 @@ public sealed class NavigationService : INavigationService, IDisposable
 
     public bool NavigateTo(NavigationPage page)
     {
+        return NavigateInternal(page, pushToBackStack: true);
+    }
+
+    public bool GoBack()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_backStack.Count == 0)
+            return false;
+
+        var targetPage = _backStack.Pop();
+        return NavigateInternal(targetPage, pushToBackStack: false);
+    }
+
+    private bool NavigateInternal(NavigationPage page, bool pushToBackStack)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         if (!_registry.TryGetValue(page, out var entry))
@@ -174,7 +193,10 @@ public sealed class NavigationService : INavigationService, IDisposable
                     _mainStack.VisibleChildName = entry.StackName;
             }
 
-            _previousPage = previous;
+            if (pushToBackStack)
+            {
+                _backStack.Push(previous);
+            }
             _currentPage = page;
             entry.OnEnter?.Invoke();
         }
@@ -202,7 +224,7 @@ public sealed class NavigationService : INavigationService, IDisposable
         if (_registry.TryGetValue(previous, out var prevEntry))
             prevEntry.OnLeave?.Invoke();
 
-        _previousPage = previous;
+        _backStack.Push(previous);
         _currentPage = page;
 
         if (_registry.TryGetValue(page, out var entry))
@@ -210,7 +232,6 @@ public sealed class NavigationService : INavigationService, IDisposable
 
         PageChanged?.Invoke(this, new NavigationPageChangedEventArgs(previous, page));
     }
-
     public bool TryGetPage(string stackName, out NavigationPage page)
     {
         return _viewStackNameToPage.TryGetValue(stackName, out page);
@@ -225,6 +246,7 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _backStack.Clear();
         _registry.Clear();
         _viewStackNameToPage.Clear();
     }

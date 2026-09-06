@@ -28,7 +28,7 @@ public static class PlayerShortcutActions
     public const string ToggleQueue = nameof(PlayerShortcutBindings.ToggleQueue);
 }
 
-internal sealed class PlayerShortcutController : IDisposable
+public sealed class PlayerShortcutController : IDisposable
 {
     private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> _shortcutMap = [];
@@ -107,7 +107,7 @@ internal sealed class PlayerShortcutController : IDisposable
         _keyboardRoot = root;
     }
 
-    private void Detach()
+    public void Detach()
     {
         if (_keyboardRoot is null || _keyboardController is null) return;
 
@@ -129,6 +129,12 @@ internal sealed class PlayerShortcutController : IDisposable
 
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
+        if (_keyboardRoot is Window window && window.GetFocus() is Widget focused)
+        {
+            if (focused is Editable || focused is TextView)
+                return false;
+        }
+
         var keyval = Functions.KeyvalToLower(args.Keyval);
         if (KeyInterceptor?.Invoke(keyval) == true) return true;
         if (!_shortcutMap.TryGetValue(keyval, out var actionName)) return false;

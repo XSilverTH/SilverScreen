@@ -56,6 +56,8 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.EngineStateChanged += OnEngineStateChanged;
     }
 
+    public Func<string, Task>? OpenChannelRequested { get; set; }
+
     public SearchViewState State
     {
         get;
@@ -75,8 +77,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     /// Label for the shell back button while the search page is visible. Read by MainWindow;
     /// kept as a property (not a constant) so it can become query-aware without a shell change.
     /// </summary>
-    public string BackLabel => "Back to Search";
-
+    public string BackLabel => "Exit Search";
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
@@ -181,6 +182,21 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         try
         {
             var parsedUrl = YouTubeUrlParser.Parse(query);
+            if (parsedUrl.Kind == YouTubeUrlKind.Channel)
+            {
+                var channelTarget = parsedUrl.ChannelPath ?? query;
+                if (OpenChannelRequested is not null)
+                {
+                    await OpenChannelRequested(channelTarget).ConfigureAwait(false);
+                    return null;
+                }
+            }
+            else if (query.StartsWith('@') && !query.Contains(' ') && OpenChannelRequested is not null)
+            {
+                await OpenChannelRequested(query).ConfigureAwait(false);
+                return null;
+            }
+
             switch (parsedUrl.Kind)
             {
                 case YouTubeUrlKind.Video:

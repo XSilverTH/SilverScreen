@@ -38,7 +38,7 @@ Adw.ApplicationWindow MainWindow {
               [start]
               Button navigation_back_button {
                 icon-name: "go-previous-symbolic";
-                tooltip-text: "Back to Home";
+                tooltip-text: "Back";
                 visible: false;
                 clicked => $OnNavigationBackButtonClicked();
 
@@ -77,9 +77,35 @@ Adw.ApplicationWindow MainWindow {
                 popover: Popover search_popover {};
               }
 
-              title-widget: Adw.ViewSwitcher view_switcher {
-                policy: wide;
+              title-widget: Adw.ViewSwitcherTitle view_switcher_title {
+                title: "SilverScreen";
               };
+
+              [end]
+              Box now_playing_box {
+                visible: false;
+                spacing: 6;
+
+                Button now_playing_toggle {
+                  icon-name: "media-playback-pause-symbolic";
+                  tooltip-text: "Pause";
+                  clicked => $OnNowPlayingToggleClicked();
+
+                  styles [
+                    "flat",
+                  ]
+                }
+
+                Button now_playing_return_button {
+                  icon-name: "video-x-generic-symbolic";
+                  tooltip-text: "Return to Player";
+                  clicked => $OnNowPlayingReturnButtonClicked();
+
+                  styles [
+                    "flat",
+                  ]
+                }
+              }
 
               [end]
               MenuButton app_menu_button {
@@ -212,6 +238,8 @@ Adw.ApplicationWindow MainWindow {
                 };
               }
             };
+            [bottom]
+            Adw.ViewSwitcherBar view_switcher_bar {}
           };
 
           sidebar: Gtk.Box queue_sidebar_host {

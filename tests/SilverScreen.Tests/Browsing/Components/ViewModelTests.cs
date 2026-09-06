@@ -305,6 +305,36 @@ public sealed class ViewModelTests
         Assert.Equal("Search could not be completed.", viewModel.State.Summary);
         Assert.Empty(viewModel.State.Videos);
     }
+    [Fact]
+    public async Task SearchViewModel_BackLabel_IsExitSearch()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+        Assert.Equal("Exit Search", viewModel.BackLabel);
+    }
+
+    [Fact]
+    public async Task SearchViewModel_RoutesChannelUrls_ToOpenChannelRequested()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+
+        string? requestedTarget = null;
+        viewModel.OpenChannelRequested = target =>
+        {
+            requestedTarget = target;
+            return Task.CompletedTask;
+        };
+
+        var notice = await viewModel.SubmitAsync("https://www.youtube.com/@mkbhd");
+        Assert.Null(notice);
+        Assert.Equal("@mkbhd", requestedTarget);
+
+        var handleNotice = await viewModel.SubmitAsync("@veritasium");
+        Assert.Null(handleNotice);
+        Assert.Equal("@veritasium", requestedTarget);
+    }
+
 
 
     private sealed class ControlledSearchService : ISearchService
