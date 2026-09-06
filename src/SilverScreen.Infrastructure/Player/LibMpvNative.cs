@@ -17,10 +17,23 @@ internal enum LibMpvEventId
 {
     None = 0,
     Shutdown = 1,
+    LogMessage = 2,
     StartFile = 6,
     EndFile = 7,
     FileLoaded = 8,
     PropertyChange = 22
+}
+
+internal enum LibMpvLogLevel
+{
+    None = 0,
+    Fatal = 10,
+    Error = 20,
+    Warn = 30,
+    Info = 40,
+    V = 50,
+    Debug = 60,
+    Trace = 70
 }
 
 internal enum LibMpvEndFileReason
@@ -86,6 +99,15 @@ internal readonly struct LibMpvOpenGlFbo(int fbo, int width, int height, int int
     public readonly int Height = height;
     public readonly int InternalFormat = internalFormat;
 }
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct LibMpvEventLogMessage(nint prefix, nint level, nint text, LibMpvLogLevel logLevel)
+{
+    public readonly nint Prefix = prefix;
+    public readonly nint Level = level;
+    public readonly nint Text = text;
+    public readonly LibMpvLogLevel LogLevel = logLevel;
+}
+
 
 internal interface ILibMpvNativeApi : IDisposable
 {
@@ -104,6 +126,7 @@ internal interface ILibMpvNativeApi : IDisposable
     LibMpvEvent WaitEvent(nint handle, double timeout);
     void Wakeup(nint handle);
     string ErrorString(int error);
+    int RequestLogMessages(nint handle, string minLevel);
     int CreateRenderContext(out nint context, nint handle);
     void SetRenderUpdateCallback(nint context, nint callback, nint callbackData);
     int GetFramebufferBinding();
@@ -136,6 +159,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private readonly delegate* unmanaged[Cdecl]<nint, nint, nint, void> _setRenderUpdateCallback;
     private readonly delegate* unmanaged[Cdecl]<nint, double, LibMpvEvent*> _waitEvent;
     private readonly delegate* unmanaged[Cdecl]<nint, void> _wakeup;
+    private readonly delegate* unmanaged[Cdecl]<nint, byte*, int> _requestLogMessages;
     private delegate* unmanaged[Cdecl]<uint, int*, void> _glGetIntegerv;
     private nint _epoxyLibrary;
     private nint _mpvLibrary;
@@ -171,6 +195,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
             _getPropertyString = (delegate* unmanaged[Cdecl]<nint, byte*, byte*>)GetExport("mpv_get_property_string");
             _waitEvent = (delegate* unmanaged[Cdecl]<nint, double, LibMpvEvent*>)GetExport("mpv_wait_event");
             _wakeup = (delegate* unmanaged[Cdecl]<nint, void>)GetExport("mpv_wakeup");
+            _requestLogMessages = (delegate* unmanaged[Cdecl]<nint, byte*, int>)GetExport("mpv_request_log_messages");
             _free = (delegate* unmanaged[Cdecl]<nint, void>)GetExport("mpv_free");
             _errorString = (delegate* unmanaged[Cdecl]<int, byte*>)GetExport("mpv_error_string");
             _createRenderContext =
@@ -223,6 +248,15 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     {
         return _initialize(handle);
     }
+    public int RequestLogMessages(nint handle, string minLevel)
+    {
+        var nativeMinLevel = Utf8(minLevel);
+        fixed (byte* levelPointer = nativeMinLevel)
+        {
+            return _requestLogMessages(handle, levelPointer);
+        }
+    }
+
 
     public int ObserveProperty(nint handle, ulong replyUserdata, string name, LibMpvFormat format)
     {

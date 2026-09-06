@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
@@ -146,6 +147,42 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("seek|10|absolute+keyframes", native.Commands);
         Assert.Contains("seek|40|absolute+exact", native.Commands);
     }
+    [Fact]
+    public void InitializesAndRequestsInfoLogMessages()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        Assert.Equal("info", native.RequestedLogLevel);
+    }
+
+    [Fact]
+    public void ProcessesLogMessageEventWithoutError()
+    {
+        var native = new RecordingNative();
+        var prefix = Marshal.StringToHGlobalAnsi("cplayer");
+        var text = Marshal.StringToHGlobalAnsi("custom mpv warning message\n");
+        var level = Marshal.StringToHGlobalAnsi("warn");
+        var logMsg = new LibMpvEventLogMessage(prefix, level, text, LibMpvLogLevel.Warn);
+        var pLogMsg = Marshal.AllocHGlobal(Marshal.SizeOf<LibMpvEventLogMessage>());
+        Marshal.StructureToPtr(logMsg, pLogMsg, false);
+
+        try
+        {
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.LogMessage, 0, 0, pLogMsg));
+            using var player = new LibMpvPlayer(native, action => action());
+
+            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pLogMsg);
+            Marshal.FreeHGlobal(level);
+            Marshal.FreeHGlobal(text);
+            Marshal.FreeHGlobal(prefix);
+        }
+    }
+
 
     [Fact]
     public void SeekRelativeDispatchesRelativeExactCommand()
@@ -279,6 +316,14 @@ public sealed class LibMpvPlayerTests
         public Dictionary<string, string> ReadProperties { get; } = [];
         public bool IsAvailable => true;
         public string? AvailabilityError => null;
+        public string? RequestedLogLevel { get; private set; }
+        public ConcurrentQueue<LibMpvEvent> EventsToYield { get; } = [];
+
+        public int RequestLogMessages(nint handle, string minLevel)
+        {
+            RequestedLogLevel = minLevel;
+            return 0;
+        }
 
         public nint Create()
         {
@@ -336,6 +381,7 @@ public sealed class LibMpvPlayerTests
 
         public LibMpvEvent WaitEvent(nint handle, double timeout)
         {
+            if (EventsToYield.TryDequeue(out var ev)) return ev;
             return new LibMpvEvent((int)LibMpvEventId.Shutdown, 0, 0, 0);
         }
 

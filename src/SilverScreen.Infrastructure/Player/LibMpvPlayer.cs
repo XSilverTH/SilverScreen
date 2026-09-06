@@ -83,6 +83,7 @@ public sealed class LibMpvPlayer : IDisposable
             Check(native.SetOptionString(_handle, "vo", "libmpv"));
             Check(native.SetOptionString(_handle, "hwdec", "auto-safe"));
             Check(native.Initialize(_handle));
+            Check(native.RequestLogMessages(_handle, "info"));
             Observe("time-pos", LibMpvFormat.Double);
             Observe("duration", LibMpvFormat.Double);
             Observe("pause", LibMpvFormat.Flag);
@@ -469,6 +470,9 @@ public sealed class LibMpvPlayer : IDisposable
         // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch ((LibMpvEventId)mpvEvent.EventId)
         {
+            case LibMpvEventId.LogMessage:
+                HandleLogMessage(mpvEvent.Data);
+                break;
             case LibMpvEventId.PropertyChange:
                 HandlePropertyChange(mpvEvent.Data);
                 break;
@@ -480,6 +484,32 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
         }
     }
+    private void HandleLogMessage(nint data)
+    {
+        if (data == 0) return;
+        var message = Marshal.PtrToStructure<LibMpvEventLogMessage>(data);
+        var prefix = Marshal.PtrToStringUTF8(message.Prefix) ?? "unknown";
+        var text = Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n');
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        switch (message.LogLevel)
+        {
+            case LibMpvLogLevel.Fatal:
+            case LibMpvLogLevel.Error:
+                Logger.Error("[mpv:{Prefix}] {Message}", prefix, text);
+                break;
+            case LibMpvLogLevel.Warn:
+                Logger.Warning("[mpv:{Prefix}] {Message}", prefix, text);
+                break;
+            case LibMpvLogLevel.Info:
+                Logger.Information("[mpv:{Prefix}] {Message}", prefix, text);
+                break;
+            default:
+                Logger.Debug("[mpv:{Prefix}] {Message}", prefix, text);
+                break;
+        }
+    }
+
 
     private void HandlePropertyChange(nint data)
     {
