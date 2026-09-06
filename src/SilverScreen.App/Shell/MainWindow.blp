@@ -189,6 +189,28 @@ Adw.ApplicationWindow MainWindow {
                   vexpand: true;
                 };
               }
+
+              Adw.ViewStackPage {
+                name: "channel";
+                title: "Channel";
+                visible: false;
+
+                child: Gtk.Box channel_host {
+                  hexpand: true;
+                  vexpand: true;
+                };
+              }
+
+              Adw.ViewStackPage {
+                name: "search";
+                title: "Search";
+                visible: false;
+
+                child: Gtk.Box search_host {
+                  hexpand: true;
+                  vexpand: true;
+                };
+              }
             };
           };
 

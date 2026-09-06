@@ -53,8 +53,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ApplicationServices _services;
     private readonly SubscriptionsView _subscriptions;
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
+    private readonly NavigationService _navigationService;
     private bool _closed;
-    private string? _lastVisibleChildName;
     private WebLoginWindow? _webLogin;
 
     public MainWindow(ApplicationServices services, Action disposeApplicationServices)
@@ -70,6 +70,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _channelViewModel = new ChannelViewModel(services.Channels);
         _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
+        channel_host.Append(_channel.Widget);
         _ = services.HomeFeed.GetVideoListSource(OpenWebLogin);
         _home = new VideoListView(
             services.HomeFeed,
@@ -110,7 +111,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         _searchView = new VideoListView(_searchViewModel, services.Thumbnails, actions);
         _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
-
+        search_host.Append(_searchView.Widget);
         _queueViewModel = new QueueViewModel(services.Queue, _playback);
         _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
         queue_sidebar_host.Append(_queueView.Widget);
@@ -123,12 +124,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             UpdateAccountAppearance);
 
         view_switcher.Stack = view_stack;
-        var channelPage = view_stack.AddTitled(_channel.Widget, "channel", "Channel");
-        channelPage.Visible = false;
-        var searchPage = view_stack.AddTitled(_searchView.Widget, "search", "Search");
-        searchPage.Visible = false;
-        view_stack.VisibleChildName = "home";
-
+        _navigationService = new NavigationService(main_stack, view_stack);
+        _navigationService.PageChanged += OnNavigationPageChanged;
+        _navigationService.Initialize(NavigationPage.Home);
         account_popover.Child = _accountPopover.Widget;
         _searchViewModel.PropertyChanged += OnBackLabelChanged;
         _channelViewModel.PropertyChanged += OnBackLabelChanged;
@@ -183,9 +181,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (string.IsNullOrWhiteSpace(video.ChannelUrl))
             return;
 
-        view_stack.VisibleChildName = "channel";
-        UpdateBackButton();
-        UpdateHomeRefreshButton(_channel.IsLoading);
+        if (_navigationService.CurrentPage == NavigationPage.Player)
+            Widget.Unfullscreen();
+
+        _navigationService.NavigateTo(NavigationPage.Channel);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
             .ConfigureAwait(false);
     }
@@ -193,16 +192,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseChannel()
     {
         _channelViewModel.Clear();
-        view_stack.VisibleChildName = "home";
-        UpdateBackButton();
-        UpdateHomeRefreshButton(_home.IsLoading);
+        _navigationService.NavigateTo(NavigationPage.Home);
     }
 
     private void OnSearchSubmitted(string query)
     {
-        view_stack.VisibleChildName = "search";
-        UpdateBackButton();
-        UpdateHomeRefreshButton(_searchView.IsLoading);
+        _navigationService.NavigateTo(NavigationPage.Search);
         SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
     }
 
@@ -216,31 +211,28 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseSearch()
     {
         _searchViewModel.Reset();
-        view_stack.VisibleChildName = "home";
-        UpdateHomeRefreshButton(_home.IsLoading);
-        UpdateBackButton();
+        _navigationService.NavigateTo(NavigationPage.Home);
     }
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        switch (view_stack.VisibleChildName)
+        switch (_navigationService.CurrentPage)
         {
-            case "search":
+            case NavigationPage.Search:
                 CloseSearch();
                 break;
-            case "channel":
+            case NavigationPage.Channel:
                 CloseChannel();
                 break;
             default:
-                view_stack.VisibleChildName = "home";
-                UpdateBackButton();
+                _navigationService.NavigateTo(NavigationPage.Home);
                 break;
         }
     }
 
     private void OpenEmbeddedPlayer()
     {
-        main_stack.VisibleChildName = "player";
+        _navigationService.NavigateTo(NavigationPage.Player);
         if (_services.Preferences.GetPreferences().OpenInFullscreen)
             Widget.Fullscreen();
     }
@@ -248,7 +240,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseEmbeddedPlayer()
     {
         Widget.Unfullscreen();
-        main_stack.VisibleChildName = "shell";
+        _navigationService.NavigateTo(_navigationService.PreviousPage is NavigationPage prev && prev != NavigationPage.Player
+            ? prev
+            : NavigationPage.Home);
     }
 
     private void ReportStartupDependencyWarnings()
@@ -293,18 +287,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
     {
-        switch (view_stack.VisibleChildName)
+        switch (_navigationService.CurrentPage)
         {
-            case "channel":
+            case NavigationPage.Channel:
                 _channel.RefreshAsync().FireAndForget(Logger);
                 break;
-            case "history":
+            case NavigationPage.History:
                 _history.RefreshAsync().FireAndForget(Logger);
                 break;
-            case "subscriptions":
+            case NavigationPage.Subscriptions:
                 _subscriptions.RefreshAsync().FireAndForget(Logger);
                 break;
-            case "search":
+            case NavigationPage.Search:
                 _searchView.RefreshAsync().FireAndForget(Logger);
                 break;
             default:
@@ -315,64 +309,69 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && view_stack.VisibleChildName != "channel" && view_stack.VisibleChildName != "history" &&
-            view_stack.VisibleChildName != "subscriptions" && view_stack.VisibleChildName != "search")
+        if (!_closed && _navigationService.CurrentPage == NavigationPage.Home)
             UpdateHomeRefreshButton(_home.IsLoading);
     }
 
     private void OnChannelRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && view_stack.VisibleChildName == "channel")
+        if (!_closed && _navigationService.CurrentPage == NavigationPage.Channel)
             UpdateHomeRefreshButton(_channel.IsLoading);
     }
 
     private void OnHistoryRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && view_stack.VisibleChildName == "history")
+        if (!_closed && _navigationService.CurrentPage == NavigationPage.History)
             UpdateHomeRefreshButton(_history.IsLoading);
     }
 
     private void OnSubscriptionsRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && view_stack.VisibleChildName == "subscriptions")
+        if (!_closed && _navigationService.CurrentPage == NavigationPage.Subscriptions)
             UpdateHomeRefreshButton(_subscriptions.IsLoading);
     }
 
     private void OnSearchRefreshLoadingChanged(object? sender, bool isLoading)
     {
-        if (!_closed && view_stack.VisibleChildName == "search")
+        if (!_closed && _navigationService.CurrentPage == NavigationPage.Search)
             UpdateHomeRefreshButton(_searchView.IsLoading);
     }
 
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
         if (_closed) return;
+        _navigationService.SyncFromViewStack(view_stack.VisibleChildName);
+    }
+
+    private void OnNavigationPageChanged(object? sender, NavigationPageChangedEventArgs e)
+    {
+        if (_closed) return;
         UpdateBackButton();
 
-        var currentChildName = view_stack.VisibleChildName;
-        var childChanged = currentChildName != _lastVisibleChildName;
-        _lastVisibleChildName = currentChildName;
+        var childChanged = e.CurrentPage != e.PreviousPage;
 
-        switch (currentChildName)
+        switch (e.CurrentPage)
         {
-            case "channel":
+            case NavigationPage.Channel:
                 UpdateHomeRefreshButton(_channel.IsLoading);
                 break;
-            case "history":
+            case NavigationPage.History:
                 UpdateHomeRefreshButton(_history.IsLoading);
                 if (childChanged)
                     _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
                 break;
-            case "subscriptions":
+            case NavigationPage.Subscriptions:
                 UpdateHomeRefreshButton(_subscriptions.IsLoading);
                 if (childChanged)
                     _subscriptionsViewModel.LoadAsync(_subscriptions.GetBatchSize()).FireAndForget(Logger);
                 break;
-            case "search":
+            case NavigationPage.Search:
                 UpdateHomeRefreshButton(_searchView.IsLoading);
                 break;
-            default:
+            case NavigationPage.Home:
                 UpdateHomeRefreshButton(_home.IsLoading);
+                break;
+            case NavigationPage.Player:
                 break;
         }
     }
@@ -471,10 +470,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateBackButton()
     {
-        var (visible, label) = view_stack.VisibleChildName switch
+        var (visible, label) = _navigationService.CurrentPage switch
         {
-            "search" => (true, _searchViewModel.BackLabel),
-            "channel" => (true, _channelViewModel.BackLabel),
+            NavigationPage.Search => (true, _searchViewModel.BackLabel),
+            NavigationPage.Channel => (true, _channelViewModel.BackLabel),
             _ => (false, "Back"),
         };
 
@@ -528,6 +527,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (_closed) return false;
         _closed = true;
+        _navigationService.PageChanged -= OnNavigationPageChanged;
+        _navigationService.Dispose();
         _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged;
         _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged;
         _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
