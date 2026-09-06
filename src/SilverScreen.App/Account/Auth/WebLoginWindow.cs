@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using GObject;
 using Serilog;
 using SilverScreen.Account.Profile;
@@ -274,11 +275,24 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         return false;
     }
 
-    private static bool IsAllowedHost(string host)
+    [GeneratedRegex(@"^(?:[a-z0-9-]+\.)*(?:google|youtube)\.(?:[a-z]{2,3}(?:\.[a-z]{2})?)$", RegexOptions.IgnoreCase)]
+    private static partial Regex AllowedHostRegex();
+
+    internal static bool IsAllowedHost(string host)
     {
-        return string.Equals(host, "accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(host, "youtube.com", StringComparison.OrdinalIgnoreCase) ||
-               host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(host))
+            return false;
+
+        var trimmed = host.Trim().TrimEnd('.');
+        if (trimmed.Equals("google", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.EndsWith(".google", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("youtube", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.EndsWith(".youtube", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return AllowedHostRegex().IsMatch(trimmed);
     }
 
     private bool OnCloseRequest(Gtk.Window sender, EventArgs args)
