@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
@@ -128,6 +129,7 @@ public static class ApplicationComposition
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
+        SweepStaleTemporaryFiles();
         return new ServiceCollection()
             .AddSilverScreenServices(configuration)
             .BuildServiceProvider(new ServiceProviderOptions
@@ -135,5 +137,18 @@ public static class ApplicationComposition
                 ValidateOnBuild = true,
                 ValidateScopes = true
             });
+    }
+
+    private static void SweepStaleTemporaryFiles()
+    {
+        // Best-effort orphan cleanup for crashed/short-lived cookie and IPC entries; never fails startup.
+        try
+        {
+            TemporaryCookieFile.SweepStale();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Stale temporary file sweep failed at startup");
+        }
     }
 }
