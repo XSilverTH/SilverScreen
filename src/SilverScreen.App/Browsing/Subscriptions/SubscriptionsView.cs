@@ -69,7 +69,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     public async Task RefreshAsync()
     {
-        await _viewModel.RefreshAsync(GetBatchSize()).ConfigureAwait(false);
+        await _videoList.RefreshAsync().ConfigureAwait(false);
     }
 
     private void OnVideoListRefreshLoadingChanged(object? sender, bool isLoading)

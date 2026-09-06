@@ -19,6 +19,8 @@ public partial class VideoListView : ViewBase<Bin>
 {
     private const int RowsPerBatch = VideoFeedConstants.RowsPerBatch;
     private const int CardWidthWithMargin = 330;
+    private const int RefreshScrollStabilizationPasses = 3;
+    private const uint RefreshScrollStabilizationMilliseconds = 16;
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly IVideoListSource _source;
@@ -31,6 +33,10 @@ public partial class VideoListView : ViewBase<Bin>
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
+    private long _refreshGeneration;
+    private uint _refreshScrollSource;
+    private int _refreshScrollPass;
+    private bool _refreshScrollPending;
     private Revealer? _paginationErrorRevealer;
     private Label? _paginationErrorLabel;
     private Button? _paginationErrorRetryButton;
@@ -159,24 +165,60 @@ public partial class VideoListView : ViewBase<Bin>
         if (_disposed || Vadjustment is null)
             return;
 
-        Vadjustment.Value = Vadjustment.Lower;
+        Vadjustment.SetValue(Vadjustment.Lower);
+    }
+
+    private void CancelRefreshScroll()
+    {
+        if (_refreshScrollSource == 0)
+            return;
+
+        Functions.SourceRemove(_refreshScrollSource);
+        _refreshScrollSource = 0;
+    }
+
+    private void ScheduleRefreshScroll(long generation, bool resetPass = true)
+    {
+        CancelRefreshScroll();
+        if (resetPass)
+            _refreshScrollPass = 0;
+        _refreshScrollPending = true;
+
+        _refreshScrollSource = Functions.TimeoutAdd(
+            0,
+            RefreshScrollStabilizationMilliseconds,
+            () =>
+            {
+                _refreshScrollSource = 0;
+                if (_disposed || generation != _refreshGeneration)
+                    return false;
+
+                ScrollToTop();
+                if (++_refreshScrollPass < RefreshScrollStabilizationPasses)
+                {
+                    ScheduleRefreshScroll(generation, resetPass: false);
+                    return false;
+                }
+
+                _refreshScrollPending = false;
+                return false;
+            });
     }
 
     public async Task RefreshAsync()
     {
+        var generation = ++_refreshGeneration;
+        _refreshScrollPending = true;
+        CancelRefreshScroll();
+
         try
         {
             await _source.RefreshAsync(GetBatchSize()).ConfigureAwait(false);
         }
         finally
         {
-            Functions.IdleAdd(0, () =>
-            {
-                if (!_disposed)
-                    ScrollToTop();
-
-                return false;
-            });
+            if (!_disposed && generation == _refreshGeneration)
+                ScheduleRefreshScroll(generation);
         }
     }
 
@@ -245,7 +287,8 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (_disposed || Vadjustment is null ||
+        if (_disposed || _refreshScrollPending || _source.State.IsLoading || _source.State.IsLoadingMore ||
+            Vadjustment is null ||
             Vadjustment.Value + Vadjustment.PageSize < Vadjustment.Upper - 240)
             return;
 
@@ -324,6 +367,7 @@ public partial class VideoListView : ViewBase<Bin>
 
         var removedMiddleCount = _displayedVideos.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextVideos.Length - prefixLength - suffixLength;
+        var isPaginationAppend = removedMiddleCount == 0 && prefixLength == _displayedVideos.Length;
         _videosById.Clear();
         foreach (var video in nextVideos)
             _videosById[video.Id] = video;
@@ -331,6 +375,17 @@ public partial class VideoListView : ViewBase<Bin>
         _displayedVideos = nextVideos;
         if (removedMiddleCount == 0 && addedMiddleCount == 0)
             return;
+
+        if (!isPaginationAppend)
+        {
+            if (!_refreshScrollPending)
+            {
+                var generation = ++_refreshGeneration;
+                ScheduleRefreshScroll(generation);
+            }
+
+            ScrollToTop();
+        }
 
         var addedMiddleIds = nextVideos.Skip(prefixLength).Take(addedMiddleCount).Select(video => video.Id).ToArray();
         _videoIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
@@ -383,6 +438,7 @@ public partial class VideoListView : ViewBase<Bin>
             return;
 
         _disposed = true;
+        CancelRefreshScroll();
         _source.StateChanged -= OnStateChanged;
         if (Vadjustment is not null)
             Vadjustment.OnValueChanged -= OnScrollValueChanged;
