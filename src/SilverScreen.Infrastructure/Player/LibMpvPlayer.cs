@@ -54,6 +54,10 @@ public sealed class LibMpvPlayer : IDisposable
         false, [], []);
 
     private GCHandle _updateCallbackHandle;
+    private readonly Lock _seekGate = new();
+    private (double Seconds, bool Exact)? _pendingSeek;
+    private bool _seekQueued;
+
 
     public LibMpvPlayer(Action<Action> dispatch) : this(new LibMpvNative(), dispatch)
     {
@@ -282,8 +286,36 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void SeekAbsolute(double seconds, bool exact = true)
     {
-        Enqueue(() => Check(_native.Command(_handle, "seek",
-            seconds.ToString(CultureInfo.InvariantCulture), exact ? "absolute+exact" : "absolute+keyframes")));
+        lock (_seekGate)
+        {
+            _pendingSeek = (seconds, exact);
+            if (!_seekQueued)
+            {
+                _seekQueued = true;
+                Enqueue(DispatchPendingSeek);
+            }
+        }
+    }
+
+    private void DispatchPendingSeek()
+    {
+        (double Seconds, bool Exact) target;
+        lock (_seekGate)
+        {
+            if (!_pendingSeek.HasValue)
+            {
+                _seekQueued = false;
+                return;
+            }
+
+            target = _pendingSeek.Value;
+            _pendingSeek = null;
+            _seekQueued = false;
+        }
+
+        Check(_native.Command(_handle, "seek",
+            target.Seconds.ToString(CultureInfo.InvariantCulture),
+            target.Exact ? "absolute+exact" : "absolute+keyframes"));
     }
 
     public void SetVolume(double volume)
@@ -349,6 +381,9 @@ public sealed class LibMpvPlayer : IDisposable
             renderContext = _renderContext;
             _renderContext = 0;
             _resumeAfterRenderer = _state.HasMedia;
+            if (_state.HasMedia && _request is not null)
+                _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
+                    _state.Speed);
         }
 
         SetPaused(true);
@@ -359,6 +394,11 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void Stop()
     {
+        lock (_seekGate)
+        {
+            _pendingSeek = null;
+        }
+
         lock (_gate)
         {
             if (IsDisposing || !IsAvailable) return;

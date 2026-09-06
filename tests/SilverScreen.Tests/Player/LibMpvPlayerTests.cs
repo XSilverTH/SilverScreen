@@ -108,11 +108,43 @@ public sealed class LibMpvPlayerTests
         using var player = new LibMpvPlayer(native, action => action());
 
         player.SeekAbsolute(42.5);
+        Assert.True(SpinWait.SpinUntil(() => !native.Commands.IsEmpty, TimeSpan.FromSeconds(2)));
         player.SeekAbsolute(100.25, false);
 
         Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 2, TimeSpan.FromSeconds(2)));
         Assert.Contains("seek|42.5|absolute+exact", native.Commands);
         Assert.Contains("seek|100.25|absolute+keyframes", native.Commands);
+    }
+
+    [Fact]
+    public void SeekAbsoluteCoalescesRapidSeeks()
+    {
+        var blockEvent = new ManualResetEventSlim(false);
+        var startedEvent = new ManualResetEventSlim(false);
+        var native = new RecordingNative
+        {
+            BlockCommandEvent = blockEvent,
+            CommandStartedEvent = startedEvent
+        };
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.SeekAbsolute(10, false);
+        Assert.True(startedEvent.Wait(TimeSpan.FromSeconds(2)));
+
+        // Rapid seeks while first seek is in progress
+        player.SeekAbsolute(20, false);
+        player.SeekAbsolute(30, false);
+        player.SeekAbsolute(40, true);
+
+        native.BlockCommandEvent = null;
+        blockEvent.Set();
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 2, TimeSpan.FromSeconds(2)));
+        Thread.Sleep(50);
+
+        Assert.Equal(2, native.Commands.Count);
+        Assert.Contains("seek|10|absolute+keyframes", native.Commands);
+        Assert.Contains("seek|40|absolute+exact", native.Commands);
     }
 
     [Fact]
@@ -242,6 +274,8 @@ public sealed class LibMpvPlayerTests
     {
         public ConcurrentBag<string> Commands { get; } = [];
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
+        public ManualResetEventSlim? BlockCommandEvent { get; set; }
+        public ManualResetEventSlim? CommandStartedEvent { get; set; }
         public Dictionary<string, string> ReadProperties { get; } = [];
         public bool IsAvailable => true;
         public string? AvailabilityError => null;
@@ -295,6 +329,8 @@ public sealed class LibMpvPlayerTests
         public int Command(nint handle, params string[] arguments)
         {
             Commands.Add(string.Join('|', arguments));
+            CommandStartedEvent?.Set();
+            BlockCommandEvent?.Wait();
             return 0;
         }
 
