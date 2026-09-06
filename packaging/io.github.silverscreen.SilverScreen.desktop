@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=SilverScreen
+GenericName=YouTube Client
+Comment=Native YouTube client for GNOME that plays videos with MPV
+Exec=SilverScreen
+Icon=silverscreen
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=YouTube;Video;Mpv;Streaming;
+StartupWMClass=SilverScreen
+StartupNotify=true
+SingleMainWindow=true

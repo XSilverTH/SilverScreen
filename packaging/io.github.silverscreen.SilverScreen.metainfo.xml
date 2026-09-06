@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.silverscreen.SilverScreen</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>SilverScreen</name>
+  <summary>Native YouTube client that plays videos with MPV</summary>
+  <description>
+    <p>
+      SilverScreen is a native YouTube client for GNOME, built with GTK 4 and
+      Libadwaita. Search YouTube or paste a video link, then play it through a
+      built-in libmpv player or an external MPV install, with stream extraction
+      handled by yt-dlp.
+    </p>
+    <p>Supports both Wayland and X11 sessions through GTK 4.</p>
+    <ul>
+      <li>Search YouTube and open results directly in MPV</li>
+      <li>Optional sign-in for Home recommendations, subscriptions, and history</li>
+      <li>Queue, comments, ratings, SponsorBlock skipping, and Discord Rich Presence</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.silverscreen.SilverScreen.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <!-- TODO: replace with hosted release screenshots after 0.1.0. -->
+      <caption>SilverScreen browsing YouTube</caption>
+      <image>https://raw.githubusercontent.com/XSilverTH/SilverScreen/v0.1.0/Screenshots/placeholder.png</image>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/XSilverTH/SilverScreen</url>
+  <url type="bugtracker">https://github.com/XSilverTH/SilverScreen/issues</url>
+  <releases>
+    <release version="0.1.0" date="2026-09-06">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1">
+    <content_attribute id="drugs-alcohol">mild</content_attribute>
+    <content_attribute id="language-profanity">mild</content_attribute>
+    <content_attribute id="social-chat">moderate</content_attribute>
+    <content_attribute id="social-info">moderate</content_attribute>
+    <content_attribute id="violence-realistic">mild</content_attribute>
+  </content_rating>
+  <developer>
+    <name>XSilverTH</name>
+  </developer>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+  </categories>
+</component>

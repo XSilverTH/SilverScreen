@@ -1,0 +1,52 @@
+name: tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish (linux-x64, AOT)
+        run: >
+          dotnet publish src/SilverScreen.App/SilverScreen.App.csproj
+          -c Release -r linux-x64 --self-contained
+          -o publish/linux-x64
+
+      - name: Stage tarball and checksums
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          dist="silverscreen-${ver}-linux-x64"
+          mkdir "${dist}"
+          cp publish/linux-x64/SilverScreen "${dist}/"
+          cp packaging/io.github.silverscreen.SilverScreen.desktop "${dist}/"
+          cp packaging/io.github.silverscreen.SilverScreen.metainfo.xml "${dist}/"
+          cp src/SilverScreen.App/Assets/silverscreen.svg "${dist}/"
+          cp LICENSE THIRD-PARTY.md "${dist}/"
+          tar -czf "${dist}.tar.gz" "${dist}"
+          sha256sum "${dist}.tar.gz" > "${dist}.tar.gz.sha256"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          dist="silverscreen-${ver}-linux-x64"
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "SilverScreen ${ver}" \
+            --notes "SilverScreen ${ver}. See THIRD-PARTY.md for attribution." \
+            "${dist}.tar.gz" "${dist}.tar.gz.sha256"
