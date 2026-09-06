@@ -4,6 +4,7 @@ using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
+using SilverScreen.Features;
 
 namespace SilverScreen.Account.Profile;
 
@@ -45,7 +46,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public bool HasManualSession => Session.HasManualSession;
+    public bool HasManualSession => SessionGate.RequireSignedIn(_sessionService);
 
     public string? ManualSessionError { get; private set; }
 
@@ -194,7 +195,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         _profileCancellation?.Dispose();
         _profileCancellation = null;
 
-        if (_disposed || !Session.HasManualSession)
+        if (_disposed || !SessionGate.RequireSignedIn(_sessionService))
             return;
 
         _profileCancellation = new CancellationTokenSource();

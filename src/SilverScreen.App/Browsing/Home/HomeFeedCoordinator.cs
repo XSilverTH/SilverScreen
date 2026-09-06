@@ -4,6 +4,7 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Common;
+using SilverScreen.Features;
 
 namespace SilverScreen.Browsing.Home;
 
@@ -33,15 +34,14 @@ public sealed class HomeFeedCoordinator : IVideoListSource
                     _lastStatus = res.Status;
                 }
 
-                if (res.Status is AuthenticatedHomeFeedStatus.AuthenticationRequired
-                    or AuthenticatedHomeFeedStatus.AuthenticationRejected)
-                    return FeedPageResult.Failed("Your YouTube sign-in is no longer valid.", true);
+                if (SessionGate.IsAuthInvalid(res.Status))
+                    return FeedPageResult.Failed(SessionGate.SessionNoLongerValidMessage, true);
 
                 var isSuccess = res.Status is AuthenticatedHomeFeedStatus.Success or AuthenticatedHomeFeedStatus.Empty;
                 var hasContinuation = res.Status == AuthenticatedHomeFeedStatus.Success &&
                                       !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
 
-                if (!isSuccess) return FeedPageResult.Failed("Could not load YouTube recommendations.");
+                if (!isSuccess) return FeedPageResult.Failed(SessionGate.HomeLoadErrorMessage);
 
                 return new FeedPageResult(
                     res.FeedPage.Videos,
@@ -126,40 +126,13 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             return;
         }
 
-        HomeFeedStateKind kind;
-        var message = engineState.StatusMessage;
-
         AuthenticatedHomeFeedStatus lastStatus;
         lock (_lock)
         {
             lastStatus = _lastStatus;
         }
 
-        if (lastStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired
-            or AuthenticatedHomeFeedStatus.AuthenticationRejected)
-        {
-            kind = HomeFeedStateKind.AuthenticationRequired;
-            message = "Your YouTube session is no longer valid.";
-        }
-        else if (engineState.LastError != null || !engineState.IsSuccess)
-        {
-            kind = HomeFeedStateKind.SafeError;
-            message = "Could not load YouTube recommendations.";
-        }
-        else if (engineState is { IsLoading: true, Videos.Count: 0 })
-        {
-            kind = HomeFeedStateKind.InitialLoading;
-        }
-        else if (engineState.Videos.Count == 0 && !engineState.IsLoading)
-        {
-            kind = HomeFeedStateKind.Empty;
-            message = "No recommendations are available right now.";
-        }
-        else
-        {
-            kind = HomeFeedStateKind.Ready;
-        }
-
+        var (kind, message) = SessionGate.MapHomeFeedOutcome(lastStatus, engineState);
         var newState = new HomeFeedState(
             kind,
             [.. engineState.Videos],
@@ -183,10 +156,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     private bool IsSessionActive()
     {
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
-               !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
@@ -204,13 +174,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     private VideoListStatus MapSignedOutStatus()
     {
-        return new VideoListStatus(
-            "Home",
-            "Sign in with Google or use cookies.txt to see your Home feed.",
-            "avatar-default-symbolic",
-            false,
-            _openWebLogin is null ? null : "Sign In",
-            _openWebLogin);
+        return SessionGate.HomeSignedOutStatus(_openWebLogin);
     }
 
     private VideoListStatus MapHomeStatus(FeedEngineState state)
@@ -221,26 +185,12 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             lastStatus = _lastStatus;
         }
 
-        if (lastStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired
-            or AuthenticatedHomeFeedStatus.AuthenticationRejected)
-            return new VideoListStatus(
-                "Home",
-                "Your YouTube sign-in is no longer valid.",
-                "dialog-password-symbolic",
-                false,
-                _openWebLogin is null ? null : "Sign In",
-                _openWebLogin);
+        if (SessionGate.IsAuthInvalid(lastStatus))
+            return SessionGate.HomeAuthInvalidStatus(_openWebLogin);
 
         if (state.LastError != null || !state.IsSuccess)
-            return new VideoListStatus(
-                "Home",
-                "Could not load YouTube recommendations.",
-                "network-error-symbolic",
-                true);
+            return SessionGate.HomeErrorStatus();
 
-        return new VideoListStatus(
-            "Home",
-            "No recommendations are available right now.",
-            "applications-internet-symbolic");
+        return SessionGate.HomeEmptyStatus();
     }
 }

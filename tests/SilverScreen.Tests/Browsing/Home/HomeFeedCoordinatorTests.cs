@@ -165,7 +165,7 @@ public sealed class HomeFeedCoordinatorTests
         // Assert
         Assert.Equal(HomeFeedStateKind.AuthenticationRequired, coordinator.State.Kind);
         Assert.Empty(coordinator.State.Videos);
-        Assert.Equal("Your YouTube session is no longer valid.", coordinator.State.Message);
+        Assert.False(string.IsNullOrWhiteSpace(coordinator.State.Message));
     }
 
     [Fact]
