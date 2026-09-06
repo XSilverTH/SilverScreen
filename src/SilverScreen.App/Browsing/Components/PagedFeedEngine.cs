@@ -362,10 +362,11 @@ public class PagedFeedEngine : IVideoListSource
         lock (_lock)
         {
             if (_disposed) return;
+            if (!isRefresh && (_isLoading || _isLoadingMore || !_hasMore || _fetcher is null))
+                return;
 
             CancelPendingRequestsUnsafe();
             generation = _currentGeneration;
-
             _cts = new CancellationTokenSource();
             token = _cts.Token;
 

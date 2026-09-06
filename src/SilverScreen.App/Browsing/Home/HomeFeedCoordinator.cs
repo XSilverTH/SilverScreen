@@ -102,8 +102,11 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
+        if (!IsSessionActive() || _engine.IsLoading || _engine.IsLoadingMore || !_engine.HasMore)
+            return Task.CompletedTask;
+
         Logger.Information("HomeFeedCoordinator loading more home feed items");
-        return !IsSessionActive() ? Task.CompletedTask : _engine.LoadMoreAsync(count);
+        return _engine.LoadMoreAsync(count);
     }
 
     public IVideoListSource GetVideoListSource(Action? openWebLogin = null)

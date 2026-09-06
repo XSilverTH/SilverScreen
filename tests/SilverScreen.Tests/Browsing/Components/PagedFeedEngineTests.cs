@@ -135,7 +135,6 @@ public sealed class PagedFeedEngineTests
             fetchCount++;
             return nextTcs.Task;
         });
-
         var loadMoreTask = engine.LoadMoreAsync();
         Assert.True(engine.IsLoadingMore);
 
@@ -145,6 +144,33 @@ public sealed class PagedFeedEngineTests
 
         nextTcs.SetResult(new FeedPageResult([CreateVideo("2")]));
         await loadMoreTask;
+    }
+
+    [Fact]
+    public async Task LoadMoreAsync_WhenInvokedConcurrently_StartsOnlyOneFetch()
+    {
+        var fetchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetchCompletion = new TaskCompletionSource<FeedPageResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetchCount = 0;
+
+        using var engine = new PagedFeedEngine(
+            fetcher: (_, _, _) =>
+            {
+                Interlocked.Increment(ref fetchCount);
+                fetchStarted.TrySetResult();
+                return fetchCompletion.Task;
+            });
+        engine.SetVideos([CreateVideo("1")], continuationToken: "token_2");
+
+        var firstLoad = engine.LoadMoreAsync();
+        await fetchStarted.Task;
+        var secondLoad = engine.LoadMoreAsync();
+
+        Assert.Equal(1, fetchCount);
+
+        fetchCompletion.SetResult(new FeedPageResult([CreateVideo("2")]));
+        await Task.WhenAll(firstLoad, secondLoad);
     }
 
     [Fact]
