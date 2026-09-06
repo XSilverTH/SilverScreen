@@ -336,6 +336,25 @@ public sealed class PreferencesTests : IDisposable
     }
 
     [Fact]
+    public void SavePreferences_PersistsWindowState()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        var prefs = service.GetPreferences() with
+        {
+            WindowWidth = 1400,
+            WindowHeight = 900,
+            WindowMaximized = true
+        };
+
+        service.SavePreferences(prefs);
+        var loaded = service.GetPreferences();
+
+        Assert.Equal(1400, loaded.WindowWidth);
+        Assert.Equal(900, loaded.WindowHeight);
+        Assert.True(loaded.WindowMaximized);
+    }
+
+    [Fact]
     public void SavePreferences_ExternalMutation_DoesNotCorruptServiceState()
     {
         var service = new FilePreferencesService(_tempFilePath);

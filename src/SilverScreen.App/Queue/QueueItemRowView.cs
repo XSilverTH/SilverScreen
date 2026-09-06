@@ -89,6 +89,8 @@ public partial class QueueItemRowView : ViewBase<Box>
         _dragSource.SetIcon(_dragPaintable, 0, 0);
 
         _dropTarget = DropTarget.New(Type.String, DragAction.Move);
+        _dropTarget.OnMotion += OnDropMotion;
+        _dropTarget.OnLeave += OnDropLeave;
         _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
         Widget.AddController(_dropTarget);
 
@@ -172,6 +174,8 @@ public partial class QueueItemRowView : ViewBase<Box>
         state_stack.VisibleChildName = "index";
         Widget.RemoveCssClass("now-playing");
         Widget.RemoveCssClass("played");
+        Widget.RemoveCssClass("queue-drop-before");
+        Widget.RemoveCssClass("queue-drop-after");
         _playNowAction.Enabled = false;
         _moveUpAction.Enabled = false;
         _moveDownAction.Enabled = false;
@@ -193,13 +197,39 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private bool HandleDrop(string? value, double y)
     {
+        Widget.RemoveCssClass("queue-drop-before");
+        Widget.RemoveCssClass("queue-drop-after");
+
         if (Item is null || !Guid.TryParse(value, out var itemId))
             return false;
 
-        Widget.RemoveCssClass("queue-drop-before");
-        Widget.RemoveCssClass("queue-drop-after");
         _dropRequested(itemId, y < Widget.GetAllocatedHeight() / 2.0 ? _index : _index + 1);
         return true;
+    }
+
+    private DragAction OnDropMotion(DropTarget sender, DropTarget.MotionSignalArgs args)
+    {
+        if (Item is null)
+            return 0;
+
+        if (args.Y < Widget.GetAllocatedHeight() / 2.0)
+        {
+            Widget.AddCssClass("queue-drop-before");
+            Widget.RemoveCssClass("queue-drop-after");
+        }
+        else
+        {
+            Widget.RemoveCssClass("queue-drop-before");
+            Widget.AddCssClass("queue-drop-after");
+        }
+
+        return DragAction.Move;
+    }
+
+    private void OnDropLeave(DropTarget sender, EventArgs args)
+    {
+        Widget.RemoveCssClass("queue-drop-before");
+        Widget.RemoveCssClass("queue-drop-after");
     }
 
     private void MoveBy(int delta)
@@ -325,6 +355,8 @@ public partial class QueueItemRowView : ViewBase<Box>
         Unbind();
         grip.RemoveController(_dragSource);
         Widget.RemoveController(_dropTarget);
+        _dropTarget.OnMotion -= OnDropMotion;
+        _dropTarget.OnLeave -= OnDropLeave;
         _dragPaintable.Dispose();
         _dragSource.Dispose();
         _dropTarget.Dispose();

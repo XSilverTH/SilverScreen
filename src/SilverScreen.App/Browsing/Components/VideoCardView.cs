@@ -30,6 +30,7 @@ public partial class VideoCardView : ViewBase<Bin>
     private readonly GestureClick _channelClick;
     private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
+    private readonly EventControllerKey _keyController;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly GestureClick _rightClick;
@@ -84,6 +85,9 @@ public partial class VideoCardView : ViewBase<Bin>
         _channelClick.OnReleased += OnChannelReleased;
         channel.AddController(_channelClick);
 
+        _keyController = EventControllerKey.New();
+        _keyController.OnKeyPressed += OnKeyPressed;
+        card.AddController(_keyController);
 
     }
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
@@ -185,8 +189,7 @@ public partial class VideoCardView : ViewBase<Bin>
         {
             try
             {
-                if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
-                    thumbnail.GetRoot() is null)
+                if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
                     return false;
 
                 Texture? texture = null;
@@ -279,6 +282,20 @@ public partial class VideoCardView : ViewBase<Bin>
         _contextMenu.SetPointingTo(rect);
         _contextMenu.Popup();
     }
+    private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+    {
+        if (_disposed || _video is null)
+            return false;
+
+        if (args.Keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+        {
+            StartPlay(_video);
+            return true;
+        }
+
+        return false;
+    }
+
 
     private void OnMenuActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
     {
@@ -484,6 +501,9 @@ public partial class VideoCardView : ViewBase<Bin>
         _channelClick.OnReleased -= OnChannelReleased;
         channel.RemoveController(_channelClick);
         _channelClick.Dispose();
+        _keyController.OnKeyPressed -= OnKeyPressed;
+        card.RemoveController(_keyController);
+        _keyController.Dispose();
 
         _contextMenu.Popdown();
         _contextMenu.Unparent();

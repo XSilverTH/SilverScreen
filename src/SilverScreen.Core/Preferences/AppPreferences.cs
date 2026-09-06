@@ -23,6 +23,9 @@ public sealed record AppPreferences
     public bool ResumePlaybackOnDemand { get; set; }
     public bool ShortcutOsdEnabled { get; set; } = true;
     public PlayerShortcutBindings Shortcuts { get; set; } = new();
+    public int WindowWidth { get; set; } = 1180;
+    public int WindowHeight { get; set; } = 760;
+    public bool WindowMaximized { get; set; }
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =
         [.. Player.SponsorBlockCategories.All];

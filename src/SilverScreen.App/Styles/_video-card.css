@@ -20,18 +20,17 @@ gridview item:hover,
 gridview > child:selected,
 gridview child:selected,
 gridview tile:selected,
-gridview item:selected,
-gridview > child:focus,
-gridview child:focus,
-gridview tile:focus,
-gridview item:focus,
-gridview > child:active,
-gridview child:active,
-gridview tile:active,
-gridview item:active {
+gridview item:selected {
     background-color: transparent;
     outline: none;
     box-shadow: none;
+}
+
+.video-card:focus,
+.video-card:focus-visible,
+gridview > child:focus .video-card {
+    outline: 2px solid @accent_color;
+    outline-offset: 2px;
 }
 
 .video-card {
