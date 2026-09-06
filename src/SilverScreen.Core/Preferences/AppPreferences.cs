@@ -18,7 +18,7 @@ public sealed record AppPreferences
     public bool DiscordRichPresenceEnabled { get; set; }
     public bool RydEnabled { get; set; }
     public bool SponsorBlockAutoSkipEnabled { get; set; }
-    public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
+    public bool SponsorBlockSegmentDisplayEnabled { get; set; }
     public bool ResumePlaybackAutomatically { get; set; }
     public bool ResumePlaybackOnDemand { get; set; }
     public bool ShortcutOsdEnabled { get; set; } = true;

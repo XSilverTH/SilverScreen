@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Serilog;
@@ -60,10 +62,13 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             return cached;
         }
 
-        var query = $"videoID={Uri.EscapeDataString(videoId)}&actionType=skip&" +
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(videoId));
+        var hashPrefix = Convert.ToHexStringLower(hashBytes)[..4];
+
+        var query = "actionType=skip&" +
                     string.Join('&',
                         selectedCategories.Select(category => $"category={Uri.EscapeDataString(category)}"));
-        var requestUri = new UriBuilder(SkipSegmentsEndpoint) { Query = query }.Uri;
+        var requestUri = new UriBuilder($"{SkipSegmentsEndpoint}/{hashPrefix}") { Query = query }.Uri;
 
         try
         {
@@ -74,19 +79,24 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
-                Logger.Warning("SponsorBlock request for video {VideoId} returned HTTP status {StatusCode}", videoId,
-                    response.StatusCode);
+                if (response.StatusCode != HttpStatusCode.NotFound)
+                {
+                    Logger.Warning("SponsorBlock request for video {VideoId} (prefix {HashPrefix}) returned HTTP status {StatusCode}",
+                        videoId, hashPrefix, response.StatusCode);
+                }
                 return [];
             }
 
             await using var responseStream =
                 await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var payload = await JsonSerializer.DeserializeAsync(responseStream,
-                    SponsorBlockJsonContext.Default.SponsorBlockSkipSegmentArray, cancellationToken)
+                    SponsorBlockJsonContext.Default.SponsorBlockVideoResponseArray, cancellationToken)
                 .ConfigureAwait(false);
             if (payload is null) return [];
 
-            var segments = payload
+            var videoEntry = payload.FirstOrDefault(v => string.Equals(v.VideoId, videoId, StringComparison.Ordinal));
+            if (videoEntry?.Segments is null) return [];
+            var segments = videoEntry.Segments
                 .Where(segment => segment is
                                   {
                                       Id.Length: > 0,
@@ -135,11 +145,16 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
     }
 }
 
+internal sealed record SponsorBlockVideoResponse(
+    [property: JsonPropertyName("videoID")] string? VideoId,
+    [property: JsonPropertyName("segments")] SponsorBlockSkipSegment[]? Segments);
+
 internal sealed record SponsorBlockSkipSegment(double[]? Segment, string? Uuid, string? Category, string? ActionType)
 {
     public string? Id => Uuid;
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(SponsorBlockVideoResponse[]))]
 [JsonSerializable(typeof(SponsorBlockSkipSegment[]))]
 internal partial class SponsorBlockJsonContext : JsonSerializerContext;

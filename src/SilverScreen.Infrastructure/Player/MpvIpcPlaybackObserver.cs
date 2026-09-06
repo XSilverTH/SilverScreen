@@ -173,7 +173,7 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
         try
         {
             File.Delete(_endpoint);
-            _endpointDirectory.Delete();
+            _endpointDirectory.Delete(true);
         }
         catch (IOException)
         {

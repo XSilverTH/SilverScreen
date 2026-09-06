@@ -1,12 +1,18 @@
 namespace SilverScreen.Account.Auth;
 
-internal sealed class WebLoginCaptureCoordinator
+internal sealed class WebLoginCaptureCoordinator : IDisposable
 {
+    private static readonly TimeSpan DefaultDebounceDelay = TimeSpan.FromMilliseconds(500);
+
     private readonly Func<string, bool> _persist;
     private readonly Action _persisted;
     private readonly Action _persistenceFailed;
     private readonly Action<Exception> _readFailed;
     private readonly Func<Task<string?>> _readReadyCookies;
+    private readonly TimeSpan _debounceDelay;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly object _gate = new();
+
     private bool _captureRequested;
     private Task _drainTask = Task.CompletedTask;
     private bool _stopped;
@@ -16,65 +22,147 @@ internal sealed class WebLoginCaptureCoordinator
         Func<string, bool> persist,
         Action persisted,
         Action<Exception> readFailed,
-        Action persistenceFailed)
+        Action persistenceFailed,
+        TimeSpan? debounceDelay = null)
     {
         _readReadyCookies = readReadyCookies;
         _persist = persist;
         _persisted = persisted;
         _readFailed = readFailed;
         _persistenceFailed = persistenceFailed;
+        _debounceDelay = debounceDelay ?? DefaultDebounceDelay;
     }
 
     internal void RequestCapture()
     {
-        if (_stopped)
-            return;
+        lock (_gate)
+        {
+            if (_stopped)
+                return;
 
-        _captureRequested = true;
-        if (_drainTask.IsCompleted)
-            _drainTask = DrainAsync();
+            _captureRequested = true;
+            if (_drainTask.IsCompleted)
+                _drainTask = DrainAsync();
+        }
     }
 
-    internal Task StopAsync()
+    internal async Task StopAsync()
     {
-        _stopped = true;
-        _captureRequested = false;
-        return _drainTask;
+        lock (_gate)
+        {
+            _stopped = true;
+            _captureRequested = false;
+        }
+
+        try
+        {
+            _cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        try
+        {
+            await _drainTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task DrainAsync()
     {
-        while (_captureRequested && !_stopped)
+        while (true)
         {
-            _captureRequested = false;
+            lock (_gate)
+            {
+                if (_stopped || !_captureRequested)
+                    return;
+
+                _captureRequested = false;
+            }
+
+            if (_debounceDelay > TimeSpan.Zero)
+            {
+                try
+                {
+                    await Task.Delay(_debounceDelay, _cts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                lock (_gate)
+                {
+                    if (_stopped)
+                        return;
+
+                    if (_captureRequested)
+                    {
+                        // Another capture request arrived during debounce; restart window to let cookies settle
+                        continue;
+                    }
+                }
+            }
+
             string? cookieText;
             try
             {
-                cookieText = await _readReadyCookies();
+                cookieText = await _readReadyCookies().ConfigureAwait(false);
             }
             catch (Exception exception)
             {
-                if (!_stopped)
+                bool shouldReport;
+                lock (_gate)
+                {
+                    shouldReport = !_stopped;
+                }
+
+                if (shouldReport)
                     _readFailed(exception);
                 continue;
             }
 
-            if (_stopped || cookieText is null)
-                continue;
+            lock (_gate)
+            {
+                if (_stopped)
+                    return;
+
+                if (cookieText is null)
+                    continue;
+            }
 
             if (!_persist(cookieText))
             {
-                if (!_stopped)
+                bool shouldReport;
+                lock (_gate)
+                {
+                    shouldReport = !_stopped;
+                }
+
+                if (shouldReport)
                     _persistenceFailed();
                 continue;
             }
 
-            if (_stopped)
-                return;
+            lock (_gate)
+            {
+                if (_stopped)
+                    return;
 
-            _stopped = true;
-            _captureRequested = false;
+                _stopped = true;
+                _captureRequested = false;
+            }
+
             _persisted();
+            return;
         }
+    }
+
+    public void Dispose()
+    {
+        _cts.Dispose();
     }
 }

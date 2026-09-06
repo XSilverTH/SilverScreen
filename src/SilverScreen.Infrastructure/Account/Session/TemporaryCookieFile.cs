@@ -1,7 +1,8 @@
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Session;
-
 namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
@@ -24,10 +25,56 @@ public static class TemporaryCookieFile
 {
     internal const string DirectoryPrefix = "silverscreen-cookies-";
     internal const string IpcDirectoryPrefix = "silverscreen-mpv-";
-    private static readonly TimeSpan DefaultStaleAge = TimeSpan.FromHours(24);
+    private static readonly TimeSpan DefaultStaleAge = TimeSpan.FromHours(1);
+    private static readonly ConcurrentDictionary<string, byte> ActiveLeaseDirectories = new();
 
     private static readonly ILogger Logger = Log.ForContext(typeof(TemporaryCookieFile));
 
+    static TemporaryCookieFile()
+    {
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => WipeActiveLeases();
+
+        if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => WipeActiveLeases());
+                PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => WipeActiveLeases());
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, "Could not register POSIX signal handlers for cookie cleanup");
+            }
+        }
+    }
+
+    public static string GetDefaultTempRoot()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg))
+                return xdg;
+        }
+
+        return Path.GetTempPath();
+    }
+
+    private static void WipeActiveLeases()
+    {
+        try
+        {
+            foreach (var directoryPath in ActiveLeaseDirectories.Keys)
+            {
+                DeleteDirectoryRecursively(directoryPath);
+                ActiveLeaseDirectories.TryRemove(directoryPath, out _);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Failed to clean up active cookie leases during exit");
+        }
+    }
     /// <summary>
     /// Best-effort lease creation. Never throws: returns <c>null</c> when there are
     /// no cookies to persist or the temporary file could not be created, so playback
@@ -50,7 +97,7 @@ public static class TemporaryCookieFile
         if (string.IsNullOrWhiteSpace(cookieContent))
             return (null, null);
 
-        var root = tempRoot ?? Path.GetTempPath();
+        var root = tempRoot ?? GetDefaultTempRoot();
         var directoryPath = Path.Combine(root, $"{DirectoryPrefix}{Guid.NewGuid():N}");
         try
         {
@@ -81,13 +128,18 @@ public static class TemporaryCookieFile
                 writer.Write(cookieContent);
             }
 
+            ActiveLeaseDirectories.TryAdd(directoryPath, 0);
             // Only the cookie file path (never its contents) reaches the logs.
             Logger.Debug("Created temporary cookie lease at {CookieFilePath}", cookieFilePath);
-            return (new CookieFileLease(cookieFilePath, directoryPath), null);
+            return (new CookieFileLease(cookieFilePath, directoryPath, () =>
+            {
+                ActiveLeaseDirectories.TryRemove(directoryPath, out _);
+            }), null);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to create temporary cookie file in {TempRoot}", root);
+            ActiveLeaseDirectories.TryRemove(directoryPath, out _);
             DeleteDirectoryRecursively(directoryPath);
             return (null,
                 "Could not prepare the temporary sign-in file, continuing without saved sign-in.");
@@ -101,7 +153,24 @@ public static class TemporaryCookieFile
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {
         var age = maxAge ?? DefaultStaleAge;
-        var root = tempRoot ?? Path.GetTempPath();
+        if (tempRoot is not null)
+        {
+            SweepDirectory(tempRoot, age);
+            return;
+        }
+
+        var defaultRoot = GetDefaultTempRoot();
+        SweepDirectory(defaultRoot, age);
+
+        var fallbackRoot = Path.GetTempPath();
+        if (!string.Equals(defaultRoot, fallbackRoot, StringComparison.Ordinal))
+        {
+            SweepDirectory(fallbackRoot, age);
+        }
+    }
+
+    private static void SweepDirectory(string root, TimeSpan age)
+    {
         try
         {
             var rootDirectory = new DirectoryInfo(root);

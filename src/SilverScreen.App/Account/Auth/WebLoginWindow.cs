@@ -34,7 +34,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     private int _terminalState;
     private bool _closedInvoked;
     private bool _nativeDisposed;
-
+    private bool _loadFinished;
     internal WebLoginWindow(Gtk.Window parent, AccountViewModel account, Action closed)
     {
         Logger.Information("Opening WebLoginWindow for YouTube authentication");
@@ -62,6 +62,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
         _cookieManager.OnChanged += OnCookieChanged;
         _webView.OnLoadChanged += OnLoadChanged;
+        _webView.OnDecidePolicy += OnDecidePolicy;
         Widget.OnCloseRequest += OnCloseRequest;
         _webView.LoadUri(LoginUri);
     }
@@ -108,6 +109,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     {
         _cookieManager.OnChanged -= OnCookieChanged;
         _webView.OnLoadChanged -= OnLoadChanged;
+        _webView.OnDecidePolicy -= OnDecidePolicy;
         Widget.OnCloseRequest -= OnCloseRequest;
         try
         {
@@ -161,6 +163,21 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             [new ConstructArgument("network-session", sessionValue)]);
     }
 
+    private static readonly HashSet<string> CompanionCookieNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "LOGIN_INFO",
+        "SID",
+        "SSID",
+        "HSID",
+        "__Secure-1PSID",
+        "__Secure-3PSID"
+    };
+
+    private static bool HasCompanionCookies(IEnumerable<WebCookieSnapshot> snapshots)
+    {
+        return snapshots.Any(s => CompanionCookieNames.Contains(s.Name));
+    }
+
     private async Task<string?> ReadReadyCookiesAsync()
     {
         var snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri).ConfigureAwait(false);
@@ -177,6 +194,25 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         catch (FormatException)
         {
             return null;
+        }
+
+        if (!HasCompanionCookies(snapshots))
+        {
+            if (!_loadFinished)
+            {
+                Logger.Debug("Solitary SAPISID detected before load finished; waiting for companion cookies");
+                return null;
+            }
+
+            Logger.Debug("Solitary SAPISID detected after load finished; waiting for debounce before finalize");
+            await Task.Delay(500).ConfigureAwait(false);
+            if (Volatile.Read(ref _disposeState) != 0)
+                return null;
+
+            snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri).ConfigureAwait(false);
+            if (Volatile.Read(ref _disposeState) != 0)
+                return null;
+            cookieText = WebLoginCookieReader.SerializeNetscape(snapshots);
         }
 
         PostStatus("Finishing sign-in…");
@@ -203,8 +239,46 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     private void OnLoadChanged(WebView sender, WebView.LoadChangedSignalArgs args)
     {
-        if (Volatile.Read(ref _disposeState) == 0 && args.LoadEvent == LoadEvent.Finished)
-            _capture.RequestCapture();
+        if (Volatile.Read(ref _disposeState) != 0)
+            return;
+
+        switch (args.LoadEvent)
+        {
+            case LoadEvent.Started:
+                _loadFinished = false;
+                break;
+            case LoadEvent.Finished:
+                _loadFinished = true;
+                _capture.RequestCapture();
+                break;
+        }
+    }
+
+    private bool OnDecidePolicy(WebView sender, WebView.DecidePolicySignalArgs args)
+    {
+        if (args.DecisionType is PolicyDecisionType.NavigationAction or PolicyDecisionType.NewWindowAction
+            && args.Decision is NavigationPolicyDecision navDecision)
+        {
+            var uriString = navDecision.GetNavigationAction()?.GetRequest()?.Uri;
+            if (!string.IsNullOrEmpty(uriString) && Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+            {
+                if (!string.IsNullOrEmpty(uri.Host) && !IsAllowedHost(uri.Host))
+                {
+                    Logger.Warning("Blocked navigation to untrusted host: {Host}", uri.Host);
+                    args.Decision.Ignore();
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsAllowedHost(string host)
+    {
+        return string.Equals(host, "accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(host, "youtube.com", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool OnCloseRequest(Gtk.Window sender, EventArgs args)
@@ -305,6 +379,15 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         catch (Exception exception)
         {
             Logger.Warning(exception, "WebLoginWindow widget dispose failed");
+        }
+
+        try
+        {
+            _capture.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow capture coordinator dispose failed");
         }
     }
 

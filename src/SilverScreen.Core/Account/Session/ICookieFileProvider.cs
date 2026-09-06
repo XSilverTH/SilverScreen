@@ -9,7 +9,7 @@ public interface ICookieFileProvider
 /// Best-effort handle to a temporary cookie file. Disposal overwrites the file bytes
 /// with zeros before deleting (best-effort, never throws), then removes the directory.
 /// </summary>
-public sealed class CookieFileLease(string path, string? directoryPath = null) : IDisposable
+public sealed class CookieFileLease(string path, string? directoryPath = null, Action? onDisposed = null) : IDisposable
 {
     private bool _disposed;
 
@@ -20,9 +20,16 @@ public sealed class CookieFileLease(string path, string? directoryPath = null) :
         if (_disposed) return;
 
         _disposed = true;
-        TryWipeAndDeleteFile(Path);
+        try
+        {
+            TryWipeAndDeleteFile(Path);
 
-        if (directoryPath is not null) TryDeleteDirectory(directoryPath);
+            if (directoryPath is not null) TryDeleteDirectory(directoryPath);
+        }
+        finally
+        {
+            onDisposed?.Invoke();
+        }
     }
 
     private static void TryWipeAndDeleteFile(string path)

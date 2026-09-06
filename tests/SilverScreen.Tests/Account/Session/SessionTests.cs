@@ -195,6 +195,59 @@ public sealed class SessionTests
         Assert.Equal("fake-session-value", cookies["SID"]?.Value);
     }
 
+    [Fact]
+    public void TemporaryCookieFile_GetDefaultTempRoot_PrefersXdgRuntimeDir()
+    {
+        var root = TemporaryCookieFile.GetDefaultTempRoot();
+        Assert.False(string.IsNullOrWhiteSpace(root));
+        if (OperatingSystem.IsLinux())
+        {
+            var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg))
+            {
+                Assert.Equal(xdg, root);
+            }
+        }
+    }
+
+    [Fact]
+    public void TemporaryCookieFile_CreateLease_AndDispose_CleansUpFileAndDirectory()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var lease = TemporaryCookieFile.CreateLease(FakeCookieContent, tempRoot.Path);
+        Assert.NotNull(lease);
+        Assert.True(File.Exists(lease.Path));
+        var directory = Path.GetDirectoryName(lease.Path);
+        Assert.NotNull(directory);
+        Assert.True(Directory.Exists(directory));
+
+        lease.Dispose();
+        Assert.False(File.Exists(lease.Path));
+        Assert.False(Directory.Exists(directory));
+    }
+
+    [Fact]
+    public void TemporaryCookieFile_SweepStale_RemovesEntriesOlderThanOneHour()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var oldDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}old");
+        var newDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}new");
+        Directory.CreateDirectory(oldDir);
+        Directory.CreateDirectory(newDir);
+        File.WriteAllText(Path.Combine(oldDir, "cookies.txt"), "old-cookies");
+        File.WriteAllText(Path.Combine(newDir, "cookies.txt"), "new-cookies");
+
+        // Set oldDir write time to 2 hours ago
+        Directory.SetLastWriteTimeUtc(oldDir, DateTime.UtcNow.AddHours(-2));
+        File.SetLastWriteTimeUtc(Path.Combine(oldDir, "cookies.txt"), DateTime.UtcNow.AddHours(-2));
+
+        // Sweep with default stale age (1 hour)
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.False(Directory.Exists(oldDir));
+        Assert.True(Directory.Exists(newDir));
+    }
+
 
     private sealed class FakeCookieSecretStore : ICookieSecretStore
     {
