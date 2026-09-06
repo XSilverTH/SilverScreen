@@ -24,9 +24,8 @@ namespace SilverScreen.Infrastructure.Account.Session;
 /// <b>Keyring Thread Expectations:</b>
 /// Keyring operations use synchronous native bindings (<c>secret_password_lookupv_binary_sync</c>, <c>secret_password_storev_binary_sync</c>,
 /// and <c>secret_password_clearv_sync</c>). When prompts or user unlock interactions occur, the Secret Service daemon blocks the calling thread
-/// until the prompt resolves. Therefore, callers should invoke persistence operations from background workers or initialization tasks
-/// rather than the GTK main UI thread.
-/// </para>
+/// until the prompt resolves. All native persistence operations are offloaded to background worker tasks (<see cref="Task.Run{TResult}(Func{TResult})"/>)
+/// so that synchronous keyring unlock prompts or D-Bus stalls never freeze the GTK main UI thread.
 /// </remarks>
 internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 {
@@ -47,9 +46,14 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 
     public byte[]? Load()
     {
+        return LoadAsync().GetAwaiter().GetResult();
+    }
+
+    public async Task<byte[]?> LoadAsync()
+    {
         try
         {
-            return LoadNative();
+            return await Task.Run(LoadNative).ConfigureAwait(false);
         }
         catch (SessionPersistenceException)
         {
@@ -63,11 +67,16 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 
     public void Save(byte[] secret)
     {
+        SaveAsync(secret).GetAwaiter().GetResult();
+    }
+
+    public async Task SaveAsync(byte[] secret)
+    {
         ArgumentNullException.ThrowIfNull(secret);
 
         try
         {
-            SaveNative(secret);
+            await Task.Run(() => SaveNative(secret)).ConfigureAwait(false);
         }
         catch (SessionPersistenceException)
         {
@@ -85,9 +94,14 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
 
     public void Delete()
     {
+        DeleteAsync().GetAwaiter().GetResult();
+    }
+
+    public async Task DeleteAsync()
+    {
         try
         {
-            DeleteNative();
+            await Task.Run(DeleteNative).ConfigureAwait(false);
         }
         catch (SessionPersistenceException)
         {

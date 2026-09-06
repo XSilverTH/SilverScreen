@@ -24,4 +24,19 @@ internal interface ICookieSecretStore
     /// Removes the persisted secret from the keyring.
     /// </summary>
     void Delete();
+
+    /// <summary>
+    /// Asynchronously loads the persisted secret.
+    /// </summary>
+    Task<byte[]?> LoadAsync() => Task.Run(Load);
+
+    /// <summary>
+    /// Asynchronously persists the secret.
+    /// </summary>
+    Task SaveAsync(byte[] secret) => Task.Run(() => Save(secret));
+
+    /// <summary>
+    /// Asynchronously removes the persisted secret from the keyring.
+    /// </summary>
+    Task DeleteAsync() => Task.Run(Delete);
 }

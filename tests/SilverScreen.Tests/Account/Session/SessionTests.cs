@@ -248,6 +248,29 @@ public sealed class SessionTests
         Assert.True(Directory.Exists(newDir));
     }
 
+    [Fact]
+    public async Task CookieSecretStore_AsyncOperations_SucceedAndPersist()
+    {
+        ICookieSecretStore store = new FakeCookieSecretStore();
+        var secret = Encoding.UTF8.GetBytes("secret-token");
+
+        await store.SaveAsync(secret);
+        var loaded = await store.LoadAsync();
+
+        Assert.NotNull(loaded);
+        Assert.Equal("secret-token", Encoding.UTF8.GetString(loaded));
+
+        await store.DeleteAsync();
+        Assert.Null(await store.LoadAsync());
+    }
+
+    [Fact]
+    public void LibSecretCookieStore_InstantiatesLazilyWithoutThrowing()
+    {
+        ICookieSecretStore store = new LibSecretCookieStore();
+        Assert.NotNull(store);
+    }
+
 
     private sealed class FakeCookieSecretStore : ICookieSecretStore
     {
