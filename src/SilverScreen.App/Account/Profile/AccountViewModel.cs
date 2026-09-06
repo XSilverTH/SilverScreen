@@ -5,6 +5,7 @@ using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Features;
+using YoutubeAPI;
 
 namespace SilverScreen.Account.Profile;
 
@@ -82,11 +83,22 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
 
         var trimmed = cookieContent.Trim();
-        if (!ContainsUsableCookies(trimmed))
+        try
         {
-            Logger.Warning("Manual session save aborted: content is not Netscape cookies.txt format");
+            var auth = YouTubeCookieAuthentication.FromNetscape(trimmed);
+            if (!auth.HasAuthenticationCookies)
+            {
+                Logger.Warning("Manual session save aborted: cookies missing authentication tokens");
+                SetManualSessionError(
+                    "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            Logger.Warning(exception, "Manual session save aborted: content is not valid Netscape cookies.txt format");
             SetManualSessionError(
-                "That doesn't look like a cookies.txt file — export Netscape-format cookies from your browser and paste the whole file contents.");
+                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
             return false;
         }
 
@@ -128,23 +140,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         {
             Logger.Warning(exception, "Manual session content was rejected");
             error =
-                "That doesn't look like a cookies.txt file — export Netscape-format cookies from your browser and paste the whole file contents.";
+                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.";
             return false;
         }
     }
 
-    private static bool ContainsUsableCookies(string cookieContent)
-    {
-        try
-        {
-            return NetscapeCookieParser.CreateCookieContainer(cookieContent)?.Count > 0;
-        }
-        catch (Exception exception) when (exception is ArgumentException or ArgumentOutOfRangeException)
-        {
-            Logger.Warning(exception, "Manual session content failed cookie parsing");
-            return false;
-        }
-    }
 
     private void SetManualSessionError(string? error)
     {

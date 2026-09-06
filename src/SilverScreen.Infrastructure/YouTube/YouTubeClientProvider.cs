@@ -64,9 +64,19 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 return hit.Value.Client;
             }
 
-            var authentication = string.IsNullOrWhiteSpace(cookieContent)
-                ? null
-                : YouTubeCookieAuthentication.FromNetscape(cookieContent);
+            YouTubeCookieAuthentication? authentication = null;
+            if (!string.IsNullOrWhiteSpace(cookieContent))
+            {
+                try
+                {
+                    authentication = YouTubeCookieAuthentication.FromNetscape(cookieContent);
+                }
+                catch (Exception exception) when (exception is ArgumentException or FormatException)
+                {
+                    Logger.Warning(exception, "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
+                    authentication = null;
+                }
+            }
             client = new YouTubeClient(new YouTubeClientOptions
             {
                 Authentication = authentication
