@@ -4,6 +4,22 @@ using SilverScreen.Core.Account.Session;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
+/// <summary>
+/// Creates and reaps 0600 cookie files inside 0700 per-lease temp directories.
+/// Lease-holder lifetimes are intentionally minimal; nothing holds a lease longer
+/// than its consumer needs it:
+/// <list type="bullet">
+/// <item>yt-dlp resolve (<c>YtDlpMediaResolver</c>): <c>using</c>-scoped to a single
+/// resolve call; disposed when the call returns. Shortest lifetime.</item>
+/// <item>External mpv (<c>ExternalMpvPlaybackService</c>): held only until the mpv
+/// process exits (or start fails), then disposed; never longer than the process.</item>
+/// <item>Embedded playback (<c>PlaybackSession</c>): held for the session lifetime
+/// and released in teardown/dispose.</item>
+/// </list>
+/// Disposal overwrites file bytes with zeros before deleting (best-effort; see
+/// <c>TryWipeAndDeleteFile</c>). Only cookie file paths — never their contents —
+/// are written to the logs.
+/// </summary>
 public static class TemporaryCookieFile
 {
     internal const string DirectoryPrefix = "silverscreen-cookies-";
@@ -116,7 +132,11 @@ public static class TemporaryCookieFile
                         if (now - directory.LastWriteTimeUtc < age)
                             continue;
 
-                        // Only our own empty-or-cookie directories are removed, recursively.
+                        // Only our own empty-or-cookie directories are removed. Cookie bytes
+                        // are overwritten before the recursive remove (sockets under the IPC
+                        // prefix fail the overwrite and fall through to plain delete).
+                        foreach (var staleFile in directory.EnumerateFiles("*", SearchOption.AllDirectories).ToList())
+                            TryWipeAndDeleteFile(staleFile.FullName);
                         directory.Delete(true);
                         removed++;
                         Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
@@ -137,7 +157,7 @@ public static class TemporaryCookieFile
                             if (now - file.LastWriteTimeUtc < age)
                                 continue;
 
-                            file.Delete();
+                            TryWipeAndDeleteFile(file.FullName);
                             removed++;
                             Logger.Debug("Removed stale temporary file {File}", file.FullName);
                         }
@@ -167,12 +187,57 @@ public static class TemporaryCookieFile
     {
         try
         {
-            if (Directory.Exists(directoryPath))
-                Directory.Delete(directoryPath, true);
+            if (!Directory.Exists(directoryPath))
+                return;
+
+            // A half-written lease directory may already hold cookie bytes: wipe first.
+            foreach (var partialFile in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).ToList())
+                TryWipeAndDeleteFile(partialFile);
+            Directory.Delete(directoryPath, true);
         }
         catch (Exception ex)
         {
             Logger.Debug(ex, "Could not remove partial temporary cookie directory {Directory}", directoryPath);
+        }
+    }
+    /// <summary>
+    /// Best-effort overwrite-before-delete: fills the file with zeros across its full
+    /// length, flushes to storage, then deletes it. Never throws. This is data hygiene,
+    /// not a guarantee against forensic recovery (copy-on-write filesystems, journals,
+    /// and SSD wear-levelling may retain copies). Logs only the file path.
+    /// </summary>
+    private static void TryWipeAndDeleteFile(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Exists && info.Length > 0)
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+                var zeros = new byte[4096];
+                var remaining = info.Length;
+                while (remaining > 0)
+                {
+                    var chunk = (int)Math.Min(zeros.Length, remaining);
+                    stream.Write(zeros, 0, chunk);
+                    remaining -= chunk;
+                }
+
+                stream.Flush(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Could not overwrite temporary file {CookieFilePath} before delete", path);
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Could not delete temporary file {CookieFilePath}", path);
         }
     }
 }
