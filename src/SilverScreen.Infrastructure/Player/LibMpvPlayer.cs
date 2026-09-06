@@ -494,7 +494,7 @@ public sealed class LibMpvPlayer : IDisposable
         PublishState();
     }
 
-    private void HandleFileLoaded()
+    internal void HandleFileLoaded()
     {
         var subtitleTracks = ReadSubtitleTracks();
         var chapters = ReadChapters();

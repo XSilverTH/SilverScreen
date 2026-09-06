@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Reflection;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
@@ -52,11 +51,7 @@ public sealed class LibMpvPlayerTests
         var states = new ConcurrentQueue<LibMpvPlaybackState>();
         using var player = new LibMpvPlayer(native, action => action());
         player.StateChanged += (_, state) => states.Enqueue(state);
-        var handleFileLoaded = typeof(LibMpvPlayer).GetMethod("HandleFileLoaded",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(handleFileLoaded);
-
-        handleFileLoaded.Invoke(player, null);
+        player.HandleFileLoaded();
 
         var chapters = Assert.Single(states).Chapters;
         Assert.Collection(chapters,
@@ -179,10 +174,7 @@ public sealed class LibMpvPlayerTests
         native.ReadProperties["track-list/0/selected"] = "yes";
 
         using var player = new LibMpvPlayer(native, action => action());
-        var handleFileLoaded = typeof(LibMpvPlayer).GetMethod("HandleFileLoaded",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(handleFileLoaded);
-        handleFileLoaded.Invoke(player, null);
+        player.HandleFileLoaded();
 
         var stats = player.GetPlaybackStats();
         Assert.NotNull(stats);

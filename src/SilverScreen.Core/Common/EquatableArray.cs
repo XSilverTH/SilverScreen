@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -139,14 +138,29 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
                typeToConvert.GetGenericTypeDefinition() == typeof(EquatableArray<>);
     }
 
-    [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
-        Justification =
-            "EquatableArray is used with statically known element types registered in JsonSerializerContext.")]
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
-        var converterType = typeof(EquatableArrayJsonConverter<>).MakeGenericType(elementType);
-        return (JsonConverter?)Activator.CreateInstance(converterType);
+        if (elementType == typeof(string))
+            return new EquatableArrayJsonConverter<string>();
+        if (elementType == typeof(int))
+            return new EquatableArrayJsonConverter<int>();
+        if (elementType == typeof(long))
+            return new EquatableArrayJsonConverter<long>();
+        if (elementType == typeof(double))
+            return new EquatableArrayJsonConverter<double>();
+        if (elementType == typeof(float))
+            return new EquatableArrayJsonConverter<float>();
+        if (elementType == typeof(bool))
+            return new EquatableArrayJsonConverter<bool>();
+        if (elementType == typeof(short))
+            return new EquatableArrayJsonConverter<short>();
+        if (elementType == typeof(byte))
+            return new EquatableArrayJsonConverter<byte>();
+        if (elementType == typeof(decimal))
+            return new EquatableArrayJsonConverter<decimal>();
+
+        return null;
     }
 }
 
