@@ -14,11 +14,15 @@ Adw.Window WebLoginWindow {
     content: Adw.Bin web_view_container {
       hexpand: true;
       vexpand: true;
+    };
 
+    [bottom]
+    Gtk.Box {
       Gtk.Label web_login_status_label {
         label: "Sign in with your Google account. Close this window to cancel.";
         xalign: 0;
         wrap: true;
+        hexpand: true;
         margin-top: 8;
         margin-bottom: 8;
         margin-start: 12;
@@ -28,6 +32,6 @@ Adw.Window WebLoginWindow {
           "dim-label",
         ]
       }
-    };
+    }
   };
 }
