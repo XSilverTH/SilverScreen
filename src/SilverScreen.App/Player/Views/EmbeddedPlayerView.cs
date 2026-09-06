@@ -364,6 +364,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _shortcutController.UpdateBindings(preferences.Shortcuts);
     }
 
+    /// <summary>
+    /// Re-realizes the OpenGL surface when navigating back to the player view,
+    /// allowing the player engine to resume playback seamlessly at the captured reload position and state.
+    /// </summary>
     private void OnPlayerSurfaceRealize(object? sender, EventArgs args)
     {
         player_surface.MakeCurrent();
@@ -384,6 +388,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
     }
 
+    /// <summary>
+    /// Unrealizes the OpenGL surface when navigating away from the player view,
+    /// capturing active playback position, playlist index, and pause state for restoration.
+    /// </summary>
     private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
     {
         player_surface.MakeCurrent();

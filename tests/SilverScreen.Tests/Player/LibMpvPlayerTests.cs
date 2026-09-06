@@ -217,6 +217,83 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void ShutdownRenderer_CapturesPlaybackPositionAndState_AndRestoresUponReinitialization()
+    {
+        var native = new RecordingNative();
+        var pPropName = Marshal.StringToCoTaskMemUTF8("time-pos");
+        var pPropData = Marshal.AllocCoTaskMem(sizeof(double));
+        Marshal.StructureToPtr(42.5d, pPropData, false);
+        var prop = new LibMpvEventProperty(pPropName, LibMpvFormat.Double, pPropData);
+        var pProp = Marshal.AllocCoTaskMem(Marshal.SizeOf<LibMpvEventProperty>());
+        Marshal.StructureToPtr(prop, pProp, false);
+
+        try
+        {
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, pProp));
+            using var player = new LibMpvPlayer(native, action => action());
+            var request = new PlaybackRequest([Video("abc123_X-yZ")]);
+            player.Load(request, new AppPreferences(), null);
+            player.InitializeRenderer();
+            player.HandleFileLoaded();
+
+            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+
+            // Shutdown renderer (simulates GL unrealize)
+            player.ShutdownRenderer();
+
+            // Re-initialize renderer (simulates GL re-realize)
+            player.InitializeRenderer();
+
+            // When file is reloaded on resumption, reload snapshot is applied
+            player.HandleFileLoaded();
+
+            Assert.True(SpinWait.SpinUntil(() => native.Commands.Any(c => c.Contains("seek|42.5|absolute+exact")), TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pProp);
+            Marshal.FreeCoTaskMem(pPropData);
+            Marshal.FreeCoTaskMem(pPropName);
+        }
+    }
+
+    [Fact]
+    public void ShutdownRenderer_PreservesPauseStateAcrossRendererReinitialization()
+    {
+        var native = new RecordingNative();
+        var pPropName = Marshal.StringToCoTaskMemUTF8("pause");
+        var pPropData = Marshal.AllocCoTaskMem(sizeof(int));
+        Marshal.WriteInt32(pPropData, 1);
+        var prop = new LibMpvEventProperty(pPropName, LibMpvFormat.Flag, pPropData);
+        var pProp = Marshal.AllocCoTaskMem(Marshal.SizeOf<LibMpvEventProperty>());
+        Marshal.StructureToPtr(prop, pProp, false);
+
+        try
+        {
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, pProp));
+            using var player = new LibMpvPlayer(native, action => action());
+            var request = new PlaybackRequest([Video("abc123_X-yZ")]);
+            player.Load(request, new AppPreferences(), null);
+            player.InitializeRenderer();
+            player.HandleFileLoaded();
+
+            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+
+            player.ShutdownRenderer();
+            player.InitializeRenderer();
+            player.HandleFileLoaded();
+
+            Assert.True(SpinWait.SpinUntil(() => native.FlagProperties.Any(p => p.Name == "pause" && p.Value), TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pProp);
+            Marshal.FreeCoTaskMem(pPropData);
+            Marshal.FreeCoTaskMem(pPropName);
+        }
+    }
+
+    [Fact]
     public void GetPlaybackStats_WhenNoMedia_ReturnsNull()
     {
         var native = new RecordingNative();
@@ -311,6 +388,7 @@ public sealed class LibMpvPlayerTests
     {
         public ConcurrentBag<string> Commands { get; } = [];
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
+        public ConcurrentQueue<(string Name, bool Value)> FlagProperties { get; } = [];
         public ManualResetEventSlim? BlockCommandEvent { get; set; }
         public ManualResetEventSlim? CommandStartedEvent { get; set; }
         public Dictionary<string, string> ReadProperties { get; } = [];
@@ -358,6 +436,7 @@ public sealed class LibMpvPlayerTests
 
         public int SetPropertyFlag(nint handle, string name, bool value)
         {
+            FlagProperties.Enqueue((name, value));
             return 0;
         }
 
