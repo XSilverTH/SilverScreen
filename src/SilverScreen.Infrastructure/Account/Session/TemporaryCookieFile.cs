@@ -98,7 +98,7 @@ public static class TemporaryCookieFile
             return (null, null);
 
         var root = tempRoot ?? GetDefaultTempRoot();
-        var directoryPath = Path.Combine(root, $"{DirectoryPrefix}{Guid.NewGuid():N}");
+        var directoryPath = Path.Combine(root, $"{DirectoryPrefix}{Environment.ProcessId}-{Guid.NewGuid():N}");
         try
         {
             if (OperatingSystem.IsLinux())
@@ -147,8 +147,10 @@ public static class TemporaryCookieFile
     }
 
     /// <summary>
-    /// Deletes orphaned 0700 cookie/IPC directories and 0600 cookie files older than
-    /// <paramref name="maxAge"/> matching our temp prefixes. Best-effort, never throws.
+    /// Deletes orphaned 0700 cookie/IPC directories and 0600 cookie files matching our temp prefixes.
+    /// Orphaned directories from dead sessions or untracked leases are purged immediately;
+    /// otherwise entries older than <paramref name="maxAge"/> (default 1 hour) are deleted.
+    /// Best-effort, never throws.
     /// </summary>
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {
@@ -197,10 +199,8 @@ public static class TemporaryCookieFile
                 {
                     try
                     {
-                        directory.Refresh();
-                        if (now - directory.LastWriteTimeUtc < age)
+                        if (!IsDirectoryOrphanedOrStale(directory, prefix, age, now))
                             continue;
-
                         // Only our own empty-or-cookie directories are removed. Cookie bytes
                         // are overwritten before the recursive remove (sockets under the IPC
                         // prefix fail the overwrite and fall through to plain delete).
@@ -222,10 +222,8 @@ public static class TemporaryCookieFile
                     {
                         try
                         {
-                            file.Refresh();
-                            if (now - file.LastWriteTimeUtc < age)
+                            if (!IsFileOrphanedOrStale(file, prefix, age, now))
                                 continue;
-
                             TryWipeAndDeleteFile(file.FullName);
                             removed++;
                             Logger.Debug("Removed stale temporary file {File}", file.FullName);
@@ -250,6 +248,109 @@ public static class TemporaryCookieFile
         {
             Logger.Warning(ex, "Stale temporary file sweep failed in {TempRoot}", root);
         }
+    }
+
+    private static bool IsDirectoryOrphanedOrStale(DirectoryInfo directory, string prefix, TimeSpan maxAge, DateTime now)
+    {
+        if (TryExtractPid(directory.Name, prefix, out var pid))
+        {
+            if (pid == Environment.ProcessId)
+                return !IsActiveLease(directory.FullName);
+
+            if (!IsProcessAlive(pid))
+                return true;
+        }
+
+        return now - directory.LastWriteTimeUtc >= maxAge;
+    }
+
+    private static bool IsFileOrphanedOrStale(FileInfo file, string prefix, TimeSpan maxAge, DateTime now)
+    {
+        if (TryExtractPid(file.Name, prefix, out var pid))
+        {
+            if (pid == Environment.ProcessId)
+                return !IsActiveLeaseFile(file.FullName);
+
+            if (!IsProcessAlive(pid))
+                return true;
+        }
+
+        return now - file.LastWriteTimeUtc >= maxAge;
+    }
+
+    private static bool TryExtractPid(string name, string prefix, out int pid)
+    {
+        pid = 0;
+        if (!name.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+
+        var suffix = name.Substring(prefix.Length);
+        var dashIndex = suffix.IndexOf('-');
+        if (dashIndex <= 0)
+            return false;
+
+        return int.TryParse(suffix.AsSpan(0, dashIndex), out pid) && pid > 0;
+    }
+
+    private static bool IsProcessAlive(int pid)
+    {
+        if (pid <= 0)
+            return false;
+
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Could not query process {Pid} state; assuming alive as safeguard", pid);
+            return true;
+        }
+    }
+
+    private static bool IsActiveLease(string directoryFullName)
+    {
+        try
+        {
+            var normalized = Path.GetFullPath(directoryFullName);
+            foreach (var key in ActiveLeaseDirectories.Keys)
+            {
+                if (string.Equals(Path.GetFullPath(key), normalized,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    return true;
+            }
+        }
+        catch
+        {
+            // Ignore path normalization errors
+        }
+
+        return false;
+    }
+
+    private static bool IsActiveLeaseFile(string fileFullName)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(fileFullName);
+            if (directory is not null)
+                return IsActiveLease(directory);
+        }
+        catch
+        {
+            // Ignore path normalization errors
+        }
+
+        return false;
     }
 
     private static void DeleteDirectoryRecursively(string directoryPath)

@@ -258,6 +258,59 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public void TemporaryCookieFile_SweepStale_PurgesOrphanedDirectoryWithDeadPidImmediately()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var deadPid = FindDeadPid();
+        var deadDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}{deadPid}-orphaned");
+        Directory.CreateDirectory(deadDir);
+        File.WriteAllText(Path.Combine(deadDir, "cookies.txt"), "dead-session-cookies");
+
+        using var activeLease = TemporaryCookieFile.CreateLease(FakeCookieContent, tempRoot.Path);
+        Assert.NotNull(activeLease);
+        var activeDir = Path.GetDirectoryName(activeLease.Path);
+        Assert.NotNull(activeDir);
+        Assert.True(Directory.Exists(activeDir));
+
+        // Sweep without waiting for 1 hour
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.False(Directory.Exists(deadDir));
+        Assert.True(Directory.Exists(activeDir));
+    }
+
+    [Fact]
+    public void TemporaryCookieFile_SweepStale_PurgesUntrackedDirectoryMatchingCurrentPid()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var untrackedDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}{Environment.ProcessId}-untracked");
+        Directory.CreateDirectory(untrackedDir);
+        File.WriteAllText(Path.Combine(untrackedDir, "cookies.txt"), "untracked-session-cookies");
+
+        // Untracked lease matching current PID is purged on sweep (e.g. startup cleanup)
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.False(Directory.Exists(untrackedDir));
+    }
+
+    private static int FindDeadPid()
+    {
+        for (var pid = 999999; pid > 100000; pid--)
+        {
+            try
+            {
+                System.Diagnostics.Process.GetProcessById(pid);
+            }
+            catch (ArgumentException)
+            {
+                return pid;
+            }
+        }
+
+        return 999999;
+    }
+
+    [Fact]
     public async Task CookieSecretStore_AsyncOperations_SucceedAndPersist()
     {
         ICookieSecretStore store = new FakeCookieSecretStore();
