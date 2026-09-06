@@ -18,6 +18,7 @@ public sealed record PreferencesEditorState
     public bool MarkWatchedVideos { get; init; }
     public bool YouTubePlaybackTelemetryEnabled { get; init; }
     public bool DiscordRichPresenceEnabled { get; init; }
+    public bool RydEnabled { get; init; }
     public bool SponsorBlockAutoSkipEnabled { get; init; }
     public bool SponsorBlockSegmentDisplayEnabled { get; init; } = true;
     public bool ResumePlaybackAutomatically { get; init; }
@@ -123,6 +124,7 @@ public sealed class PreferencesViewModel
             MarkWatchedVideos = preferences.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = preferences.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = preferences.DiscordRichPresenceEnabled,
+            RydEnabled = preferences.RydEnabled,
             SponsorBlockAutoSkipEnabled = preferences.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = preferences.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = preferences.ResumePlaybackAutomatically,
@@ -149,6 +151,7 @@ public sealed class PreferencesViewModel
             MarkWatchedVideos = state.MarkWatchedVideos,
             YouTubePlaybackTelemetryEnabled = state.YouTubePlaybackTelemetryEnabled,
             DiscordRichPresenceEnabled = state.DiscordRichPresenceEnabled,
+            RydEnabled = state.RydEnabled,
             SponsorBlockAutoSkipEnabled = state.SponsorBlockAutoSkipEnabled,
             SponsorBlockSegmentDisplayEnabled = state.SponsorBlockSegmentDisplayEnabled,
             ResumePlaybackAutomatically = state.ResumePlaybackAutomatically,

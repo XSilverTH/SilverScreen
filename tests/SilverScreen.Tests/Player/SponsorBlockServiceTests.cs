@@ -40,6 +40,35 @@ public sealed class SponsorBlockServiceTests
         Assert.Equal(1, handler.CallCount);
     }
 
+    [Fact]
+    public async Task GetSegmentsAsync_EvictsOldestInsertedPastBound()
+    {
+        var handler = new FakeHttpMessageHandler((request, _) =>
+        {
+            var videoId = request.RequestUri!.Query.Split('&')[0].Split('=')[1];
+            return Task.FromResult(JsonResponse($$"""
+                                                [
+                                                  { "segment": [1, 2], "UUID": "id-{{videoId}}", "category": "sponsor", "actionType": "skip" }
+                                                ]
+                                                """));
+        });
+        using var client = new HttpClient(handler);
+        using var service = new SponsorBlockService(client);
+
+        var categories = new[] { SponsorBlockCategories.Sponsor };
+        var ids = Enumerable.Range(0, SponsorBlockService.MaxCachedRequests + 1)
+            .Select(i => $"dQw4w9Wg{i:D3}")
+            .ToArray();
+        foreach (var id in ids)
+            Assert.NotEmpty(await service.GetSegmentsAsync(id, categories));
+        Assert.Equal(ids.Length, handler.CallCount);
+
+        Assert.NotEmpty(await service.GetSegmentsAsync(ids[0], categories));
+        Assert.Equal(ids.Length + 1, handler.CallCount);
+
+        Assert.NotEmpty(await service.GetSegmentsAsync(ids[^1], categories));
+        Assert.Equal(ids.Length + 1, handler.CallCount);
+    }
 
     private static HttpResponseMessage JsonResponse(string json)
     {

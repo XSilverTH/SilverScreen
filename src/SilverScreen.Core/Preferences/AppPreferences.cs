@@ -16,6 +16,7 @@ public sealed record AppPreferences
     public bool MarkWatchedVideos { get; set; }
     public bool YouTubePlaybackTelemetryEnabled { get; set; }
     public bool DiscordRichPresenceEnabled { get; set; }
+    public bool RydEnabled { get; set; }
     public bool SponsorBlockAutoSkipEnabled { get; set; }
     public bool SponsorBlockSegmentDisplayEnabled { get; set; } = true;
     public bool ResumePlaybackAutomatically { get; set; }

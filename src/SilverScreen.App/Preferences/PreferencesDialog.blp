@@ -171,6 +171,7 @@ Adw.PreferencesDialog PreferencesDialog {
       Adw.SwitchRow sponsorblock_auto_skip_row {
         notify => $OnRowNotify();
         title: "Automatically skip segments";
+        subtitle: "Fetches skip segments from sponsor.ajay.app when enabled";
       }
 
       Adw.SwitchRow sponsorblock_display_row {
@@ -433,11 +434,20 @@ Adw.PreferencesDialog PreferencesDialog {
 
     Adw.PreferencesGroup {
       title: "Discord";
-
       Adw.SwitchRow discord_rich_presence_row {
         notify => $OnRowNotify();
         title: "Share playback activity on Discord";
         subtitle: "Show the currently playing video in Discord Rich Presence";
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "Dislike Estimates";
+
+      Adw.SwitchRow ryd_enabled_row {
+        notify => $OnRowNotify();
+        title: "Show dislike estimates";
+        subtitle: "Fetches dislike estimates from returnyoutubedislike.com when enabled";
       }
     }
   }

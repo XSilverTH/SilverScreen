@@ -8,14 +8,22 @@ using SilverScreen.Core.Player;
 
 namespace SilverScreen.Infrastructure.Player;
 
+/// <summary>
+/// Fetches skip segments from sponsor.ajay.app. Results are cached per video+categories request,
+/// bounded to <see cref="MaxCachedRequests"/> entries (oldest-inserted evicted). Callers gate
+/// network access behind the SponsorBlock toggles (no fetch unless auto-skip or display is on).
+/// </summary>
 public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 {
+    /// <summary>Maximum cached video+categories requests; oldest-inserted entry evicted past this bound.</summary>
+    internal const int MaxCachedRequests = 100;
     private static readonly ILogger Logger = Log.ForContext<SponsorBlockService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SkipSegmentsEndpoint = new("https://sponsor.ajay.app/api/skipSegments");
     private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, IReadOnlyList<SponsorBlockSegment>> _segmentsByRequest = new();
+    private readonly ConcurrentQueue<string> _insertionOrder = new();
 
     public SponsorBlockService() : this(CreateDefaultHttpClient(), true)
     {
@@ -92,7 +100,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
                 .OrderBy(segment => segment.Start)
                 .ToArray();
 
-            _segmentsByRequest.TryAdd(cacheKey, segments);
+            AddBounded(cacheKey, segments);
             Logger.Information("Fetched {Count} SponsorBlock segments for video {VideoId}", segments.Length, videoId);
             return segments;
         }
@@ -105,6 +113,14 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             Logger.Warning(exception, "Failed to fetch SponsorBlock segments for video {VideoId}", videoId);
             return [];
         }
+    }
+
+    private void AddBounded(string cacheKey, IReadOnlyList<SponsorBlockSegment> segments)
+    {
+        if (_segmentsByRequest.TryAdd(cacheKey, segments))
+            _insertionOrder.Enqueue(cacheKey);
+        while (_segmentsByRequest.Count > MaxCachedRequests && _insertionOrder.TryDequeue(out var oldest))
+            _segmentsByRequest.TryRemove(oldest, out _);
     }
 
     private static bool IsValidTimeRange(double start, double end)

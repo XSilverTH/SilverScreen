@@ -90,6 +90,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             mark_watched_row.Active = state.MarkWatchedVideos;
             youtube_playback_telemetry_row.Active = state.YouTubePlaybackTelemetryEnabled;
             discord_rich_presence_row.Active = state.DiscordRichPresenceEnabled;
+            ryd_enabled_row.Active = state.RydEnabled;
             sponsorblock_auto_skip_row.Active = state.SponsorBlockAutoSkipEnabled;
             sponsorblock_display_row.Active = state.SponsorBlockSegmentDisplayEnabled;
             resume_playback_automatically_row.Active = state.ResumePlaybackAutomatically;
@@ -321,6 +322,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             MarkWatchedVideos = mark_watched_row.Active,
             YouTubePlaybackTelemetryEnabled = youtube_playback_telemetry_row.Active,
             DiscordRichPresenceEnabled = discord_rich_presence_row.Active,
+            RydEnabled = ryd_enabled_row.Active,
             SponsorBlockAutoSkipEnabled = sponsorblock_auto_skip_row.Active,
             SponsorBlockSegmentDisplayEnabled = sponsorblock_display_row.Active,
             ResumePlaybackAutomatically = resume_playback_automatically_row.Active,
