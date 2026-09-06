@@ -5,6 +5,33 @@ using SilverScreen.Core.Browsing.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
+/// <summary>
+/// Evaluates and selects formats from yt-dlp JSON dumps (<c>--dump-single-json</c>), and provides
+/// the mapping from quality preference labels to mpv/yt-dlp format strings.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Architectural Role:</b><br/>
+/// This class fulfills two distinct roles:
+/// <list type="bullet">
+/// <item>
+/// <description>
+/// <b>Active:</b> <see cref="ToMpvFormat(string)"/> provides the single source of truth mapping user-configured
+/// video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command builders.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// <b>Dormant Fallback Extraction:</b> <see cref="SelectMedia(string, string, YouTubeVideoDetails?)"/> contains
+/// the format selection engine that parses adaptive video/audio streams, muxed streams, and live HLS manifests,
+/// pairing streams and extracting expiration timestamps. Although standard playback uses mpv's internal
+/// <c>ytdl_hook.lua</c>, this logic is retained as a fallback extraction pipeline and for future offline downloading
+/// or headless stream resolution.
+/// </description>
+/// </item>
+/// </list>
+/// </para>
+/// </remarks>
 internal static class YtDlpFormatSelector
 {
     /// <summary>

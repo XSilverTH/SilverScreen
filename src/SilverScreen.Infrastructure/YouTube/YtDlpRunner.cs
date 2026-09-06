@@ -5,6 +5,24 @@ using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
+/// <summary>
+/// Manages asynchronous, out-of-process execution of the <c>yt-dlp</c> binary, providing bounded
+/// timeouts, process tree termination, argument redaction for sensitive credentials, and standard
+/// output/error stream capture.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Architectural Role &amp; Diagnostics:</b><br/>
+/// This runner executes yt-dlp directly for the fallback extraction pipeline (<see cref="YtDlpMediaResolver"/>)
+/// and format diagnostics. While mpv handles primary playback extraction internally via <c>ytdl_hook.lua</c>,
+/// this runner provides direct process management for fallback format resolution, future media downloading,
+/// or headless stream probing.
+/// </para>
+/// <para>
+/// Standard error output is captured and surfaced through structured logging with credential redaction
+/// to provide full diagnostic visibility into yt-dlp extraction failures, warnings, and anti-bot challenges.
+/// </para>
+/// </remarks>
 public sealed class YtDlpRunner : IYtDlpRunner
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpRunner>();
@@ -29,6 +47,11 @@ public sealed class YtDlpRunner : IYtDlpRunner
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
+
+        // Ensure stream redirection is enabled and shell execute is disabled so stdout and stderr can be read safely.
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        startInfo.UseShellExecute = false;
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
@@ -66,12 +89,42 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
 
         await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
-        if (process.ExitCode != 0)
-            Logger.Warning("yt-dlp process exited with non-zero exit code {ExitCode}", process.ExitCode);
-        else
-            Logger.Debug("yt-dlp process exited successfully (ExitCode 0)");
+        var standardOutput = outputTask.Result;
+        var standardError = errorTask.Result;
 
-        return new ProcessResult(process.ExitCode, outputTask.Result, errorTask.Result);
+        if (process.ExitCode != 0)
+        {
+            if (!string.IsNullOrWhiteSpace(standardError))
+            {
+                var redactedStderr = RedactFreeform(standardError.Trim());
+                Logger.Warning(
+                    "yt-dlp process exited with non-zero exit code {ExitCode}. Stderr: {StdErr}",
+                    process.ExitCode,
+                    redactedStderr);
+            }
+            else
+            {
+                Logger.Warning(
+                    "yt-dlp process exited with non-zero exit code {ExitCode} (no stderr captured)",
+                    process.ExitCode);
+            }
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(standardError))
+            {
+                var redactedStderr = RedactFreeform(standardError.Trim());
+                Logger.Information(
+                    "yt-dlp process exited successfully (ExitCode 0) with stderr diagnostics: {StdErr}",
+                    redactedStderr);
+            }
+            else
+            {
+                Logger.Debug("yt-dlp process exited successfully (ExitCode 0)");
+            }
+        }
+
+        return new ProcessResult(process.ExitCode, standardOutput, standardError);
     }
 
     private static async Task KillAndDrainAsync(Process process, Task<string> outputTask, Task<string> errorTask)
@@ -104,6 +157,11 @@ public sealed class YtDlpRunner : IYtDlpRunner
         try
         {
             await Task.WhenAll(outputTask, errorTask).WaitAsync(KillGracePeriod).ConfigureAwait(false);
+            if (errorTask.IsCompletedSuccessfully && !string.IsNullOrWhiteSpace(errorTask.Result))
+            {
+                var redactedStderr = RedactFreeform(errorTask.Result.Trim());
+                Logger.Warning("yt-dlp process emitted stderr before being terminated: {StdErr}", redactedStderr);
+            }
         }
         catch (Exception ex)
         {

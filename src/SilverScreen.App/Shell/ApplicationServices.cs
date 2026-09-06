@@ -98,7 +98,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<IYouTubePlaybackProgressService, YoutubeApiPlaybackProgressService>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
-        // yt-dlp is retained only for raw media stream extraction used by MPV.
+        // yt-dlp runner and media resolver are retained as a dormant fallback / direct extraction pipeline
+        // (mpv handles primary playback extraction internally via ytdl_hook.lua).
         services.AddSingleton<IYtDlpRunner, YtDlpRunner>();
         services.AddSingleton<ISearchService, YoutubeApiSearchService>();
         services.AddSingleton<ISearchSuggestionService, YoutubeApiSearchSuggestionService>();

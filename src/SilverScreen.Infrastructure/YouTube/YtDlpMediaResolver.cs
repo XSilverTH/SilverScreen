@@ -9,6 +9,41 @@ using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
+/// <summary>
+/// Resolves YouTube media streams directly by invoking yt-dlp with <c>--dump-single-json</c>
+/// and parsing adaptive/muxed format payloads.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Architectural Role &amp; Dormant Status:</b><br/>
+/// In standard playback, SilverScreen delegates media stream extraction directly to mpv's internal
+/// <c>ytdl_hook.lua</c> script, which natively invokes yt-dlp to stream videos directly from YouTube URLs.
+/// Consequently, <see cref="ResolveMediaAsync"/> is not currently invoked during the primary playback path.
+/// </para>
+/// <para>
+/// This direct extraction infrastructure is deliberately preserved as:
+/// <list type="bullet">
+/// <item>
+/// <description>
+/// A robust fallback pipeline in the event that mpv's internal <c>ytdl_hook.lua</c> fails, experiences
+/// compatibility issues with YouTube updates, or requires out-of-process stream resolution.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// A foundation for features outside the mpv playback engine, such as offline media downloading,
+/// headless extraction, stream URL inspection, or custom format muxing.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// The provider for video metadata via <see cref="GetVideoDetailsAsync"/>, consumed by UI components
+/// such as the video info/stats panel.
+/// </description>
+/// </item>
+/// </list>
+/// </para>
+/// </remarks>
 public sealed class YtDlpMediaResolver(
     ICookieFileProvider cookieFileProvider,
     IPreferencesService preferencesService,
@@ -261,11 +296,32 @@ public sealed class YtDlpMediaResolver(
         }
 
         if (processResult.ExitCode != 0)
-            return (false, null, RuntimeDependencyGuidance.YtDlpFailed(
-                $"the process exited with error code {processResult.ExitCode}."));
-        return string.IsNullOrWhiteSpace(processResult.StandardOutput)
-            ? (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."))
-            : (true, processResult.StandardOutput, null);
+        {
+            if (!string.IsNullOrWhiteSpace(processResult.StandardError))
+            {
+                Logger.Warning("yt-dlp extraction failed for {VideoId} with exit code {ExitCode}. Stderr: {StdErr}",
+                    videoId, processResult.ExitCode, processResult.StandardError.Trim());
+            }
+
+            var errorDetail = !string.IsNullOrWhiteSpace(processResult.StandardError)
+                ? $"the process exited with error code {processResult.ExitCode}: {processResult.StandardError.Trim()}"
+                : $"the process exited with error code {processResult.ExitCode}.";
+
+            return (false, null, RuntimeDependencyGuidance.YtDlpFailed(errorDetail));
+        }
+
+        if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
+        {
+            if (!string.IsNullOrWhiteSpace(processResult.StandardError))
+            {
+                Logger.Warning("yt-dlp extraction returned empty output for {VideoId}. Stderr: {StdErr}",
+                    videoId, processResult.StandardError.Trim());
+            }
+
+            return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
+        }
+
+        return (true, processResult.StandardOutput, null);
     }
 
 

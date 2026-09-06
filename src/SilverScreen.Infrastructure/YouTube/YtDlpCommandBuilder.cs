@@ -3,7 +3,10 @@ using SilverScreen.Core.Player;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
-/// <summary>Builds the single yt-dlp invocation still required for raw MPV media extraction.</summary>
+/// <summary>
+/// Builds <see cref="ProcessStartInfo"/> command specifications for direct yt-dlp invocations,
+/// such as single-JSON manifest dumps for fallback format extraction and stream probing.
+/// </summary>
 public static class YtDlpCommandBuilder
 {
     public static ProcessStartInfo BuildMediaExtraction(string executablePath, string videoId,
