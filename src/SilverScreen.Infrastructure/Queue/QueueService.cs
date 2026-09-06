@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Queue;
@@ -6,11 +7,16 @@ using SilverScreen.Core.Queue;
 namespace SilverScreen.Infrastructure.Queue;
 
 /// <summary>
-///     List owner for the playback queue. Sync is one-directional: edits flow from
-///     this service into an immutable playback-request snapshot (videos plus the
-///     session's playlist index) published through the playback session; the snapshot
-///     never writes back into the list. The embedded view mirrors snapshots into the
-///     native playlist, never the reverse.
+///     List owner for the playback queue: the single mutable, ordered, in-memory
+///     holder of play-next state. No persistence: entries live only for the process
+///     lifetime and change only through <c>Add</c>/<c>Move</c>/<c>Remove</c>/<c>Clear</c>/<c>Replace</c>.
+///     Sync is one-directional: edits flow from this service into an immutable
+///     playback-request snapshot (videos plus the session's playlist index) published
+///     through the playback session; the snapshot never writes back into the list.
+///     The embedded view mirrors snapshots into the native playlist, never the reverse.
+///     External-list callers receive derived watch URLs plus a start index, and an
+///     empty list surfaces as a guidance status, never a throw (see
+///     <c>PlaybackRequest.EmptyQueueMessage</c> and the coordinator entry guard).
 /// </summary>
 public sealed class QueueService : IQueueService
 {
@@ -21,6 +27,9 @@ public sealed class QueueService : IQueueService
     public QueueService()
     {
         _readOnlyItems = _items.AsReadOnly();
+        // Guard: the published list stays a read-only view, so snapshots can only copy
+        // out (queue -> request) and no caller can write a snapshot back into the list.
+        Debug.Assert(ReferenceEquals(Items, _readOnlyItems));
     }
 
 

@@ -2,11 +2,13 @@ using SilverScreen.Core.Browsing.Common;
 
 namespace SilverScreen.Core.Queue;
 
-/// <summary>
-///     List-owner contract for the playback queue. Implementations own the mutable
-///     item list; playback snapshots (<c>PlaybackRequest</c>) are derived from it and
-///     sync flows queue-to-request only, never back.
-/// </summary>
+///     List-owner contract for the playback queue: the single mutable, ordered,
+///     in-memory owner of play-next state. No persistence: the list lives only for
+///     the process lifetime and is rebuilt by explicit <c>Add</c>/<c>Replace</c> calls.
+///     Playback snapshots (<c>PlaybackRequest</c>) are derived copies
+///     (<c>Videos</c> list plus start index); sync is one-directional
+///     queue-to-request only and a snapshot never writes back into the list.
+///     Consumers holding a snapshot must start a new snapshot to observe later edits.
 public interface IQueueService
 {
     IReadOnlyList<QueueItem> Items { get; }

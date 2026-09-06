@@ -7,6 +7,16 @@ namespace SilverScreen.Core.Player;
 /// <summary>
 ///     Headless coordinator that unifies the shared playback lifecycle:
 ///     telemetry sessions, presence pulsing, cookie file leasing, and playlist/queue synchronization.
+///     <para>
+///     Process registry, not a view lifecycle: the coordinator tracks <em>multiple</em>
+///     concurrent requests (backend routing, process lifetimes, telemetry/presence for
+///     each active playback id), while <c>PlaybackSession</c> owns a <em>single</em>
+///     view lifecycle (one video/view: OSD, resume prompts, engagement, timeline).
+///     Sessions must not spawn or manage player processes directly; all process
+///     lifetime and backend routing goes through this coordinator. No logic is owned
+///     twice: per-video view state lives in the session, multi-request process state
+///     lives here.
+///     </para>
 /// </summary>
 public sealed class PlaybackCoordinator(
     ICookieFileProvider? cookieFiles = null,
