@@ -34,6 +34,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
         _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
         _viewModel.StateChanged += OnStateChanged;
+        Widget.OnUnmap += OnWidgetUnmap;
         Render();
     }
 
@@ -148,6 +149,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
 
     private void OpenManualEditor()
     {
+        ClearBuffer(manual_editor);
         _editing = true;
         manual_error_label.SetVisible(false);
         Render();
@@ -168,12 +170,26 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private void OnClearButtonClicked(object? sender, EventArgs args)
     {
         Logger.Information("AccountPopoverView clear session button clicked");
+        ClearBuffer(manual_editor);
         _viewModel.ClearSession();
     }
+
+    private void OnWidgetUnmap(Widget sender, EventArgs args)
+    {
+        ClearBuffer(manual_editor);
+        if (_editing)
+        {
+            _editing = false;
+            manual_error_label.SetVisible(false);
+            Render();
+        }
+    }
+
     private void OnManualCancelButtonClicked(object? sender, EventArgs args)
     {
         _editing = false;
         manual_error_label.SetVisible(false);
+        ClearBuffer(manual_editor);
         Render();
     }
 
@@ -186,6 +202,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
             return;
         }
 
+        ClearBuffer(manual_editor);
         manual_error_label.SetVisible(false);
         _editing = false;
         Render();
@@ -199,13 +216,23 @@ public partial class AccountPopoverView : ViewBase<Bin>
         return buffer.GetText(start, end, true);
     }
 
+    internal static void ClearBuffer(TextView textView)
+    {
+        var buffer = textView.Buffer;
+        if (buffer is null)
+            return;
+
+        buffer.SetText(string.Empty, 0);
+    }
+
 
     public new void Dispose()
     {
         if (_disposed)
             return;
-
         _disposed = true;
+        Widget.OnUnmap -= OnWidgetUnmap;
+        ClearBuffer(manual_editor);
         _avatarCancellation?.Cancel();
         _avatarCancellation?.Dispose();
         signed_in_avatar.CustomImage = null!;
