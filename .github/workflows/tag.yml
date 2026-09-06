@@ -50,8 +50,7 @@ jobs:
           cp publish/linux-x64/SilverScreen "${dist}/bin/"
           cp packaging/io.github.silverscreen.SilverScreen.desktop "${dist}/share/applications/"
           cp packaging/io.github.silverscreen.SilverScreen.metainfo.xml "${dist}/share/metainfo/"
-          cp packaging/io.github.silverscreen.SilverScreen.svg "${dist}/share/icons/hicolor/scalable/apps/" 2>/dev/null || \
-            cp src/SilverScreen.App/Assets/silverscreen.svg "${dist}/share/icons/hicolor/scalable/apps/io.github.silverscreen.SilverScreen.svg"
+          cp packaging/io.github.silverscreen.SilverScreen.svg "${dist}/share/icons/hicolor/scalable/apps/"
           cp LICENSE "${dist}/share/licenses/silverscreen/"
           cp THIRD-PARTY.md "${dist}/share/doc/silverscreen/"
 

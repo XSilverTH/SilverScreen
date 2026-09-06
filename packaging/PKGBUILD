@@ -52,8 +52,8 @@ package() {
     "$pkgdir/usr/share/applications/io.github.silverscreen.SilverScreen.desktop"
   install -Dm644 packaging/io.github.silverscreen.SilverScreen.metainfo.xml \
     "$pkgdir/usr/share/metainfo/io.github.silverscreen.SilverScreen.metainfo.xml"
-  install -Dm644 src/SilverScreen.App/Assets/silverscreen.svg \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/silverscreen.svg"
+  install -Dm644 packaging/io.github.silverscreen.SilverScreen.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.silverscreen.SilverScreen.svg"
 }
 
 # Stable-tarball note:
