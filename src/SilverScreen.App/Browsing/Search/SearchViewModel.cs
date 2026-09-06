@@ -27,6 +27,12 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     public const string UnsupportedUrlMessage =
         "That link isn't playable yet — paste a video or Shorts URL.";
 
+    /// <summary>
+    /// User-visible guidance returned when an empty or whitespace search query is submitted.
+    /// </summary>
+    public const string EmptyQueryMessage =
+        "Enter search terms to find videos.";
+
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
@@ -203,8 +209,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            ShowUnsupportedUrlNotice();
-            return UnsupportedUrlMessage;
+            return EmptyQueryMessage;
         }
 
         try

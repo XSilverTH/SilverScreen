@@ -378,6 +378,22 @@ public sealed class ViewModelTests
         Assert.Empty(service.Requests);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n")]
+    public async Task SearchViewModel_SubmitAsync_WithEmptyQuery_ReturnsEnterSearchTermsPrompt(string emptyQuery)
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+
+        var notice = await viewModel.SubmitAsync(emptyQuery);
+
+        Assert.Equal(SearchViewModel.EmptyQueryMessage, notice);
+        Assert.Equal("Enter search terms to find videos.", notice);
+        Assert.Empty(service.Requests);
+    }
+
 
 
     private sealed class ControlledSearchService : ISearchService

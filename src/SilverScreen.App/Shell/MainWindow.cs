@@ -275,6 +275,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     }
 
     private void OnSearchSubmitted(string query)
+    {
         var trimmed = query.Trim();
         if (string.IsNullOrWhiteSpace(trimmed))
         {

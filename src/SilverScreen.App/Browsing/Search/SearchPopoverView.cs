@@ -84,7 +84,6 @@ public partial class SearchPopoverView : ViewBase<Box>
             search_entry.SetText(string.Empty);
         }
 
-        if (string.IsNullOrWhiteSpace(trimmed)) return;
         Logger.Information("Search submitted from popover: {Query}", trimmed);
         _submitCallback(trimmed);
     }
