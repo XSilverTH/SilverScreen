@@ -8,7 +8,7 @@
 # need a maintainer chroot test before any AUR upload.
 
 pkgname=silverscreen-git
-pkgver=0.1.0.r0.g0000000
+pkgver=0.1.0
 pkgrel=1
 pkgdesc='Native GTK4 YouTube client that plays videos with MPV'
 arch=('x86_64')
