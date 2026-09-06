@@ -168,12 +168,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         try
         {
-            var request = new PlaybackRequest([video]);
-            var playbackBackend = _services.Preferences.GetPreferences().PlaybackBackend;
-            if (PlaybackBackends.IsEmbedded(playbackBackend))
-                await _services.Playback.PlayAsync(request).ConfigureAwait(false);
-            else
-                await _embeddedPlayer.PresentAsync(request).ConfigureAwait(false);
+            await _playback.PlayAlternateAsync(new PlaybackRequest([video])).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

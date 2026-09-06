@@ -23,4 +23,19 @@ internal sealed class PlaybackModeRoutingService(
             ? embeddedPlayer.PresentAsync(request)
             : externalMpvPlayback.PlayAsync(request);
     }
+
+    /// <summary>
+    ///     Plays through whichever backend is NOT currently configured, so "open in alternate
+    ///     player" stays a single decision point beside <see cref="PlayAsync" />.
+    /// </summary>
+    public Task<string> PlayAlternateAsync(PlaybackRequest request)
+    {
+        var backend = preferencesService.GetPreferences().PlaybackBackend;
+        var firstVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
+        Logger.Information("Routing alternate playback for video {VideoId} ({Title}) against backend {Backend}",
+            firstVideo?.Id, firstVideo?.Title, backend);
+        return PlaybackBackends.IsEmbedded(backend)
+            ? externalMpvPlayback.PlayAsync(request)
+            : embeddedPlayer.PresentAsync(request);
+    }
 }
