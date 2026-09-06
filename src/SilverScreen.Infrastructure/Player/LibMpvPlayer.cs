@@ -558,6 +558,11 @@ public sealed class LibMpvPlayer : IDisposable
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
         Check(_native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));
+        if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
+        {
+            Check(_native.SetPropertyString(_handle, "script-opts",
+                $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));
+        }
         Check(_native.Command(_handle, "loadfile", urls[0], "replace"));
         foreach (var url in urls.Skip(1)) Check(_native.Command(_handle, "loadfile", url, "append-play"));
         if (reload is not null) Check(_native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));

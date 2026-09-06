@@ -142,6 +142,7 @@ public sealed class ExternalMpvPlaybackService(
         return new PlaybackOptions
         {
             MpvExecutablePath = prefs.MpvExecutablePath,
+            YtDlpExecutablePath = prefs.YtDlpExecutablePath,
             VideoQuality = prefs.VideoQuality,
             MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,

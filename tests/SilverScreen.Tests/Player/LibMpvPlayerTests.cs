@@ -22,6 +22,35 @@ public sealed class LibMpvPlayerTests
             () => states.Any(state => state is { IsLoading: true, IsPaused: false }), TimeSpan.FromSeconds(2)));
     }
 
+    [Fact]
+    public void LoadSetsScriptOptsWithCustomYtDlpPath()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences { YtDlpExecutablePath = "/custom/path/to/yt-dlp" };
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), preferences, null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Any(p => p.Name == "script-opts" && p.Value == "ytdl_hook-ytdl_path=/custom/path/to/yt-dlp"),
+            TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void LoadOmitsScriptOptsWhenYtDlpPathIsEmpty()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences { YtDlpExecutablePath = "" };
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), preferences, null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Any(p => p.Name == "ytdl-raw-options"),
+            TimeSpan.FromSeconds(2)));
+        Assert.DoesNotContain(native.StringProperties, p => p.Name == "script-opts");
+    }
+
 
     [Fact]
     public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()

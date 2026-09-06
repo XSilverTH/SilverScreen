@@ -132,6 +132,33 @@ public sealed class MpvCommandBuilderTests
         }
     }
 
+    [Theory]
+    [InlineData("yt-dlp", "--script-opts=ytdl_hook-ytdl_path=yt-dlp")]
+    [InlineData("/usr/local/bin/yt-dlp", "--script-opts=ytdl_hook-ytdl_path=/usr/local/bin/yt-dlp")]
+    public void Build_WithYtDlpExecutablePath_AddsScriptOptsArgument(string path, string expectedArg)
+    {
+        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
+        var options = new PlaybackOptions { YtDlpExecutablePath = path };
+
+        var command = MpvCommandBuilder.Build(request, options);
+
+        Assert.Contains(expectedArg, command.Arguments);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Build_WithoutYtDlpExecutablePath_OmitsScriptOptsArgument(string? path)
+    {
+        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
+        var options = new PlaybackOptions { YtDlpExecutablePath = path! };
+
+        var command = MpvCommandBuilder.Build(request, options);
+
+        Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--script-opts", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Build_WithCookieFilePath_IncludesCookieArguments()
     {
