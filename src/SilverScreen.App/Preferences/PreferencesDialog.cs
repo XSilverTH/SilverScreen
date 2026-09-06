@@ -17,6 +17,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
     private bool _loading;
+    public event EventHandler<string>? SaveFailed;
 
     public PreferencesDialog(IPreferencesService preferencesService)
     {
@@ -95,9 +96,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             resume_playback_on_demand_row.Active = state.ResumePlaybackOnDemand;
             shortcut_osd_enabled_row.Active = state.ShortcutOsdEnabled;
             ApplyShortcuts(state.Shortcuts);
-
             foreach (var (category, row) in _sponsorBlockCategoryRows)
                 row.Active = state.SponsorBlockCategories.Contains(category, StringComparer.Ordinal);
+            UpdatePathStatus();
         }
         finally
         {
@@ -132,8 +133,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private void SetShortcut(string name, IEnumerable<string> shortcuts)
     {
         var values = shortcuts.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
-        _shortcutValues[name] = values;
-        _shortcutRows[name].SetLabel(values.Length == 0 ? "Unassigned" : GetShortcutLabel(values[0]));
+        _shortcutRows[name].SetLabel(values.Length == 0 ? "Unassigned" : string.Join(" / ", values.Select(GetShortcutLabel)));
     }
 
     private void OnShortcutButtonClicked(object? sender, EventArgs args)
@@ -244,8 +244,64 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         var result = _viewModel.Save(CreateEditorState(), changedOption);
         ApplyEditorState(result.State);
         if (!result.Succeeded)
-            Logger.Warning("Failed to persist preferences: {Error}",
-                result.ErrorMessage ?? PreferencesViewModel.PersistenceErrorMessage);
+        {
+            var message = result.ErrorMessage ?? PreferencesViewModel.PersistenceErrorMessage;
+            Logger.Warning("Failed to persist preferences: {Error}", message);
+            SaveFailed?.Invoke(this, message);
+        }
+    }
+    private void UpdatePathStatus()
+    {
+        SetPathStatus(ytdlp_status_row, ytdlp_status_label,
+            PreferencesViewModel.ValidateExecutablePath(((Editable)ytdlp_path_row).GetText()));
+        SetPathStatus(mpv_status_row, mpv_status_label,
+            PreferencesViewModel.ValidateExecutablePath(((Editable)mpv_path_row).GetText()));
+    }
+
+    private static void SetPathStatus(ActionRow row, Label label, ExecutablePathStatus status)
+    {
+        row.SetSubtitle(status.Detail);
+        label.SetLabel(status.Found ? "Found" : "Not found");
+        label.RemoveCssClass("success");
+        label.RemoveCssClass("error");
+        label.AddCssClass(status.Found ? "success" : "error");
+    }
+
+    private void OnBrowseYtDlpClicked(object? sender, EventArgs args)
+    {
+        BrowseForExecutable("Choose yt-dlp executable",
+            path => ((Editable)ytdlp_path_row).SetText(path));
+    }
+
+    private void OnBrowseMpvClicked(object? sender, EventArgs args)
+    {
+        BrowseForExecutable("Choose mpv executable",
+            path => ((Editable)mpv_path_row).SetText(path));
+    }
+
+    private void BrowseForExecutable(string title, Action<string> applyPath)
+    {
+        var chooser = FileChooserNative.New(title, null, FileChooserAction.Open, "_Open", "_Cancel");
+        chooser.OnResponse += (_, response) =>
+        {
+            try
+            {
+                if (response.ResponseId == (int)ResponseType.Accept)
+                {
+                    var path = chooser.GetFile()?.GetPath();
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        applyPath(path);
+                        Save();
+                    }
+                }
+            }
+            finally
+            {
+                chooser.Dispose();
+            }
+        };
+        chooser.Show();
     }
 
     private PreferencesEditorState CreateEditorState()

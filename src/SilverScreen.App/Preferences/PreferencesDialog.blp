@@ -33,9 +33,55 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Media extractor executable path";
       }
 
+      Adw.ActionRow ytdlp_status_row {
+        title: "Media extractor status";
+        subtitle: "Not checked yet.";
+
+        [suffix]
+        Gtk.Label ytdlp_status_label {
+          label: "Unknown";
+          valign: center;
+
+          styles [
+            "caption",
+          ]
+        }
+
+        [suffix]
+        Gtk.Button ytdlp_browse_button {
+          label: "Browse…";
+          valign: center;
+          tooltip-text: "Choose the yt-dlp executable";
+          clicked => $OnBrowseYtDlpClicked();
+        }
+      }
+
       Adw.EntryRow mpv_path_row {
         changed => $OnRowChanged();
         title: "MPV Executable path";
+      }
+
+      Adw.ActionRow mpv_status_row {
+        title: "MPV status";
+        subtitle: "Not checked yet.";
+
+        [suffix]
+        Gtk.Label mpv_status_label {
+          label: "Unknown";
+          valign: center;
+
+          styles [
+            "caption",
+          ]
+        }
+
+        [suffix]
+        Gtk.Button mpv_browse_button {
+          label: "Browse…";
+          valign: center;
+          tooltip-text: "Choose the mpv executable";
+          clicked => $OnBrowseMpvClicked();
+        }
       }
     }
   }
@@ -52,8 +98,8 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Playback Mode";
         model: Gtk.StringList playback_backend_model {
           strings: [
-            "MPV",
-            "Internal player",
+            "External MPV (separate window)",
+            "Built-in player",
           ];
         };
       }

@@ -4,13 +4,15 @@ using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Preferences;
 
+public sealed record ExecutablePathStatus(bool Found, string Detail);
+
 public sealed record PreferencesEditorState
 {
     public string Theme { get; init; } = "System";
     public string VideoQuality { get; init; } = "Best";
     public string YtDlpExecutablePath { get; init; } = "yt-dlp";
     public string MpvExecutablePath { get; init; } = "mpv";
-    public string PlaybackBackend { get; init; } = PlaybackBackends.ExternalMpv;
+    public string PlaybackBackend { get; init; } = PlaybackBackends.EmbeddedPlayer;
     public bool OpenInFullscreen { get; init; } = true;
     public bool AutoAdvanceNextVideo { get; init; } = true;
     public bool MarkWatchedVideos { get; init; }
@@ -157,5 +159,75 @@ public sealed class PreferencesViewModel
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = state.PreferredSubtitleLanguage
         };
+    }
+
+    /// <summary>
+    /// Validates an executable path: non-empty, resolvable (direct path or PATH lookup),
+    /// and executable where the platform tracks an executable bit.
+    /// </summary>
+    public static ExecutablePathStatus ValidateExecutablePath(string? rawPath)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath))
+            return new ExecutablePathStatus(false, "Enter an executable path.");
+
+        var path = rawPath.Trim();
+        string? candidate;
+        if (path.Contains(Path.DirectorySeparatorChar) ||
+            path.Contains(Path.AltDirectorySeparatorChar))
+        {
+            candidate = path;
+            if (!File.Exists(candidate))
+                return new ExecutablePathStatus(false, $"Not found at {candidate}.");
+        }
+        else
+        {
+            candidate = FindOnPath(path);
+            if (candidate is null)
+                return new ExecutablePathStatus(false, $"“{path}” was not found on PATH.");
+        }
+
+        if ((OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) && !IsExecutable(candidate))
+            return new ExecutablePathStatus(false, $"{candidate} is not executable.");
+
+        return new ExecutablePathStatus(true, $"Found at {candidate}.");
+    }
+
+    private static string? FindOnPath(string fileName)
+    {
+        var pathVariable = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathVariable))
+            return null;
+
+        foreach (var directory in pathVariable.Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+                continue;
+
+            try
+            {
+                var candidate = Path.Combine(directory.Trim(), fileName);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+            {
+                // Malformed PATH entry — skip it.
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsExecutable(string path)
+    {
+        try
+        {
+            var mode = File.GetUnixFileMode(path);
+            return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

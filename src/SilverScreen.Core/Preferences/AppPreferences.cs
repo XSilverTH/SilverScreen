@@ -6,7 +6,7 @@ namespace SilverScreen.Core.Preferences;
 public sealed record AppPreferences
 {
     public string Theme { get; set; } = "System"; // "System", "Light", "Dark"
-    public string PlaybackBackend { get; set; } = PlaybackBackends.ExternalMpv;
+    public string PlaybackBackend { get; set; } = PlaybackBackends.EmbeddedPlayer;
     public bool OpenInFullscreen { get; set; } = true;
     public bool AutoAdvanceNextVideo { get; set; } = true;
     public string MpvExecutablePath { get; set; } = "mpv";
