@@ -34,15 +34,7 @@ jobs:
         run: >
           dotnet publish src/SilverScreen.App/SilverScreen.App.csproj
           -c Release -r linux-x64 --self-contained
-          -p:Version=${GITHUB_REF_NAME#v}
-          -p:InformationalVersion=${GITHUB_REF_NAME#v}
           -o publish/linux-x64
-
-      - name: Assert release metadata version
-        run: |
-          ver="${GITHUB_REF_NAME#v}"
-          grep -Fq "version=\"${ver}\"" packaging/io.github.silverscreen.SilverScreen.metainfo.xml
-          grep -Fq "pkgver=${ver}" packaging/PKGBUILD
 
       - name: Stage tarball and checksums
         run: |

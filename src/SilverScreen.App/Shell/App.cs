@@ -14,9 +14,8 @@ public partial class App
 {
     private static CssProvider? _styles;
     private IServiceProvider? _serviceProvider;
-    private MainWindow? _mainWindow;
     private bool _servicesDisposed;
-    private bool _themeSubscribed;
+
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -38,28 +37,14 @@ public partial class App
                        ?? throw new InvalidOperationException("Application services have not been configured.");
 
         InstallStyles();
-        if (!_themeSubscribed)
-        {
-            services.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.Theme);
-            _themeSubscribed = true;
-        }
         ApplyTheme(services.Preferences.GetPreferences().Theme);
+        services.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.Theme);
 
-        if (_mainWindow is not null)
-        {
-            _mainWindow.Widget.Present();
-            return;
-        }
-
-        _mainWindow = new MainWindow(services, OnMainWindowClosed);
-        _mainWindow.Widget.Application = this;
-        AddWindow(_mainWindow.Widget);
-        _mainWindow.Widget.Present();
-    }
-
-    private void OnMainWindowClosed()
-    {
-        _mainWindow = null;
+        var mainWindowWrapper = new MainWindow(services, DisposeServices);
+        var mainWindow = mainWindowWrapper.Widget;
+        mainWindow.Application = this;
+        AddWindow(mainWindow);
+        mainWindow.Present();
     }
 
     private static void ApplyTheme(string theme)

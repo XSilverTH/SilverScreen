@@ -9,8 +9,9 @@
         <PublishAot>true</PublishAot>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <AssemblyName>SilverScreen</AssemblyName>
-        <Version Condition="'$(Version)' == ''">0.1.0</Version>
-        <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)</InformationalVersion>
+        <RootNamespace>SilverScreen</RootNamespace>
+        <Version>0.1.0</Version>
+        <InformationalVersion>0.1.0</InformationalVersion>
         <Authors>XSilverTH</Authors>
         <Copyright>Copyright © XSilverTH</Copyright>
         <Description>A GTK 4 and Libadwaita desktop app for YouTube</Description>
