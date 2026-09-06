@@ -24,6 +24,7 @@ public sealed record ChannelViewState(
     public static ChannelViewState Empty { get; } = new(null, string.Empty, null, null, null, [],
         ChannelVideoSort.Newest, string.Empty, false, true);
 }
+public sealed record ChannelNavigationArgs(string Url, string? Name = null);
 
 public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 {

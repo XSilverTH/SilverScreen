@@ -259,11 +259,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_navigationService.CurrentPage == NavigationPage.Player)
             Widget.Unfullscreen();
 
-        _navigationService.NavigateTo(NavigationPage.Channel);
+        var channelArgs = new ChannelNavigationArgs(video.ChannelUrl, video.ChannelName);
+        _navigationService.NavigateTo(NavigationPage.Channel, channelArgs);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
             .ConfigureAwait(false);
     }
-
     private void CloseChannel()
     {
         _channelViewModel.Clear();
@@ -291,16 +291,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        switch (_navigationService.CurrentPage)
-        {
-            case NavigationPage.Search:
-                _searchViewModel.Reset();
-                break;
-            case NavigationPage.Channel:
-                _channelViewModel.Clear();
-                break;
-        }
-
         if (!_navigationService.GoBack())
         {
             _navigationService.NavigateTo(NavigationPage.Home);
@@ -425,8 +415,30 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         UpdateBackButton();
         UpdateNowPlayingBar();
 
-        var childChanged = e.CurrentPage != e.PreviousPage;
+        if (e.IsBackNavigation)
+        {
+            if (e.CurrentPage == NavigationPage.Channel && e.CurrentParameter is ChannelNavigationArgs channelArgs)
+            {
+                _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? "Channel", _channel.GetBatchSize())
+                    .FireAndForget(Logger);
+            }
+            else if (e.CurrentPage == NavigationPage.Search && e.CurrentParameter is string query)
+            {
+                SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
+            }
+        }
 
+        if (e.PreviousPage == NavigationPage.Channel && e.CurrentPage != NavigationPage.Channel)
+        {
+            _channelViewModel.Clear();
+        }
+
+        if (e.PreviousPage == NavigationPage.Search && e.CurrentPage != NavigationPage.Search)
+        {
+            _searchViewModel.Reset();
+        }
+
+        var childChanged = e.CurrentPage != e.PreviousPage;
         switch (e.CurrentPage)
         {
             case NavigationPage.Channel:

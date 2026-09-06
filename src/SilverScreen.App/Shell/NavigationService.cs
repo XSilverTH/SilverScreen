@@ -17,17 +17,58 @@ public enum NavigationPage
 }
 
 /// <summary>
+/// Represents a navigation history entry with a target page and optional parameter payload.
+/// </summary>
+public sealed record NavigationEntry(NavigationPage Page, object? Parameter = null);
+
+/// <summary>
 /// Provides event data for navigation page transition events.
 /// </summary>
 public sealed class NavigationPageChangedEventArgs : EventArgs
 {
     public NavigationPage? PreviousPage { get; }
     public NavigationPage CurrentPage { get; }
+    public object? PreviousParameter { get; }
+    public object? CurrentParameter { get; }
+    public NavigationEntry? PreviousEntry { get; }
+    public NavigationEntry CurrentEntry { get; }
+    public bool IsBackNavigation { get; }
 
-    public NavigationPageChangedEventArgs(NavigationPage? previousPage, NavigationPage currentPage)
+    public NavigationPageChangedEventArgs(
+        NavigationPage? previousPage,
+        NavigationPage currentPage)
+        : this(
+            previousPage.HasValue ? new NavigationEntry(previousPage.Value) : null,
+            new NavigationEntry(currentPage),
+            false)
     {
-        PreviousPage = previousPage;
-        CurrentPage = currentPage;
+    }
+
+    public NavigationPageChangedEventArgs(
+        NavigationPage? previousPage,
+        NavigationPage currentPage,
+        object? previousParameter,
+        object? currentParameter,
+        bool isBackNavigation = false)
+        : this(
+            previousPage.HasValue ? new NavigationEntry(previousPage.Value, previousParameter) : null,
+            new NavigationEntry(currentPage, currentParameter),
+            isBackNavigation)
+    {
+    }
+
+    public NavigationPageChangedEventArgs(
+        NavigationEntry? previousEntry,
+        NavigationEntry currentEntry,
+        bool isBackNavigation = false)
+    {
+        PreviousEntry = previousEntry;
+        CurrentEntry = currentEntry;
+        PreviousPage = previousEntry?.Page;
+        CurrentPage = currentEntry.Page;
+        PreviousParameter = previousEntry?.Parameter;
+        CurrentParameter = currentEntry.Parameter;
+        IsBackNavigation = isBackNavigation;
     }
 }
 
@@ -63,10 +104,15 @@ public sealed class NavigationPageRegistration
 public interface INavigationService
 {
     NavigationPage CurrentPage { get; }
+    object? CurrentParameter { get; }
+    NavigationEntry CurrentEntry { get; }
     NavigationPage? PreviousPage { get; }
+    object? PreviousParameter { get; }
+    NavigationEntry? PreviousEntry { get; }
     bool CanGoBack { get; }
     event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
     bool NavigateTo(NavigationPage page);
+    bool NavigateTo(NavigationPage page, object? parameter);
     bool GoBack();
     bool CanNavigateTo(NavigationPage page);
     void SyncFromViewStack(string? childName);
@@ -79,25 +125,29 @@ public sealed class NavigationService : INavigationService, IDisposable
 {
     private const string ShellStackName = "shell";
 
-    private readonly Gtk.Stack _mainStack;
-    private readonly Adw.ViewStack _viewStack;
+    private readonly Gtk.Stack? _mainStack;
+    private readonly Adw.ViewStack? _viewStack;
     private readonly Dictionary<NavigationPage, NavigationPageRegistration> _registry = new();
     private readonly Dictionary<string, NavigationPage> _viewStackNameToPage = new(StringComparer.Ordinal);
-    private NavigationPage _currentPage = NavigationPage.Home;
-    private readonly Stack<NavigationPage> _backStack = new();
+    private NavigationEntry _currentEntry = new(NavigationPage.Home);
+    private readonly Stack<NavigationEntry> _backStack = new();
     private bool _isNavigating;
     private bool _disposed;
 
-    public NavigationPage CurrentPage => _currentPage;
-    public NavigationPage? PreviousPage => _backStack.Count > 0 ? _backStack.Peek() : null;
+    public NavigationPage CurrentPage => _currentEntry.Page;
+    public object? CurrentParameter => _currentEntry.Parameter;
+    public NavigationEntry CurrentEntry => _currentEntry;
+    public NavigationPage? PreviousPage => _backStack.Count > 0 ? _backStack.Peek().Page : null;
+    public object? PreviousParameter => _backStack.Count > 0 ? _backStack.Peek().Parameter : null;
+    public NavigationEntry? PreviousEntry => _backStack.Count > 0 ? _backStack.Peek() : null;
     public bool CanGoBack => _backStack.Count > 0;
 
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
 
-    public NavigationService(Gtk.Stack mainStack, Adw.ViewStack viewStack)
+    public NavigationService(Gtk.Stack? mainStack = null, Adw.ViewStack? viewStack = null)
     {
-        _mainStack = mainStack ?? throw new ArgumentNullException(nameof(mainStack));
-        _viewStack = viewStack ?? throw new ArgumentNullException(nameof(viewStack));
+        _mainStack = mainStack;
+        _viewStack = viewStack;
 
         RegisterPage(NavigationPage.Home, "home", isShellPage: true);
         RegisterPage(NavigationPage.Subscriptions, "subscriptions", isShellPage: true);
@@ -123,20 +173,24 @@ public sealed class NavigationService : INavigationService, IDisposable
         }
     }
 
-    public void Initialize(NavigationPage initialPage = NavigationPage.Home)
+    public void Initialize(NavigationPage initialPage = NavigationPage.Home, object? parameter = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _currentPage = initialPage;
+        _currentEntry = new NavigationEntry(initialPage, parameter);
         if (_registry.TryGetValue(initialPage, out var entry))
         {
             if (entry.IsShellPage)
             {
-                _mainStack.VisibleChildName = ShellStackName;
-                _viewStack.VisibleChildName = entry.StackName;
+                if (_mainStack is not null && !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
+                    _mainStack.VisibleChildName = ShellStackName;
+
+                if (_viewStack is not null && !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                    _viewStack.VisibleChildName = entry.StackName;
             }
             else
             {
-                _mainStack.VisibleChildName = entry.StackName;
+                if (_mainStack is not null && !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                    _mainStack.VisibleChildName = entry.StackName;
             }
         }
     }
@@ -148,7 +202,12 @@ public sealed class NavigationService : INavigationService, IDisposable
 
     public bool NavigateTo(NavigationPage page)
     {
-        return NavigateInternal(page, pushToBackStack: true);
+        return NavigateTo(page, null);
+    }
+
+    public bool NavigateTo(NavigationPage page, object? parameter)
+    {
+        return NavigateInternal(new NavigationEntry(page, parameter), pushToBackStack: true, isBackNavigation: false);
     }
 
     public bool GoBack()
@@ -158,38 +217,38 @@ public sealed class NavigationService : INavigationService, IDisposable
         if (_backStack.Count == 0)
             return false;
 
-        var targetPage = _backStack.Pop();
-        return NavigateInternal(targetPage, pushToBackStack: false);
+        var target = _backStack.Pop();
+        return NavigateInternal(target, pushToBackStack: false, isBackNavigation: true);
     }
 
-    private bool NavigateInternal(NavigationPage page, bool pushToBackStack)
+    private bool NavigateInternal(NavigationEntry target, bool pushToBackStack, bool isBackNavigation)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (!_registry.TryGetValue(page, out var entry))
-            throw new ArgumentException($"Page '{page}' is not registered in the navigation service.", nameof(page));
+        if (!_registry.TryGetValue(target.Page, out var entry))
+            throw new ArgumentException($"Page '{target.Page}' is not registered in the navigation service.", nameof(target));
 
-        if (_currentPage == page)
+        if (_currentEntry == target || (_currentEntry.Page == target.Page && Equals(_currentEntry.Parameter, target.Parameter)))
             return false;
 
-        var previous = _currentPage;
+        var previous = _currentEntry;
         _isNavigating = true;
         try
         {
-            if (_registry.TryGetValue(previous, out var prevEntry))
+            if (_registry.TryGetValue(previous.Page, out var prevEntry))
                 prevEntry.OnLeave?.Invoke();
 
             if (entry.IsShellPage)
             {
-                if (!string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
+                if (_mainStack is not null && !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
                     _mainStack.VisibleChildName = ShellStackName;
 
-                if (!string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                if (_viewStack is not null && !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
                     _viewStack.VisibleChildName = entry.StackName;
             }
             else
             {
-                if (!string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                if (_mainStack is not null && !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
                     _mainStack.VisibleChildName = entry.StackName;
             }
 
@@ -197,7 +256,7 @@ public sealed class NavigationService : INavigationService, IDisposable
             {
                 _backStack.Push(previous);
             }
-            _currentPage = page;
+            _currentEntry = target;
             entry.OnEnter?.Invoke();
         }
         finally
@@ -205,7 +264,7 @@ public sealed class NavigationService : INavigationService, IDisposable
             _isNavigating = false;
         }
 
-        PageChanged?.Invoke(this, new NavigationPageChangedEventArgs(previous, page));
+        PageChanged?.Invoke(this, new NavigationPageChangedEventArgs(previous, target, isBackNavigation));
         return true;
     }
 
@@ -217,20 +276,20 @@ public sealed class NavigationService : INavigationService, IDisposable
         if (!_viewStackNameToPage.TryGetValue(childName, out var page))
             return;
 
-        if (_currentPage == page)
+        if (_currentEntry.Page == page && _currentEntry.Parameter is null)
             return;
 
-        var previous = _currentPage;
-        if (_registry.TryGetValue(previous, out var prevEntry))
+        var previous = _currentEntry;
+        if (_registry.TryGetValue(previous.Page, out var prevEntry))
             prevEntry.OnLeave?.Invoke();
 
         _backStack.Push(previous);
-        _currentPage = page;
+        _currentEntry = new NavigationEntry(page);
 
         if (_registry.TryGetValue(page, out var entry))
             entry.OnEnter?.Invoke();
 
-        PageChanged?.Invoke(this, new NavigationPageChangedEventArgs(previous, page));
+        PageChanged?.Invoke(this, new NavigationPageChangedEventArgs(previous, _currentEntry, isBackNavigation: false));
     }
     public bool TryGetPage(string stackName, out NavigationPage page)
     {
