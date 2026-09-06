@@ -7,6 +7,11 @@ using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
+/// <summary>
+/// Persists the manual YouTube session in Secret Service. Construction performs a single
+/// synchronous restore of any stored session (fail-closed to unavailable, never throws);
+/// all later keyring access happens only on explicit save/clear calls, never on hot paths.
+/// </summary>
 public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability, IDisposable
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -254,7 +259,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     public void ClearSession()
     {
         CancelValidation();
-        bool changed;
+        bool changed = false;
         try
         {
             lock (_gate)
@@ -268,13 +273,23 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
         catch (SessionPersistenceException ex)
         {
-            Logger.Error(ex, "Failed to clear YouTube session in Secret Service");
             lock (_gate)
             {
-                _isAvailable = false;
+                if (_manualCookies is null)
+                {
+                    // Nothing is cached locally, so the store was already empty (libsecret
+                    // reports clearing a missing item as a failure). Clearing an empty
+                    // store succeeds without poisoning availability.
+                    Logger.Debug(ex, "YouTube session already cleared; treating empty Secret Service clear as success");
+                    changed = false;
+                }
+                else
+                {
+                    Logger.Error(ex, "Failed to clear YouTube session in Secret Service");
+                    _isAvailable = false;
+                    throw;
+                }
             }
-
-            throw;
         }
 
         if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);

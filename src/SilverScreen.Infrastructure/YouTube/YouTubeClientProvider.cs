@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using YoutubeAPI;
@@ -11,16 +13,34 @@ public interface IYouTubeClientProvider
 }
 
 /// <summary>
-/// Creates and caches YoutubeAPI clients by cookie snapshot. A new session gets a new client, while
+/// Creates and caches YoutubeAPI clients by session-cookie hash. A new session gets a new client, while
 /// requests sharing the same session reuse the client's bootstrapped InnerTube connection.
+/// At most two clients are cached (least-recently-used eviction); evicted clients are disposed.
+/// Cache keys are SHA256 hashes of the cookie content: raw cookies never appear as keys or in logs,
+/// and only a truncated hash prefix is logged for diagnostics.
 /// </summary>
 public sealed class YouTubeClientProvider(ISessionService sessionService) : IYouTubeClientProvider, IDisposable
 {
+    internal const int MaxCachedClients = 2;
+    private const int LoggedHashPrefixLength = 12;
+
     private static readonly ILogger Logger = Log.ForContext<YouTubeClientProvider>();
     private readonly Lock _gate = new();
-    private readonly Dictionary<string, YouTubeClient> _clients = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, LinkedListNode<CachedClient>> _clients = new(StringComparer.Ordinal);
+    private readonly LinkedList<CachedClient> _lru = new();
     private readonly ISessionService _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
     private bool _disposed;
+
+    internal int CachedClientCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _clients.Count;
+            }
+        }
+    }
 
     public YouTubeClient GetClient()
     {
@@ -30,38 +50,79 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
         var cookieContent = cookies?.Format == SessionCookieFormat.NetscapeCookiesText
             ? cookies.Content
             : string.Empty;
+        var sessionKey = HashSessionCookies(cookieContent);
 
+        List<YouTubeClient>? evicted = null;
+        YouTubeClient client;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_clients.TryGetValue(cookieContent, out var cached))
-                return cached;
+            if (_clients.TryGetValue(sessionKey, out var hit))
+            {
+                _lru.Remove(hit);
+                _lru.AddLast(hit);
+                return hit.Value.Client;
+            }
 
             var authentication = string.IsNullOrWhiteSpace(cookieContent)
                 ? null
                 : YouTubeCookieAuthentication.FromNetscape(cookieContent);
-            var client = new YouTubeClient(new YouTubeClientOptions
+            client = new YouTubeClient(new YouTubeClientOptions
             {
                 Authentication = authentication
             });
-            _clients.Add(cookieContent, client);
-            Logger.Debug("Created YoutubeAPI client for {AuthenticationState} session",
-                authentication is null ? "anonymous" : "authenticated");
-            return client;
+            _clients.Add(sessionKey, _lru.AddLast(new CachedClient(sessionKey, client)));
+            Logger.Debug("Created YoutubeAPI client for {AuthenticationState} session ({SessionHash})",
+                authentication is null ? "anonymous" : "authenticated",
+                TruncateHash(sessionKey));
+
+            while (_clients.Count > MaxCachedClients && _lru.First is not null)
+            {
+                var oldest = _lru.First;
+                _lru.RemoveFirst();
+                _clients.Remove(oldest.Value.SessionKey);
+                evicted ??= [];
+                evicted.Add(oldest.Value.Client);
+                Logger.Debug("Evicted YoutubeAPI client ({SessionHash})", TruncateHash(oldest.Value.SessionKey));
+            }
         }
+
+        if (evicted is not null)
+            foreach (var evictedClient in evicted)
+                evictedClient.Dispose();
+
+        return client;
     }
 
     public void Dispose()
     {
+        List<YouTubeClient>? evicted;
         lock (_gate)
         {
             if (_disposed)
                 return;
 
             _disposed = true;
-            foreach (var client in _clients.Values)
-                client.Dispose();
+            evicted = new List<YouTubeClient>(_lru.Count);
+            foreach (var entry in _lru)
+                evicted.Add(entry.Client);
             _clients.Clear();
+            _lru.Clear();
         }
+
+        foreach (var client in evicted)
+            client.Dispose();
     }
+
+    private static string HashSessionCookies(string cookieContent)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cookieContent)));
+    }
+
+    private static string TruncateHash(string sessionKey)
+    {
+        return sessionKey.Length > LoggedHashPrefixLength ? sessionKey[..LoggedHashPrefixLength] : sessionKey;
+    }
+
+    private sealed record CachedClient(string SessionKey, YouTubeClient Client);
 }
