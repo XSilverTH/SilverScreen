@@ -581,7 +581,7 @@ public sealed class LibMpvPlayer : IDisposable
             reload = _reload;
         }
 
-        if (reload is not null && reload.PlaylistIndex == _state.PlaylistIndex)
+        if (reload is not null && (reload.PlaylistIndex < 0 || reload.PlaylistIndex == _state.PlaylistIndex || _state.PlaylistIndex < 0))
         {
             _reload = null;
             Enqueue(() =>

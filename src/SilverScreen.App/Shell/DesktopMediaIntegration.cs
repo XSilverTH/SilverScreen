@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using GLib;
 using Serilog;
@@ -426,6 +427,9 @@ internal sealed class DesktopMediaIntegration : IDisposable
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPlay);
                 if (previous.CanPause != current.CanPause)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.CanPause);
+
+                if (TryGetSeekedPosition(previous, current, out var seekedPosition))
+                    Connection.EmitSeeked(MprisObjectPath, seekedPosition);
             }
             catch (Exception exception)
             {
@@ -447,7 +451,8 @@ internal sealed class DesktopMediaIntegration : IDisposable
         bool CanPlay,
         bool CanPause,
         ObjectPath TrackId,
-        Dictionary<string, VariantValue> Metadata)
+        Dictionary<string, VariantValue> Metadata,
+        long Timestamp = 0)
     {
         public static DesktopPlaybackSnapshot Stopped { get; } = new(false, false, "Stopped", 0, 1, 1, false,
             false, false, false, false, new ObjectPath("/org/mpris/MediaPlayer2/Track/none"), []);
@@ -477,7 +482,37 @@ internal sealed class DesktopMediaIntegration : IDisposable
             return new DesktopPlaybackSnapshot(true, !state.IsPaused, state.IsPaused ? "Paused" : "Playing",
                 state.Position.Ticks / 10, Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,
                 state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId,
-                metadata);
+                metadata, Stopwatch.GetTimestamp());
         }
+    }
+
+    internal static bool TryGetSeekedPosition(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current, out long positionMicroseconds)
+    {
+        positionMicroseconds = current.PositionMicroseconds;
+        if (!current.HasMedia)
+            return false;
+
+        var trackChanged = !Equals(previous.TrackId, current.TrackId);
+        if (trackChanged)
+        {
+            if (previous.HasMedia || current.PositionMicroseconds > 0)
+                return true;
+
+            return false;
+        }
+
+        if (!previous.HasMedia)
+            return false;
+
+        if (!previous.IsPlaying)
+        {
+            return Math.Abs(current.PositionMicroseconds - previous.PositionMicroseconds) > 100_000;
+        }
+
+        var elapsed = previous.Timestamp > 0 && current.Timestamp >= previous.Timestamp
+            ? Stopwatch.GetElapsedTime(previous.Timestamp, current.Timestamp)
+            : TimeSpan.Zero;
+        var expected = previous.PositionMicroseconds + (long)(elapsed.TotalSeconds * previous.Rate * 1_000_000);
+        return Math.Abs(current.PositionMicroseconds - expected) > 1_000_000;
     }
 }
