@@ -19,6 +19,14 @@ public sealed record SearchViewState(
 
 public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
 {
+    /// <summary>
+    /// Single generic status line for every pasted URL that is not a playable video or Shorts
+    /// (channel, playlist, unknown or invalid). Shell shows the returned notice as a toast;
+    /// the search page also surfaces it in its empty status.
+    /// </summary>
+    public const string UnsupportedUrlMessage =
+        "That link isn't playable yet — paste a video or Shorts URL.";
+
     private static readonly ILogger Logger = Log.ForContext<SearchViewModel>();
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
@@ -58,9 +66,16 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             OnPropertyChanged(nameof(IsLoading));
             OnPropertyChanged(nameof(IsLoadingMore));
             OnPropertyChanged(nameof(HasMore));
+            OnPropertyChanged(nameof(BackLabel));
             StateChanged?.Invoke(this, value);
         }
     } = new([], "Search results will appear here.", false);
+
+    /// <summary>
+    /// Label for the shell back button while the search page is visible. Read by MainWindow;
+    /// kept as a property (not a constant) so it can become query-aware without a shell change.
+    /// </summary>
+    public string BackLabel => "Back to Search";
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
@@ -147,11 +162,21 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         }
     }
 
-    public async Task SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
+    /// <summary>
+    /// Handles a submitted search entry. Returns null when the submit was handled cleanly
+    /// (video/Shorts playback started or a text search launched); otherwise returns a
+    /// user-visible guidance string the shell should surface as a transient toast.
+    /// Search-page state always reflects the outcome too, so nothing fails silently.
+    /// </summary>
+    public async Task<string?> SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("Search submitted: {Text}", text);
         var query = text.Trim();
-        if (string.IsNullOrWhiteSpace(query)) return;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            ShowUnsupportedUrlNotice();
+            return UnsupportedUrlMessage;
+        }
 
         try
         {
@@ -159,24 +184,26 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             switch (parsedUrl.Kind)
             {
                 case YouTubeUrlKind.Video:
-                    await PlayYouTubeUrlAsync(parsedUrl);
-                    return;
                 case YouTubeUrlKind.Shorts:
+                    return await PlayYouTubeUrlAsync(parsedUrl).ConfigureAwait(false);
                 case YouTubeUrlKind.Channel:
                 case YouTubeUrlKind.Playlist:
                 case YouTubeUrlKind.UnknownYouTube:
                 case YouTubeUrlKind.Invalid:
-                    return;
+                    ShowUnsupportedUrlNotice();
+                    return UnsupportedUrlMessage;
                 case YouTubeUrlKind.NotYouTube:
-                    await SearchPlainTextAsync(query, count);
-                    return;
+                    await SearchPlainTextAsync(query, count).ConfigureAwait(false);
+                    return null;
                 default:
-                    return;
+                    ShowUnsupportedUrlNotice();
+                    return UnsupportedUrlMessage;
             }
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to submit search or play URL for query {Query}", query);
+            return "Could not complete search. Check your network connection and try again.";
         }
     }
 
@@ -229,13 +256,39 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             state is { IsSuccess: true, LastError: null });
     }
 
-    private async Task PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
+    /// <summary>
+    /// Surfaces the generic unsupported-link status on the search page itself (via the engine
+    /// status the page already renders) and in view state, so a pasted non-video URL is never
+    /// a silent no-op. Cancels any in-flight text search first so it cannot overwrite the notice.
+    /// </summary>
+    private void ShowUnsupportedUrlNotice()
     {
-        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null) return;
+        ThrowIfDisposed();
+        CurrentQuery = null;
+        _engine.Reset(statusMessage: UnsupportedUrlMessage);
+        State = new SearchViewState([], UnsupportedUrlMessage, false);
+    }
+
+    private async Task<string?> PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
+    {
+        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
+        {
+            ShowUnsupportedUrlNotice();
+            return UnsupportedUrlMessage;
+        }
 
         var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
-        await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+        try
+        {
+            await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
+            return null;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to start playback for pasted URL {VideoId}", parsedUrl.VideoId);
+            return "Could not start playback. Check your network connection and try again.";
+        }
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

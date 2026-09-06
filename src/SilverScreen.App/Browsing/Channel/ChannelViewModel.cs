@@ -60,9 +60,16 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         {
             field = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(BackLabel));
             StateChanged?.Invoke(this, value);
         }
     } = ChannelViewState.Empty;
+
+    /// <summary>
+    /// Label for the shell back button while the channel page is visible. Read by MainWindow;
+    /// names the loaded channel so Back reads dynamically instead of a hardcoded destination.
+    /// </summary>
+    public string BackLabel => string.IsNullOrWhiteSpace(State.Name) ? "Back" : $"Back from {State.Name}";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

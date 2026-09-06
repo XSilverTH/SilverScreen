@@ -17,7 +17,8 @@ public sealed record YouTubeUrlParseResult(
     string? ChannelPath = null,
     string? PlaylistId = null)
 {
-    public string? CanonicalWatchUrl => Kind == YouTubeUrlKind.Video && VideoId is not null
+    public string? CanonicalWatchUrl => VideoId is not null &&
+        (Kind == YouTubeUrlKind.Video || Kind == YouTubeUrlKind.Shorts)
         ? $"https://www.youtube.com/watch?v={Uri.EscapeDataString(VideoId)}"
         : null;
 
@@ -47,10 +48,15 @@ public static class YouTubeUrlParser
             ? ParseShortHost(uri)
             : ParseYouTubeHost(uri);
     }
-
     private static YouTubeUrlParseResult ParseShortHost(Uri uri)
     {
-        var videoId = GetPathSegment(uri, 0);
+        var firstSegment = GetPathSegment(uri, 0);
+        if (firstSegment is null) return YouTubeUrlParseResult.UnknownYouTube;
+
+        // youtu.be/shorts/<id> shares carry a redundant leading segment; strip it.
+        var videoId = firstSegment.Equals("shorts", StringComparison.OrdinalIgnoreCase)
+            ? GetPathSegment(uri, 1)
+            : firstSegment;
         if (videoId is null) return YouTubeUrlParseResult.UnknownYouTube;
 
         return IsValidVideoId(videoId)
@@ -83,6 +89,20 @@ public static class YouTubeUrlParser
                 : YouTubeUrlParseResult.Invalid;
         }
 
+        if (firstSegment.Equals("embed", StringComparison.OrdinalIgnoreCase)
+            || firstSegment.Equals("v", StringComparison.OrdinalIgnoreCase)
+            || firstSegment.Equals("live", StringComparison.OrdinalIgnoreCase)
+            || firstSegment.Equals("clip", StringComparison.OrdinalIgnoreCase))
+        {
+            // Embed, legacy /v/, live and clip links all address a single video; play it like a watch URL.
+            var embeddedVideoId = GetPathSegment(uri, 1);
+            if (embeddedVideoId is null) return YouTubeUrlParseResult.UnknownYouTube;
+
+            return IsValidVideoId(embeddedVideoId)
+                ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, embeddedVideoId)
+                : YouTubeUrlParseResult.Invalid;
+        }
+
         if (firstSegment.Equals("playlist", StringComparison.OrdinalIgnoreCase))
         {
             var playlistId = GetQueryValue(uri.Query, "list");
@@ -93,6 +113,8 @@ public static class YouTubeUrlParser
 
         if (firstSegment.Equals("channel", StringComparison.OrdinalIgnoreCase)
             || firstSegment.Equals("c", StringComparison.OrdinalIgnoreCase)
+            || firstSegment.Equals("user", StringComparison.OrdinalIgnoreCase)
+            || firstSegment.Equals("handle", StringComparison.OrdinalIgnoreCase)
             || firstSegment.StartsWith('@'))
             return new YouTubeUrlParseResult(YouTubeUrlKind.Channel, ChannelPath: uri.AbsolutePath.Trim('/'));
 
@@ -110,6 +132,9 @@ public static class YouTubeUrlParser
         return host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase)
                || host.Equals("www.youtube.com", StringComparison.OrdinalIgnoreCase)
                || host.Equals("m.youtube.com", StringComparison.OrdinalIgnoreCase)
+               || host.Equals("music.youtube.com", StringComparison.OrdinalIgnoreCase)
+               || host.Equals("youtube-nocookie.com", StringComparison.OrdinalIgnoreCase)
+               || host.Equals("www.youtube-nocookie.com", StringComparison.OrdinalIgnoreCase)
                || host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase);
     }
 
