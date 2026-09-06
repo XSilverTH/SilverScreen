@@ -5,6 +5,13 @@ using SilverScreen.Core.Queue;
 
 namespace SilverScreen.Infrastructure.Queue;
 
+/// <summary>
+///     List owner for the playback queue. Sync is one-directional: edits flow from
+///     this service into an immutable playback-request snapshot (videos plus the
+///     session's playlist index) published through the playback session; the snapshot
+///     never writes back into the list. The embedded view mirrors snapshots into the
+///     native playlist, never the reverse.
+/// </summary>
 public sealed class QueueService : IQueueService
 {
     private static readonly ILogger Logger = Log.ForContext<QueueService>();

@@ -19,6 +19,10 @@ namespace SilverScreen.Player;
 internal sealed class PlaybackSession : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
+    /// <summary>Mirrors <c>PlayerTimelineEngine</c>'s default resume minimum: positions at or below this are "from the start".</summary>
+    private const double MinimumResumeSeconds = 5;
+    /// <summary>Positions leaving at most this (or 10% of short media, whichever is smaller) are treated as finished.</summary>
+    private const double ResumeEndEpsilonSeconds = 10;
 
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
 
@@ -128,17 +132,29 @@ internal sealed class PlaybackSession : IDisposable
         ArgumentNullException.ThrowIfNull(request);
         if (_disposed) return;
 
+        if (request.Videos.IsDefaultOrEmpty)
+        {
+            Fail("Nothing to play. Choose a video to start playback.");
+            return;
+        }
+
+        var firstVideo = PlaybackCoordinator.GetVideoAt(request, 0);
+        if (firstVideo is null || string.IsNullOrWhiteSpace(firstVideo.Id))
+        {
+            Fail("That video is missing its id, so playback cannot start.");
+            return;
+        }
+
         Reset();
         Request = request;
         CurrentPlaylistIndex = 0;
-        CurrentVideo = PlaybackCoordinator.GetVideoAt(request, 0);
+        CurrentVideo = firstVideo;
         HasMedia = false;
         _playbackId = _coordinator.RegisterActivePlayback(request);
         _cookieFile = _coordinator.AcquireCookieFileLease();
 
-        if (CurrentVideo is null) return;
-        LoadVideo(CurrentVideo);
-        VideoChanged?.Invoke(CurrentVideo, 0);
+        LoadVideo(firstVideo);
+        VideoChanged?.Invoke(firstVideo, 0);
     }
 
     public void UpdatePlayback(LibMpvPlaybackState state)
@@ -192,11 +208,13 @@ internal sealed class PlaybackSession : IDisposable
         LastPlaybackState = state;
     }
 
-    public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
+    public string UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
-        if (_disposed || Request is null) return;
+        if (_disposed || Request is null) return "Playback is not active, ignoring the queue update.";
+        if (newVideos.IsDefaultOrEmpty) return "Queue is empty, keeping the current playback queue.";
         Request = PlaybackCoordinator.UpdateQueue(newVideos);
         QueueUpdated?.Invoke(Request);
+        return newVideos.Length == 1 ? "Queue updated (1 video)." : $"Queue updated ({newVideos.Length} videos).";
     }
 
     public void EndSession()
@@ -420,6 +438,14 @@ internal sealed class PlaybackSession : IDisposable
             prefs.ResumePlaybackOnDemand,
             out var resumePos);
 
+        // The engine already rejects null/completed/zero positions, but it has no
+        // near-end epsilon: without this, AutoResume would seek seconds before the
+        // credits and raise a bogus Restart prompt. Only prompt (and seek) when the
+        // saved position is genuinely mid-video; otherwise continue silently.
+        if (promptState != ResumePromptState.None &&
+            !IsMeaningfulResumePosition(_youtubePlaybackProgress, resumePos, state.Duration))
+            promptState = ResumePromptState.None;
+
         switch (promptState)
         {
             case ResumePromptState.AutoResume:
@@ -439,6 +465,18 @@ internal sealed class PlaybackSession : IDisposable
                 ResumePosition = TimeSpan.Zero;
                 break;
         }
+    }
+
+    private static bool IsMeaningfulResumePosition(
+        YouTubePlaybackProgress? progress,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        if (progress is { IsCompleted: true }) return false;
+        if (duration <= TimeSpan.Zero) return false;
+        if (position < TimeSpan.FromSeconds(MinimumResumeSeconds)) return false;
+        var endEpsilon = TimeSpan.FromSeconds(Math.Min(ResumeEndEpsilonSeconds, duration.TotalSeconds * 0.1));
+        return position < duration - endEpsilon;
     }
 
     private void EvaluateSponsorBlock(LibMpvPlaybackState state)
