@@ -203,16 +203,16 @@ public partial class ChannelView : ViewBase<Box>
         // 1. Metadata & Avatar
         channel_name.SetText(state.Name);
 
-        if (!string.IsNullOrWhiteSpace(state.Url))
+        var handle = ExtractHandle(state.Url);
+        if (!string.IsNullOrWhiteSpace(handle))
         {
-            channel_handle.SetText(state.Url);
+            channel_handle.SetText(handle);
             channel_handle.Visible = true;
         }
         else
         {
             channel_handle.Visible = false;
         }
-
         if (state.SubscriberCount is { } subsCount)
         {
             channel_subscribers.SetText(FormatSubscriberCount(subsCount));
@@ -239,6 +239,65 @@ public partial class ChannelView : ViewBase<Box>
                 buffer.Text = string.Empty;
 
             channel_description_scroller.Visible = false;
+        }
+
+        // Populate "About" popover with full channel links and details
+        about_channel_title.SetText(state.Name);
+
+        if (!string.IsNullOrWhiteSpace(handle))
+        {
+            about_handle_label.SetText($"Handle: {handle}");
+            about_handle_label.Visible = true;
+        }
+        else
+        {
+            about_handle_label.Visible = false;
+        }
+
+        if (state.SubscriberCount is { } subs)
+        {
+            about_subscribers_label.SetText($"Subscribers: {FormatSubscriberCount(subs)}");
+            about_subscribers_label.Visible = true;
+        }
+        else
+        {
+            about_subscribers_label.Visible = false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.Url))
+        {
+            about_channel_link.SetUri(state.Url);
+            about_channel_link.SetLabel(state.Url);
+            about_channel_link.Visible = true;
+            about_links_section.Visible = true;
+        }
+        else
+        {
+            about_channel_link.Visible = false;
+            about_links_section.Visible = false;
+        }
+
+        var contactInfo = ExtractContactInfo(state.Description);
+        if (!string.IsNullOrWhiteSpace(contactInfo))
+        {
+            about_contact_label.SetText(contactInfo);
+            about_contact_section.Visible = true;
+        }
+        else
+        {
+            about_contact_label.SetText(string.Empty);
+            about_contact_section.Visible = false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.Description))
+        {
+            about_description_label.SetText(state.Description);
+            about_description_section.Visible = true;
+        }
+        else
+        {
+            about_description_label.SetText(string.Empty);
+            about_description_section.Visible = false;
         }
 
         if (!string.Equals(_currentAvatarUrl, state.AvatarUrl, StringComparison.Ordinal))
@@ -423,5 +482,39 @@ public partial class ChannelView : ViewBase<Box>
         _videoList.Dispose();
 
         base.Dispose();
+    }
+
+    private static string? ExtractHandle(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        var atIndex = url.IndexOf('@');
+        if (atIndex < 0) return null;
+        var handle = url[atIndex..].TrimEnd('/');
+        var slashIndex = handle.IndexOf('/');
+        return slashIndex > 0 ? handle[..slashIndex] : handle;
+    }
+
+    private static string? ExtractContactInfo(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+
+        var lines = description.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var contactLines = new List<string>();
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("contact", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("business", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("inquir", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("email", StringComparison.OrdinalIgnoreCase) ||
+                (line.Contains('@') && (line.Contains(".com", StringComparison.OrdinalIgnoreCase) ||
+                                        line.Contains(".org", StringComparison.OrdinalIgnoreCase) ||
+                                        line.Contains(".net", StringComparison.OrdinalIgnoreCase))))
+            {
+                contactLines.Add(line);
+            }
+        }
+
+        return contactLines.Count > 0 ? string.Join("\n", contactLines) : null;
     }
 }

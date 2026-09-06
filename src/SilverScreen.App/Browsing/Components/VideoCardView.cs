@@ -94,20 +94,24 @@ public partial class VideoCardView : ViewBase<Bin>
         _video = video;
         title.SetText(video.Title);
         title.TooltipText = video.Title;
+        card.TooltipText = FormatCardTooltip(video);
         channel.SetText(video.ChannelName);
         if (video.PublishedAt is { } publishedAt)
         {
             upload_date.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
+            upload_date.TooltipText = FormatTooltipMeta(publishedAt.ToLocalTime().ToString("MMM d, yyyy"));
             upload_date.Visible = true;
         }
         else if (video.ApproximateUploadDate is { } uploadDate)
         {
             upload_date.SetText(FormatUploadAge(uploadDate, DateOnly.FromDateTime(DateTime.Now)));
+            upload_date.TooltipText = FormatTooltipMeta(uploadDate.ToString("MMM d, yyyy"));
             upload_date.Visible = true;
         }
         else
         {
             upload_date.SetText(string.Empty);
+            upload_date.TooltipText = string.Empty;
             upload_date.Visible = false;
         }
 
@@ -127,10 +131,12 @@ public partial class VideoCardView : ViewBase<Bin>
         _bindingGeneration++;
         title.SetText(string.Empty);
         title.TooltipText = string.Empty;
+        card.TooltipText = string.Empty;
         _contextMenu.Popdown();
         channel.SetText(string.Empty);
         duration.SetText(string.Empty);
         upload_date.SetText(string.Empty);
+        upload_date.TooltipText = string.Empty;
         upload_date.Visible = false;
         SetWatchProgress(null);
         _thumbnailAlternativeText = string.Empty;
@@ -415,6 +421,50 @@ public partial class VideoCardView : ViewBase<Bin>
     private static string FormatWholeUnits(int count, string unit)
     {
         return count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
+    }
+
+    public static string FormatViewCount(long views)
+    {
+        return views switch
+        {
+            >= 1_000_000_000 => $"{(views / 1_000_000_000.0):0.#}B views",
+            >= 1_000_000 => $"{(views / 1_000_000.0):0.#}M views",
+            >= 1_000 => $"{(views / 1_000.0):0.#}K views",
+            1 => "1 view",
+            _ => $"{views:N0} views"
+        };
+    }
+
+    public static string FormatCardTooltip(VideoSummary video, long? viewCount = null)
+    {
+        var publishedText = video.PublishedAt is { } publishedAt
+            ? publishedAt.ToLocalTime().ToString("MMM d, yyyy")
+            : video.ApproximateUploadDate is { } uploadDate
+                ? uploadDate.ToString("MMM d, yyyy")
+                : null;
+
+        return FormatCardTooltip(video.Title, video.ChannelName, publishedText, viewCount);
+    }
+
+    public static string FormatCardTooltip(string title, string channelName, string? publishedText, long? viewCount = null)
+    {
+        var metaLine = FormatTooltipMeta(publishedText, viewCount);
+
+        return string.IsNullOrWhiteSpace(metaLine)
+            ? $"{title}\n{channelName}"
+            : $"{title}\n{channelName}\n{metaLine}";
+    }
+
+    public static string FormatTooltipMeta(string? publishedText, long? viewCount = null)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(publishedText))
+            parts.Add($"Published: {publishedText}");
+
+        if (viewCount is { } count and >= 0)
+            parts.Add(FormatViewCount(count));
+
+        return string.Join(" • ", parts);
     }
 
     public new void Dispose()

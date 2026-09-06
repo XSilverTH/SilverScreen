@@ -159,6 +159,148 @@ Gtk.Box ChannelView {
 
           selected: 0;
         }
+
+        Gtk.Box channel_controls_spacer {
+          hexpand: true;
+        }
+
+        Gtk.MenuButton channel_about_button {
+          label: "About";
+          icon-name: "dialog-information-symbolic";
+          tooltip-text: "About channel";
+
+          styles [
+            "flat",
+          ]
+
+          popover: Gtk.Popover channel_about_popover {
+            child: Gtk.Box channel_about_box {
+              orientation: vertical;
+              spacing: 12;
+              width-request: 320;
+              margin-start: 12;
+              margin-end: 12;
+              margin-top: 12;
+              margin-bottom: 12;
+
+              Gtk.Label about_channel_title {
+                xalign: 0;
+                wrap: true;
+
+                styles [
+                  "heading",
+                ]
+              }
+
+              Gtk.Box about_meta_box {
+                orientation: vertical;
+                spacing: 4;
+
+                Gtk.Label about_handle_label {
+                  xalign: 0;
+                  wrap: true;
+                  selectable: true;
+                  visible: false;
+
+                  styles [
+                    "caption",
+                    "dim-label",
+                  ]
+                }
+
+                Gtk.Label about_subscribers_label {
+                  xalign: 0;
+                  selectable: true;
+                  visible: false;
+
+                  styles [
+                    "caption",
+                    "dim-label",
+                  ]
+                }
+              }
+
+              Gtk.Box about_links_section {
+                orientation: vertical;
+                spacing: 6;
+
+                Gtk.Label about_links_header {
+                  label: "Links";
+                  xalign: 0;
+
+                  styles [
+                    "dim-label",
+                    "caption-heading",
+                  ]
+                }
+
+                Gtk.LinkButton about_channel_link {
+                  halign: start;
+                  visible: false;
+                }
+              }
+
+              Gtk.Box about_contact_section {
+                orientation: vertical;
+                spacing: 4;
+                visible: false;
+
+                Gtk.Label about_contact_header {
+                  label: "Contact";
+                  xalign: 0;
+
+                  styles [
+                    "dim-label",
+                    "caption-heading",
+                  ]
+                }
+
+                Gtk.Label about_contact_label {
+                  xalign: 0;
+                  wrap: true;
+                  selectable: true;
+
+                  styles [
+                    "caption",
+                  ]
+                }
+              }
+
+              Gtk.Box about_description_section {
+                orientation: vertical;
+                spacing: 4;
+                visible: false;
+
+                Gtk.Label about_description_header {
+                  label: "Description";
+                  xalign: 0;
+
+                  styles [
+                    "dim-label",
+                    "caption-heading",
+                  ]
+                }
+
+                Gtk.ScrolledWindow about_description_scroller {
+                  hscrollbar-policy: never;
+                  vscrollbar-policy: automatic;
+                  max-content-height: 180;
+                  propagate-natural-height: true;
+
+                  Gtk.Label about_description_label {
+                    xalign: 0;
+                    wrap: true;
+                    selectable: true;
+
+                    styles [
+                      "caption",
+                    ]
+                  }
+                }
+              }
+            };
+          };
+        }
       }
     };
   }

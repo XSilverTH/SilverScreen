@@ -50,6 +50,19 @@ public partial class SubscriptionsView : ViewBase<Box>
             openWebLogin);
         subscriptions_video_list_host.Append(_videoList.Widget);
 
+        var allKeyController = EventControllerKey.New();
+        allKeyController.OnKeyPressed += (_, args) =>
+        {
+            if (args.Keyval == (uint)Gdk.Constants.KEY_Right && _channelItems.Count > 0)
+            {
+                _channelItems[0].ItemBox.GrabFocus();
+                return true;
+            }
+
+            return false;
+        };
+        all_channel_button.AddController(allKeyController);
+
         _viewModel.StateChanged += OnStateChanged;
         Render(_viewModel.State);
     }
@@ -92,9 +105,15 @@ public partial class SubscriptionsView : ViewBase<Box>
 
         // Update "All" toggle button state
         if (state.SelectedChannel is null)
+        {
             all_channel_button.AddCssClass("active");
+            all_channel_button.AddCssClass("selected");
+        }
         else
+        {
             all_channel_button.RemoveCssClass("active");
+            all_channel_button.RemoveCssClass("selected");
+        }
 
         // Reveal channel bar only when we have channels
         channel_bar_revealer.RevealChild = state.Channels.Count > 0;
@@ -113,9 +132,15 @@ public partial class SubscriptionsView : ViewBase<Box>
                              (selected.Id == holder.Channel.Id || selected.Url == holder.Channel.Url);
 
             if (isSelected)
+            {
                 holder.ItemBox.AddCssClass("selected");
+                holder.ItemBox.AddCssClass("active");
+            }
             else
+            {
                 holder.ItemBox.RemoveCssClass("selected");
+                holder.ItemBox.RemoveCssClass("active");
+            }
         }
     }
 
@@ -150,7 +175,9 @@ public partial class SubscriptionsView : ViewBase<Box>
         itemBox.Halign = Align.Center;
         itemBox.Valign = Align.Center;
         itemBox.AddCssClass("subscriptions-channel-item");
-        itemBox.TooltipText = channel.Title;
+        itemBox.TooltipText = FormatChannelTooltip(channel);
+        itemBox.Focusable = true;
+        itemBox.AccessibleRole = AccessibleRole.Button;
 
         var avatarOverlay = Overlay.New();
         avatarOverlay.WidthRequest = AvatarSize;
@@ -184,6 +211,45 @@ public partial class SubscriptionsView : ViewBase<Box>
             _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
         };
         itemBox.AddController(leftClick);
+        var keyController = EventControllerKey.New();
+        keyController.OnKeyPressed += (_, args) =>
+        {
+            var keyval = args.Keyval;
+            if (keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+            {
+                _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
+                return true;
+            }
+
+            if (keyval == (uint)Gdk.Constants.KEY_Left)
+            {
+                var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
+                if (index > 0)
+                {
+                    _channelItems[index - 1].ItemBox.GrabFocus();
+                }
+                else if (index == 0)
+                {
+                    all_channel_button.GrabFocus();
+                }
+
+                return true;
+            }
+
+            if (keyval == (uint)Gdk.Constants.KEY_Right)
+            {
+                var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
+                if (index >= 0 && index < _channelItems.Count - 1)
+                {
+                    _channelItems[index + 1].ItemBox.GrabFocus();
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        itemBox.AddController(keyController);
+
 
         // Secondary / context click: Go to channel page
         var menu = Menu.New();
@@ -331,6 +397,28 @@ public partial class SubscriptionsView : ViewBase<Box>
         ClearChannelItems();
         _videoList.Dispose();
         base.Dispose();
+    }
+
+    private static string FormatChannelTooltip(SubscribedChannel channel)
+    {
+        var handle = ExtractHandle(channel.Url);
+        if (!string.IsNullOrWhiteSpace(handle) &&
+            !string.Equals(channel.Title, handle, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{channel.Title} ({handle})";
+        }
+
+        return channel.Title;
+    }
+
+    private static string? ExtractHandle(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        var atIndex = url.IndexOf('@');
+        if (atIndex < 0) return null;
+        var handle = url[atIndex..].TrimEnd('/');
+        var slashIndex = handle.IndexOf('/');
+        return slashIndex > 0 ? handle[..slashIndex] : handle;
     }
 
     private sealed class ChannelItemHolder(
