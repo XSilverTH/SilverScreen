@@ -32,6 +32,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
     private readonly WebView _webView;
     private readonly int _uiThreadId;
     private int _disposeState;
+    private readonly ManualResetEventSlim _teardownEvent = new(false);
     private int _terminalState;
     private bool _closedInvoked;
     private bool _nativeDisposed;
@@ -70,40 +71,40 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     public new void Dispose()
     {
-        // Double-dispose guard: exactly one thread wins disposal.
-        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
-            return;
-
-        if (Environment.CurrentManagedThreadId == _uiThreadId)
+        // Double-dispose guard: exactly one thread wins disposal initiation.
+        if (Interlocked.Exchange(ref _disposeState, 1) == 0)
         {
-            DisposeOnMainThread();
-            return;
+            if (Environment.CurrentManagedThreadId == _uiThreadId)
+            {
+                DisposeOnMainThread();
+            }
+            else
+            {
+                Functions.IdleAdd(0, () =>
+                {
+                    try
+                    {
+                        DisposeOnMainThread();
+                    }
+                    catch (Exception exception)
+                    {
+                        Logger.Warning(exception, "WebLoginWindow UI-thread disposal failed");
+                        _teardownEvent.Set();
+                    }
+
+                    return false;
+                });
+            }
         }
 
         // WebKit/GTK natives must be torn down on the UI thread, never on a
         // threadpool thread. Marshal synchronously so the caller never
-        // outlives the teardown ordering (capture stopped before natives go).
-        using var completed = new ManualResetEventSlim(false);
-        Functions.IdleAdd(0, () =>
+        // outlives the teardown ordering (capture stopped and native handles disposed).
+        if (Environment.CurrentManagedThreadId != _uiThreadId)
         {
-            try
-            {
-                DisposeOnMainThread();
-            }
-            catch (Exception exception)
-            {
-                Logger.Warning(exception, "WebLoginWindow UI-thread disposal failed");
-            }
-            finally
-            {
-                completed.Set();
-            }
-
-            return false;
-        });
-
-        if (!completed.Wait(TimeSpan.FromSeconds(10)))
-            Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
+            if (!_teardownEvent.Wait(TimeSpan.FromSeconds(10)))
+                Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
+        }
     }
 
     private void DisposeOnMainThread()
@@ -112,6 +113,16 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         _webView.OnLoadChanged -= OnLoadChanged;
         _webView.OnDecidePolicy -= OnDecidePolicy;
         Widget.OnCloseRequest -= OnCloseRequest;
+
+        try
+        {
+            _webView.StopLoading();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow WebView stop loading failed");
+        }
+
         try
         {
             Widget.Hide();
@@ -127,7 +138,18 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             _closed();
         }
 
-        var stopped = _capture.StopAsync();
+        Task stopped;
+        try
+        {
+            stopped = _capture.StopAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "WebLoginWindow capture stop failed during disposal");
+            TearDownNativeObjects();
+            return;
+        }
+
         if (stopped.IsCompleted)
         {
             if (stopped.IsFaulted && stopped.Exception is not null)
@@ -143,11 +165,19 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             var self = (WebLoginWindow)state!;
             if (task.IsFaulted && task.Exception is not null)
                 Logger.Warning(task.Exception, "WebLoginWindow capture drain faulted during disposal");
-            Functions.IdleAdd(0, () =>
+            try
             {
-                self.TearDownNativeObjects();
-                return false;
-            });
+                Functions.IdleAdd(0, () =>
+                {
+                    self.TearDownNativeObjects();
+                    return false;
+                });
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "Failed to schedule native teardown on UI thread");
+                self._teardownEvent.Set();
+            }
         }, this, CancellationToken.None, TaskContinuationOptions.DenyChildAttach, TaskScheduler.Default);
     }
 
@@ -352,57 +382,72 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         _nativeDisposed = true;
         try
         {
-            _webView.Unparent();
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "WebLoginWindow WebView unparent failed");
-        }
+            try
+            {
+                _webView.StopLoading();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow WebView stop loading failed");
+            }
 
-        try
-        {
-            _webView.Dispose();
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "WebLoginWindow WebView dispose failed");
-        }
+            try
+            {
+                _webView.Unparent();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow WebView unparent failed");
+            }
 
-        try
-        {
-            _cookieManager.Dispose();
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "WebLoginWindow CookieManager dispose failed");
-        }
+            try
+            {
+                _webView.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow WebView dispose failed");
+            }
 
-        try
-        {
-            _networkSession.Dispose();
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "WebLoginWindow NetworkSession dispose failed");
-        }
+            try
+            {
+                _cookieManager.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow CookieManager dispose failed");
+            }
 
-        try
-        {
-            Widget.Dispose();
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "WebLoginWindow widget dispose failed");
-        }
+            try
+            {
+                _networkSession.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow NetworkSession dispose failed");
+            }
 
-        try
-        {
-            _capture.Dispose();
+            try
+            {
+                Widget.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow widget dispose failed");
+            }
+
+            try
+            {
+                _capture.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "WebLoginWindow capture coordinator dispose failed");
+            }
         }
-        catch (Exception exception)
+        finally
         {
-            Logger.Warning(exception, "WebLoginWindow capture coordinator dispose failed");
+            _teardownEvent.Set();
         }
     }
-
 }
