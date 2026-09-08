@@ -1,8 +1,380 @@
+using System.Diagnostics.CodeAnalysis;
 using Gtk;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
+
+public enum ResumePromptState
+{
+    None,
+    AutoResume,
+    ManualResume
+}
+
+/// <summary>
+///     Pure timeline/playback-position state: scrubbing lifecycle, seek reconciliation,
+///     chapter hit-testing, time formatting, SponsorBlock evaluation, and resume evaluation.
+///     Single owner of the logic formerly in <c>PlayerTimelineEngine</c>; composed by
+///     <see cref="PlayerTimelineController" /> and subclassed (obsolete) by the compat shim.
+/// </summary>
+public class PlayerTimelineState(
+    uint seekThrottleIntervalMs = PlayerTimelineState.DefaultSeekThrottleIntervalMilliseconds,
+    long reconciliationLatchMs = PlayerTimelineState.DefaultReconciliationLatchMilliseconds,
+    double seekToleranceSeconds = PlayerTimelineState.DefaultSeekReconciliationToleranceSeconds,
+    Func<long>? tickCountProvider = null)
+{
+    internal const uint DefaultSeekThrottleIntervalMilliseconds = 120;
+    internal const long DefaultReconciliationLatchMilliseconds = 400;
+    internal const double DefaultSeekReconciliationToleranceSeconds = 1.5;
+    private const double MinimumResumeSeconds = 5;
+    public const uint DefaultSkipPromptDurationMilliseconds = 5_000;
+    public const uint DefaultResumePromptDurationMilliseconds = 15_000;
+
+    private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
+
+    public bool IsScrubbing { get; private set; }
+    public TimeSpan PlaybackPosition { get; private set; }
+    public TimeSpan Duration { get; private set; }
+    public IReadOnlyList<LibMpvChapter> Chapters { get; private set; } = [];
+    public bool HasMedia { get; private set; }
+    public TimeSpan ScrubStartPosition { get; private set; }
+    public double LatestScrubPositionSeconds { get; private set; }
+    public double PendingSeekTargetSeconds { get; private set; } = -1;
+    public long ReconciliationLatchExpiry { get; private set; }
+
+    public long LastThrottledSeekTime { get; private set; }
+
+    // --- Timeline State Management & Seeking Reconciliation ---
+
+    public void SetDuration(TimeSpan duration)
+    {
+        Duration = duration;
+    }
+
+    public void SetChapters(IReadOnlyList<LibMpvChapter> chapters)
+    {
+        Chapters = chapters;
+    }
+
+    public void SetPositionDirect(TimeSpan position)
+    {
+        PlaybackPosition = position;
+    }
+
+    public bool UpdatePlaybackState(
+        bool hasMedia,
+        TimeSpan position,
+        TimeSpan duration,
+        IReadOnlyList<LibMpvChapter> chapters,
+        out bool positionAccepted)
+    {
+        HasMedia = hasMedia;
+        Duration = duration;
+        Chapters = chapters;
+
+        if (IsScrubbing)
+        {
+            positionAccepted = false;
+            return false;
+        }
+
+        var now = _getTickCount();
+        var withinLatch = now < ReconciliationLatchExpiry;
+        var isCloseToPending = PendingSeekTargetSeconds >= 0 &&
+                               Math.Abs(position.TotalSeconds - PendingSeekTargetSeconds) <= seekToleranceSeconds;
+
+        if (withinLatch && !isCloseToPending)
+        {
+            positionAccepted = false;
+            return false;
+        }
+
+        if (isCloseToPending)
+        {
+            ReconciliationLatchExpiry = 0;
+            PendingSeekTargetSeconds = -1;
+        }
+
+        PlaybackPosition = position;
+        positionAccepted = true;
+        return true;
+    }
+
+    public void RegisterSeek(double targetSeconds)
+    {
+        PendingSeekTargetSeconds = targetSeconds;
+        ReconciliationLatchExpiry = _getTickCount() + reconciliationLatchMs;
+    }
+
+    public void Reset()
+    {
+        IsScrubbing = false;
+        PlaybackPosition = TimeSpan.Zero;
+        Duration = TimeSpan.Zero;
+        Chapters = [];
+        HasMedia = false;
+        ScrubStartPosition = TimeSpan.Zero;
+        LatestScrubPositionSeconds = 0;
+        PendingSeekTargetSeconds = -1;
+        ReconciliationLatchExpiry = 0;
+        LastThrottledSeekTime = 0;
+    }
+
+    // --- Scrubbing Lifecycle ---
+
+    public void BeginScrub(double initialTimelineValue)
+    {
+        IsScrubbing = true;
+        ScrubStartPosition = PlaybackPosition;
+        LatestScrubPositionSeconds = initialTimelineValue;
+    }
+
+    public void UpdateScrub(double targetSeconds)
+    {
+        LatestScrubPositionSeconds = targetSeconds;
+    }
+
+    public TimeSpan CalculateScrubDelta(TimeSpan targetTime)
+    {
+        return targetTime - ScrubStartPosition;
+    }
+
+    public TimeSpan CancelScrub()
+    {
+        if (!IsScrubbing) return PlaybackPosition;
+        IsScrubbing = false;
+        PlaybackPosition = ScrubStartPosition;
+        return ScrubStartPosition;
+    }
+
+    public double EndScrub(double finalTimelineValue)
+    {
+        IsScrubbing = false;
+        RegisterSeek(finalTimelineValue);
+        PlaybackPosition = TimeSpan.FromSeconds(finalTimelineValue);
+        return finalTimelineValue;
+    }
+
+    public bool ShouldDispatchThrottledSeek(out uint delayMilliseconds)
+    {
+        var now = _getTickCount();
+        var elapsed = now - LastThrottledSeekTime;
+        if (elapsed >= seekThrottleIntervalMs)
+        {
+            LastThrottledSeekTime = now;
+            delayMilliseconds = 0;
+            return true;
+        }
+
+        delayMilliseconds = Math.Max(10u, (uint)(seekThrottleIntervalMs - elapsed));
+        return false;
+    }
+
+    public void RecordThrottledSeekDispatched()
+    {
+        LastThrottledSeekTime = _getTickCount();
+    }
+
+    // --- Chapter Hit-Testing ---
+
+    public LibMpvChapter? GetChapterAt(TimeSpan position)
+    {
+        return GetChapterAt(position, Chapters);
+    }
+
+    public static LibMpvChapter? GetChapterAt(TimeSpan position, IReadOnlyList<LibMpvChapter> chapters)
+    {
+        LibMpvChapter? match = null;
+        foreach (var chapter in chapters)
+            if (chapter.Start <= position)
+                match = chapter;
+            else
+                break;
+        return match;
+    }
+
+    public static double CalculateChapterMarkerPosition(
+        TimeSpan chapterStart,
+        TimeSpan duration,
+        int trackStart,
+        int trackWidth,
+        int hostWidth,
+        int markerWidth = 20)
+    {
+        var trackPos = PlayerTimelineGeometry.GetTrackPosition(chapterStart, duration, trackStart, trackWidth);
+        return Math.Clamp(Math.Round(trackPos - markerWidth / 2d), 0, Math.Max(0, hostWidth - markerWidth));
+    }
+
+    // --- Scrub Cue Badge Geometry ---
+
+    public static double CalculateScrubCueBadgePosition(
+        double pointerX,
+        double cueWidth,
+        double hostWidth,
+        double margin = 8.0)
+    {
+        if (cueWidth <= 0) cueWidth = 80;
+        return Math.Clamp(pointerX - cueWidth / 2d, margin, Math.Max(margin, hostWidth - cueWidth - margin));
+    }
+
+    // --- Time Formatting & Progress Fraction Math ---
+
+    public static string FormatTime(TimeSpan value)
+    {
+        var seconds = Math.Max(0, (long)Math.Floor(value.TotalSeconds));
+        var duration = TimeSpan.FromSeconds(seconds);
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
+            : $"{duration.Minutes}:{duration.Seconds:D2}";
+    }
+
+    public static string FormatDelta(TimeSpan delta)
+    {
+        var sign = delta < TimeSpan.Zero ? "-" : "+";
+        var abs = delta.Duration();
+        return abs.TotalHours >= 1
+            ? $"{sign}{(int)abs.TotalHours}:{abs.Minutes:D2}:{abs.Seconds:D2}"
+            : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
+    }
+
+    public static string FormatDurationLabel(TimeSpan duration)
+    {
+        return duration <= TimeSpan.Zero ? "Live" : FormatTime(duration);
+    }
+
+    public static double CalculateProgressFraction(TimeSpan position, TimeSpan duration)
+    {
+        return duration <= TimeSpan.Zero ? 0.0 : Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
+    }
+
+    // --- SponsorBlock Evaluation ---
+
+    public static SponsorBlockSegment? FindSponsorBlockSegmentAt(
+        IReadOnlyList<SponsorBlockSegment> segments,
+        TimeSpan position)
+    {
+        return segments.FirstOrDefault(segment => position >= segment.Start && position < segment.End);
+    }
+
+    public static bool ShouldAutoSkip(
+        TimeSpan currentPosition,
+        IReadOnlyList<SponsorBlockSegment> segments,
+        bool isPaused,
+        bool autoSkipEnabled,
+        ISet<string> autoSkippedSegmentIds,
+        [NotNullWhen(true)] out SponsorBlockSegment? segmentToSkip)
+    {
+        segmentToSkip = null;
+        if (isPaused || !autoSkipEnabled || segments.Count == 0) return false;
+        var segment = FindSponsorBlockSegmentAt(segments, currentPosition);
+        if (segment is null || !autoSkippedSegmentIds.Add(segment.Id)) return false;
+        segmentToSkip = segment;
+        return true;
+    }
+
+    public static bool ShouldShowManualPrompt(
+        SponsorBlockSegment? activeSegment,
+        SponsorBlockSegment? candidateSegment,
+        bool isPaused,
+        bool wasPaused,
+        bool hadSeek)
+    {
+        if (candidateSegment is null) return false;
+        return hadSeek ||
+               !string.Equals(activeSegment?.Id, candidateSegment.Id, StringComparison.Ordinal) ||
+               (isPaused && !wasPaused);
+    }
+
+    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
+    {
+        return ManualSponsorBlockSkipEnabled(preferences.SponsorBlockSegmentDisplayEnabled,
+            preferences.SponsorBlockAutoSkipEnabled);
+    }
+
+    private static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
+    {
+        return segmentDisplayEnabled && !autoSkipEnabled;
+    }
+
+    public static string GetSponsorBlockCategoryLabel(string category)
+    {
+        return category switch
+        {
+            SponsorBlockCategories.Sponsor => "Sponsor",
+            SponsorBlockCategories.SelfPromotion => "Self-promotion",
+            SponsorBlockCategories.InteractionReminder => "Interaction reminder",
+            SponsorBlockCategories.Intro => "Intro",
+            SponsorBlockCategories.Outro => "Outro",
+            SponsorBlockCategories.Preview => "Preview",
+            SponsorBlockCategories.Hook => "Hook",
+            SponsorBlockCategories.Filler => "Filler",
+            _ => category
+        };
+    }
+
+    public static string GetSponsorBlockButtonColorClass(string category)
+    {
+        var resolved = SponsorBlockCategories.All.Contains(category) ? category : SponsorBlockCategories.Sponsor;
+        return $"player-sponsorblock-skip-button-{resolved}";
+    }
+
+    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences)
+    {
+        return GetSponsorBlockConfigurationKey(
+            preferences.SponsorBlockAutoSkipEnabled,
+            preferences.SponsorBlockSegmentDisplayEnabled,
+            preferences.SponsorBlockCategories);
+    }
+
+    public static string GetSponsorBlockConfigurationKey(
+        bool autoSkipEnabled,
+        bool segmentDisplayEnabled,
+        IEnumerable<string> categories)
+    {
+        if (!autoSkipEnabled && !segmentDisplayEnabled) return "disabled";
+        var filtered = categories.Where(SponsorBlockCategories.All.Contains).Distinct(StringComparer.Ordinal);
+        return $"{autoSkipEnabled}:{segmentDisplayEnabled}:{string.Join(',', filtered)}";
+    }
+
+    // --- Resume State Evaluation ---
+
+    public static bool TryGetResumePosition(
+        YouTubePlaybackProgress? progress,
+        TimeSpan duration,
+        out TimeSpan position,
+        double minimumSeconds = MinimumResumeSeconds)
+    {
+        position = TimeSpan.Zero;
+        if (progress is null || progress.IsCompleted || !progress.HasResumePosition ||
+            progress.ResumePosition is not { } savedPosition ||
+            savedPosition < TimeSpan.FromSeconds(minimumSeconds) ||
+            savedPosition >= duration || duration <= TimeSpan.Zero)
+            return false;
+
+        position = savedPosition;
+        return true;
+    }
+
+    public static ResumePromptState GetResumePromptState(
+        YouTubePlaybackProgress? progress,
+        TimeSpan duration,
+        bool resumeAutomatically,
+        bool resumeOnDemand,
+        out TimeSpan resumePosition,
+        double minimumSeconds = MinimumResumeSeconds)
+    {
+        if (!TryGetResumePosition(progress, duration, out resumePosition, minimumSeconds))
+            return ResumePromptState.None;
+
+        if (resumeAutomatically) return ResumePromptState.AutoResume;
+
+        return resumeOnDemand ? ResumePromptState.ManualResume : ResumePromptState.None;
+    }
+}
 
 internal sealed class PlayerTimelineController : IDisposable
 {
@@ -47,12 +419,12 @@ internal sealed class PlayerTimelineController : IDisposable
         _durationLabel = durationLabel;
         _seekAbsolute = seekAbsolute;
         _registerActivity = registerActivity;
-        Engine = engine ?? new PlayerTimelineEngine();
+        State = engine ?? new PlayerTimelineState();
 
         _timelineMotionController = EventControllerMotion.New();
         _timelineMotionController.OnMotion += OnTimelineMotion;
         _timelineMotionController.OnLeave += OnTimelineLeave;
-        _timelineOverlay.AddController(_timelineMotionController);
+        ControllerDisposal.Attach(_timelineOverlay, _timelineMotionController);
 
         _timelineDragGesture = GestureDrag.New();
         _timelineDragGesture.Button = 1;
@@ -60,32 +432,29 @@ internal sealed class PlayerTimelineController : IDisposable
         _timelineDragGesture.OnDragBegin += OnTimelineDragBegin;
         _timelineDragGesture.OnDragUpdate += OnTimelineDragUpdate;
         _timelineDragGesture.OnDragEnd += OnTimelineDragEnd;
-        _timeline.AddController(_timelineDragGesture);
+        ControllerDisposal.Attach(_timeline, _timelineDragGesture);
 
         _timeline.OnValueChanged += OnTimelineValueChanged;
     }
 
-    public bool IsScrubbing => Engine.IsScrubbing;
+    public bool IsScrubbing => State.IsScrubbing;
 
-    public TimeSpan PlaybackPosition => Engine.PlaybackPosition;
+    public TimeSpan PlaybackPosition => State.PlaybackPosition;
 
-    private PlayerTimelineEngine Engine { get; }
+    private PlayerTimelineState State { get; }
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         CancelThrottledSeek();
         _timelineMotionController.OnMotion -= OnTimelineMotion;
         _timelineMotionController.OnLeave -= OnTimelineLeave;
-        _timelineOverlay.RemoveController(_timelineMotionController);
-        _timelineMotionController.Dispose();
+        ControllerDisposal.Detach(_timelineOverlay, _timelineMotionController);
 
         _timelineDragGesture.OnDragBegin -= OnTimelineDragBegin;
         _timelineDragGesture.OnDragUpdate -= OnTimelineDragUpdate;
         _timelineDragGesture.OnDragEnd -= OnTimelineDragEnd;
-        _timeline.RemoveController(_timelineDragGesture);
-        _timelineDragGesture.Dispose();
+        ControllerDisposal.Detach(_timeline, _timelineDragGesture);
 
         _timeline.OnValueChanged -= OnTimelineValueChanged;
     }
@@ -97,13 +466,13 @@ internal sealed class PlayerTimelineController : IDisposable
         _updatingControls = true;
         try
         {
-            _durationLabel.SetText(PlayerTimelineEngine.FormatDurationLabel(state.Duration));
+            _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(state.Duration));
             _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
             _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
 
-            if (!Engine.UpdatePlaybackState(state.HasMedia, state.Position, state.Duration, state.Chapters,
+            if (!State.UpdatePlaybackState(state.HasMedia, state.Position, state.Duration, state.Chapters,
                     out var accepted) || !accepted) return;
-            _positionLabel.SetText(PlayerTimelineEngine.FormatTime(state.Position));
+            _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
             _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
         }
         finally
@@ -114,14 +483,14 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public void SeekAbsolute(double position, bool exact = true)
     {
-        Engine.RegisterSeek(position);
+        State.RegisterSeek(position);
         _seekAbsolute(position, exact);
     }
 
     public void CancelScrubbing()
     {
         if (!IsScrubbing) return;
-        var restoredPosition = Engine.CancelScrub();
+        var restoredPosition = State.CancelScrub();
         CancelThrottledSeek();
         _positionLabel.RemoveCssClass("player-time-scrubbing");
         _timeline.RemoveCssClass("dragging");
@@ -130,7 +499,7 @@ internal sealed class PlayerTimelineController : IDisposable
         try
         {
             _timeline.SetValue(restoredPosition.TotalSeconds);
-            _positionLabel.SetText(PlayerTimelineEngine.FormatTime(restoredPosition));
+            _positionLabel.SetText(PlayerTimelineState.FormatTime(restoredPosition));
         }
         finally
         {
@@ -141,7 +510,7 @@ internal sealed class PlayerTimelineController : IDisposable
     public void Reset()
     {
         CancelScrubbing();
-        Engine.Reset();
+        State.Reset();
         _scrubCue.SetVisible(false);
         _updatingControls = true;
         try
@@ -160,13 +529,13 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public void SetDuration(TimeSpan duration)
     {
-        Engine.SetDuration(duration);
-        _durationLabel.SetText(PlayerTimelineEngine.FormatDurationLabel(duration));
+        State.SetDuration(duration);
+        _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(duration));
     }
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
     {
-        if (_disposed || !Engine.HasMedia || Engine.Duration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        if (_disposed || !State.HasMedia || State.Duration <= TimeSpan.Zero || !_timeline.GetSensitive())
         {
             _scrubCue.SetVisible(false);
             return;
@@ -184,27 +553,27 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void UpdateScrubCue(double pointerX)
     {
-        var currentPosition = IsScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : Engine.PlaybackPosition;
+        var currentPosition = IsScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : State.PlaybackPosition;
         var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(
             _timeline,
             _timelineOverlay,
             currentPosition,
-            Engine.Duration);
+            State.Duration);
 
         var targetTime =
-            PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, Engine.Duration);
+            PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, State.Duration);
 
         var cueWidth = _scrubCue.GetAllocatedWidth();
         var hostWidth = _timelineOverlay.GetAllocatedWidth();
-        var badgeX = PlayerTimelineEngine.CalculateScrubCueBadgePosition(pointerX, cueWidth, hostWidth);
+        var badgeX = PlayerTimelineState.CalculateScrubCueBadgePosition(pointerX, cueWidth, hostWidth);
         _scrubCue.MarginStart = (int)Math.Round(badgeX);
 
-        _scrubTimeLabel.SetText(PlayerTimelineEngine.FormatTime(targetTime));
+        _scrubTimeLabel.SetText(PlayerTimelineState.FormatTime(targetTime));
 
         if (IsScrubbing)
         {
-            var delta = Engine.CalculateScrubDelta(targetTime);
-            _scrubDeltaLabel.SetText(PlayerTimelineEngine.FormatDelta(delta));
+            var delta = State.CalculateScrubDelta(targetTime);
+            _scrubDeltaLabel.SetText(PlayerTimelineState.FormatDelta(delta));
             _scrubDeltaLabel.SetVisible(true);
         }
         else
@@ -212,7 +581,7 @@ internal sealed class PlayerTimelineController : IDisposable
             _scrubDeltaLabel.SetVisible(false);
         }
 
-        var chapter = Engine.GetChapterAt(targetTime);
+        var chapter = State.GetChapterAt(targetTime);
         if (chapter is not null && !string.IsNullOrWhiteSpace(chapter.Title))
         {
             _scrubChapterLabel.SetText(chapter.Title);
@@ -228,10 +597,10 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
     {
-        if (_disposed || !Engine.HasMedia || !_timeline.GetSensitive() || Engine.Duration <= TimeSpan.Zero)
+        if (_disposed || !State.HasMedia || !_timeline.GetSensitive() || State.Duration <= TimeSpan.Zero)
             return;
 
-        Engine.BeginScrub(_timeline.GetValue());
+        State.BeginScrub(_timeline.GetValue());
         _positionLabel.AddCssClass("player-time-scrubbing");
         _timeline.AddCssClass("dragging");
         _registerActivity();
@@ -255,9 +624,9 @@ internal sealed class PlayerTimelineController : IDisposable
         CancelThrottledSeek();
 
         var finalPosition = _timeline.GetValue();
-        Engine.EndScrub(finalPosition);
+        State.EndScrub(finalPosition);
         _seekAbsolute(finalPosition, true);
-        _positionLabel.SetText(PlayerTimelineEngine.FormatTime(Engine.PlaybackPosition));
+        _positionLabel.SetText(PlayerTimelineState.FormatTime(State.PlaybackPosition));
         _registerActivity();
     }
 
@@ -266,21 +635,21 @@ internal sealed class PlayerTimelineController : IDisposable
         if (_updatingControls || !_timeline.GetSensitive()) return;
 
         var targetSeconds = _timeline.GetValue();
-        Engine.SetPositionDirect(TimeSpan.FromSeconds(targetSeconds));
-        _positionLabel.SetText(PlayerTimelineEngine.FormatTime(Engine.PlaybackPosition));
+        State.SetPositionDirect(TimeSpan.FromSeconds(targetSeconds));
+        _positionLabel.SetText(PlayerTimelineState.FormatTime(State.PlaybackPosition));
 
         if (IsScrubbing)
         {
-            Engine.UpdateScrub(targetSeconds);
-            if (Engine.ShouldDispatchThrottledSeek(out var delay) && _throttledSeekSource == 0)
-                SeekAbsolute(Engine.LatestScrubPositionSeconds, false);
+            State.UpdateScrub(targetSeconds);
+            if (State.ShouldDispatchThrottledSeek(out var delay) && _throttledSeekSource == 0)
+                SeekAbsolute(State.LatestScrubPositionSeconds, false);
             else if (_throttledSeekSource == 0)
                 _throttledSeekSource = Functions.TimeoutAdd(0, delay, () =>
                 {
                     _throttledSeekSource = 0;
                     if (_disposed || !IsScrubbing) return false;
-                    Engine.RecordThrottledSeekDispatched();
-                    SeekAbsolute(Engine.LatestScrubPositionSeconds, false);
+                    State.RecordThrottledSeekDispatched();
+                    SeekAbsolute(State.LatestScrubPositionSeconds, false);
                     return false;
                 });
         }
@@ -293,8 +662,6 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void CancelThrottledSeek()
     {
-        if (_throttledSeekSource == 0) return;
-        Functions.SourceRemove(_throttledSeekSource);
-        _throttledSeekSource = 0;
+        ControllerDisposal.ClearTimeout(ref _throttledSeekSource);
     }
 }

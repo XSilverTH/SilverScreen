@@ -20,8 +20,7 @@ internal sealed class PlayerSubtitleController(
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
     }
 
     public void UpdateTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks, bool suppressSelectionChanged)

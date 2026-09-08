@@ -20,8 +20,7 @@ internal sealed class PlayerChapterOverlay(
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         ClearMarkers();
     }
 
@@ -80,7 +79,7 @@ internal sealed class PlayerChapterOverlay(
             var chapter = _chapters[index];
             marker.SetVisible(hasDuration && chapter.Start <= duration);
             if (!hasDuration) continue;
-            var markerX = PlayerTimelineEngine.CalculateChapterMarkerPosition(
+            var markerX = PlayerTimelineState.CalculateChapterMarkerPosition(
                 chapter.Start,
                 duration,
                 trackStart,

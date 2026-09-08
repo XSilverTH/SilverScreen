@@ -47,13 +47,13 @@ internal sealed class PlayerChromeController : IDisposable
         _motionController = EventControllerMotion.New();
         _motionController.SetPropagationPhase(PropagationPhase.Capture);
         _motionController.OnMotion += OnMotion;
-        _viewWidget.AddController(_motionController);
+        ControllerDisposal.Attach(_viewWidget, _motionController);
 
         _clickGesture = GestureClick.New();
         _clickGesture.Button = 0;
         _clickGesture.SetPropagationPhase(PropagationPhase.Capture);
         _clickGesture.OnPressed += OnPressed;
-        _viewWidget.AddController(_clickGesture);
+        ControllerDisposal.Attach(_viewWidget, _clickGesture);
 
         RegisterActivity();
 
@@ -73,22 +73,15 @@ internal sealed class PlayerChromeController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
 
-        if (_timeoutSource != 0)
-        {
-            Functions.SourceRemove(_timeoutSource);
-            _timeoutSource = 0;
-        }
+        ControllerDisposal.ClearTimeout(ref _timeoutSource);
 
         _motionController.OnMotion -= OnMotion;
-        _viewWidget.RemoveController(_motionController);
-        _motionController.Dispose();
+        ControllerDisposal.Detach(_viewWidget, _motionController);
 
         _clickGesture.OnPressed -= OnPressed;
-        _viewWidget.RemoveController(_clickGesture);
-        _clickGesture.Dispose();
+        ControllerDisposal.Detach(_viewWidget, _clickGesture);
     }
 
     public void RegisterActivity()

@@ -53,8 +53,7 @@ public sealed class PlayerShortcutController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         Detach();
         _actionHandlers.Clear();
         _shortcutMap.Clear();
@@ -103,7 +102,7 @@ public sealed class PlayerShortcutController : IDisposable
         if (_disposed || _keyboardController is null || _keyboardRoot is not null) return;
         if (_viewWidget.GetRoot() is not Widget root) return;
 
-        root.AddController(_keyboardController);
+        ControllerDisposal.Attach(root, _keyboardController);
         _keyboardRoot = root;
     }
 

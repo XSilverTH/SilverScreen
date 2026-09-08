@@ -44,8 +44,7 @@ internal sealed class PlayerStatsController(
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         StopTimer();
     }
 
@@ -202,8 +201,6 @@ internal sealed class PlayerStatsController(
 
     private void StopTimer()
     {
-        if (_refreshTimerSource == 0) return;
-        SourceRemove(_refreshTimerSource);
-        _refreshTimerSource = 0;
+        ControllerDisposal.ClearTimeout(ref _refreshTimerSource);
     }
 }

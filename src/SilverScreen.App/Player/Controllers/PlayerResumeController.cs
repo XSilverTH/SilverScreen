@@ -10,7 +10,7 @@ namespace SilverScreen.Player.Controllers;
 /// </summary>
 internal sealed class PlayerResumeController : IDisposable
 {
-    private const uint PromptDurationMilliseconds = PlayerTimelineEngine.DefaultResumePromptDurationMilliseconds;
+    private const uint PromptDurationMilliseconds = PlayerTimelineState.DefaultResumePromptDurationMilliseconds;
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
     private readonly Revealer _restartRevealer;
@@ -46,8 +46,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         _session.ResumePromptChanged -= OnResumePromptChanged;
         _session.SessionEnded -= OnSessionEnded;
         _session.Failed -= OnSessionFailed;
@@ -108,8 +107,8 @@ internal sealed class PlayerResumeController : IDisposable
         {
             if (_disposed) return false;
             _seekPromptPosition = returnPosition;
-            _resumeLabel.SetText($"Back to {PlayerTimelineEngine.FormatTime(returnPosition)}");
-            _resumeButton.SetTooltipText($"Return to {PlayerTimelineEngine.FormatTime(returnPosition)} (Enter)");
+            _resumeLabel.SetText($"Back to {PlayerTimelineState.FormatTime(returnPosition)}");
+            _resumeButton.SetTooltipText($"Return to {PlayerTimelineState.FormatTime(returnPosition)} (Enter)");
             _resumeRevealer.RevealChild = true;
             _restartRevealer.RevealChild = false;
             SchedulePromptHide(false);
@@ -119,7 +118,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void SchedulePromptHide(bool dismissSessionPrompt = true)
     {
-        if (_promptHideSource != 0) SourceRemove(_promptHideSource);
+        ControllerDisposal.ClearTimeout(ref _promptHideSource);
         _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
@@ -150,8 +149,8 @@ internal sealed class PlayerResumeController : IDisposable
     private void ShowResumePrompt(TimeSpan resumePosition)
     {
         _seekPromptPosition = null;
-        _resumeLabel.SetText($"Resume from {PlayerTimelineEngine.FormatTime(resumePosition)}");
-        _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineEngine.FormatTime(resumePosition)} (Enter)");
+        _resumeLabel.SetText($"Resume from {PlayerTimelineState.FormatTime(resumePosition)}");
+        _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineState.FormatTime(resumePosition)} (Enter)");
         _resumeRevealer.RevealChild = true;
         _restartRevealer.RevealChild = false;
         SchedulePromptHide();
@@ -169,11 +168,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void HidePrompt()
     {
-        if (_promptHideSource != 0)
-        {
-            SourceRemove(_promptHideSource);
-            _promptHideSource = 0;
-        }
+        ControllerDisposal.ClearTimeout(ref _promptHideSource);
 
         if (_disposed) return;
         _seekPromptPosition = null;

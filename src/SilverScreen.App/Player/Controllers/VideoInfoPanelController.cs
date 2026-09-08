@@ -74,12 +74,9 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         _description.OnActivateLink -= OnDescriptionLinkActivated;
-        _infoLoadCancellation?.Cancel();
-        _infoLoadCancellation?.Dispose();
-        _infoLoadCancellation = null;
+        ControllerDisposal.Cancel(ref _infoLoadCancellation);
     }
 
     public void Show()

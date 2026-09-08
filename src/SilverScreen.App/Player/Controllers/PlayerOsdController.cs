@@ -1,12 +1,210 @@
+using System.Globalization;
 using Gtk;
 using SilverScreen.Core.Preferences;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
+public enum OsdActionKind
+{
+    None,
+    PlayPause,
+    Volume,
+    Speed,
+    Seek,
+    SeekToBeginning,
+    Subtitles,
+    Queue,
+    VideoInfo,
+    Stats,
+    Fullscreen,
+    NextVideo,
+    PreviousVideo,
+    Resume,
+    SkipSponsor
+}
+
+public sealed record OsdDisplayModel(string IconName, string Text);
+
+/// <summary>
+///     Pure OSD aggregation state: coalesces rapid key repeats (seek accumulation) into
+///     display models. Single owner of the logic formerly in <c>PlayerOsdEngine</c>;
+///     composed by <see cref="PlayerOsdController" /> and subclassed (obsolete) by the compat shim.
+/// </summary>
+public class PlayerOsdState(
+    uint aggregationWindowMilliseconds = PlayerOsdState.DefaultAggregationWindowMilliseconds,
+    Func<long>? tickCountProvider = null)
+{
+    internal const uint DefaultAggregationWindowMilliseconds = 600;
+    public const uint DefaultHoldDurationMilliseconds = 700;
+
+    private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
+
+    public OsdActionKind CurrentActionKind { get; private set; } = OsdActionKind.None;
+    public int AccumulatedSeekDeltaSeconds { get; private set; }
+    private long LastKeypressTimestamp { get; set; }
+    public bool IsActive { get; private set; }
+
+    public OsdDisplayModel ProcessSeek(int deltaSeconds)
+    {
+        var now = _getTickCount();
+        if (CurrentActionKind == OsdActionKind.Seek && now - LastKeypressTimestamp <= aggregationWindowMilliseconds)
+        {
+            AccumulatedSeekDeltaSeconds += deltaSeconds;
+        }
+        else
+        {
+            CurrentActionKind = OsdActionKind.Seek;
+            AccumulatedSeekDeltaSeconds = deltaSeconds;
+        }
+
+        LastKeypressTimestamp = now;
+        IsActive = true;
+
+        var icon = AccumulatedSeekDeltaSeconds >= 0
+            ? "media-seek-forward-symbolic"
+            : "media-seek-backward-symbolic";
+        var text = FormatSeekDelta(AccumulatedSeekDeltaSeconds);
+
+        return new OsdDisplayModel(icon, text);
+    }
+
+    public OsdDisplayModel ProcessVolume(double volume, bool isMuted)
+    {
+        RecordAction(OsdActionKind.Volume);
+        var icon = GetVolumeIcon(volume, isMuted);
+        var text = isMuted ? "Muted" : $"{Math.Clamp((int)Math.Round(volume), 0, 100)}%";
+        return new OsdDisplayModel(icon, text);
+    }
+
+    public OsdDisplayModel ProcessPlayPause(bool isPaused)
+    {
+        RecordAction(OsdActionKind.PlayPause);
+        var icon = isPaused ? "media-playback-pause-symbolic" : "media-playback-start-symbolic";
+        var text = isPaused ? "Paused" : "Playing";
+        return new OsdDisplayModel(icon, text);
+    }
+
+    public OsdDisplayModel ProcessSpeed(double speed)
+    {
+        RecordAction(OsdActionKind.Speed);
+        var text = FormatSpeed(speed);
+        return new OsdDisplayModel("speedometer-symbolic", text);
+    }
+
+    public OsdDisplayModel ProcessSeekToBeginning()
+    {
+        RecordAction(OsdActionKind.SeekToBeginning);
+        return new OsdDisplayModel("media-skip-backward-symbolic", "Beginning");
+    }
+
+    public OsdDisplayModel ProcessSubtitles(string trackOrOff)
+    {
+        RecordAction(OsdActionKind.Subtitles);
+        return new OsdDisplayModel("subtitles-symbolic", string.IsNullOrWhiteSpace(trackOrOff) ? "Off" : trackOrOff);
+    }
+
+    public OsdDisplayModel ProcessQueue(bool isOpen)
+    {
+        RecordAction(OsdActionKind.Queue);
+        return new OsdDisplayModel("view-list-symbolic", isOpen ? "Queue Open" : "Queue Closed");
+    }
+
+    public OsdDisplayModel ProcessVideoInfo(bool isOpen)
+    {
+        RecordAction(OsdActionKind.VideoInfo);
+        return new OsdDisplayModel("info-symbolic", isOpen ? "Video Info Open" : "Video Info Closed");
+    }
+
+    public OsdDisplayModel ProcessStats(bool isOpen)
+    {
+        RecordAction(OsdActionKind.Stats);
+        return new OsdDisplayModel("utilities-system-monitor-symbolic",
+            isOpen ? "Playback Stats: Open" : "Playback Stats: Closed");
+    }
+
+    public OsdDisplayModel ProcessFullscreen(bool isFullscreen)
+    {
+        RecordAction(OsdActionKind.Fullscreen);
+        return new OsdDisplayModel(
+            isFullscreen ? "view-fullscreen-symbolic" : "view-restore-symbolic",
+            isFullscreen ? "Fullscreen" : "Exit Fullscreen");
+    }
+
+    public OsdDisplayModel ProcessNextVideo()
+    {
+        RecordAction(OsdActionKind.NextVideo);
+        return new OsdDisplayModel("media-skip-forward-symbolic", "Next Video");
+    }
+
+    public OsdDisplayModel ProcessPreviousVideo()
+    {
+        RecordAction(OsdActionKind.PreviousVideo);
+        return new OsdDisplayModel("media-skip-backward-symbolic", "Previous Video");
+    }
+
+    public OsdDisplayModel ProcessResumed()
+    {
+        RecordAction(OsdActionKind.Resume);
+        return new OsdDisplayModel("media-playback-start-symbolic", "Resumed");
+    }
+
+    public OsdDisplayModel ProcessSkippedSponsor()
+    {
+        RecordAction(OsdActionKind.SkipSponsor);
+        return new OsdDisplayModel("media-seek-forward-symbolic", "Skipped Sponsor");
+    }
+
+    public void Reset()
+    {
+        CurrentActionKind = OsdActionKind.None;
+        AccumulatedSeekDeltaSeconds = 0;
+        IsActive = false;
+    }
+
+    private void RecordAction(OsdActionKind kind)
+    {
+        CurrentActionKind = kind;
+        AccumulatedSeekDeltaSeconds = 0;
+        LastKeypressTimestamp = _getTickCount();
+        IsActive = true;
+    }
+
+    public static string FormatSeekDelta(int totalSeconds)
+    {
+        if (totalSeconds == 0)
+            return "0s";
+
+        var sign = totalSeconds > 0 ? "+" : "-";
+        var abs = Math.Abs(totalSeconds);
+        if (abs < 60)
+            return $"{sign}{abs}s";
+
+        var minutes = abs / 60;
+        var seconds = abs % 60;
+        return seconds == 0 ? $"{sign}{minutes}m" : $"{sign}{minutes}m {seconds}s";
+    }
+
+    public static string FormatSpeed(double speed)
+    {
+        return $"{speed.ToString("0.##", CultureInfo.InvariantCulture)}×";
+    }
+
+    public static string GetVolumeIcon(double volume, bool isMuted)
+    {
+        if (isMuted || volume <= 0) return "audio-volume-muted-symbolic";
+        return volume switch
+        {
+            <= 33 => "audio-volume-low-symbolic",
+            <= 66 => "audio-volume-medium-symbolic",
+            _ => "audio-volume-high-symbolic"
+        };
+    }
+}
+
 internal sealed class PlayerOsdController : IDisposable
 {
-    private readonly PlayerOsdEngine _engine;
+    private readonly PlayerOsdState _state;
     private readonly uint _holdDurationMilliseconds;
     private readonly Image _osdIcon;
     private readonly Label _osdLabel;
@@ -22,13 +220,13 @@ internal sealed class PlayerOsdController : IDisposable
         Image osdIcon,
         Label osdLabel,
         PlayerOsdEngine? engine = null,
-        uint holdDurationMilliseconds = PlayerOsdEngine.DefaultHoldDurationMilliseconds)
+        uint holdDurationMilliseconds = PlayerOsdState.DefaultHoldDurationMilliseconds)
     {
         _preferences = preferences;
         _osdRevealer = osdRevealer;
         _osdIcon = osdIcon;
         _osdLabel = osdLabel;
-        _engine = engine ?? new PlayerOsdEngine();
+        _state = engine ?? new PlayerOsdState();
         _holdDurationMilliseconds = holdDurationMilliseconds;
 
         _enabled = _preferences.GetPreferences().ShortcutOsdEnabled;
@@ -37,8 +235,7 @@ internal sealed class PlayerOsdController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         _preferences.PreferencesChanged -= OnPreferencesChanged;
         HideImmediate();
     }
@@ -46,56 +243,56 @@ internal sealed class PlayerOsdController : IDisposable
     public void ShowSeek(int deltaSeconds)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessSeek(deltaSeconds);
+        var model = _state.ProcessSeek(deltaSeconds);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowVolume(double volume, bool isMuted)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessVolume(volume, isMuted);
+        var model = _state.ProcessVolume(volume, isMuted);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowPlayPause(bool isPaused)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessPlayPause(isPaused);
+        var model = _state.ProcessPlayPause(isPaused);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSpeed(double speed)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessSpeed(speed);
+        var model = _state.ProcessSpeed(speed);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSeekToBeginning()
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessSeekToBeginning();
+        var model = _state.ProcessSeekToBeginning();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSubtitles(string trackOrOff)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessSubtitles(trackOrOff);
+        var model = _state.ProcessSubtitles(trackOrOff);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowQueue(bool isOpen)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessQueue(isOpen);
+        var model = _state.ProcessQueue(isOpen);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowVideoInfo(bool isOpen)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessVideoInfo(isOpen);
+        var model = _state.ProcessVideoInfo(isOpen);
         ApplyAndScheduleHide(model);
     }
 
@@ -103,35 +300,35 @@ internal sealed class PlayerOsdController : IDisposable
     public void ShowFullscreen(bool isFullscreen)
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessFullscreen(isFullscreen);
+        var model = _state.ProcessFullscreen(isFullscreen);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowNextVideo()
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessNextVideo();
+        var model = _state.ProcessNextVideo();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowPreviousVideo()
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessPreviousVideo();
+        var model = _state.ProcessPreviousVideo();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowResumed()
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessResumed();
+        var model = _state.ProcessResumed();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSkippedSponsor()
     {
         if (!_enabled || _disposed) return;
-        var model = _engine.ProcessSkippedSponsor();
+        var model = _state.ProcessSkippedSponsor();
         ApplyAndScheduleHide(model);
     }
 
@@ -146,14 +343,10 @@ internal sealed class PlayerOsdController : IDisposable
 
     public void HideImmediate()
     {
-        if (_hideTimeoutSource != 0)
-        {
-            SourceRemove(_hideTimeoutSource);
-            _hideTimeoutSource = 0;
-        }
+        ControllerDisposal.ClearTimeout(ref _hideTimeoutSource);
 
         _osdRevealer.RevealChild = false;
-        _engine.Reset();
+        _state.Reset();
     }
 
     private void ApplyAndScheduleHide(OsdDisplayModel model)
@@ -162,18 +355,14 @@ internal sealed class PlayerOsdController : IDisposable
         _osdLabel.SetText(model.Text);
         _osdRevealer.RevealChild = true;
 
-        if (_hideTimeoutSource != 0)
-        {
-            SourceRemove(_hideTimeoutSource);
-            _hideTimeoutSource = 0;
-        }
+        ControllerDisposal.ClearTimeout(ref _hideTimeoutSource);
 
         _hideTimeoutSource = TimeoutAdd(0, _holdDurationMilliseconds, () =>
         {
             _hideTimeoutSource = 0;
             if (_disposed) return false;
             _osdRevealer.RevealChild = false;
-            _engine.Reset();
+            _state.Reset();
 
             return false;
         });

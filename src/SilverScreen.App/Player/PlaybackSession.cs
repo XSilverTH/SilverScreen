@@ -12,13 +12,16 @@ using SilverScreen.Shell;
 namespace SilverScreen.Player;
 
 /// <summary>
-///     Deep playback engine managing end-to-end playback lifecycle and sidecars:
-///     telemetry, presence, cookie leasing, SponsorBlock auto-skipping and prompts,
-///     watch progress and resume calculation, video engagement/ratings, and playlist progression.
+///     Deep playback engine managing end-to-end playback lifecycle and sidecars.
+///     Internally grouped in two regions (no public API split):
+///     session infrastructure (telemetry, presence, cookie leasing, queue plumbing,
+///     coordinator/process-lifetime bridging) vs. content sidecars (SponsorBlock
+///     auto-skipping and prompts, watch progress and resume calculation, video
+///     engagement/ratings, and playlist progression).
 /// </summary>
 internal sealed class PlaybackSession : IDisposable
 {
-    /// <summary>Mirrors <c>PlayerTimelineEngine</c>'s default resume minimum: positions at or below this are "from the start".</summary>
+    /// <summary>Mirrors <c>PlayerTimelineState</c>'s default resume minimum: positions at or below this are "from the start".</summary>
     private const double MinimumResumeSeconds = 5;
 
     /// <summary>Positions leaving at most this (or 10% of short media, whichever is smaller) are treated as finished.</summary>
@@ -26,29 +29,37 @@ internal sealed class PlaybackSession : IDisposable
 
     private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
 
-    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    #region Session infrastructure sidecars (telemetry / presence / cookies / queue plumbing)
 
     private readonly PlaybackCoordinator _coordinator;
     private readonly DesktopMediaIntegration? _desktopMedia;
-    private readonly IYouTubePlaybackProgressService _playbackProgress;
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _session;
-    private readonly ISponsorBlockService _sponsorBlock;
-    private readonly IVideoEngagementService _videoEngagement;
-    private readonly IYouTubeRatingService _youtubeRating;
-    private SponsorBlockSegment? _activeManualSegment;
     private CookieFileLease? _cookieFile;
     private bool _disposed;
-    private bool _hadSeek;
-    private bool _handledResumeForCurrentVideo;
     private string? _lastPlaybackVideoId;
     private CancellationTokenSource? _loadCts;
     private long _loadVersion;
     private long _playbackId;
+
+    #endregion
+
+    #region Content sidecars (SponsorBlock / resume / engagement / playlist)
+
+    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    private readonly IYouTubePlaybackProgressService _playbackProgress;
+    private readonly ISponsorBlockService _sponsorBlock;
+    private readonly IVideoEngagementService _videoEngagement;
+    private readonly IYouTubeRatingService _youtubeRating;
+    private SponsorBlockSegment? _activeManualSegment;
+    private bool _hadSeek;
+    private bool _handledResumeForCurrentVideo;
     private bool _playbackProgressLoaded;
     private string _sponsorBlockConfigurationKey = string.Empty;
     private bool _wasPaused;
     private YouTubePlaybackProgress? _youtubePlaybackProgress;
+
+    #endregion
 
     public PlaybackSession(
         PlaybackCoordinator coordinator,
@@ -128,6 +139,8 @@ internal sealed class PlaybackSession : IDisposable
     public event Action<SponsorBlockSegment?>? SponsorBlockPromptChanged;
     public event Action<SponsorBlockSegment>? SponsorBlockAutoSkipped;
     public event Action<ResumePromptMode, TimeSpan>? ResumePromptChanged;
+
+    #region Session infrastructure (telemetry / presence / cookies / queue plumbing)
 
     public void Start(PlaybackRequest request)
     {
@@ -239,6 +252,10 @@ internal sealed class PlaybackSession : IDisposable
         SeekRequested?.Invoke(positionSeconds, exact);
     }
 
+    #endregion
+
+    #region Content sidecars (SponsorBlock / resume / engagement / playlist)
+
     public bool TryResume()
     {
         if (_disposed || ResumePrompt != ResumePromptMode.Resume || ResumePosition <= TimeSpan.Zero)
@@ -271,11 +288,11 @@ internal sealed class PlaybackSession : IDisposable
     {
         if (_disposed) return false;
         var prefs = _preferences.GetPreferences();
-        if (!PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(prefs)) return false;
+        if (!PlayerTimelineState.ManualSponsorBlockSkipEnabled(prefs)) return false;
 
         var segment = ActiveManualSegment ??
                       (LastPlaybackState is { } st
-                          ? PlayerTimelineEngine.FindSponsorBlockSegmentAt(SponsorBlockSegments, st.Position)
+                          ? PlayerTimelineState.FindSponsorBlockSegmentAt(SponsorBlockSegments, st.Position)
                           : null);
 
         if (segment is null) return false;
@@ -378,7 +395,7 @@ internal sealed class PlaybackSession : IDisposable
             FetchPlaybackProgressAsync(video.Id, version, cts.Token).FireAndForget(Logger);
 
         var prefs = _preferences.GetPreferences();
-        _sponsorBlockConfigurationKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(prefs);
+        _sponsorBlockConfigurationKey = PlayerTimelineState.GetSponsorBlockConfigurationKey(prefs);
 
         if (prefs.SponsorBlockAutoSkipEnabled || prefs.SponsorBlockSegmentDisplayEnabled)
         {
@@ -433,7 +450,7 @@ internal sealed class PlaybackSession : IDisposable
         _handledResumeForCurrentVideo = true;
 
         var prefs = _preferences.GetPreferences();
-        var promptState = PlayerTimelineEngine.GetResumePromptState(
+        var promptState = PlayerTimelineState.GetResumePromptState(
             _youtubePlaybackProgress,
             state.Duration,
             prefs.ResumePlaybackAutomatically,
@@ -492,7 +509,7 @@ internal sealed class PlaybackSession : IDisposable
 
         var prefs = _preferences.GetPreferences();
 
-        if (PlayerTimelineEngine.ShouldAutoSkip(
+        if (PlayerTimelineState.ShouldAutoSkip(
                 state.Position,
                 SponsorBlockSegments,
                 state.IsPaused,
@@ -508,9 +525,9 @@ internal sealed class PlaybackSession : IDisposable
             SponsorBlockAutoSkipped?.Invoke(skipSegment);
         }
 
-        if (PlayerTimelineEngine.ManualSponsorBlockSkipEnabled(prefs))
+        if (PlayerTimelineState.ManualSponsorBlockSkipEnabled(prefs))
         {
-            var candidate = PlayerTimelineEngine.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
+            var candidate = PlayerTimelineState.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
             if (candidate is null)
             {
                 if (_activeManualSegment is null) return;
@@ -522,7 +539,7 @@ internal sealed class PlaybackSession : IDisposable
             }
             else
             {
-                var shouldShow = PlayerTimelineEngine.ShouldShowManualPrompt(
+                var shouldShow = PlayerTimelineState.ShouldShowManualPrompt(
                     _activeManualSegment,
                     candidate,
                     state.IsPaused,
@@ -637,7 +654,7 @@ internal sealed class PlaybackSession : IDisposable
 
         if (preferences is { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: false }) DismissResumePrompt();
 
-        var newKey = PlayerTimelineEngine.GetSponsorBlockConfigurationKey(preferences);
+        var newKey = PlayerTimelineState.GetSponsorBlockConfigurationKey(preferences);
         if (newKey == _sponsorBlockConfigurationKey) return;
         _sponsorBlockConfigurationKey = newKey;
 
@@ -660,6 +677,10 @@ internal sealed class PlaybackSession : IDisposable
         if (categories.Length > 0 && _loadCts is { } cts)
             FetchSponsorBlockAsync(CurrentVideo.Id, categories, _loadVersion, cts.Token).FireAndForget(Logger);
     }
+
+    #endregion
+
+    #region Session infrastructure: load lifecycle and resource release
 
     private void CancelVideoLoads()
     {
@@ -704,4 +725,6 @@ internal sealed class PlaybackSession : IDisposable
         _cookieFile = null;
         _desktopMedia?.ClearPlayback();
     }
+
+    #endregion
 }

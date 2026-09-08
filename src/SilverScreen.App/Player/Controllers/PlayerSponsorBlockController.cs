@@ -12,7 +12,7 @@ namespace SilverScreen.Player.Controllers;
 /// </summary>
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
-    private const uint SkipPromptDurationMilliseconds = PlayerTimelineEngine.DefaultSkipPromptDurationMilliseconds;
+    private const uint SkipPromptDurationMilliseconds = PlayerTimelineState.DefaultSkipPromptDurationMilliseconds;
     private readonly IPreferencesService _preferences;
     private readonly PlaybackSession _session;
     private readonly Button _skipButton;
@@ -57,8 +57,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged;
         _session.SponsorBlockPromptChanged -= OnPromptChanged;
         _session.SessionEnded -= OnSessionEnded;
@@ -152,12 +151,12 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void ShowManualPrompt(SponsorBlockSegment segment)
     {
-        var category = PlayerTimelineEngine.GetSponsorBlockCategoryLabel(segment.Category);
+        var category = PlayerTimelineState.GetSponsorBlockCategoryLabel(segment.Category);
         _skipLabel.SetText($"Skip {category}");
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
         _skipRevealer.RevealChild = true;
-        if (_promptHideSource != 0) SourceRemove(_promptHideSource);
+        ControllerDisposal.ClearTimeout(ref _promptHideSource);
         _promptHideSource = TimeoutAdd(0, SkipPromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
@@ -171,11 +170,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void HideManualPrompt()
     {
-        if (_promptHideSource != 0)
-        {
-            SourceRemove(_promptHideSource);
-            _promptHideSource = 0;
-        }
+        ControllerDisposal.ClearTimeout(ref _promptHideSource);
 
         if (_disposed) return;
         _skipRevealer.RevealChild = false;
@@ -185,7 +180,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private void SetSkipButtonColor(string category)
     {
         ClearSkipButtonColor();
-        var colorClass = PlayerTimelineEngine.GetSponsorBlockButtonColorClass(category);
+        var colorClass = PlayerTimelineState.GetSponsorBlockButtonColorClass(category);
         _skipButton.AddCssClass(colorClass);
         _skipButtonColorClass = colorClass;
     }

@@ -48,8 +48,7 @@ internal sealed class PlayerEngagementController : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
         _session.EngagementChanged -= OnEngagementChanged;
         _session.RatingStateChanged -= OnRatingStateChanged;
         _session.VideoChanged -= OnVideoChanged;
