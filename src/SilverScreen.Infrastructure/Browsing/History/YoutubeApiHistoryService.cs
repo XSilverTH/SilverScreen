@@ -14,8 +14,6 @@ namespace SilverScreen.Infrastructure.Browsing.History;
 /// <summary>Keeps the current YoutubeAPI watch-history page sequence for the active session.</summary>
 public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDisposable
 {
-    private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
-    private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string EmptyHistoryMessage = "No watch history was returned.";
     private const string NoContinuationMessage = "No additional watch history is available.";
     private const string InvalidContinuationMessage = "Invalid history continuation.";
@@ -46,7 +44,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         return new AuthenticatedHistoryResult(
             AuthenticatedHistoryStatus.AuthenticationRequired,
             FeedPage.Empty,
-            AuthenticationRequiredMessage);
+            SessionGate.HistoryServiceAuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(
@@ -60,7 +58,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.AuthenticationRequired,
                 FeedPage.Empty,
-                AuthenticationRequiredMessage);
+                SessionGate.HistoryServiceAuthenticationRequiredMessage);
         }
 
         string? token;
@@ -153,7 +151,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.AuthenticationRejected,
                 FeedPage.Empty,
-                AuthenticationRejectedMessage);
+                SessionGate.ServiceAuthenticationRejectedMessage);
         }
         catch (YouTubeException exception)
         {
@@ -183,10 +181,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
     private bool IsSessionActive()
     {
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void ClearCachedResults()

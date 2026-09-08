@@ -3,6 +3,7 @@ using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
@@ -48,13 +49,13 @@ public sealed class HomeVideoListSource : IVideoListSource
     {
         var (description, icon) = state.Kind switch
         {
-            HomeFeedStateKind.SignedOut => ("Sign in to see your YouTube recommendations.",
+            HomeFeedStateKind.SignedOut => (SessionGate.HomePresentationSignedOutMessage,
                 "avatar-default-symbolic"),
-            HomeFeedStateKind.Empty or HomeFeedStateKind.Ready => ("No recommendations are available right now.",
+            HomeFeedStateKind.Empty or HomeFeedStateKind.Ready => (SessionGate.HomeEmptyMessage,
                 "applications-internet-symbolic"),
-            HomeFeedStateKind.AuthenticationRequired => ("Your YouTube session is no longer valid.",
+            HomeFeedStateKind.AuthenticationRequired => (SessionGate.HomePresentationAuthInvalidMessage,
                 "dialog-password-symbolic"),
-            _ => ("Could not load YouTube recommendations.", "network-error-symbolic")
+            _ => (SessionGate.HomeLoadErrorMessage, "network-error-symbolic")
         };
 
         var status = new VideoListStatus(
@@ -252,34 +253,34 @@ public sealed class HistoryVideoListSource : IVideoListSource
         {
             AuthenticatedHistoryStatus.AuthenticationRequired or AuthenticatedHistoryStatus.AuthenticationRejected =>
                 new VideoListStatus(
-                    "Sign in to see history",
+                    SessionGate.HistorySignedOutTitle,
                     !string.IsNullOrWhiteSpace(summary)
                         ? summary
-                        : "Watch history requires an active YouTube session.",
+                        : SessionGate.HistoryPresentationSignedOutMessage,
                     "avatar-default-symbolic"),
 
             AuthenticatedHistoryStatus.TemporaryBackendFailure =>
                 new VideoListStatus(
-                    "Could not load history",
+                    SessionGate.HistoryErrorTitle,
                     !string.IsNullOrWhiteSpace(summary)
                         ? summary
-                        : "Failed to load your watch history. Check your network connection and try again.",
+                        : SessionGate.HistoryErrorMessage,
                     "network-error-symbolic",
                     true),
 
             _ => !isSuccess
                 ? new VideoListStatus(
-                    "Could not load history",
+                    SessionGate.HistoryErrorTitle,
                     !string.IsNullOrWhiteSpace(summary)
                         ? summary
-                        : "Failed to load your watch history. Check your network connection and try again.",
+                        : SessionGate.HistoryErrorMessage,
                     "network-error-symbolic",
                     true)
                 : new VideoListStatus(
-                    "No watch history",
+                    SessionGate.HistoryEmptyTitle,
                     !string.IsNullOrWhiteSpace(summary)
                         ? summary
-                        : "Videos you watch on YouTube will appear here.",
+                        : SessionGate.HistoryEmptyMessage,
                     "document-open-recent-symbolic")
         };
     }
@@ -446,22 +447,22 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
             case AuthenticatedSubscriptionsStatus.AuthenticationRequired:
             case AuthenticatedSubscriptionsStatus.AuthenticationRejected:
                 status = new VideoListStatus(
-                    "Sign in to see subscriptions",
+                    SessionGate.SubscriptionsSignedOutTitle,
                     !string.IsNullOrWhiteSpace(state.Summary)
                         ? state.Summary
-                        : "Subscriptions feed requires an active YouTube session.",
+                        : SessionGate.SubscriptionsPresentationSignedOutMessage,
                     "avatar-default-symbolic",
                     false,
-                    "Sign In",
+                    SessionGate.SignInActionLabel,
                     openWebLogin);
                 break;
 
             case AuthenticatedSubscriptionsStatus.TemporaryBackendFailure:
                 status = new VideoListStatus(
-                    "Could not load subscriptions",
+                    SessionGate.SubscriptionsErrorTitle,
                     !string.IsNullOrWhiteSpace(state.Summary)
                         ? state.Summary
-                        : "Failed to load your subscriptions. Check your network connection and try again.",
+                        : SessionGate.SubscriptionsErrorMessage,
                     "network-error-symbolic",
                     true);
                 break;
@@ -472,10 +473,10 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                 if (!state.IsSuccess)
                 {
                     status = new VideoListStatus(
-                        "Could not load subscriptions",
+                        SessionGate.SubscriptionsErrorTitle,
                         !string.IsNullOrWhiteSpace(state.Summary)
                             ? state.Summary
-                            : "Failed to load your subscriptions. Check your network connection and try again.",
+                            : SessionGate.SubscriptionsErrorMessage,
                         "network-error-symbolic",
                         true);
                 }
@@ -488,10 +489,10 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                             "video-x-generic-symbolic");
                     else
                         status = new VideoListStatus(
-                            "No subscriptions",
+                            SessionGate.SubscriptionsEmptyTitle,
                             !string.IsNullOrWhiteSpace(state.Summary)
                                 ? state.Summary
-                                : "Channels you subscribe to on YouTube will appear here.",
+                                : SessionGate.SubscriptionsEmptyMessage,
                             "emblem-favorite-symbolic");
                 }
                 else

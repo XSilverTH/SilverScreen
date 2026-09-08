@@ -14,8 +14,6 @@ namespace SilverScreen.Infrastructure.Browsing.Home;
 /// <summary>Keeps the current YoutubeAPI home-feed page sequence for the active session.</summary>
 public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, IDisposable
 {
-    private const string AuthenticationRequiredMessage = "Sign in to YouTube to load recommendations.";
-    private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string EmptyFeedMessage = "No usable recommendations were returned.";
     private const string NoContinuationMessage = "No additional recommendations are available.";
     private const string InvalidContinuationMessage = "Invalid recommendation continuation.";
@@ -47,7 +45,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         return new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.AuthenticationRequired,
             FeedPage.Empty,
-            AuthenticationRequiredMessage);
+            SessionGate.HomeServiceAuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(
@@ -61,7 +59,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.AuthenticationRequired,
                 FeedPage.Empty,
-                AuthenticationRequiredMessage);
+                SessionGate.HomeServiceAuthenticationRequiredMessage);
         }
 
         string? token;
@@ -168,7 +166,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.AuthenticationRejected,
                 FeedPage.Empty,
-                AuthenticationRejectedMessage);
+                SessionGate.ServiceAuthenticationRejectedMessage);
         }
         catch (YouTubeException exception)
         {
@@ -222,10 +220,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
 
     private bool IsSessionActive()
     {
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void ClearCachedResults()

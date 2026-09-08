@@ -1,6 +1,5 @@
 using Serilog;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Common;
@@ -13,12 +12,12 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private static readonly ILogger Logger = Log.ForContext<HomeFeedCoordinator>();
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
-    private readonly ISessionService _sessionService;
+    private readonly SilverScreen.Core.Account.Session.ISessionService _sessionService;
     private bool _disposed;
     private AuthenticatedHomeFeedStatus _lastStatus = AuthenticatedHomeFeedStatus.Success;
     private Action? _openWebLogin;
 
-    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
+    public HomeFeedCoordinator(SilverScreen.Core.Account.Session.ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
         Action? openWebLogin = null)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));

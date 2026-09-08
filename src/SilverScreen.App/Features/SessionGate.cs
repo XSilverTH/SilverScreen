@@ -1,21 +1,18 @@
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Home;
+using CoreGate = SilverScreen.Core.Account.Session.SessionGate;
 
 namespace SilverScreen.Features;
 
 /// <summary>
-///     Shared session-gate vocabulary for feed and account surfaces.
-///     Home, History, and Account previously hand-rolled the same "is there a
-///     usable signed-in session" check and copied the same user-facing strings,
-///     so copy drifted (e.g. "session" vs "sign-in" wording for the same expired
-///     sign-in state). The Wave 1 plain-language strings live here as the single
-///     source of truth: signed-out vs error vs ok.
-///     Batch scope: HomeFeedCoordinator and AccountViewModel consume this helper.
-///     HistoryViewModel, SubscriptionsViewModel, and the YoutubeApi* services
-///     still carry their own copies and adopt this helper in a follow-up; the
-///     HomeVideoListSource.MapState wrapper likewise keeps its older copy until
-///     its owner aligns it (Wave 1 uncertainty, unchanged here).
+///     App-level session-gate presentation helpers for feed surfaces.
+///     Migration complete: every feed, ViewModel, Coordinator, and service now
+///     delegates to <see cref="CoreGate" /> in SilverScreen.Core, which is the
+///     single source of truth for the signed-in predicate and all gate
+///     messages. This class remains as the App-layer facade so existing
+///     callers keep compiling; it adds the <see cref="VideoListStatus" />
+///     builders and the Home outcome mapping that need App-layer types.
 /// </summary>
 public enum SessionGateState
 {
@@ -25,28 +22,21 @@ public enum SessionGateState
 
 public static class SessionGate
 {
-    private const string SignInActionLabel = "Sign In";
-    private const string HomeSignedOutMessage = "Sign in with Google or use cookies.txt to see your Home feed.";
-    public const string HistorySignedOutMessage = "Sign in with Google or use cookies.txt to see your watch history.";
-    public const string SessionNoLongerValidMessage = "Your YouTube sign-in is no longer valid.";
-    public const string HomeLoadErrorMessage = "Could not load YouTube recommendations.";
-    private const string HomeEmptyMessage = "No recommendations are available right now.";
+    private const string SignInActionLabel = CoreGate.SignInActionLabel;
+    private const string HomeSignedOutMessage = CoreGate.HomeSignedOutMessage;
+    public const string HistorySignedOutMessage = CoreGate.HistorySignedOutMessage;
+    public const string SessionNoLongerValidMessage = CoreGate.SessionNoLongerValidMessage;
+    public const string HomeLoadErrorMessage = CoreGate.HomeLoadErrorMessage;
+    private const string HomeEmptyMessage = CoreGate.HomeEmptyMessage;
 
     public static bool RequireSignedIn(ISessionService? sessionService)
     {
-        if (sessionService is null)
-            return true;
-
-        var session = sessionService.GetCurrentSession();
-        var cookies = sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
-               !string.IsNullOrWhiteSpace(cookies.Content);
+        return CoreGate.RequireSignedIn(sessionService);
     }
 
     public static bool IsAuthInvalid(AuthenticatedHomeFeedStatus status)
     {
-        return status is AuthenticatedHomeFeedStatus.AuthenticationRequired
-            or AuthenticatedHomeFeedStatus.AuthenticationRejected;
+        return CoreGate.IsAuthInvalid(status);
     }
 
     public static VideoListStatus HomeSignedOutStatus(Action? openWebLogin)

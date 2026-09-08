@@ -89,7 +89,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 false,
                 false,
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
-                "Sign in to YouTube to load your subscriptions.",
+                SessionGate.SubscriptionsSignedOutMessage,
                 false);
     }
 
@@ -174,7 +174,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 false,
                 false,
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
-                "Sign in to YouTube to load your subscriptions.",
+                SessionGate.SubscriptionsSignedOutMessage,
                 false);
             return;
         }
@@ -274,7 +274,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 IsLoading = false,
                 HasMore = false,
                 Status = AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                Summary = "Failed to load subscriptions. Check your network connection and try again.",
+                Summary = SessionGate.SubscriptionsErrorMessage,
                 IsSuccess = false
             };
         }
@@ -306,10 +306,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         ThrowIfDisposed();
 
         if (State.IsLoading || State.IsLoadingMore || (_loadedAtLeastOnce &&
-                                                       State.Status is not (AuthenticatedSubscriptionsStatus
-                                                               .AuthenticationRequired
-                                                           or AuthenticatedSubscriptionsStatus
-                                                               .AuthenticationRejected) &&
+                                                       !SessionGate.IsAuthInvalid(State.Status) &&
                                                        (State.Videos.Count > 0 || State.Channels.Count > 0 ||
                                                         State.IsSuccess)))
             return Task.CompletedTask;
@@ -651,10 +648,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
     private bool IsSessionActive()
     {
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
-               !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
@@ -686,7 +680,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 false,
                 false,
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
-                "Sign in to YouTube to load your subscriptions.",
+                SessionGate.SubscriptionsSignedOutMessage,
                 false);
         }
     }

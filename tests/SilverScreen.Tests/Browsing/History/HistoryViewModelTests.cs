@@ -1,3 +1,5 @@
+using SilverScreen.Core.Account.Session;
+using SilverScreen.Infrastructure.Account.Session;
 using SilverScreen.Browsing.History;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
@@ -20,7 +22,7 @@ public sealed class HistoryViewModelTests
                 new FeedPage([CreateVideo("v1"), CreateVideo("v2")]),
                 "Watch history loaded.")
         };
-        using var viewModel = new HistoryViewModel(service);
+        using var viewModel = new HistoryViewModel(service, CreateSession());
         await viewModel.LoadAsync();
 
         await viewModel.LoadMoreAsync();
@@ -43,12 +45,18 @@ public sealed class HistoryViewModelTests
                 new FeedPage([CreateVideo("v2")]),
                 "Watch history loaded.")
         };
-        using var viewModel = new HistoryViewModel(service);
+        using var viewModel = new HistoryViewModel(service, CreateSession());
         await viewModel.RefreshAsync(count: 40);
         Assert.Equal(40, Assert.Single(service.FirstPageCounts));
 
         await viewModel.LoadMoreAsync(count: 40);
         Assert.Equal(40, Assert.Single(service.NextPageCounts));
+    }
+    private static InMemorySessionService CreateSession()
+    {
+        var session = new InMemorySessionService();
+        session.SetManualSession("test-manual-session", SessionCookieFormat.NetscapeCookiesText);
+        return session;
     }
 
 

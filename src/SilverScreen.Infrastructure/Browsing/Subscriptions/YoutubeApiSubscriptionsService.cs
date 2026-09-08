@@ -15,8 +15,6 @@ namespace SilverScreen.Infrastructure.Browsing.Subscriptions;
 /// <summary>Keeps the current YoutubeAPI subscriptions and subscribed-channel pages for the active session.</summary>
 public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptionsService, IDisposable
 {
-    private const string AuthenticationRequiredMessage = "Sign in to YouTube to load your subscriptions.";
-    private const string AuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
     private const string EmptySubscriptionsMessage = "No subscription videos were returned.";
     private const string NoContinuationMessage = "No additional subscription videos are available.";
     private const string InvalidContinuationMessage = "Invalid subscription continuation.";
@@ -49,7 +47,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         return new AuthenticatedSubscriptionsFeedResult(
             AuthenticatedSubscriptionsStatus.AuthenticationRequired,
             FeedPage.Empty,
-            AuthenticationRequiredMessage);
+            SessionGate.SubscriptionsSignedOutMessage);
     }
 
     public async Task<AuthenticatedSubscriptionsFeedResult> LoadNextFeedPageAsync(
@@ -63,7 +61,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 FeedPage.Empty,
-                AuthenticationRequiredMessage);
+                SessionGate.SubscriptionsSignedOutMessage);
         }
 
         string? token;
@@ -104,7 +102,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 [],
-                AuthenticationRequiredMessage);
+                SessionGate.SubscriptionsSignedOutMessage);
         }
 
         try
@@ -130,7 +128,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRejected,
                 [],
-                AuthenticationRejectedMessage);
+                SessionGate.ServiceAuthenticationRejectedMessage);
         }
         catch (YouTubeException exception)
         {
@@ -212,7 +210,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRejected,
                 FeedPage.Empty,
-                AuthenticationRejectedMessage);
+                SessionGate.ServiceAuthenticationRejectedMessage);
         }
         catch (YouTubeException exception)
         {
@@ -242,10 +240,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
     private bool IsSessionActive()
     {
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void ClearCachedFeed()

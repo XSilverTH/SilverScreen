@@ -4,7 +4,6 @@ using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
-using SilverScreen.Features;
 using YoutubeAPI;
 
 namespace SilverScreen.Account.Profile;

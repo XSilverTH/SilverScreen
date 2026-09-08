@@ -179,7 +179,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     {
         return new HistoryViewState(
             [],
-            "Sign in with Google or use cookies.txt to see your watch history.",
+            SessionGate.HistorySignedOutMessage,
             false,
             false,
             AuthenticatedHistoryStatus.AuthenticationRequired);
@@ -187,27 +187,21 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
 
     private VideoListStatus WithSignInAction(VideoListStatus status)
     {
-        if (_historyStatus is not (AuthenticatedHistoryStatus.AuthenticationRequired
-            or AuthenticatedHistoryStatus.AuthenticationRejected))
+        if (!SessionGate.IsAuthInvalid(_historyStatus))
             return status;
 
         return status with
         {
-            Description = "Sign in with Google or use cookies.txt to see your watch history.",
+            Description = SessionGate.HistorySignedOutMessage,
             ShowRetry = false,
-            ActionLabel = _openWebLogin is null ? null : "Sign In",
+            ActionLabel = _openWebLogin is null ? null : SessionGate.SignInActionLabel,
             Action = _openWebLogin
         };
     }
 
     private bool IsSessionActive()
     {
-        if (_sessionService is null)
-            return true;
-        var session = _sessionService.GetCurrentSession();
-        var cookies = _sessionService.GetManualSessionCookies();
-        return session is { IsSignedIn: true, HasManualSession: true } && cookies != null &&
-               !string.IsNullOrWhiteSpace(cookies.Content);
+        return SessionGate.RequireSignedIn(_sessionService);
     }
 
     private void ThrowIfDisposed()
