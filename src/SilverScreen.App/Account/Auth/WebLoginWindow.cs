@@ -204,6 +204,18 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         return snapshots.Any(s => CompanionCookieNames.Contains(s.Name));
     }
 
+    private static bool HasAuthenticationCookies(string cookieText)
+    {
+        try
+        {
+            return YouTubeCookieAuthentication.FromNetscape(cookieText).HasAuthenticationCookies;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     private async Task<string?> ReadReadyCookiesAsync()
     {
         var snapshots = await WebLoginCookieReader.GetCookiesAsync(_cookieManager, YouTubeUri).ConfigureAwait(false);
@@ -211,16 +223,8 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             return null;
         var cookieText = WebLoginCookieReader.SerializeNetscape(snapshots);
 
-        try
-        {
-            var auth = YouTubeCookieAuthentication.FromNetscape(cookieText);
-            if (!auth.HasAuthenticationCookies)
-                return null;
-        }
-        catch (FormatException)
-        {
+        if (!HasAuthenticationCookies(cookieText))
             return null;
-        }
 
         if (!HasCompanionCookies(snapshots))
         {
@@ -239,6 +243,10 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             if (Volatile.Read(ref _disposeState) != 0)
                 return null;
             cookieText = WebLoginCookieReader.SerializeNetscape(snapshots);
+            // The cookie store can change while the debounce window is open. Revalidate
+            // the snapshot that will actually be persisted instead of trusting the first read.
+            if (!HasAuthenticationCookies(cookieText))
+                return null;
         }
 
         PostStatus("Finishing sign-in…");

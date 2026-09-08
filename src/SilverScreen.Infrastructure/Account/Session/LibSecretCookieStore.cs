@@ -172,14 +172,7 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
         {
             attributes = CreateAttributes();
             secretHandle = GCHandle.Alloc(secret, GCHandleType.Pinned);
-            try
-            {
-                secretValue = SecretValueNew(secretHandle.AddrOfPinnedObject(), secret.Length, ContentType);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(secret);
-            }
+            secretValue = SecretValueNew(secretHandle.AddrOfPinnedObject(), secret.Length, ContentType);
 
             if (secretValue == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to allocate secret value in libsecret.");
@@ -191,6 +184,9 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
         }
         finally
         {
+            // Keep the caller's buffer intact until the synchronous native store has
+            // consumed the SecretValue. SaveAsync wipes it again after this returns.
+            CryptographicOperations.ZeroMemory(secret);
             if (secretHandle.IsAllocated) secretHandle.Free();
 
             if (secretValue != IntPtr.Zero) SecretValueUnref(secretValue);

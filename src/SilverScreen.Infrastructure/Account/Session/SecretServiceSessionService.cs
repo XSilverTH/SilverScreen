@@ -4,6 +4,7 @@ using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
+using YoutubeAPI;
 using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Infrastructure.Account.Session;
@@ -321,9 +322,24 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 throw new SessionPersistenceException();
             }
 
-            return string.IsNullOrWhiteSpace(content)
-                ? null
-                : new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, content);
+            if (string.IsNullOrWhiteSpace(content))
+                return null;
+
+            try
+            {
+                if (!YouTubeCookieAuthentication.FromNetscape(content).HasAuthenticationCookies)
+                {
+                    Logger.Warning("Stored YouTube session contains no authentication cookies; ignoring it");
+                    return null;
+                }
+            }
+            catch (Exception exception) when (exception is ArgumentException or FormatException)
+            {
+                Logger.Warning(exception, "Stored YouTube session cookies are invalid; ignoring them");
+                return null;
+            }
+
+            return new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, content);
         }
         finally
         {

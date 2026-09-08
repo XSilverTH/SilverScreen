@@ -10,7 +10,8 @@ namespace SilverScreen.Tests.Account.Session;
 public sealed class SessionTests
 {
     private const string FakeCookieContent =
-        "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n";
+        "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfake-session-value\n" +
+        ".youtube.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\tfake-sapisid-value\n";
 
 
     [Fact]
@@ -76,6 +77,20 @@ public sealed class SessionTests
         Assert.Null(store.StoredContent);
         var clearedService = new SecretServiceSessionService(store);
         Assert.False(clearedService.GetCurrentSession().IsSignedIn);
+    }
+
+    [Fact]
+    public void SecretServiceSessionIgnoresStoredCookiesWithoutAuthentication()
+    {
+        var store = new FakeCookieSecretStore();
+        store.Save(Encoding.UTF8.GetBytes(
+            "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession-only\n"));
+
+        var service = new SecretServiceSessionService(store);
+
+        Assert.True(service.IsAvailable);
+        Assert.False(service.GetCurrentSession().IsSignedIn);
+        Assert.Null(service.GetManualSessionCookies());
     }
 
     [Fact]
