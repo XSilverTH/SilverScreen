@@ -183,7 +183,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
             {
                 _client = null;
                 UnsubscribeClientEvents(client);
-                DisposeClientQuietly(client);
+                TryDisposeClient(client);
             }
         }
         catch (Exception ex)
@@ -191,7 +191,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
             _client = null;
             UnsubscribeClientEvents(client);
             Logger.Warning(ex, "Could not initialize RPC client");
-            DisposeClientQuietly(client);
+            TryDisposeClient(client);
             _clientReady = false;
         }
 
@@ -220,7 +220,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
             _lastPublishedActivity = null;
             UnsubscribeClientEvents(client);
             Logger.Debug("Discord Rich Presence connection failed; retrying on the next playback state update");
-            DisposeClientQuietly(client);
+            TryDisposeClient(client);
         }
     }
 
@@ -242,7 +242,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
             _lastPublishedActivity = null;
             UnsubscribeClientEvents(client);
             Logger.Debug("Discord Rich Presence connection did not become ready; reconnecting");
-            DisposeClientQuietly(client);
+            TryDisposeClient(client);
             EnsureClientLocked();
             PublishCachedActivityLocked();
         }
@@ -300,7 +300,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         _clientReady = false;
         if (client is null) return;
         UnsubscribeClientEvents(client);
-        DisposeClientQuietly(client);
+        TryDisposeClient(client);
     }
 
     private void ClearPresenceLocked()
@@ -317,7 +317,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         }
     }
 
-    private static void DisposeClientQuietly(IDiscordRpcClient client)
+    private static void TryDisposeClient(IDiscordRpcClient client)
     {
         try
         {

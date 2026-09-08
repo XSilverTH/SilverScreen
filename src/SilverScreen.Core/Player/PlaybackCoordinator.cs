@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 
@@ -24,10 +25,18 @@ public sealed class PlaybackCoordinator(
     IYouTubePlaybackTelemetryService? playbackTelemetry = null)
     : IDisposable
 {
+    private static readonly ILogger Logger = Log.ForContext<PlaybackCoordinator>();
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
     private readonly Lock _lock = new();
     private bool _disposed;
     private long _nextPlaybackId;
+
+    // O(1) latest-presence tracking: playback ids increase monotonically, so the
+    // most recently registered id is the presence owner. Maintained under _lock
+    // on register (new id wins) and on complete (recomputed only when the latest
+    // itself completes). UpdateActivePlayback compares against this field instead
+    // of scanning _activePlaybacks.Keys.Max() per update.
+    private long _latestPlaybackId;
 
     public void Dispose()
     {
@@ -35,9 +44,11 @@ public sealed class PlaybackCoordinator(
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var playback in _activePlaybacks.Values) playback.Telemetry?.Dispose();
+            foreach (var playback in _activePlaybacks.Values)
+                TryDisposeTelemetry(playback.Telemetry, playback.Id, "coordinator disposed");
             _activePlaybacks.Clear();
-            ClearPresenceQuietly();
+            _latestPlaybackId = 0;
+            TryClearPresence("coordinator disposed");
         }
     }
 
@@ -53,9 +64,10 @@ public sealed class PlaybackCoordinator(
         {
             if (_disposed) return 0;
             var id = ++_nextPlaybackId;
-            var telemetry = StartTelemetryQuietly(request);
+            var telemetry = TryStartTelemetry(request, id);
             var playback = new ActivePlayback(id, request, telemetry);
             _activePlaybacks.Add(id, playback);
+            _latestPlaybackId = id;
             return id;
         }
     }
@@ -68,9 +80,9 @@ public sealed class PlaybackCoordinator(
             if (_disposed || !_activePlaybacks.TryGetValue(playbackId, out var playback)) return;
 
             playback.State = state;
-            SetTelemetryQuietly(playback.Telemetry, state);
+            TryUpdateTelemetry(playback.Telemetry, state, playbackId);
 
-            if (_activePlaybacks.Keys.Max() == playbackId) SetPresenceQuietly(playback.Request, state);
+            if (playbackId == _latestPlaybackId) TrySetPresence(playback.Request, state, playbackId);
         }
     }
 
@@ -80,16 +92,17 @@ public sealed class PlaybackCoordinator(
         {
             if (_disposed || !_activePlaybacks.Remove(playbackId, out var completedPlayback)) return;
 
-            var wasMostRecent = _activePlaybacks.Count == 0 || _activePlaybacks.Keys.Max() < playbackId;
-            completedPlayback.Telemetry?.Dispose();
+            var wasMostRecent = playbackId == _latestPlaybackId;
+            TryDisposeTelemetry(completedPlayback.Telemetry, playbackId, "playback completed");
 
             if (!wasMostRecent) return;
 
             var currentPlayback = _activePlaybacks.Values.MaxBy(playback => playback.Id);
+            _latestPlaybackId = currentPlayback?.Id ?? 0;
             if (currentPlayback?.State is { } state)
-                SetPresenceQuietly(currentPlayback.Request, state);
+                TrySetPresence(currentPlayback.Request, state, currentPlayback.Id);
             else
-                ClearPresenceQuietly();
+                TryClearPresence($"playback {playbackId} completed");
         }
     }
 
@@ -126,55 +139,76 @@ public sealed class PlaybackCoordinator(
         return new PlaybackRequest(newVideos.IsDefault ? ImmutableArray<VideoSummary>.Empty : newVideos);
     }
 
-    private IYouTubePlaybackTelemetrySession? StartTelemetryQuietly(PlaybackRequest request)
+    private IYouTubePlaybackTelemetrySession? TryStartTelemetry(PlaybackRequest request, long playbackId)
     {
         if (playbackTelemetry is null) return null;
         try
         {
             return playbackTelemetry.Start(request);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Warning(ex, "Failed to start playback telemetry for playback {PlaybackId}", playbackId);
             return null;
         }
     }
 
-    private static void SetTelemetryQuietly(IYouTubePlaybackTelemetrySession? telemetry, PlaybackPresenceState state)
+    private void TryUpdateTelemetry(
+        IYouTubePlaybackTelemetrySession? telemetry,
+        PlaybackPresenceState state,
+        long playbackId)
     {
         if (telemetry is null) return;
         try
         {
             telemetry.UpdateState(state);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Logger.Warning(ex, "Failed to update playback telemetry for playback {PlaybackId}", playbackId);
         }
     }
 
-    private void SetPresenceQuietly(PlaybackRequest request, PlaybackPresenceState state)
+    private void TrySetPresence(PlaybackRequest request, PlaybackPresenceState state, long playbackId)
     {
         if (playbackPresence is null) return;
         try
         {
             playbackPresence.SetPlaybackState(request, state);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Logger.Warning(ex, "Failed to set playback presence for playback {PlaybackId}", playbackId);
         }
     }
 
-    private void ClearPresenceQuietly()
+    private void TryClearPresence(string reason)
     {
         if (playbackPresence is null) return;
         try
         {
             playbackPresence.Clear();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Logger.Warning(ex, "Failed to clear playback presence ({Reason})", reason);
+        }
+    }
+
+    private static void TryDisposeTelemetry(
+        IYouTubePlaybackTelemetrySession? telemetry,
+        long playbackId,
+        string operation)
+    {
+        if (telemetry is null) return;
+        try
+        {
+            telemetry.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to dispose playback telemetry for playback {PlaybackId} ({Operation})",
+                playbackId, operation);
         }
     }
 

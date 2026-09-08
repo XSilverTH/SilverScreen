@@ -88,8 +88,8 @@ public sealed class ExternalMpvPlaybackService(
             if (started is null)
             {
                 Logger.Warning("MPV process start returned no process");
-                CleanupCookieLeaseQuietly(cookieFile, "MPV start returned no process");
-                CleanupIpcDirectoryQuietly(ipcDirectory);
+                CleanupCookieLease(cookieFile, "MPV start returned no process");
+                CleanupIpcDirectory(ipcDirectory);
                 return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
             }
 
@@ -109,29 +109,29 @@ public sealed class ExternalMpvPlaybackService(
         catch (Win32Exception ex)
         {
             Logger.Warning(ex, "MPV process start failed");
-            CleanupCookieLeaseQuietly(cookieFile, "MPV executable start failed");
-            CleanupIpcDirectoryQuietly(ipcDirectory);
+            CleanupCookieLease(cookieFile, "MPV executable start failed");
+            CleanupIpcDirectory(ipcDirectory);
             return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
         }
         catch (InvalidOperationException ex)
         {
             Logger.Warning(ex, "MPV playback request rejected");
-            CleanupCookieLeaseQuietly(cookieFile, "MPV playback request rejected");
-            CleanupIpcDirectoryQuietly(ipcDirectory);
+            CleanupCookieLease(cookieFile, "MPV playback request rejected");
+            CleanupIpcDirectory(ipcDirectory);
             return ex.Message;
         }
         catch (IOException ex)
         {
             Logger.Warning(ex, "MPV temporary file setup failed");
-            CleanupCookieLeaseQuietly(cookieFile, "MPV temporary file setup failed");
-            CleanupIpcDirectoryQuietly(ipcDirectory);
+            CleanupCookieLease(cookieFile, "MPV temporary file setup failed");
+            CleanupIpcDirectory(ipcDirectory);
             return "Could not prepare temporary files for MPV playback. Try again.";
         }
         catch (UnauthorizedAccessException ex)
         {
             Logger.Warning(ex, "MPV temporary file setup denied");
-            CleanupCookieLeaseQuietly(cookieFile, "MPV temporary file setup denied");
-            CleanupIpcDirectoryQuietly(ipcDirectory);
+            CleanupCookieLease(cookieFile, "MPV temporary file setup denied");
+            CleanupIpcDirectory(ipcDirectory);
             return "Could not prepare temporary files for MPV playback. Try again.";
         }
     }
@@ -200,7 +200,7 @@ public sealed class ExternalMpvPlaybackService(
         }
         finally
         {
-            CleanupCookieLeaseQuietly(cookieFileLease, "MPV process exited");
+            CleanupCookieLease(cookieFileLease, "MPV process exited");
             try
             {
                 process?.Dispose();
@@ -229,7 +229,7 @@ public sealed class ExternalMpvPlaybackService(
         }
     }
 
-    private static void CleanupCookieLeaseQuietly(IDisposable? cookieFileLease, string reason)
+    private static void CleanupCookieLease(IDisposable? cookieFileLease, string reason)
     {
         if (cookieFileLease is null) return;
         try
@@ -277,7 +277,7 @@ public sealed class ExternalMpvPlaybackService(
             || argument.StartsWith("--cookies-file=", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void CleanupIpcDirectoryQuietly(DirectoryInfo? directory)
+    private static void CleanupIpcDirectory(DirectoryInfo? directory)
     {
         if (directory is null) return;
         try

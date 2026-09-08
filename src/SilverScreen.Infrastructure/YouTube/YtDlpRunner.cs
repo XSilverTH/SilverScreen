@@ -151,7 +151,7 @@ public sealed class YtDlpRunner : IYtDlpRunner
             Logger.Debug(ex, "Bounded wait for killed yt-dlp process did not complete cleanly");
         }
 
-        if (!HasExitedQuietly(process))
+        if (!TryHasExited(process))
             Logger.Warning("yt-dlp process did not exit within {GraceSeconds}s of kill",
                 KillGracePeriod.TotalSeconds);
 
@@ -171,7 +171,7 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
     }
 
-    private static bool HasExitedQuietly(Process process)
+    private static bool TryHasExited(Process process)
     {
         try
         {
@@ -179,7 +179,7 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Could not query yt-dlp process exit state");
+            Logger.Warning(ex, "Could not query yt-dlp process exit state");
             return false;
         }
     }
