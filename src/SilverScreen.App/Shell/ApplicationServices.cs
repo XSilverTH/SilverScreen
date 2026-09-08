@@ -31,40 +31,8 @@ using SilverScreen.Player;
 
 namespace SilverScreen.Shell;
 
-/// <summary>Provides the services consumed by the application shell.</summary>
-public sealed class ApplicationServices(
-    IPreferencesService preferences,
-    IQueueService queue,
-    ISessionService session,
-    IAccountProfileService accountProfile,
-    IPlaybackService playback,
-    ISearchService search,
-    ISearchSuggestionService searchSuggestions,
-    IChannelService channels,
-    IThumbnailService thumbnails,
-    HomeFeedCoordinator homeFeed,
-    IAuthenticatedHistoryService history,
-    IAuthenticatedSubscriptionsService subscriptions,
-    RuntimeDependencyDiagnostics runtimeDependencyDiagnostics,
-    PlayerDependencies player)
-{
-    public IPreferencesService Preferences { get; } = preferences;
-    public IQueueService Queue { get; } = queue;
-    public ISessionService Session { get; } = session;
-    public IAccountProfileService AccountProfile { get; } = accountProfile;
-    public IPlaybackService Playback { get; } = playback;
-    public ISearchService Search { get; } = search;
-    public ISearchSuggestionService SearchSuggestions { get; } = searchSuggestions;
-    public IChannelService Channels { get; } = channels;
-    public IThumbnailService Thumbnails { get; } = thumbnails;
-    public HomeFeedCoordinator HomeFeed { get; } = homeFeed;
-    public IAuthenticatedHistoryService History { get; } = history;
-    public IAuthenticatedSubscriptionsService Subscriptions { get; } = subscriptions;
-    public RuntimeDependencyDiagnostics RuntimeDependencyDiagnostics { get; } = runtimeDependencyDiagnostics;
-    public PlayerDependencies Player { get; } = player;
-}
+/// <summary>Narrow facade over browsing services consumed by the application shell.</summary>
 
-/// <summary>Narrow facade over browsing services (additive; <see cref="ApplicationServices" /> stays canonical).</summary>
 public sealed record BrowsingServices(
     ISearchService Search,
     ISearchSuggestionService SearchSuggestions,
@@ -74,7 +42,7 @@ public sealed record BrowsingServices(
     IAuthenticatedHistoryService History,
     IAuthenticatedSubscriptionsService Subscriptions);
 
-/// <summary>Narrow facade over account/session services (additive; <see cref="ApplicationServices" /> stays canonical).</summary>
+/// <summary>Narrow facade over account/session services consumed by the application shell.</summary>
 public sealed record AccountServices(
     ISessionService Session,
     IAccountProfileService AccountProfile,
@@ -115,8 +83,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<IYouTubePlaybackProgressService, YoutubeApiPlaybackProgressService>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
-        // yt-dlp runner and media resolver are retained as a dormant fallback / direct extraction pipeline
-        // (mpv handles primary playback extraction internally via ytdl_hook.lua).
+        // yt-dlp runner and media resolver back the mpv fallback path: when mpv exits fast
+        // with a non-zero code, the playback service resolves direct media URLs and relaunches once.
         services.AddSingleton<IYtDlpRunner, YtDlpRunner>();
         services.AddSingleton<ISearchService, YoutubeApiSearchService>();
         services.AddSingleton<ISearchSuggestionService, YoutubeApiSearchSuggestionService>();
@@ -148,7 +116,6 @@ public static class ApplicationServiceCollectionExtensions
             provider.GetRequiredService<IPreferencesService>(),
             provider.GetRequiredService<IQueueService>()));
         services.AddSingleton<PlayerDependencies>();
-        services.AddSingleton<ApplicationServices>();
         return services;
     }
 }

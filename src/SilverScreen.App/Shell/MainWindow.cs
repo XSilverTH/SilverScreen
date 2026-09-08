@@ -14,6 +14,7 @@ using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
 using SilverScreen.Player.Views;
 using SilverScreen.Queue;
@@ -50,46 +51,53 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly SearchPopoverView _searchPopover;
     private readonly VideoListView _searchView;
     private readonly SearchViewModel _searchViewModel;
-    private readonly ApplicationServices _services;
+    private readonly AccountServices _account;
+    private readonly RuntimeDependencyDiagnostics _diagnostics;
     private readonly SubscriptionsView _subscriptions;
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private bool _closed;
     private WebLoginWindow? _webLogin;
 
-    public MainWindow(ApplicationServices services, Action disposeApplicationServices)
+    public MainWindow(
+        BrowsingServices browsing,
+        AccountServices account,
+        IPlaybackService playback,
+        PlayerDependencies player,
+        RuntimeDependencyDiagnostics diagnostics,
+        Action disposeApplicationServices)
     {
         Logger.Information("Initializing MainWindow");
-        _services = services;
+        _account = account;
+        _diagnostics = diagnostics;
         _disposeApplicationServices = disposeApplicationServices;
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
             video => OpenChannelAsync(video).FireAndForget(Logger),
             video => PlayVideoAsync(video).FireAndForget(Logger),
             OnSearchSubmitted,
-            services.Player);
-        _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
+            player);
+        _playback = new PlaybackModeRoutingService(account.Preferences, playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
-        _channelViewModel = new ChannelViewModel(services.Channels);
-        _channel = new ChannelView(_channelViewModel, services.Thumbnails, actions);
+        _channelViewModel = new ChannelViewModel(browsing.Channels);
+        _channel = new ChannelView(_channelViewModel, browsing.Thumbnails, actions);
         _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
         channel_host.Append(_channel.Widget);
-        _ = services.HomeFeed.GetVideoListSource(OpenWebLogin);
         _home = new VideoListView(
-            services.HomeFeed,
-            services.Thumbnails,
+            browsing.HomeFeed.GetVideoListSource(OpenWebLogin),
+            browsing.Thumbnails,
             actions);
         _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
-        _historyViewModel = new HistoryViewModel(services.History, services.Session, OpenWebLogin);
-        _history = new VideoListView(_historyViewModel, services.Thumbnails, actions);
+        _historyViewModel = new HistoryViewModel(browsing.History, account.Session, OpenWebLogin);
+        _history = new VideoListView((IVideoListSource)_historyViewModel, browsing.Thumbnails, actions);
         _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
         _subscriptionsViewModel = new SubscriptionsViewModel(
-            services.Subscriptions,
-            services.Channels,
-            services.Session,
+            browsing.Subscriptions,
+            browsing.Channels,
+            account.Session,
             true);
         _subscriptions = new SubscriptionsView(
             _subscriptionsViewModel,
-            services.Thumbnails,
+            browsing.Thumbnails,
             actions,
             OpenWebLogin,
             (url, name) =>
@@ -100,7 +108,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
         UpdateHomeRefreshButton(_home.IsLoading);
-        _searchViewModel = new SearchViewModel(services.Search, _playback, services.SearchSuggestions);
+        _searchViewModel = new SearchViewModel(browsing.Search, _playback, browsing.SearchSuggestions);
         _searchViewModel.OpenChannelRequested = channelTarget =>
             OpenChannelAsync(new VideoSummary("", "", channelTarget, TimeSpan.Zero, "", false, "", null, null,
                 channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase)
@@ -115,17 +123,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 _searchPopover.OnOpened();
         };
 
-        _searchView = new VideoListView(_searchViewModel, services.Thumbnails, actions);
+        _searchView = new VideoListView((IVideoListSource)_searchViewModel, browsing.Thumbnails, actions);
         _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
         search_host.Append(_searchView.Widget);
-        _queueViewModel = new QueueViewModel(services.Queue, _playback);
-        _queueView = new QueueView(_queueViewModel, services.Thumbnails, CloseQueue);
+        _queueViewModel = new QueueViewModel(account.Queue, _playback);
+        _queueView = new QueueView(_queueViewModel, browsing.Thumbnails, CloseQueue);
         queue_sidebar_host.Append(_queueView.Widget);
         _queueView.PlayFailed += OnQueuePlayFailed;
-        _accountViewModel = new AccountViewModel(services.AccountProfile, services.Session);
+        _accountViewModel = new AccountViewModel(account.AccountProfile, account.Session);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
-            services.Thumbnails,
+            browsing.Thumbnails,
             OpenWebLogin,
             UpdateAccountAppearance);
 
@@ -133,7 +141,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         view_switcher_bar.Stack = view_stack;
         view_switcher_title.BindProperty("title-visible", view_switcher_bar, "reveal", BindingFlags.SyncCreate);
 
-        var startupPrefs = services.Preferences.GetPreferences();
+        var startupPrefs = account.Preferences.GetPreferences();
         if (startupPrefs.WindowWidth > 0 && startupPrefs.WindowHeight > 0)
             Widget.SetDefaultSize(startupPrefs.WindowWidth, startupPrefs.WindowHeight);
         if (startupPrefs.WindowMaximized)
@@ -205,7 +213,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
             AddToQueue = video =>
             {
-                _services.Queue.Add(video);
+                _account.Queue.Add(video);
                 ShowToast($"Added “{video.Title}” to queue");
             },
             OpenChannelAsync = OpenChannelAsync
@@ -313,7 +321,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OpenEmbeddedPlayer()
     {
         _navigationService.NavigateTo(NavigationPage.Player);
-        if (_services.Preferences.GetPreferences().OpenInFullscreen)
+        if (_account.Preferences.GetPreferences().OpenInFullscreen)
             Widget.Fullscreen();
     }
 
@@ -325,7 +333,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void ReportStartupDependencyWarnings()
     {
-        var warnings = _services.RuntimeDependencyDiagnostics.GetStartupWarnings();
+        var warnings = _diagnostics.GetStartupWarnings();
         if (warnings.Count == 0)
             return;
 
@@ -493,7 +501,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void ShowPreferences()
     {
-        var preferencesDialogWrapper = new PreferencesDialog(_services.Preferences);
+        var preferencesDialogWrapper = new PreferencesDialog(_account.Preferences);
         preferencesDialogWrapper.SaveFailed += OnPreferencesSaveFailed;
         preferencesDialogWrapper.Widget.Present(Widget);
     }
@@ -664,7 +672,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_closed) return false;
         _closed = true;
 
-        var prefs = _services.Preferences.GetPreferences();
+        var prefs = _account.Preferences.GetPreferences();
         var isMaximized = Widget.Maximized;
         prefs.WindowMaximized = isMaximized;
         if (!isMaximized)
@@ -677,7 +685,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             }
         }
 
-        _services.Preferences.SavePreferences(prefs);
+        _account.Preferences.SavePreferences(prefs);
         _playback.PlaybackStateChanged -= OnPlaybackStateChanged;
         _navigationService.PageChanged -= OnNavigationPageChanged;
         _navigationService.Dispose();

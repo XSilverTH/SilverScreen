@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Account.Profile;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player;
 using SilverScreen.Shell;
@@ -11,7 +12,7 @@ namespace SilverScreen.Tests.Common;
 public sealed class ApplicationCompositionTests
 {
     [Fact]
-    public void CreateServiceProvider_ValidatesOnBuildAndResolvesApplicationServices()
+    public void CreateServiceProvider_ValidatesOnBuildAndResolvesFacades()
     {
         var configuration = new ApplicationConfiguration
         {
@@ -20,24 +21,25 @@ public sealed class ApplicationCompositionTests
 
         using var provider = ApplicationComposition.CreateServiceProvider(configuration);
 
-        var services = provider.GetRequiredService<ApplicationServices>();
-        Assert.NotNull(services);
-        Assert.NotNull(services.Preferences);
-        Assert.NotNull(services.Queue);
-        Assert.NotNull(services.Session);
-        Assert.NotNull(services.AccountProfile);
-        Assert.NotNull(services.Playback);
-        Assert.NotNull(services.Search);
-        Assert.NotNull(services.SearchSuggestions);
-        Assert.NotNull(services.Channels);
-        Assert.NotNull(services.Thumbnails);
-        Assert.NotNull(services.HomeFeed);
-        Assert.NotNull(services.History);
-        Assert.NotNull(services.Subscriptions);
-        Assert.NotNull(services.RuntimeDependencyDiagnostics);
+        var browsing = provider.GetRequiredService<BrowsingServices>();
+        Assert.NotNull(browsing.Search);
+        Assert.NotNull(browsing.SearchSuggestions);
+        Assert.NotNull(browsing.Channels);
+        Assert.NotNull(browsing.Thumbnails);
+        Assert.NotNull(browsing.HomeFeed);
+        Assert.NotNull(browsing.History);
+        Assert.NotNull(browsing.Subscriptions);
 
-        var player = services.Player;
-        Assert.NotNull(player);
+        var account = provider.GetRequiredService<AccountServices>();
+        Assert.NotNull(account.Preferences);
+        Assert.NotNull(account.Queue);
+        Assert.NotNull(account.Session);
+        Assert.NotNull(account.AccountProfile);
+
+        Assert.NotNull(provider.GetRequiredService<IPlaybackService>());
+        Assert.NotNull(provider.GetRequiredService<RuntimeDependencyDiagnostics>());
+
+        var player = provider.GetRequiredService<PlayerDependencies>();
         Assert.NotNull(player.Preferences);
         Assert.NotNull(player.CookieFiles);
         Assert.NotNull(player.PlaybackPresence);

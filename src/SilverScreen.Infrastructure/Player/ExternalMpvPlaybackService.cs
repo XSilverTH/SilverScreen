@@ -5,20 +5,25 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Infrastructure.Player;
 
 public sealed class ExternalMpvPlaybackService(
     IPreferencesService preferencesService,
-    PlaybackCoordinator playbackCoordinator)
+    PlaybackCoordinator playbackCoordinator,
+    YtDlpMediaResolver? mediaResolver = null)
     : IPlaybackService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<ExternalMpvPlaybackService>();
+    private static readonly TimeSpan YtdlHookFailureWindow = TimeSpan.FromSeconds(15);
     private readonly Dictionary<long, MpvIpcPlaybackObserver> _activeObservers = [];
     private readonly Lock _activeObserversLock = new();
 
     private readonly PlaybackCoordinator _coordinator =
         playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
+
+    private readonly YtDlpMediaResolver? _mediaResolver = mediaResolver;
 
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
@@ -29,10 +34,12 @@ public sealed class ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
         ICookieFileProvider? cookieFileProvider = null,
         IPlaybackPresenceService? playbackPresenceService = null,
-        IYouTubePlaybackTelemetryService? playbackTelemetryService = null)
+        IYouTubePlaybackTelemetryService? playbackTelemetryService = null,
+        YtDlpMediaResolver? mediaResolver = null)
         : this(
             preferencesService,
-            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService))
+            new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService),
+            mediaResolver)
     {
     }
 
@@ -51,16 +58,27 @@ public sealed class ExternalMpvPlaybackService(
 
     /// <summary>
     ///     Launches external mpv with the FULL queue snapshot as watch URLs plus cookie lease,
-    ///     ytdl-format, and IPC endpoint. mpv+yt-dlp fetch formats and advance the playlist;
-    ///     resolved direct URLs are never used here. Returns a status string, never throws for
-    ///     empty requests or temporary-file failures (only ArgumentNullException for a null request).
+    ///     ytdl-format, and IPC endpoint. mpv+yt-dlp fetch formats and advance the playlist.
+    ///     If mpv exits fast with a non-zero code (ytdl_hook extraction failure), the current
+    ///     video is resolved once via <see cref="YtDlpMediaResolver.TryResolveAsFallbackAsync" />
+    ///     and mpv is relaunched a single time with the direct media URLs. Returns a status
+    ///     string, never throws for empty requests or temporary-file failures (only
+    ///     ArgumentNullException for a null request).
     /// </summary>
-    public async Task<string> PlayAsync(PlaybackRequest request)
+    public Task<string> PlayAsync(PlaybackRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Videos.IsDefaultOrEmpty)
-            return PlaybackRequest.EmptyQueueMessage;
+            return Task.FromResult(PlaybackRequest.EmptyQueueMessage);
 
+        return LaunchMpvAsync(request, isFallbackRetry: false);
+    }
+
+    private async Task<string> LaunchMpvAsync(
+        PlaybackRequest request,
+        bool isFallbackRetry,
+        IReadOnlyList<string>? extraArguments = null)
+    {
         CookieFileLease? cookieFile = null;
         DirectoryInfo? ipcDirectory = null;
         var activeOptions = GetActiveOptions();
@@ -75,6 +93,8 @@ public sealed class ExternalMpvPlaybackService(
 
             var command =
                 MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint);
+            if (extraArguments is { Count: > 0 })
+                command = command with { Arguments = [..command.Arguments, ..extraArguments] };
             Logger.Information(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; TempCookiesProvided: {TempCookiesProvided}; CookiesOption: {CookiesOption}; VideoCount: {VideoCount}; StartIndex: {StartIndex}",
                 command.ExecutablePath,
@@ -84,6 +104,7 @@ public sealed class ExternalMpvPlaybackService(
                 request.EffectiveStartIndex);
 
             var startInfo = MpvCommandBuilder.BuildStartInfo(command);
+            var launchTimestamp = DateTimeOffset.UtcNow;
             var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
             if (started is null)
             {
@@ -102,7 +123,8 @@ public sealed class ExternalMpvPlaybackService(
             var cookieFileForProcess = cookieFile;
             cookieFile = null;
 
-            ObserveProcessExitAsync(started, cookieFileForProcess, playbackId).FireAndForget(Logger);
+            ObserveProcessExitAsync(started, cookieFileForProcess, playbackId, request, launchTimestamp,
+                isFallbackRetry).FireAndForget(Logger);
 
             return "Opening in MPV.";
         }
@@ -143,7 +165,7 @@ public sealed class ExternalMpvPlaybackService(
         {
             MpvExecutablePath = prefs.MpvExecutablePath,
             YtDlpExecutablePath = prefs.YtDlpExecutablePath,
-            VideoQuality = prefs.VideoQuality,
+            VideoQuality = prefs.Quality.ToPersistedString(),
             MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,
             AutoAdvanceNextVideo = prefs.AutoAdvanceNextVideo,
@@ -212,8 +234,15 @@ public sealed class ExternalMpvPlaybackService(
         }
     }
 
-    private async Task ObserveProcessExitAsync(Process process, IDisposable? cookieFileLease, long playbackId)
+    private async Task ObserveProcessExitAsync(
+        Process process,
+        IDisposable? cookieFileLease,
+        long playbackId,
+        PlaybackRequest request,
+        DateTimeOffset launchTimestamp,
+        bool isFallbackRetry)
     {
+        int? exitCode;
         try
         {
             await process.WaitForExitAsync().ConfigureAwait(false);
@@ -224,9 +253,61 @@ public sealed class ExternalMpvPlaybackService(
         }
         finally
         {
+            exitCode = TryGetExitCode(process);
             CompleteActivePlayback(playbackId);
             HandleProcessExited(process, cookieFileLease);
         }
+
+        await MaybeRetryWithFallbackAsync(request, exitCode, launchTimestamp, isFallbackRetry)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Single-shot recovery for mpv ytdl_hook extraction failures: a fast non-zero exit means
+    ///     mpv never started playing, so the current video is resolved once via
+    ///     <see cref="YtDlpMediaResolver.TryResolveAsFallbackAsync" /> and mpv is relaunched with
+    ///     the direct media URLs through the same launch path (fresh cookie lease and IPC
+    ///     directory, cleaned up exactly like the initial launch). The retry never retries itself.
+    ///     Never throws.
+    /// </summary>
+    private async Task MaybeRetryWithFallbackAsync(
+        PlaybackRequest request,
+        int? exitCode,
+        DateTimeOffset launchTimestamp,
+        bool isFallbackRetry)
+    {
+        if (isFallbackRetry || exitCode is null or 0)
+            return;
+        if (DateTimeOffset.UtcNow - launchTimestamp > YtdlHookFailureWindow)
+            return;
+        if (_mediaResolver is null)
+        {
+            Logger.Debug("Skipping MPV fallback retry: no media resolver configured");
+            return;
+        }
+        if (request.Videos.IsDefaultOrEmpty)
+            return;
+
+        var video = request.Videos[request.EffectiveStartIndex];
+        Logger.Warning("MPV exited quickly with code {ExitCode}; attempting yt-dlp fallback for {VideoId}",
+            exitCode, video.Id);
+
+        var fallback = await _mediaResolver.TryResolveAsFallbackAsync(video.Id).ConfigureAwait(false);
+        var media = fallback.IsSuccess ? fallback.Media : null;
+        if (string.IsNullOrWhiteSpace(media?.VideoUrl))
+        {
+            Logger.Warning("MPV fallback resolution failed: {Status}", fallback.StatusMessage);
+            return;
+        }
+
+        Logger.Information("MPV fallback resolved direct media for {VideoId}; relaunching once", video.Id);
+        var retryRequest = new PlaybackRequest([video with { WatchUrl = media.VideoUrl }]);
+        IReadOnlyList<string>? extraArguments = string.IsNullOrWhiteSpace(media.AudioUrl)
+            ? null
+            : [$"--audio-file={media.AudioUrl}"];
+        var status = await LaunchMpvAsync(retryRequest, isFallbackRetry: true, extraArguments: extraArguments)
+            .ConfigureAwait(false);
+        Logger.Information("MPV fallback relaunch finished: {Status}", status);
     }
 
     private static void CleanupCookieLease(IDisposable? cookieFileLease, string reason)

@@ -18,7 +18,7 @@ public sealed class VideoListSourceTests
         var presentation = HomeVideoListSource.MapState(state);
 
         Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("Sign in to see your YouTube recommendations.", presentation.Status.Description);
+        Assert.Equal("Sign in with Google or use cookies.txt to see your Home feed.", presentation.Status.Description);
         Assert.Equal("avatar-default-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
         Assert.False(presentation.IsLoading);
@@ -67,7 +67,7 @@ public sealed class VideoListSourceTests
         var presentation = HomeVideoListSource.MapState(state);
 
         Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("Your YouTube session is no longer valid.", presentation.Status.Description);
+        Assert.Equal("Your YouTube sign-in is no longer valid.", presentation.Status.Description);
         Assert.Equal("dialog-password-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
     }
@@ -152,7 +152,7 @@ public sealed class VideoListSourceTests
         var presentation = HistoryVideoListSource.MapState(state);
 
         Assert.Equal("Sign in to see history", presentation.Status.Title);
-        Assert.Equal("Watch history requires an active YouTube session.", presentation.Status.Description);
+        Assert.Equal("Sign in with Google or use cookies.txt to see your watch history.", presentation.Status.Description);
         Assert.Equal("avatar-default-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
         Assert.Equal("Loading more history…", presentation.PaginationLoadingMessage);

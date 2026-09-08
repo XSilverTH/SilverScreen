@@ -5,6 +5,10 @@ using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using SilverScreen.Core.Player;
+using SilverScreen.Infrastructure.Common;
+using SilverScreen.Player;
+using SilverScreen.Core.Preferences;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
@@ -40,21 +44,28 @@ public partial class App
 
     private void Activate(Gio.Application sender, EventArgs args)
     {
-        var services = _serviceProvider?.GetRequiredService<ApplicationServices>()
-                       ?? throw new InvalidOperationException("Application services have not been configured.");
+        if (_serviceProvider is null)
+            throw new InvalidOperationException("Application services have not been configured.");
 
         InstallStyles();
-        ApplyTheme(services.Preferences.GetPreferences().Theme);
-        services.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.Theme);
+        var account = _serviceProvider.GetRequiredService<AccountServices>();
+        ApplyTheme(account.Preferences.GetPreferences().ThemeMode);
+        account.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.ThemeMode);
 
-        var mainWindowWrapper = new MainWindow(services, DisposeServices);
+        var mainWindowWrapper = new MainWindow(
+            _serviceProvider.GetRequiredService<BrowsingServices>(),
+            account,
+            _serviceProvider.GetRequiredService<IPlaybackService>(),
+            _serviceProvider.GetRequiredService<PlayerDependencies>(),
+            _serviceProvider.GetRequiredService<RuntimeDependencyDiagnostics>(),
+            DisposeServices);
         var mainWindow = mainWindowWrapper.Widget;
         mainWindow.Application = this;
         AddWindow(mainWindow);
         mainWindow.Present();
     }
 
-    private static void ApplyTheme(string theme)
+    private static void ApplyTheme(ThemeMode theme)
     {
         if (Display.GetDefault() is null)
         {
@@ -67,8 +78,8 @@ public partial class App
             var styleManager = StyleManager.GetDefault();
             styleManager.ColorScheme = theme switch
             {
-                "Light" => ColorScheme.PreferLight,
-                "Dark" => ColorScheme.PreferDark,
+                ThemeMode.Light => ColorScheme.PreferLight,
+                ThemeMode.Dark => ColorScheme.PreferDark,
                 _ => ColorScheme.Default
             };
             return false;

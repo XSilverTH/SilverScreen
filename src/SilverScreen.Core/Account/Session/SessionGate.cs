@@ -14,9 +14,8 @@ namespace SilverScreen.Core.Account.Session;
 ///     <see cref="RequireSignedIn" /> is the only session predicate and the
 ///     constants below are the only message source.
 ///     The predicate is fail-closed: a null service never counts as signed in.
-///     The presentation fallbacks keep their pre-migration wording so Wave 1
-///     changes no user-visible text; unifying them with the plain-language gate
-///     strings is a follow-up.
+///     The presentation fallbacks reuse the gate strings directly so feed surfaces
+///     can never drift from the service messages again.
 /// </summary>
 public static class SessionGate
 {
@@ -34,18 +33,13 @@ public static class SessionGate
     public const string HistoryServiceAuthenticationRequiredMessage = "Sign in to YouTube to load your watch history.";
     public const string ServiceAuthenticationRejectedMessage = "The YouTube session was rejected or has expired.";
 
-    public const string HomePresentationSignedOutMessage = "Sign in to see your YouTube recommendations.";
-    public const string HomePresentationAuthInvalidMessage = "Your YouTube session is no longer valid.";
-
     public const string HistorySignedOutTitle = "Sign in to see history";
-    public const string HistoryPresentationSignedOutMessage = "Watch history requires an active YouTube session.";
     public const string HistoryErrorTitle = "Could not load history";
     public const string HistoryErrorMessage = "Failed to load your watch history. Check your network connection and try again.";
     public const string HistoryEmptyTitle = "No watch history";
     public const string HistoryEmptyMessage = "Videos you watch on YouTube will appear here.";
 
     public const string SubscriptionsSignedOutTitle = "Sign in to see subscriptions";
-    public const string SubscriptionsPresentationSignedOutMessage = "Subscriptions feed requires an active YouTube session.";
     public const string SubscriptionsErrorTitle = "Could not load subscriptions";
     public const string SubscriptionsErrorMessage = "Failed to load your subscriptions. Check your network connection and try again.";
     public const string SubscriptionsEmptyTitle = "No subscriptions";

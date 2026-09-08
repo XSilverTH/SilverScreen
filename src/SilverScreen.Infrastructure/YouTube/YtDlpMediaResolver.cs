@@ -15,20 +15,10 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///     and parsing adaptive/muxed format payloads.
 /// </summary>
 /// <remarks>
-///     Primary playback delegates extraction to mpv's internal <c>ytdl_hook.lua</c>; this resolver is the
-///     fallback/direct-extraction pipeline (out-of-process recovery, offline tooling, URL inspection).
-///     <see cref="GetVideoDetailsAsync" /> also feeds UI metadata (info/stats panel).
-///     Wave-2 wiring: inject <see cref="IYouTubeMediaResolver" /> into the mpv playback service and call
-///     <see cref="TryResolveAsFallbackAsync" /> when ytdl_hook fails (snippet below).
-///     <example>
-///     <code>
-///     var fallback = await mediaResolver.TryResolveAsFallbackAsync(videoId, cancellationToken);
-///     if (fallback.IsSuccess &amp;&amp; fallback.Media?.VideoUrl is { } directUrl)
-///         command = MpvCommandBuilder.BuildForDirectUrl(command, directUrl, fallback.Media.AudioUrl);
-///     else
-///         return fallback.StatusMessage;
-///     </code>
-///     </example>
+///     Primary playback delegates extraction to mpv's internal <c>ytdl_hook.lua</c>. When mpv exits
+///     fast with a non-zero code, <c>ExternalMpvPlaybackService</c> calls
+///     <see cref="TryResolveAsFallbackAsync" /> once and relaunches mpv with the resolved direct
+///     media URLs. <see cref="GetVideoDetailsAsync" /> also feeds UI metadata (info/stats panel).
 /// </remarks>
 public sealed class YtDlpMediaResolver(
     ICookieFileProvider cookieFileProvider,
@@ -78,7 +68,7 @@ public sealed class YtDlpMediaResolver(
         if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
             return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
 
-        var quality = preferredQuality ?? _preferencesService.GetPreferences().VideoQuality;
+        var quality = preferredQuality ?? _preferencesService.GetPreferences().Quality.ToPersistedString();
 
         // Details-only entries carry no yt-dlp payload and must never satisfy media resolve.
         // They are a media-miss here; the fresh fetch below re-resolves via yt-dlp.

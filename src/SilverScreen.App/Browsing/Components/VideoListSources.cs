@@ -49,11 +49,11 @@ public sealed class HomeVideoListSource : IVideoListSource
     {
         var (description, icon) = state.Kind switch
         {
-            HomeFeedStateKind.SignedOut => (SessionGate.HomePresentationSignedOutMessage,
+            HomeFeedStateKind.SignedOut => (SessionGate.HomeSignedOutMessage,
                 "avatar-default-symbolic"),
             HomeFeedStateKind.Empty or HomeFeedStateKind.Ready => (SessionGate.HomeEmptyMessage,
                 "applications-internet-symbolic"),
-            HomeFeedStateKind.AuthenticationRequired => (SessionGate.HomePresentationAuthInvalidMessage,
+            HomeFeedStateKind.AuthenticationRequired => (SessionGate.SessionNoLongerValidMessage,
                 "dialog-password-symbolic"),
             _ => (SessionGate.HomeLoadErrorMessage, "network-error-symbolic")
         };
@@ -256,7 +256,7 @@ public sealed class HistoryVideoListSource : IVideoListSource
                     SessionGate.HistorySignedOutTitle,
                     !string.IsNullOrWhiteSpace(summary)
                         ? summary
-                        : SessionGate.HistoryPresentationSignedOutMessage,
+                        : SessionGate.HistorySignedOutMessage,
                     "avatar-default-symbolic"),
 
             AuthenticatedHistoryStatus.TemporaryBackendFailure =>
@@ -450,7 +450,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                     SessionGate.SubscriptionsSignedOutTitle,
                     !string.IsNullOrWhiteSpace(state.Summary)
                         ? state.Summary
-                        : SessionGate.SubscriptionsPresentationSignedOutMessage,
+                        : SessionGate.SubscriptionsSignedOutMessage,
                     "avatar-default-symbolic",
                     false,
                     SessionGate.SignInActionLabel,
