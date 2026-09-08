@@ -5,20 +5,21 @@ using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Home;
+
 namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
-/// Persists the manual YouTube session in Secret Service. Construction performs a single
-/// synchronous restore of any stored session (fail-closed to unavailable, never throws);
-/// all later keyring access happens only on explicit save/clear calls, never on hot paths.
+///     Persists the manual YouTube session in Secret Service. Construction performs a single
+///     synchronous restore of any stored session (fail-closed to unavailable, never throws);
+///     all later keyring access happens only on explicit save/clear calls, never on hot paths.
 /// </summary>
 public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability, IDisposable
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
-    private readonly Func<IAccountProfileService>? _profileServiceFactory;
     private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly Lock _gate = new();
+    private readonly Func<IAccountProfileService>? _profileServiceFactory;
 
     private readonly ICookieSecretStore _store;
     private readonly string? _tempRoot;
@@ -31,13 +32,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         Func<IAccountProfileService>? profileServiceFactory,
         string? tempRoot = null)
         : this(new LibSecretCookieStore(), profileServiceFactory, null, tempRoot)
-    {
-    }
-
-    public SecretServiceSessionService(
-        Func<IAuthenticatedHomeFeedService>? feedServiceFactory,
-        string? tempRoot = null)
-        : this(new LibSecretCookieStore(), null, feedServiceFactory, tempRoot)
     {
     }
 
@@ -69,17 +63,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             Logger.Debug(exception, "Secret Service startup restoration error details");
             _isAvailable = false;
             _manualCookies = null;
-        }
-    }
-
-    public bool IsValidating
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _isValidating;
-            }
         }
     }
 
@@ -282,7 +265,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     public void ClearSession()
     {
         CancelValidation();
-        bool changed = false;
+        bool changed;
         try
         {
             lock (_gate)
@@ -308,7 +291,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 }
                 else
                 {
-                    Logger.Warning(ex, "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
+                    Logger.Warning(ex,
+                        "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
                     _isAvailable = false;
                     changed = true;
                     _manualCookies = null;

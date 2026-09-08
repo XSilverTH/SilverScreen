@@ -3,10 +3,9 @@ using GObject;
 using Serilog;
 using SilverScreen.Account.Profile;
 using SilverScreen.Core.Common;
-using SilverScreen.Infrastructure.YouTube;
-using YoutubeAPI;
 using WebKit;
 using XSTH.Blueprint.Helpers;
+using YoutubeAPI;
 using Functions = GLib.Functions;
 using Window = Adw.Window;
 
@@ -24,19 +23,31 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     private static readonly ILogger Logger = Log.ForContext<WebLoginWindow>();
 
+    private static readonly HashSet<string> CompanionCookieNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "LOGIN_INFO",
+            "SID",
+            "SSID",
+            "HSID",
+            "__Secure-1PSID",
+            "__Secure-3PSID"
+        };
+
     private readonly AccountViewModel _account;
     private readonly WebLoginCaptureCoordinator _capture;
     private readonly Action _closed;
     private readonly CookieManager _cookieManager;
     private readonly NetworkSession _networkSession;
-    private readonly WebView _webView;
-    private readonly int _uiThreadId;
-    private int _disposeState;
     private readonly ManualResetEventSlim _teardownEvent = new(false);
-    private int _terminalState;
+    private readonly int _uiThreadId;
+    private readonly WebView _webView;
     private bool _closedInvoked;
-    private bool _nativeDisposed;
+    private int _disposeState;
     private bool _loadFinished;
+    private bool _nativeDisposed;
+    private int _terminalState;
+
     internal WebLoginWindow(Gtk.Window parent, AccountViewModel account, Action closed)
     {
         Logger.Information("Opening WebLoginWindow for YouTube authentication");
@@ -75,11 +86,8 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         if (Interlocked.Exchange(ref _disposeState, 1) == 0)
         {
             if (Environment.CurrentManagedThreadId == _uiThreadId)
-            {
                 DisposeOnMainThread();
-            }
             else
-            {
                 Functions.IdleAdd(0, () =>
                 {
                     try
@@ -94,17 +102,14 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
                     return false;
                 });
-            }
         }
 
         // WebKit/GTK natives must be torn down on the UI thread, never on a
         // threadpool thread. Marshal synchronously so the caller never
         // outlives the teardown ordering (capture stopped and native handles disposed).
-        if (Environment.CurrentManagedThreadId != _uiThreadId)
-        {
-            if (!_teardownEvent.Wait(TimeSpan.FromSeconds(10)))
-                Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
-        }
+        if (Environment.CurrentManagedThreadId == _uiThreadId) return;
+        if (!_teardownEvent.Wait(TimeSpan.FromSeconds(10)))
+            Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
     }
 
     private void DisposeOnMainThread()
@@ -152,7 +157,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
         if (stopped.IsCompleted)
         {
-            if (stopped.IsFaulted && stopped.Exception is not null)
+            if (stopped is { IsFaulted: true, Exception: not null })
                 Logger.Warning(stopped.Exception, "WebLoginWindow capture drain faulted during disposal");
             TearDownNativeObjects();
             return;
@@ -163,7 +168,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         _ = stopped.ContinueWith(static (task, state) =>
         {
             var self = (WebLoginWindow)state!;
-            if (task.IsFaulted && task.Exception is not null)
+            if (task is { IsFaulted: true, Exception: not null })
                 Logger.Warning(task.Exception, "WebLoginWindow capture drain faulted during disposal");
             try
             {
@@ -193,16 +198,6 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         return WebView.NewWithProperties(
             [new ConstructArgument("network-session", sessionValue)]);
     }
-
-    private static readonly HashSet<string> CompanionCookieNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "LOGIN_INFO",
-        "SID",
-        "SSID",
-        "HSID",
-        "__Secure-1PSID",
-        "__Secure-3PSID"
-    };
 
     private static bool HasCompanionCookies(IEnumerable<WebCookieSnapshot> snapshots)
     {
@@ -252,14 +247,12 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
     private bool TryPersistSession(string cookieText)
     {
-        if (Volatile.Read(ref _disposeState) != 0)
-            return false;
-
-        // Failed saves return false without touching the stored session, so a
-        // refresh never clears the previous session unless a new capture
-        // succeeds; failures stay retryable while terminal completion below
-        // fires exactly once.
-        return _account.SaveWebSession(cookieText);
+        return Volatile.Read(ref _disposeState) == 0 &&
+               // Failed saves return false without touching the stored session, so a
+               // refresh never clears the previous session unless a new capture
+               // succeeds; failures stay retryable while terminal completion below
+               // fires exactly once.
+               _account.SaveWebSession(cookieText);
     }
 
     private void OnCookieChanged(CookieManager sender, EventArgs args)
@@ -285,24 +278,17 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         }
     }
 
-    private bool OnDecidePolicy(WebView sender, WebView.DecidePolicySignalArgs args)
+    private static bool OnDecidePolicy(WebView sender, WebView.DecidePolicySignalArgs args)
     {
-        if (args.DecisionType is PolicyDecisionType.NavigationAction or PolicyDecisionType.NewWindowAction
-            && args.Decision is NavigationPolicyDecision navDecision)
-        {
-            var uriString = navDecision.GetNavigationAction()?.GetRequest()?.Uri;
-            if (!string.IsNullOrEmpty(uriString) && Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
-            {
-                if (!string.IsNullOrEmpty(uri.Host) && !IsAllowedHost(uri.Host))
-                {
-                    Logger.Warning("Blocked navigation to untrusted host: {Host}", uri.Host);
-                    args.Decision.Ignore();
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        if (args.DecisionType is not (PolicyDecisionType.NavigationAction or PolicyDecisionType.NewWindowAction)
+            || args.Decision is not NavigationPolicyDecision navDecision) return false;
+        var uriString = navDecision.GetNavigationAction().GetRequest().Uri;
+        if (string.IsNullOrEmpty(uriString) || !Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+            return false;
+        if (string.IsNullOrEmpty(uri.Host) || IsAllowedHost(uri.Host)) return false;
+        Logger.Warning("Blocked navigation to untrusted host: {Host}", uri.Host);
+        args.Decision.Ignore();
+        return true;
     }
 
     [GeneratedRegex(@"^(?:[a-z0-9-]+\.)*(?:google|youtube)\.(?:[a-z]{2,3}(?:\.[a-z]{2})?)$", RegexOptions.IgnoreCase)]
@@ -318,9 +304,7 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             trimmed.EndsWith(".google", StringComparison.OrdinalIgnoreCase) ||
             trimmed.Equals("youtube", StringComparison.OrdinalIgnoreCase) ||
             trimmed.EndsWith(".youtube", StringComparison.OrdinalIgnoreCase))
-        {
             return true;
-        }
 
         return AllowedHostRegex().IsMatch(trimmed);
     }

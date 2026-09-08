@@ -8,11 +8,11 @@ public static class PlaybackBackends
 
     // Canonical chooser labels for the Preferences dialog. Display-only; never persisted.
     public const string ExternalMpvDisplayName = "External MPV (separate window)";
-    public const string EmbeddedDisplayName = "Built-in player";
+    private const string EmbeddedDisplayName = "Built-in player";
 
     // Short labels for tooltips, logs, and other compact surfaces.
     public const string ExternalMpvShortName = "External MPV";
-    public const string EmbeddedShortName = "Built-in";
+    private const string EmbeddedShortName = "Built-in";
 
     public static bool IsEmbedded(string? backend)
     {

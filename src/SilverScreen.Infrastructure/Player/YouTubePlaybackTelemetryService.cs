@@ -4,9 +4,9 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 
@@ -17,10 +17,10 @@ public sealed class YouTubePlaybackTelemetryService(
     Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
     : IYouTubePlaybackTelemetryService
 {
-    private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
     // Bounded live-session set: Start-without-Dispose callers must not grow memory without limit,
     // so the oldest-tracked session is evicted (disposed) past the cap.
     private const int MaxActiveSessions = 200;
+    private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
     private bool _disposed;
@@ -115,11 +115,11 @@ public sealed class YouTubePlaybackTelemetryService(
     private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
         : IYouTubePlaybackTelemetrySession
     {
-        private readonly Lock _lock = new();
         // Bounded per-video map: keys are playlist indices (already playlist-bounded), capped as
         // defense in depth so an adversarial playlist length cannot grow this dict without limit.
         // The evicted entry is never the index being added, which is absent by construction.
         private const int MaxVideosPerSession = 200;
+        private readonly Lock _lock = new();
         private readonly Dictionary<int, VideoTelemetrySession> _videos = [];
         private bool _disposed;
 
@@ -128,10 +128,10 @@ public sealed class YouTubePlaybackTelemetryService(
             if (!owner.IsEnabled() || state.PlaylistIndex < 0 || state.PlaylistIndex >= request.Videos.Length) return;
 
             VideoTelemetrySession? evicted = null;
-            VideoTelemetrySession video;
             lock (_lock)
             {
                 if (_disposed) return;
+                VideoTelemetrySession video;
                 if (!_videos.TryGetValue(state.PlaylistIndex, out var existing))
                 {
                     if (_videos.Count >= MaxVideosPerSession)

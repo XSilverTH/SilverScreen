@@ -24,6 +24,7 @@ public sealed record ChannelViewState(
     public static ChannelViewState Empty { get; } = new(null, string.Empty, null, null, null, [],
         ChannelVideoSort.Newest, string.Empty, false, true);
 }
+
 public sealed record ChannelNavigationArgs(string Url, string? Name = null);
 
 public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
@@ -68,14 +69,15 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
     } = ChannelViewState.Empty;
 
     /// <summary>
-    /// Concise label for the shell back button while the channel page is visible.
+    ///     Concise label for the shell back button while the channel page is visible.
     /// </summary>
     public string BackLabel => "Back";
 
     /// <summary>
-    /// Descriptive tooltip for the shell back button while the channel page is visible.
+    ///     Descriptive tooltip for the shell back button while the channel page is visible.
     /// </summary>
     public string BackTooltip => string.IsNullOrWhiteSpace(State.Name) ? "Back" : $"Back from {State.Name}";
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Dispose()
@@ -114,7 +116,8 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
         if (channelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
         {
-            Logger.Warning("Cannot open channel with dummy placeholder ID: {ChannelUrl} ({FallbackName})", channelUrl, fallbackName);
+            Logger.Warning("Cannot open channel with dummy placeholder ID: {ChannelUrl} ({FallbackName})", channelUrl,
+                fallbackName);
             return;
         }
 

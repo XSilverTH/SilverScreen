@@ -14,15 +14,16 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private static readonly ILogger Logger = Log.ForContext<ThumbnailCacheService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
-    private static readonly HashSet<string> SafeExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".webp",
-        ".gif",
-        ".bmp"
-    };
+    private static readonly HashSet<string> SafeExtensions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".gif",
+            ".bmp"
+        };
 
     private readonly bool _disposeHttpClient;
 

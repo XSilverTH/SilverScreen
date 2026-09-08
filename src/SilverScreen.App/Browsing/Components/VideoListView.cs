@@ -8,7 +8,6 @@ using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
@@ -33,13 +32,13 @@ public partial class VideoListView : ViewBase<Bin>
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private bool _disposed;
-    private long _refreshGeneration;
-    private uint _refreshScrollSource;
-    private int _refreshScrollPass;
-    private bool _refreshScrollPending;
-    private Revealer? _paginationErrorRevealer;
     private Label? _paginationErrorLabel;
     private Button? _paginationErrorRetryButton;
+    private Revealer? _paginationErrorRevealer;
+    private long _refreshGeneration;
+    private int _refreshScrollPass;
+    private bool _refreshScrollPending;
+    private uint _refreshScrollSource;
 
     private VideoListView(
         IVideoListSource source,
@@ -196,7 +195,7 @@ public partial class VideoListView : ViewBase<Bin>
                 ScrollToTop();
                 if (++_refreshScrollPass < RefreshScrollStabilizationPasses)
                 {
-                    ScheduleRefreshScroll(generation, resetPass: false);
+                    ScheduleRefreshScroll(generation, false);
                     return false;
                 }
 
@@ -464,6 +463,7 @@ public partial class VideoListView : ViewBase<Bin>
             _paginationErrorLabel = null;
             _paginationErrorRetryButton = null;
         }
+
         video_list_grid.Dispose();
         _videoSelection.Dispose();
         _videoFactory.Dispose();

@@ -2,10 +2,6 @@ namespace SilverScreen.Core.Player;
 
 public readonly record struct PlaybackResult
 {
-    public bool Success { get; }
-    public string? ErrorMessage { get; }
-    public string Message { get; }
-
     private PlaybackResult(bool success, string message, string? errorMessage)
     {
         Success = success;
@@ -13,18 +9,18 @@ public readonly record struct PlaybackResult
         ErrorMessage = errorMessage;
     }
 
-    public static PlaybackResult Ok(string message = "Playback started.") =>
-        new(true, message, null);
+    public bool Success { get; }
+    public string? ErrorMessage { get; }
+    public string Message { get; }
 
-    public static PlaybackResult Fail(string errorMessage) =>
-        new(false, errorMessage, errorMessage);
-
-    public static PlaybackResult FromStatusString(string status)
+    public static PlaybackResult Ok(string message = "Playback started.")
     {
-        if (IsSuccessStatus(status))
-            return Ok(status);
+        return new PlaybackResult(true, message, null);
+    }
 
-        return Fail(status);
+    public static PlaybackResult Fail(string errorMessage)
+    {
+        return new PlaybackResult(false, errorMessage, errorMessage);
     }
 
     public static bool IsSuccessStatus(string? status)
@@ -40,5 +36,8 @@ public readonly record struct PlaybackResult
                s.StartsWith("External playback called", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static implicit operator string(PlaybackResult result) => result.Message;
+    public static implicit operator string(PlaybackResult result)
+    {
+        return result.Message;
+    }
 }

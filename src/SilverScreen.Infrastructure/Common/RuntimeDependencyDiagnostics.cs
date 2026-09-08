@@ -8,21 +8,25 @@ using SilverScreen.Infrastructure.Player;
 namespace SilverScreen.Infrastructure.Common;
 
 /// <summary>
-/// Checks whether external runtime dependencies configured for SilverScreen are reachable and executable.
+///     Checks whether external runtime dependencies configured for SilverScreen are reachable and executable.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Platform Support & Arch Linux x86-64 Tier-1 Target:</b>
-/// SilverScreen targets modern 64-bit Linux, with <b>Arch Linux x86-64</b> designated as the primary tier-1 reference platform.
-/// Dependencies such as <c>yt-dlp</c>, <c>mpv</c>, <c>libmpv.so.2</c>, and <c>libsecret-1.so.0</c> are expected to follow standard
-/// Arch package layouts and system search paths (<c>/usr/bin</c>, <c>/usr/lib</c>).
-/// </para>
-/// <para>
-/// <b>Defensive Diagnostics:</b>
-/// All checks verify both file existence and POSIX executable permissions (<see cref="UnixFileMode.UserExecute"/>,
-/// <see cref="UnixFileMode.GroupExecute"/>, <see cref="UnixFileMode.OtherExecute"/>) defensively, tolerating path lookup failures
-/// without crashing, and issuing structured warnings rather than fatal application startup aborts.
-/// </para>
+///     <para>
+///         <b>Platform Support & Arch Linux x86-64 Tier-1 Target:</b>
+///         SilverScreen targets modern 64-bit Linux, with <b>Arch Linux x86-64</b> designated as the primary tier-1
+///         reference platform.
+///         Dependencies such as <c>yt-dlp</c>, <c>mpv</c>, <c>libmpv.so.2</c>, and <c>libsecret-1.so.0</c> are expected to
+///         follow standard
+///         Arch package layouts and system search paths (<c>/usr/bin</c>, <c>/usr/lib</c>).
+///     </para>
+///     <para>
+///         <b>Defensive Diagnostics:</b>
+///         All checks verify both file existence and POSIX executable permissions (<see cref="UnixFileMode.UserExecute" />
+///         ,
+///         <see cref="UnixFileMode.GroupExecute" />, <see cref="UnixFileMode.OtherExecute" />) defensively, tolerating
+///         path lookup failures
+///         without crashing, and issuing structured warnings rather than fatal application startup aborts.
+///     </para>
 /// </remarks>
 public sealed class RuntimeDependencyDiagnostics
 {

@@ -45,6 +45,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private readonly ISessionService _sessionService;
 
     private readonly IAuthenticatedSubscriptionsService _subscriptionsService;
+    private CancellationTokenSource? _channelCts;
+    private uint _channelGeneration;
     private bool _disposed;
     private string? _feedContinuationToken;
     private AuthenticatedSubscriptionsStatus _feedStatus = AuthenticatedSubscriptionsStatus.Success;
@@ -54,8 +56,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private bool _loadedAtLeastOnce;
     private Action? _openWebLogin;
-    private CancellationTokenSource? _channelCts;
-    private uint _channelGeneration;
     private CancellationTokenSource? _refreshCts;
     private uint _refreshGeneration;
     private SubscribedChannel? _selectedChannel;
@@ -81,7 +81,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine.EngineStateChanged += OnEngineStateChanged;
 
         if (!IsSessionActive())
-        {
             State = new SubscriptionsViewState(
                 [],
                 null,
@@ -92,7 +91,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 "Sign in to YouTube to load your subscriptions.",
                 false);
-        }
     }
 
     public SubscriptionsViewModel(
@@ -114,11 +112,12 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             field = value;
             OnPropertyChanged();
             StateChanged?.Invoke(this, value);
-            _videoListStateChanged?.Invoke(this, ((IVideoListSource)this).State);
+            VideoListStateChanged?.Invoke(this, ((IVideoListSource)this).State);
         }
     } = SubscriptionsViewState.Empty;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
     public void Dispose()
     {
         lock (_lock)
@@ -133,14 +132,12 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine.Dispose();
     }
 
-    private event EventHandler<VideoListPresentationState>? _videoListStateChanged;
-
     VideoListPresentationState IVideoListSource.State => SubscriptionsVideoListSource.MapState(State, _openWebLogin);
 
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
-        add => _videoListStateChanged += value;
-        remove => _videoListStateChanged -= value;
+        add => VideoListStateChanged += value;
+        remove => VideoListStateChanged -= value;
     }
 
     public async Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
@@ -292,6 +289,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _lastRequestedCount = Math.Max(count, 1);
         return _engine.LoadMoreAsync(count);
     }
+
+    private event EventHandler<VideoListPresentationState>? VideoListStateChanged;
 
     public event EventHandler<SubscriptionsViewState>? StateChanged;
 
@@ -559,10 +558,9 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         uint generation,
         CancellationToken cancellationToken)
     {
-        List<VideoSummary> inMemoryMatches;
         lock (_lock)
         {
-            inMemoryMatches = _feedVideos.Where(v => IsMatchingChannel(v, activeChannel)).ToList();
+            List<VideoSummary> inMemoryMatches = [.. _feedVideos.Where(v => IsMatchingChannel(v, activeChannel))];
             _channelVideos.Clear();
             _channelVideos.AddRange(inMemoryMatches);
         }

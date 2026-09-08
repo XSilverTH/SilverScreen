@@ -96,13 +96,9 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var result = await _playback.PlayAsync(new PlaybackRequest(videos)).ConfigureAwait(false);
-            if (!PlaybackResult.IsSuccessStatus(result))
-            {
-                Logger.Warning("Playback failed for queue items: {Result}", result);
-                return result;
-            }
-
-            return null;
+            if (PlaybackResult.IsSuccessStatus(result)) return null;
+            Logger.Warning("Playback failed for queue items: {Result}", result);
+            return result;
         }
         catch (Exception exception)
         {

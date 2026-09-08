@@ -4,8 +4,8 @@ using SilverScreen.Core.Player;
 namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
-/// Builds <see cref="ProcessStartInfo"/> command specifications for direct yt-dlp invocations,
-/// such as single-JSON manifest dumps for fallback format extraction and stream probing.
+///     Builds <see cref="ProcessStartInfo" /> command specifications for direct yt-dlp invocations,
+///     such as single-JSON manifest dumps for fallback format extraction and stream probing.
 /// </summary>
 public static class YtDlpCommandBuilder
 {

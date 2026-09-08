@@ -6,8 +6,8 @@ public interface ICookieFileProvider
 }
 
 /// <summary>
-/// Best-effort handle to a temporary cookie file. Disposal overwrites the file bytes
-/// with zeros before deleting (best-effort, never throws), then removes the directory.
+///     Best-effort handle to a temporary cookie file. Disposal overwrites the file bytes
+///     with zeros before deleting (best-effort, never throws), then removes the directory.
 /// </summary>
 public sealed class CookieFileLease(string path, string? directoryPath = null, Action? onDisposed = null) : IDisposable
 {
@@ -37,7 +37,7 @@ public sealed class CookieFileLease(string path, string? directoryPath = null, A
         try
         {
             var info = new FileInfo(path);
-            if (info.Exists && info.Length > 0)
+            if (info is { Exists: true, Length: > 0 })
             {
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
                 var zeros = new byte[4096];

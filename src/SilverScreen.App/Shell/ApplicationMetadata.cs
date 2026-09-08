@@ -5,6 +5,7 @@ namespace SilverScreen.Shell;
 internal static class ApplicationMetadata
 {
     internal const string ApplicationId = "io.github.silverscreen.SilverScreen";
+    internal const string IconName = "silverscreen";
     internal const string ApplicationName = "SilverScreen";
     internal const string Copyright = "Copyright © XSilverTH";
     internal const string DeveloperName = "XSilverTH";

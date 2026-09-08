@@ -50,10 +50,10 @@ public sealed class ExternalMpvPlaybackService(
     }
 
     /// <summary>
-    /// Launches external mpv with the FULL queue snapshot as watch URLs plus cookie lease,
-    /// ytdl-format, and IPC endpoint. mpv+yt-dlp fetch formats and advance the playlist;
-    /// resolved direct URLs are never used here. Returns a status string, never throws for
-    /// empty requests or temporary-file failures (only ArgumentNullException for a null request).
+    ///     Launches external mpv with the FULL queue snapshot as watch URLs plus cookie lease,
+    ///     ytdl-format, and IPC endpoint. mpv+yt-dlp fetch formats and advance the playlist;
+    ///     resolved direct URLs are never used here. Returns a status string, never throws for
+    ///     empty requests or temporary-file failures (only ArgumentNullException for a null request).
     /// </summary>
     public async Task<string> PlayAsync(PlaybackRequest request)
     {

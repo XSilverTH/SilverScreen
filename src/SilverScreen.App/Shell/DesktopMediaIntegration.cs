@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.Text;
 using GLib;
 using Serilog;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.DBus;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Player;
 using Tmds.DBus.Protocol;
 using TimeSpan = System.TimeSpan;
@@ -262,8 +262,38 @@ internal sealed class DesktopMediaIntegration : IDisposable
     private static bool IsObjectNotFound(DBusErrorReplyException exception)
     {
         return string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownMethod", StringComparison.Ordinal)
-               || string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownObject", StringComparison.Ordinal)
+               || string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownObject",
+                   StringComparison.Ordinal)
                || (exception.Message?.Contains("Object does not exist", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    internal static bool TryGetSeekedPosition(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current,
+        out long positionMicroseconds)
+    {
+        positionMicroseconds = current.PositionMicroseconds;
+        if (!current.HasMedia)
+            return false;
+
+        var trackChanged = !Equals(previous.TrackId, current.TrackId);
+        if (trackChanged)
+        {
+            if (previous.HasMedia || current.PositionMicroseconds > 0)
+                return true;
+
+            return false;
+        }
+
+        if (!previous.HasMedia)
+            return false;
+
+        if (!previous.IsPlaying)
+            return Math.Abs(current.PositionMicroseconds - previous.PositionMicroseconds) > 100_000;
+
+        var elapsed = previous.Timestamp > 0 && current.Timestamp >= previous.Timestamp
+            ? Stopwatch.GetElapsedTime(previous.Timestamp, current.Timestamp)
+            : TimeSpan.Zero;
+        var expected = previous.PositionMicroseconds + (long)(elapsed.TotalSeconds * previous.Rate * 1_000_000);
+        return Math.Abs(current.PositionMicroseconds - expected) > 1_000_000;
     }
 
     private sealed class MprisHandler(DesktopMediaIntegration owner, DBusConnection connection) : DBusHandler(
@@ -484,35 +514,5 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId,
                 metadata, Stopwatch.GetTimestamp());
         }
-    }
-
-    internal static bool TryGetSeekedPosition(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current, out long positionMicroseconds)
-    {
-        positionMicroseconds = current.PositionMicroseconds;
-        if (!current.HasMedia)
-            return false;
-
-        var trackChanged = !Equals(previous.TrackId, current.TrackId);
-        if (trackChanged)
-        {
-            if (previous.HasMedia || current.PositionMicroseconds > 0)
-                return true;
-
-            return false;
-        }
-
-        if (!previous.HasMedia)
-            return false;
-
-        if (!previous.IsPlaying)
-        {
-            return Math.Abs(current.PositionMicroseconds - previous.PositionMicroseconds) > 100_000;
-        }
-
-        var elapsed = previous.Timestamp > 0 && current.Timestamp >= previous.Timestamp
-            ? Stopwatch.GetElapsedTime(previous.Timestamp, current.Timestamp)
-            : TimeSpan.Zero;
-        var expected = previous.PositionMicroseconds + (long)(elapsed.TotalSeconds * previous.Rate * 1_000_000);
-        return Math.Abs(current.PositionMicroseconds - expected) > 1_000_000;
     }
 }

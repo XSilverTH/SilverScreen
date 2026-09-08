@@ -154,7 +154,7 @@ public sealed class SearchVideoListSource : IVideoListSource
             "system-search-symbolic");
     }
 
-    public static VideoListStatus MapStatus(SearchViewState state)
+    private static VideoListStatus MapStatus(SearchViewState state)
     {
         if (!state.IsSuccess)
         {
@@ -242,11 +242,11 @@ public sealed class HistoryVideoListSource : IVideoListSource
     {
         return MapStatus(
             state.LastError != null ? AuthenticatedHistoryStatus.TemporaryBackendFailure : historyStatus,
-            state.IsSuccess && state.LastError == null,
+            state is { IsSuccess: true, LastError: null },
             state.StatusMessage);
     }
 
-    public static VideoListStatus MapStatus(AuthenticatedHistoryStatus status, bool isSuccess, string? summary)
+    private static VideoListStatus MapStatus(AuthenticatedHistoryStatus status, bool isSuccess, string? summary)
     {
         return status switch
         {
@@ -324,6 +324,7 @@ public sealed class ChannelVideoListSource : IVideoListSource
         _disposed = true;
         _viewModel.StateChanged -= OnStateChanged;
     }
+
     public static VideoListPresentationState MapState(ChannelViewState state, string? paginationError = null)
     {
         var status = MapStatus(state);
@@ -368,7 +369,7 @@ public sealed class ChannelVideoListSource : IVideoListSource
             "applications-internet-symbolic");
     }
 
-    public static VideoListStatus MapStatus(ChannelViewState state)
+    private static VideoListStatus MapStatus(ChannelViewState state)
     {
         if (!state.IsSuccess)
         {
@@ -436,7 +437,8 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
         _viewModel.StateChanged -= OnStateChanged;
     }
 
-    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null, string? paginationError = null)
+    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
+        string? paginationError = null)
     {
         VideoListStatus status;
         switch (state.Status)

@@ -26,8 +26,8 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
     private readonly PagedFeedEngine _engine;
+    private readonly Action? _openWebLogin;
     private readonly ISessionService? _sessionService;
-    private Action? _openWebLogin;
     private bool _disposed;
     private AuthenticatedHistoryStatus _historyStatus = AuthenticatedHistoryStatus.Success;
 
@@ -112,6 +112,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             GateSignedOut();
             return Task.CompletedTask;
         }
+
         Logger.Information("HistoryViewModel refreshing watch history");
         return _engine.RefreshAsync(count);
     }
@@ -119,18 +120,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     public Task LoadMoreAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
-        if (!IsSessionActive())
-            return Task.CompletedTask;
-        return _engine.LoadMoreAsync(count);
-    }
-
-    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
-    {
-        if (openWebLogin != null)
-            _openWebLogin = openWebLogin;
-        if (!IsSessionActive())
-            GateSignedOut();
-        return this;
+        return !IsSessionActive() ? Task.CompletedTask : _engine.LoadMoreAsync(count);
     }
 
     public event EventHandler<HistoryViewState>? StateChanged;
@@ -173,13 +163,9 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         if (IsSessionActive())
-        {
             RefreshAsync().FireAndForget(Logger);
-        }
         else
-        {
             GateSignedOut();
-        }
     }
 
     private void GateSignedOut()

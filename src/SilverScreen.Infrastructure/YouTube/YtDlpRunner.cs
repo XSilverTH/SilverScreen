@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Serilog;
 using SilverScreen.Infrastructure.Common;
@@ -6,22 +7,22 @@ using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
-/// Manages asynchronous, out-of-process execution of the <c>yt-dlp</c> binary, providing bounded
-/// timeouts, process tree termination, argument redaction for sensitive credentials, and standard
-/// output/error stream capture.
+///     Manages asynchronous, out-of-process execution of the <c>yt-dlp</c> binary, providing bounded
+///     timeouts, process tree termination, argument redaction for sensitive credentials, and standard
+///     output/error stream capture.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Architectural Role &amp; Diagnostics:</b><br/>
-/// This runner executes yt-dlp directly for the fallback extraction pipeline (<see cref="YtDlpMediaResolver"/>)
-/// and format diagnostics. While mpv handles primary playback extraction internally via <c>ytdl_hook.lua</c>,
-/// this runner provides direct process management for fallback format resolution, future media downloading,
-/// or headless stream probing.
-/// </para>
-/// <para>
-/// Standard error output is captured and surfaced through structured logging with credential redaction
-/// to provide full diagnostic visibility into yt-dlp extraction failures, warnings, and anti-bot challenges.
-/// </para>
+///     <para>
+///         <b>Architectural Role &amp; Diagnostics:</b><br />
+///         This runner executes yt-dlp directly for the fallback extraction pipeline (<see cref="YtDlpMediaResolver" />)
+///         and format diagnostics. While mpv handles primary playback extraction internally via <c>ytdl_hook.lua</c>,
+///         this runner provides direct process management for fallback format resolution, future media downloading,
+///         or headless stream probing.
+///     </para>
+///     <para>
+///         Standard error output is captured and surfaced through structured logging with credential redaction
+///         to provide full diagnostic visibility into yt-dlp extraction failures, warnings, and anti-bot challenges.
+///     </para>
 /// </remarks>
 public sealed class YtDlpRunner : IYtDlpRunner
 {
@@ -31,16 +32,16 @@ public sealed class YtDlpRunner : IYtDlpRunner
     // Option names whose value must never reach the logs. Our own invocations only
     // pass cookie file paths (never cookie contents), but redaction is defense in depth
     // in case a future caller forwards credential-bearing options.
-    private static readonly HashSet<string> SecretOptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "--password",
-        "--client-secret",
-        "--access-token",
-        "--refresh-token",
-        "--token",
-        "--api-key"
-    };
-
+    private static readonly HashSet<string> SecretOptions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "--password",
+            "--client-secret",
+            "--access-token",
+            "--refresh-token",
+            "--token",
+            "--api-key"
+        };
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
         TimeSpan timeout,
@@ -134,7 +135,7 @@ public sealed class YtDlpRunner : IYtDlpRunner
         try
         {
             if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
         }
         catch (Exception ex)
         {
@@ -185,24 +186,21 @@ public sealed class YtDlpRunner : IYtDlpRunner
 
     private static string RedactArgumentList(ProcessStartInfo startInfo)
     {
-        if (startInfo.ArgumentList.Count > 0)
+        if (startInfo.ArgumentList.Count <= 0) return RedactFreeform(startInfo.Arguments);
+        var redacted = new string[startInfo.ArgumentList.Count];
+        for (var i = 0; i < startInfo.ArgumentList.Count; i++)
         {
-            var redacted = new string[startInfo.ArgumentList.Count];
-            for (var i = 0; i < startInfo.ArgumentList.Count; i++)
-            {
-                var argument = startInfo.ArgumentList[i];
-                redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument)
-                    ? "***"
-                    : argument;
-            }
-
-            return string.Join(" ", redacted);
+            var argument = startInfo.ArgumentList[i];
+            redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument)
+                ? "***"
+                : argument;
         }
 
-        return RedactFreeform(startInfo.Arguments);
+        return string.Join(" ", redacted);
+
     }
 
-    private static bool IsSecretValue(int index, System.Collections.Generic.IList<string> arguments)
+    private static bool IsSecretValue(int index, Collection<string> arguments)
     {
         return index > 0 && SecretOptions.Contains(arguments[index - 1]);
     }
@@ -230,7 +228,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
                     var end = valueStart + 1;
                     var quoted = end < arguments.Length && arguments[end] == '"';
                     if (quoted) end++;
-                    while (end < arguments.Length && (quoted ? arguments[end] != '"' : !char.IsWhiteSpace(arguments[end])))
+                    while (end < arguments.Length &&
+                           (quoted ? arguments[end] != '"' : !char.IsWhiteSpace(arguments[end])))
                         end++;
                     if (quoted && end < arguments.Length) end++;
                     arguments = string.Concat(arguments.AsSpan(0, valueStart + 1), "***",

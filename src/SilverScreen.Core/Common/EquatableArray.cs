@@ -7,19 +7,20 @@ using System.Text.Json.Serialization.Metadata;
 namespace SilverScreen.Core.Common;
 
 /// <summary>
-/// Represents an immutable, heap-backed array with structural (element-wise) value equality.
+///     Represents an immutable, heap-backed array with structural (element-wise) value equality.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Standard C# arrays (<c>T[]</c>) exhibit reference equality when used inside record types or compared
-/// with equality operators. <see cref="EquatableArray{T}"/> provides value-based equality semantics by
-/// comparing elements sequentially via <see cref="ReadOnlySpan{T}.SequenceEqual"/>.
-/// </para>
-/// <para>
-/// Designed for Native AOT friendliness: avoids runtime code generation when serialized with System.Text.Json
-/// by pairing with statically generated <see cref="JsonSerializerContext"/> metadata and registered element types.
-/// Array mutation is prevented through defensive copying on construction and read-only indexer/span access.
-/// </para>
+///     <para>
+///         Standard C# arrays (<c>T[]</c>) exhibit reference equality when used inside record types or compared
+///         with equality operators. <see cref="EquatableArray{T}" /> provides value-based equality semantics by
+///         comparing elements sequentially via <see cref="ReadOnlySpan{T}.SequenceEqual" />.
+///     </para>
+///     <para>
+///         Designed for Native AOT friendliness: avoids runtime code generation when serialized with System.Text.Json
+///         by pairing with statically generated <see cref="JsonSerializerContext" /> metadata and registered element
+///         types.
+///         Array mutation is prevented through defensive copying on construction and read-only indexer/span access.
+///     </para>
 /// </remarks>
 /// <typeparam name="T">The type of elements in the array. Must implement equality comparison.</typeparam>
 [CollectionBuilder(typeof(EquatableArray), nameof(EquatableArray.Create))]

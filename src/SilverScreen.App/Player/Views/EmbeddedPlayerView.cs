@@ -21,12 +21,13 @@ namespace SilverScreen.Player.Views;
 
 internal interface IEmbeddedPlayerPresenter
 {
-    Task<string> PresentAsync(PlaybackRequest request);
     bool HasMedia { get; }
     bool IsPaused { get; }
+    Task<string> PresentAsync(PlaybackRequest request);
     event EventHandler? PlaybackStateChanged;
     Task TogglePauseAsync();
 }
+
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
 {
     private const double MinimumPlaybackSpeed = 0.25;
@@ -61,23 +62,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private string? _commentsVideoId;
     private bool _disposed;
     private bool _isMuted;
-    private bool _isPaused = true;
+    private PlaybackRequest? _loadedRequest;
     private bool _rendererReady;
     private double _speed = 1;
-
-    public bool HasMedia => _session.HasMedia;
-    public bool IsPaused => _isPaused;
-    public event EventHandler? PlaybackStateChanged;
-
-    public Task TogglePauseAsync()
-    {
-        _player.TogglePause();
-        return Task.CompletedTask;
-    }
     private bool _syncingQueue;
     private bool _updatingControls;
     private double _volume = 100;
-    private PlaybackRequest? _loadedRequest;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
         PlayerDependencies dependencies)
@@ -137,7 +127,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.PlaybackFailed += OnPlaybackFailed;
         SetControls(100, 1, "Best");
         _osdController = new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label);
-        _statsController = new PlayerStatsController(new PlayerStatsProvider(_player), player_stats_revealer, player_stats_label);
+        _statsController =
+            new PlayerStatsController(new PlayerStatsProvider(_player), player_stats_revealer, player_stats_label);
         _chromeController = new PlayerChromeController(
             Widget,
             player_header_bar,
@@ -152,9 +143,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _shortcutController.KeyInterceptor = keyval => _statsController.HandleKeyPress(keyval);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
         {
-            _isPaused = !_isPaused;
+            IsPaused = !IsPaused;
             _player.TogglePause();
-            _osdController.ShowPlayPause(_isPaused);
+            _osdController.ShowPlayPause(IsPaused);
         });
         _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () =>
         {
@@ -253,13 +244,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
         Widget.OnNotify += (_, e) =>
         {
-            if (e.Pspec.GetName() == "visible")
-            {
-                if (Widget.GetVisible())
-                    _shortcutController.Attach();
-                else
-                    _shortcutController.Detach();
-            }
+            if (e.Pspec.GetName() != "visible") return;
+            if (Widget.GetVisible())
+                _shortcutController.Attach();
+            else
+                _shortcutController.Detach();
         };
     }
 
@@ -301,6 +290,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.Dispose();
         _desktopMedia.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    public bool HasMedia => _session.HasMedia;
+    public bool IsPaused { get; private set; } = true;
+
+    public event EventHandler? PlaybackStateChanged;
+
+    public Task TogglePauseAsync()
+    {
+        _player.TogglePause();
+        return Task.CompletedTask;
     }
 
     public Task<string> PresentAsync(PlaybackRequest request)
@@ -348,11 +348,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _presentRequested();
             _shortcutController.Attach();
             Widget.GrabFocus();
-            if (_rendererReady)
-            {
-                _player.Load(request, preferences, _session.CookieFilePath);
-                _loadedRequest = request;
-            }
+            if (!_rendererReady) return false;
+            _player.Load(request, preferences, _session.CookieFilePath);
+            _loadedRequest = request;
+
             return false;
         });
 
@@ -365,8 +364,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     }
 
     /// <summary>
-    /// Re-realizes the OpenGL surface when navigating back to the player view,
-    /// allowing the player engine to resume playback seamlessly at the captured reload position and state.
+    ///     Re-realizes the OpenGL surface when navigating back to the player view,
+    ///     allowing the player engine to resume playback seamlessly at the captured reload position and state.
     /// </summary>
     private void OnPlayerSurfaceRealize(object? sender, EventArgs args)
     {
@@ -381,16 +380,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _rendererReady = true;
         _shortcutController.Attach();
 
-        if (_session.Request is not null && !ReferenceEquals(_loadedRequest, _session.Request))
-        {
-            _player.Load(_session.Request, _preferences.GetPreferences(), _session.CookieFilePath);
-            _loadedRequest = _session.Request;
-        }
+        if (_session.Request is null || ReferenceEquals(_loadedRequest, _session.Request)) return;
+        _player.Load(_session.Request, _preferences.GetPreferences(), _session.CookieFilePath);
+        _loadedRequest = _session.Request;
     }
 
     /// <summary>
-    /// Unrealizes the OpenGL surface when navigating away from the player view,
-    /// capturing active playback position, playlist index, and pause state for restoration.
+    ///     Unrealizes the OpenGL surface when navigating away from the player view,
+    ///     capturing active playback position, playlist index, and pause state for restoration.
     /// </summary>
     private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
     {
@@ -514,12 +511,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OpenCurrentChannel()
     {
-        if (_session.CurrentVideo is { } video)
-        {
-            _shortcutController.Detach();
-            _channelRequested(video);
-        }
+        if (_session.CurrentVideo is not { } video) return;
+        _shortcutController.Detach();
+        _channelRequested(video);
     }
+
     private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
     {
         if (_session.TrySkipManualSegment())
@@ -660,7 +656,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (_disposed) return;
         _speed = state.Speed;
-        _isPaused = state.IsPaused;
+        IsPaused = state.IsPaused;
         _volume = state.Volume;
         _isMuted = state.IsMuted;
         _session.UpdatePlayback(state);
@@ -901,6 +897,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private sealed class PlayerStatsProvider(LibMpvPlayer player) : IPlayerStatsProvider
     {
-        public PlaybackStats? GetPlaybackStats() => player.GetPlaybackStats();
+        public PlaybackStats? GetPlaybackStats()
+        {
+            return player.GetPlaybackStats();
+        }
     }
 }

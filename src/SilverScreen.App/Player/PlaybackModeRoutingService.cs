@@ -11,16 +11,9 @@ internal sealed class PlaybackModeRoutingService(
     IEmbeddedPlayerPresenter embeddedPlayer)
     : IPlaybackService
 {
+    private static readonly ILogger Logger = Log.ForContext<PlaybackModeRoutingService>();
     public bool HasMedia => embeddedPlayer.HasMedia;
     public bool IsPaused => embeddedPlayer.IsPaused;
-    public event EventHandler? PlaybackStateChanged
-    {
-        add => embeddedPlayer.PlaybackStateChanged += value;
-        remove => embeddedPlayer.PlaybackStateChanged -= value;
-    }
-
-    public Task TogglePauseAsync() => embeddedPlayer.TogglePauseAsync();
-    private static readonly ILogger Logger = Log.ForContext<PlaybackModeRoutingService>();
 
     public Task<string> PlayAsync(PlaybackRequest request)
     {
@@ -31,6 +24,17 @@ internal sealed class PlaybackModeRoutingService(
         return PlaybackBackends.IsEmbedded(backend)
             ? embeddedPlayer.PresentAsync(request)
             : externalMpvPlayback.PlayAsync(request);
+    }
+
+    public event EventHandler? PlaybackStateChanged
+    {
+        add => embeddedPlayer.PlaybackStateChanged += value;
+        remove => embeddedPlayer.PlaybackStateChanged -= value;
+    }
+
+    public Task TogglePauseAsync()
+    {
+        return embeddedPlayer.TogglePauseAsync();
     }
 
     /// <summary>

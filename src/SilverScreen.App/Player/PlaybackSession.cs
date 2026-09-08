@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Controllers;
 using SilverScreen.Shell;
@@ -18,20 +18,22 @@ namespace SilverScreen.Player;
 /// </summary>
 internal sealed class PlaybackSession : IDisposable
 {
-    private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
     /// <summary>Mirrors <c>PlayerTimelineEngine</c>'s default resume minimum: positions at or below this are "from the start".</summary>
     private const double MinimumResumeSeconds = 5;
+
     /// <summary>Positions leaving at most this (or 10% of short media, whichever is smaller) are treated as finished.</summary>
     private const double ResumeEndEpsilonSeconds = 10;
+
+    private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
 
     private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
 
     private readonly PlaybackCoordinator _coordinator;
     private readonly DesktopMediaIntegration? _desktopMedia;
+    private readonly IYouTubePlaybackProgressService _playbackProgress;
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _session;
     private readonly ISponsorBlockService _sponsorBlock;
-    private readonly IYouTubePlaybackProgressService _playbackProgress;
     private readonly IVideoEngagementService _videoEngagement;
     private readonly IYouTubeRatingService _youtubeRating;
     private SponsorBlockSegment? _activeManualSegment;
@@ -44,9 +46,9 @@ internal sealed class PlaybackSession : IDisposable
     private long _loadVersion;
     private long _playbackId;
     private bool _playbackProgressLoaded;
-    private YouTubePlaybackProgress? _youtubePlaybackProgress;
     private string _sponsorBlockConfigurationKey = string.Empty;
     private bool _wasPaused;
+    private YouTubePlaybackProgress? _youtubePlaybackProgress;
 
     public PlaybackSession(
         PlaybackCoordinator coordinator,

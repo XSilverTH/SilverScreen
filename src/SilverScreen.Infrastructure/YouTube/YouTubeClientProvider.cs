@@ -13,33 +13,43 @@ public interface IYouTubeClientProvider
 }
 
 /// <summary>
-/// Creates and caches YoutubeAPI clients by session-cookie hash. A new session gets a new client, while
-/// requests sharing the same session reuse the client's bootstrapped InnerTube connection.
-/// At most two clients are cached (least-recently-used eviction); evicted clients are disposed.
-/// Cache keys are SHA256 hashes of the cookie content: raw cookies never appear as keys or in logs,
-/// and only a truncated hash prefix is logged for diagnostics.
+///     Creates and caches YoutubeAPI clients by session-cookie hash. A new session gets a new client, while
+///     requests sharing the same session reuse the client's bootstrapped InnerTube connection.
+///     At most two clients are cached (least-recently-used eviction); evicted clients are disposed.
+///     Cache keys are SHA256 hashes of the cookie content: raw cookies never appear as keys or in logs,
+///     and only a truncated hash prefix is logged for diagnostics.
 /// </summary>
 public sealed class YouTubeClientProvider(ISessionService sessionService) : IYouTubeClientProvider, IDisposable
 {
-    internal const int MaxCachedClients = 2;
+    private const int MaxCachedClients = 2;
     private const int LoggedHashPrefixLength = 12;
 
     private static readonly ILogger Logger = Log.ForContext<YouTubeClientProvider>();
-    private readonly Lock _gate = new();
     private readonly Dictionary<string, LinkedListNode<CachedClient>> _clients = new(StringComparer.Ordinal);
+    private readonly Lock _gate = new();
     private readonly LinkedList<CachedClient> _lru = new();
-    private readonly ISessionService _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+
+    private readonly ISessionService _sessionService =
+        sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+
     private bool _disposed;
 
-    internal int CachedClientCount
+    public void Dispose()
     {
-        get
+        var evicted = new List<YouTubeClient>();
+        lock (_gate)
         {
-            lock (_gate)
-            {
-                return _clients.Count;
-            }
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            evicted.AddRange(_lru.Select(entry => entry.Client));
+            _clients.Clear();
+            _lru.Clear();
         }
+
+        foreach (var client in evicted)
+            client.Dispose();
     }
 
     public YouTubeClient GetClient()
@@ -66,17 +76,17 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
 
             YouTubeCookieAuthentication? authentication = null;
             if (!string.IsNullOrWhiteSpace(cookieContent))
-            {
                 try
                 {
                     authentication = YouTubeCookieAuthentication.FromNetscape(cookieContent);
                 }
                 catch (Exception exception) when (exception is ArgumentException or FormatException)
                 {
-                    Logger.Warning(exception, "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
+                    Logger.Warning(exception,
+                        "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
                     authentication = null;
                 }
-            }
+
             client = new YouTubeClient(new YouTubeClientOptions
             {
                 Authentication = authentication
@@ -97,31 +107,11 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             }
         }
 
-        if (evicted is not null)
-            foreach (var evictedClient in evicted)
-                evictedClient.Dispose();
+        if (evicted is null) return client;
+        foreach (var evictedClient in evicted)
+            evictedClient.Dispose();
 
         return client;
-    }
-
-    public void Dispose()
-    {
-        List<YouTubeClient>? evicted;
-        lock (_gate)
-        {
-            if (_disposed)
-                return;
-
-            _disposed = true;
-            evicted = new List<YouTubeClient>(_lru.Count);
-            foreach (var entry in _lru)
-                evicted.Add(entry.Client);
-            _clients.Clear();
-            _lru.Clear();
-        }
-
-        foreach (var client in evicted)
-            client.Dispose();
     }
 
     private static string HashSessionCookies(string cookieContent)

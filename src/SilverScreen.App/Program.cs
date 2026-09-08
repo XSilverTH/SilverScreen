@@ -1,9 +1,9 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Adw;
 using Serilog;
 using Serilog.Events;
 using SilverScreen.Shell;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using XSTH.Blueprint.Helpers;
 
 var applicationStateDirectory = Path.Combine(
@@ -68,7 +68,7 @@ static LogEventLevel ResolveLogLevel()
         "warning" or "warn" => LogEventLevel.Warning,
         "error" => LogEventLevel.Error,
         "fatal" => LogEventLevel.Fatal,
-        _ => LogEventLevel.Information,
+        _ => LogEventLevel.Information
     };
 }
 
@@ -114,13 +114,11 @@ static void LogToolVersion(
     if (Version.TryParse(version, out var actual)
         && Version.TryParse(floorVersion, out var floor)
         && actual < floor)
-    {
         Log.Warning(
             "{Tool} {ActualVersion} is older than the supported floor {FloorVersion}; please upgrade",
             displayName,
             version,
             floorVersion);
-    }
 }
 
 static string? ProbeToolVersion(
@@ -131,17 +129,15 @@ static string? ProbeToolVersion(
 {
     try
     {
-        using var process = new Process
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
+            FileName = fileName,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
 
         if (!process.Start())

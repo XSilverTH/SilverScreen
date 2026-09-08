@@ -14,8 +14,10 @@ public sealed class YoutubeApiRatingService(
     ISessionService sessionService) : IYouTubeRatingService
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiRatingService>();
+
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
+
     private readonly ISessionService _sessionService =
         sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 

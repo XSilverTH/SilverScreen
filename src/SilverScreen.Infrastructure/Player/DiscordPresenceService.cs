@@ -1,9 +1,9 @@
 using DiscordRPC;
 using DiscordRPC.Entities;
 using Serilog;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Core.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 

@@ -9,6 +9,7 @@ public sealed class YoutubeApiSearchSuggestionService(
     IYouTubeClientProvider clientProvider) : ISearchSuggestionService
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiSearchSuggestionService>();
+
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
 

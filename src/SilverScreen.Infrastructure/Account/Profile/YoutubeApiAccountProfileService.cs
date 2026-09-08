@@ -10,8 +10,8 @@ namespace SilverScreen.Infrastructure.Account.Profile;
 public sealed class YoutubeApiAccountProfileService : IAccountProfileService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiAccountProfileService>();
-    private readonly IYouTubeClientProvider _clientProvider;
     private readonly Lock _cacheGate = new();
+    private readonly IYouTubeClientProvider _clientProvider;
     private readonly ISessionService _sessionService;
     private AccountProfile? _cachedProfile;
     private bool _disposed;
@@ -47,7 +47,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         try
         {
             Logger.Information("Fetching YouTube account profile");
-            YoutubeAPI.Models.Account.Profile profile = await _clientProvider.GetClient().Account
+            var profile = await _clientProvider.GetClient().Account
                 .GetProfileAsync(cancellationToken)
                 .ConfigureAwait(false);
             if (!HasAuthenticatedSession() || string.IsNullOrWhiteSpace(profile.DisplayName))

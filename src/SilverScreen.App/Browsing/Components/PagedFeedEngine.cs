@@ -377,10 +377,7 @@ public class PagedFeedEngine : IVideoListSource
             priorToken = _continuationToken;
             priorHasMore = _hasMore;
 
-            if (isRefresh)
-            {
-                _continuationToken = null;
-            }
+            if (isRefresh) _continuationToken = null;
 
             tokenForFetch = isRefresh ? null : _continuationToken;
             fetcher = _fetcher;

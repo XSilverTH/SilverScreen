@@ -1,10 +1,10 @@
+using System.ComponentModel;
 using Adw;
 using Gdk;
 using Gio;
 using GObject;
 using Gtk;
 using Serilog;
-using System.ComponentModel;
 using SilverScreen.Account.Auth;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Channel;
@@ -13,9 +13,8 @@ using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Infrastructure.Common;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Player;
 using SilverScreen.Player.Views;
 using SilverScreen.Queue;
@@ -23,6 +22,7 @@ using XSTH.Blueprint.Helpers;
 using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
+using Constants = Gdk.Constants;
 using Functions = GLib.Functions;
 using License = Gtk.License;
 using PreferencesDialog = SilverScreen.Preferences.PreferencesDialog;
@@ -44,6 +44,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly VideoListView _history;
     private readonly HistoryViewModel _historyViewModel;
     private readonly VideoListView _home;
+    private readonly NavigationService _navigationService;
     private readonly PlaybackModeRoutingService _playback;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
@@ -53,7 +54,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly ApplicationServices _services;
     private readonly SubscriptionsView _subscriptions;
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
-    private readonly NavigationService _navigationService;
     private bool _closed;
     private WebLoginWindow? _webLogin;
 
@@ -101,7 +101,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchViewModel = new SearchViewModel(services.Search, _playback, services.SearchSuggestions);
         _searchViewModel.OpenChannelRequested = channelTarget =>
             OpenChannelAsync(new VideoSummary("", "", channelTarget, TimeSpan.Zero, "", false, "", null, null,
-                channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? channelTarget : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
+                channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                    ? channelTarget
+                    : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
         _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
         search_popover.Child = _searchPopover.Widget;
         search_popover.OnClosed += (_, _) => _searchPopover.OnClosed();
@@ -138,7 +140,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         SetupDesktopBackShortcuts();
         _navigationService = new NavigationService(main_stack, view_stack);
         _navigationService.PageChanged += OnNavigationPageChanged;
-        _navigationService.Initialize(NavigationPage.Home);
+        _navigationService.Initialize();
         account_popover.Child = _accountPopover.Widget;
         _searchViewModel.PropertyChanged += OnBackLabelChanged;
         _channelViewModel.PropertyChanged += OnBackLabelChanged;
@@ -152,32 +154,29 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Widget.OnCloseRequest += OnCloseRequest;
         ReportStartupDependencyWarnings();
     }
+
     private void SetupDesktopBackShortcuts()
     {
         var keyController = EventControllerKey.New();
         keyController.SetPropagationPhase(PropagationPhase.Bubble);
         keyController.OnKeyPressed += (_, args) =>
         {
-            if (Widget.GetFocus() is Gtk.Editable or Gtk.TextView)
+            if (Widget.GetFocus() is Editable or TextView)
                 return false;
 
-            if ((args.State & Gdk.ModifierType.AltMask) != 0 && args.Keyval == Gdk.Constants.KEY_Left)
-            {
+            if ((args.State & ModifierType.AltMask) != 0 && args.Keyval == Constants.KEY_Left)
                 if (_navigationService.CanGoBack)
                 {
                     OnNavigationBackButtonClicked();
                     return true;
                 }
-            }
 
-            if (args.Keyval == Gdk.Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
-            {
+            if (args.Keyval == Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
                 if (_navigationService.CanGoBack)
                 {
                     OnNavigationBackButtonClicked();
                     return true;
                 }
-            }
 
             return false;
         };
@@ -188,13 +187,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         mouseController.OnPressed += (sender, _) =>
         {
             if (sender.GetCurrentButton() == 8)
-            {
                 if (_navigationService.CanGoBack)
                 {
                     OnNavigationBackButtonClicked();
                     sender.SetState(EventSequenceState.Claimed);
                 }
-            }
         };
         Widget.AddController(mouseController);
     }
@@ -256,7 +253,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (string.IsNullOrWhiteSpace(video.ChannelUrl) ||
             video.ChannelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
         {
-            Logger.Warning("Cannot open channel with missing or placeholder URL for video {VideoId} ({ChannelName})", video.Id, video.ChannelName);
+            Logger.Warning("Cannot open channel with missing or placeholder URL for video {VideoId} ({ChannelName})",
+                video.Id, video.ChannelName);
             return;
         }
 
@@ -268,6 +266,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
             .ConfigureAwait(false);
     }
+
     private void CloseChannel()
     {
         _channelViewModel.Clear();
@@ -308,11 +307,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        if (!_navigationService.GoBack())
-        {
-            _navigationService.NavigateTo(NavigationPage.Home);
-        }
+        if (!_navigationService.GoBack()) _navigationService.NavigateTo(NavigationPage.Home);
     }
+
     private void OpenEmbeddedPlayer()
     {
         _navigationService.NavigateTo(NavigationPage.Player);
@@ -323,11 +320,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void CloseEmbeddedPlayer()
     {
         Widget.Unfullscreen();
-        if (!_navigationService.GoBack())
-        {
-            _navigationService.NavigateTo(NavigationPage.Home);
-        }
+        if (!_navigationService.GoBack()) _navigationService.NavigateTo(NavigationPage.Home);
     }
+
     private void ReportStartupDependencyWarnings()
     {
         var warnings = _services.RuntimeDependencyDiagnostics.GetStartupWarnings();
@@ -435,25 +430,17 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (e.IsBackNavigation)
         {
             if (e.CurrentPage == NavigationPage.Channel && e.CurrentParameter is ChannelNavigationArgs channelArgs)
-            {
-                _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? "Channel", _channel.GetBatchSize())
+                _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? "Channel",
+                        _channel.GetBatchSize())
                     .FireAndForget(Logger);
-            }
             else if (e.CurrentPage == NavigationPage.Search && e.CurrentParameter is string query)
-            {
                 SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
-            }
         }
 
         if (e.PreviousPage == NavigationPage.Channel && e.CurrentPage != NavigationPage.Channel)
-        {
             _channelViewModel.Clear();
-        }
 
-        if (e.PreviousPage == NavigationPage.Search && e.CurrentPage != NavigationPage.Search)
-        {
-            _searchViewModel.Reset();
-        }
+        if (e.PreviousPage == NavigationPage.Search && e.CurrentPage != NavigationPage.Search) _searchViewModel.Reset();
 
         var childChanged = e.CurrentPage != e.PreviousPage;
         switch (e.CurrentPage)
@@ -519,6 +506,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void PresentAboutDialog()
     {
         var dialog = AboutDialog.New();
+        dialog.ApplicationIcon = ApplicationMetadata.IconName;
         dialog.ApplicationName = ApplicationMetadata.ApplicationName;
         dialog.Version = ApplicationMetadata.Version;
         dialog.DeveloperName = ApplicationMetadata.DeveloperName;
@@ -580,7 +568,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         {
             NavigationPage.Search => (true, _searchViewModel.BackLabel, "Exit Search"),
             NavigationPage.Channel => (true, _channelViewModel.BackLabel, _channelViewModel.BackTooltip),
-            _ => (false, "Back", "Back"),
+            _ => (false, "Back", "Back")
         };
 
         var text = string.IsNullOrWhiteSpace(label) ? "Back" : label;
@@ -684,6 +672,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 prefs.WindowHeight = height;
             }
         }
+
         _services.Preferences.SavePreferences(prefs);
         _playback.PlaybackStateChanged -= OnPlaybackStateChanged;
         _navigationService.PageChanged -= OnNavigationPageChanged;

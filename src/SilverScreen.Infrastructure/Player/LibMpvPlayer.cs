@@ -41,22 +41,22 @@ public sealed class LibMpvPlayer : IDisposable
     private readonly Task? _eventPump;
     private readonly Lock _gate = new();
     private readonly ILibMpvNativeApi _native;
+    private readonly Lock _seekGate = new();
     private string? _cookieFilePath;
     private nint _handle;
+    private (double Seconds, bool Exact)? _pendingSeek;
     private AppPreferences? _preferences;
     private string _quality = "Best";
     private ReloadSnapshot? _reload;
     private nint _renderContext;
     private PlaybackRequest? _request;
     private bool _resumeAfterRenderer;
+    private bool _seekQueued;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
         false, [], []);
 
     private GCHandle _updateCallbackHandle;
-    private readonly Lock _seekGate = new();
-    private (double Seconds, bool Exact)? _pendingSeek;
-    private bool _seekQueued;
 
 
     public LibMpvPlayer(Action<Action> dispatch) : this(new LibMpvNative(), dispatch)
@@ -290,11 +290,9 @@ public sealed class LibMpvPlayer : IDisposable
         lock (_seekGate)
         {
             _pendingSeek = (seconds, exact);
-            if (!_seekQueued)
-            {
-                _seekQueued = true;
-                Enqueue(DispatchPendingSeek);
-            }
+            if (_seekQueued) return;
+            _seekQueued = true;
+            Enqueue(DispatchPendingSeek);
         }
     }
 
@@ -484,7 +482,8 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
         }
     }
-    private void HandleLogMessage(nint data)
+
+    private static void HandleLogMessage(nint data)
     {
         if (data == 0) return;
         var message = Marshal.PtrToStructure<LibMpvEventLogMessage>(data);
@@ -560,16 +559,8 @@ public sealed class LibMpvPlayer : IDisposable
                 _ => _state
             };
             if (_reload is not null)
-            {
-                _reload = _reload with
-                {
-                    PlaylistIndex = _state.PlaylistIndex,
-                    Position = _state.Position,
-                    IsPaused = _state.IsPaused,
-                    Volume = _state.Volume,
-                    Speed = _state.Speed
-                };
-            }
+                _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
+                    _state.Speed);
         }
 
         PublishState();
@@ -592,7 +583,8 @@ public sealed class LibMpvPlayer : IDisposable
             reload = _reload;
         }
 
-        if (reload is not null && (reload.PlaylistIndex < 0 || reload.PlaylistIndex == _state.PlaylistIndex || _state.PlaylistIndex < 0))
+        if (reload is not null && (reload.PlaylistIndex < 0 || reload.PlaylistIndex == _state.PlaylistIndex ||
+                                   _state.PlaylistIndex < 0))
         {
             _reload = null;
             Enqueue(() =>
@@ -640,10 +632,8 @@ public sealed class LibMpvPlayer : IDisposable
         Check(_native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));
         if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
-        {
             Check(_native.SetPropertyString(_handle, "script-opts",
                 $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));
-        }
         Check(_native.Command(_handle, "loadfile", urls[0], "replace"));
         foreach (var url in urls.Skip(1)) Check(_native.Command(_handle, "loadfile", url, "append-play"));
         if (reload is not null) Check(_native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));

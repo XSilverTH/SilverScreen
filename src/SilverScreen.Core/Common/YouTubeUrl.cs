@@ -18,7 +18,7 @@ public sealed record YouTubeUrlParseResult(
     string? PlaylistId = null)
 {
     public string? CanonicalWatchUrl => VideoId is not null &&
-        (Kind == YouTubeUrlKind.Video || Kind == YouTubeUrlKind.Shorts)
+                                        Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts
         ? $"https://www.youtube.com/watch?v={Uri.EscapeDataString(VideoId)}"
         : null;
 
@@ -48,6 +48,7 @@ public static class YouTubeUrlParser
             ? ParseShortHost(uri)
             : ParseYouTubeHost(uri);
     }
+
     private static YouTubeUrlParseResult ParseShortHost(Uri uri)
     {
         var firstSegment = GetPathSegment(uri, 0);

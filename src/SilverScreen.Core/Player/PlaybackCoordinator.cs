@@ -8,14 +8,14 @@ namespace SilverScreen.Core.Player;
 ///     Headless coordinator that unifies the shared playback lifecycle:
 ///     telemetry sessions, presence pulsing, cookie file leasing, and playlist/queue synchronization.
 ///     <para>
-///     Process registry, not a view lifecycle: the coordinator tracks <em>multiple</em>
-///     concurrent requests (backend routing, process lifetimes, telemetry/presence for
-///     each active playback id), while <c>PlaybackSession</c> owns a <em>single</em>
-///     view lifecycle (one video/view: OSD, resume prompts, engagement, timeline).
-///     Sessions must not spawn or manage player processes directly; all process
-///     lifetime and backend routing goes through this coordinator. No logic is owned
-///     twice: per-video view state lives in the session, multi-request process state
-///     lives here.
+///         Process registry, not a view lifecycle: the coordinator tracks <em>multiple</em>
+///         concurrent requests (backend routing, process lifetimes, telemetry/presence for
+///         each active playback id), while <c>PlaybackSession</c> owns a <em>single</em>
+///         view lifecycle (one video/view: OSD, resume prompts, engagement, timeline).
+///         Sessions must not spawn or manage player processes directly; all process
+///         lifetime and backend routing goes through this coordinator. No logic is owned
+///         twice: per-video view state lives in the session, multi-request process state
+///         lives here.
 ///     </para>
 /// </summary>
 public sealed class PlaybackCoordinator(
@@ -98,18 +98,9 @@ public sealed class PlaybackCoordinator(
         if (request is null || index < 0 || index >= request.Videos.Length) return null;
         return request.Videos[index];
     }
+
     // Coordinator entry guard: null videoId / empty request is a guidance string, never a throw.
     // Returns null when the request is playable; PlayAsync surfaces the message otherwise.
-    public static string? GetInvalidRequestReason(PlaybackRequest? request)
-    {
-        if (request is null || request.Videos.IsDefaultOrEmpty)
-            return "Nothing to play. Add a video to the queue first.";
-        var first = request.Videos[0];
-        if (first is null || string.IsNullOrWhiteSpace(first.Id) ||
-            !PlaybackRequest.LooksLikeYouTubeVideoId(first.Id))
-            return "Media is unavailable for this video.";
-        return null;
-    }
 
     public static bool TryResolveVideoChange(
         PlaybackRequest? request,

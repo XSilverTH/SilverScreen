@@ -79,10 +79,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         _popdownAction();
 
         var trimmed = query.Trim();
-        if (SearchViewModel.IsDirectVideoUrl(trimmed))
-        {
-            search_entry.SetText(string.Empty);
-        }
+        if (SearchViewModel.IsDirectVideoUrl(trimmed)) search_entry.SetText(string.Empty);
 
         Logger.Information("Search submitted from popover: {Query}", trimmed);
         _submitCallback(trimmed);
@@ -302,7 +299,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         suggestions_revealer.RevealChild = false;
     }
 
-    internal static string FormatSuggestionMarkup(string rawQuery, string suggestion)
+    private static string FormatSuggestionMarkup(string rawQuery, string suggestion)
     {
         var trimmedQuery = rawQuery.Trim();
         var escapedSuggestion = SecurityElement.Escape(suggestion);

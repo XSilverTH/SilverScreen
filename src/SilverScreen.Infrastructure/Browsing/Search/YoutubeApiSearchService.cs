@@ -1,13 +1,15 @@
 using Serilog;
-using SilverScreen.Core.Browsing.Common;
-using CoreSearchRequest = SilverScreen.Core.Browsing.Search.SearchRequest;
 using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.Enums;
 using YoutubeAPI.Models.Search;
+using YoutubeAPI.Models.Videos;
+using CoreSearchRequest = SilverScreen.Core.Browsing.Search.SearchRequest;
 using ApiVideoSummary = YoutubeAPI.Models.Videos.VideoSummary;
+using SearchRequest = YoutubeAPI.Models.Search.SearchRequest;
+using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Search;
 
@@ -30,10 +32,10 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
             var client = _clientProvider.GetClient();
             var page = request.ContinuationToken is null
                 ? await client.Search.GetPageAsync(
-                    new YoutubeAPI.Models.Search.SearchRequest(request.Query, SearchKind.Video),
+                    new SearchRequest(request.Query, SearchKind.Video),
                     cancellationToken).ConfigureAwait(false)
                 : await client.Search.GetPageAsync(
-                    SearchContinuation.Import(request.ContinuationToken), cancellationToken)
+                        SearchContinuation.Import(request.ContinuationToken), cancellationToken)
                     .ConfigureAwait(false);
 
             var videos = page.Items
@@ -89,7 +91,7 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
 
     private static VideoSummary MapVideo(
         ApiVideoSummary video,
-        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
+        VideoPlaybackProgress? playbackProgress)
     {
         var thumbnailUrl = video.Thumbnails
             .OrderBy(thumbnail => (long)thumbnail.Width * thumbnail.Height)

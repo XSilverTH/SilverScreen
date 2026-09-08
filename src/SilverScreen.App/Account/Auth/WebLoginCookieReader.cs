@@ -33,7 +33,9 @@ internal static partial class WebLoginCookieReader
 
         // Run continuations asynchronously so drain logic never executes on the
         // native WebKit async-callback thread.
-        var completion = new TaskCompletionSource<IReadOnlyList<WebCookieSnapshot>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion =
+            new TaskCompletionSource<IReadOnlyList<WebCookieSnapshot>>(TaskCreationOptions
+                .RunContinuationsAsynchronously);
 
         var callbackHandler = new AsyncReadyCallbackAsyncHandler((sourceObject, result, _) =>
         {

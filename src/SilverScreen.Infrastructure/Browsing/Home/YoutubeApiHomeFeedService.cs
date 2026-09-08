@@ -6,6 +6,8 @@ using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.Feeds;
+using YoutubeAPI.Models.Videos;
+using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Home;
 
@@ -21,11 +23,11 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
 
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiHomeFeedService>();
     private readonly IYouTubeClientProvider _clientProvider;
-    private readonly Lock _lock = new();
     private readonly List<VideoSummary> _loadedVideos = [];
+    private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
-    private string? _continuationToken;
     private FeedPage _cachedFeedPage = FeedPage.Empty;
+    private string? _continuationToken;
 
     public YoutubeApiHomeFeedService(ISessionService sessionService, IYouTubeClientProvider clientProvider)
     {
@@ -39,16 +41,13 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         CancellationToken cancellationToken = default)
     {
         var pageSize = Math.Max(count, 1);
-        if (!IsSessionActive())
-        {
-            ClearCachedResults();
-            return new AuthenticatedHomeFeedResult(
-                AuthenticatedHomeFeedStatus.AuthenticationRequired,
-                FeedPage.Empty,
-                AuthenticationRequiredMessage);
-        }
-
-        return await FetchPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
+        if (IsSessionActive())
+            return await FetchPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
+        ClearCachedResults();
+        return new AuthenticatedHomeFeedResult(
+            AuthenticatedHomeFeedStatus.AuthenticationRequired,
+            FeedPage.Empty,
+            AuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHomeFeedResult> LoadNextPageAsync(
@@ -67,7 +66,9 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
 
         string? token;
         lock (_lock)
+        {
             token = _continuationToken;
+        }
 
         if (string.IsNullOrWhiteSpace(token))
             return new AuthenticatedHomeFeedResult(
@@ -92,7 +93,10 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         return await FetchPageAsync(continuation, pageSize, false, cancellationToken).ConfigureAwait(false);
     }
 
-    public void Dispose() => _sessionService.SessionChanged -= OnSessionChanged;
+    public void Dispose()
+    {
+        _sessionService.SessionChanged -= OnSessionChanged;
+    }
 
     private async Task<AuthenticatedHomeFeedResult> FetchPageAsync(
         HomeContinuation? continuation,
@@ -102,16 +106,14 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     {
         try
         {
-            var videos = new List<SilverScreen.Core.Browsing.Common.VideoSummary>();
+            var videos = new List<VideoSummary>();
             var knownVideoIds = new HashSet<string>(StringComparer.Ordinal);
             if (!isFirstPage)
-            {
                 lock (_lock)
                 {
                     foreach (var video in _loadedVideos)
                         knownVideoIds.Add(video.Id);
                 }
-            }
 
             var currentContinuation = continuation;
             string? nextToken;
@@ -125,12 +127,9 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                     : await _clientProvider.GetClient().Feeds.GetHomePageAsync(currentContinuation, cancellationToken)
                         .ConfigureAwait(false);
 
-                foreach (var item in page.Items.OfType<VideoFeedItem>().Where(item => !item.Video.IsShort))
-                {
-                    var video = MapVideo(item.Video, item.PlaybackProgress);
-                    if (knownVideoIds.Add(video.Id))
-                        videos.Add(video);
-                }
+                videos.AddRange(page.Items.OfType<VideoFeedItem>().Where(item => !item.Video.IsShort)
+                    .Select(item => MapVideo(item.Video, item.PlaybackProgress))
+                    .Where(video => knownVideoIds.Add(video.Id)));
 
                 nextToken = page.Next?.Export();
                 if (!isFirstPage || videos.Count >= pageSize || string.IsNullOrWhiteSpace(nextToken))
@@ -151,16 +150,12 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 currentContinuation = page.Next;
             } while (true);
 
-            if (videos.Count == 0 && isFirstPage)
-            {
-                ClearCachedResults();
-                return new AuthenticatedHomeFeedResult(
-                    AuthenticatedHomeFeedStatus.Empty,
-                    FeedPage.Empty,
-                    EmptyFeedMessage);
-            }
-
-            return CommitVideos(videos, nextToken, isFirstPage);
+            if (videos.Count != 0 || !isFirstPage) return CommitVideos(videos, nextToken, isFirstPage);
+            ClearCachedResults();
+            return new AuthenticatedHomeFeedResult(
+                AuthenticatedHomeFeedStatus.Empty,
+                FeedPage.Empty,
+                EmptyFeedMessage);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -194,7 +189,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     }
 
     private AuthenticatedHomeFeedResult CommitVideos(
-        IReadOnlyList<SilverScreen.Core.Browsing.Common.VideoSummary> videos,
+        IReadOnlyList<VideoSummary> videos,
         string? nextToken,
         bool isFirstPage)
     {
@@ -220,7 +215,9 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     private FeedPage GetHomeFeed()
     {
         lock (_lock)
+        {
             return _cachedFeedPage;
+        }
     }
 
     private bool IsSessionActive()
@@ -228,7 +225,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
         return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is { Content: not null } && !string.IsNullOrWhiteSpace(cookies.Content);
+               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     private void ClearCachedResults()
@@ -241,20 +238,26 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         }
     }
 
-    private void OnSessionChanged(object? sender, EventArgs e) => ClearCachedResults();
+    private void OnSessionChanged(object? sender, EventArgs e)
+    {
+        ClearCachedResults();
+    }
 
-    private static bool IsAuthenticationFailure(YouTubeException exception) =>
-        exception is AuthenticationRequiredException or AuthenticationExpiredException or PermissionDeniedException;
+    private static bool IsAuthenticationFailure(YouTubeException exception)
+    {
+        return exception is AuthenticationRequiredException or AuthenticationExpiredException
+            or PermissionDeniedException;
+    }
 
-    private static SilverScreen.Core.Browsing.Common.VideoSummary MapVideo(
+    private static VideoSummary MapVideo(
         YoutubeAPI.Models.Videos.VideoSummary video,
-        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
+        VideoPlaybackProgress? playbackProgress)
     {
         var thumbnail = video.Thumbnails
             .OrderBy(item => (long)item.Width * item.Height)
             .LastOrDefault()?.Url.ToString() ?? string.Empty;
         var channel = video.Channel;
-        return new SilverScreen.Core.Browsing.Common.VideoSummary(
+        return new VideoSummary(
             video.Id.Value,
             video.Title,
             channel.Title,

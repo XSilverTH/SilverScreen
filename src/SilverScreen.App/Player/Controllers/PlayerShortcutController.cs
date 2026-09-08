@@ -129,11 +129,7 @@ public sealed class PlayerShortcutController : IDisposable
 
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (_keyboardRoot is Window window && window.GetFocus() is Widget focused)
-        {
-            if (focused is Editable || focused is TextView)
-                return false;
-        }
+        if (_keyboardRoot is Window window && window.GetFocus() is Editable or TextView) return false;
 
         var keyval = Functions.KeyvalToLower(args.Keyval);
         if (KeyInterceptor?.Invoke(keyval) == true) return true;

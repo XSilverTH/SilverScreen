@@ -10,9 +10,9 @@ public sealed record MpvPlaybackCommand(string ExecutablePath, IReadOnlyList<str
 public sealed class MpvCommandBuilder
 {
     /// <summary>
-    /// Builds the external-mpv argv for the FULL queue snapshot: watch URLs plus cookie
-    /// lease plus ytdl-format plus IPC endpoint. mpv+yt-dlp fetch formats and advance the
-    /// playlist itself. Resolved direct URLs are never used here. Pure: no I/O.
+    ///     Builds the external-mpv argv for the FULL queue snapshot: watch URLs plus cookie
+    ///     lease plus ytdl-format plus IPC endpoint. mpv+yt-dlp fetch formats and advance the
+    ///     playlist itself. Resolved direct URLs are never used here. Pure: no I/O.
     /// </summary>
     public static MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options,
         string? cookieFilePath = null, string? inputIpcServerPath = null)

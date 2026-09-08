@@ -10,20 +10,31 @@ using YoutubeAPI.Models.ValueTypes;
 namespace SilverScreen.Infrastructure.Player.Comments;
 
 /// <summary>Loads comment-thread pages and retains YoutubeAPI continuation state between requests.</summary>
-public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvider) : IYouTubeCommentService, IDisposable
+public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvider)
+    : IYouTubeCommentService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiCommentService>();
+
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
+
     private readonly Lock _gate = new();
-    private readonly SemaphoreSlim _requestGate = new(1, 1);
-    private readonly List<YouTubeComment> _loadedComments = [];
     private readonly HashSet<string> _loadedCommentIds = new(StringComparer.Ordinal);
+    private readonly List<YouTubeComment> _loadedComments = [];
     private readonly Queue<CommentRepliesContinuation> _replyContinuations = [];
-    private CommentThreadsContinuation? _threadContinuation;
-    private YouTubeCommentSort _sort;
-    private string? _videoId;
+    private readonly SemaphoreSlim _requestGate = new(1, 1);
     private bool _disposed;
+    private YouTubeCommentSort _sort;
+    private CommentThreadsContinuation? _threadContinuation;
+    private string? _videoId;
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _requestGate.Dispose();
+    }
 
     public async Task<YouTubeCommentsResult> LoadFirstPageAsync(
         string videoId,
@@ -85,14 +96,6 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         {
             _requestGate.Release();
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        _requestGate.Dispose();
     }
 
     private async Task<YouTubeCommentsResult> FetchThreadPageAsync(
@@ -205,29 +208,31 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
 
     private void AddComment(Comment comment, string? parentId)
     {
-        if (_loadedCommentIds.Add(comment.Id.Value))
-        {
-            var authorName = string.IsNullOrWhiteSpace(comment.Author.Name) ? "YouTube user" : comment.Author.Name;
-            _loadedComments.Add(new YouTubeComment(
-                comment.Id.Value,
-                authorName,
-                comment.Text,
-                comment.PublishedText,
-                Math.Max(comment.LikeCount.GetValueOrDefault(), 0),
-                parentId));
-        }
+        if (!_loadedCommentIds.Add(comment.Id.Value)) return;
+        var authorName = string.IsNullOrWhiteSpace(comment.Author.Name) ? "YouTube user" : comment.Author.Name;
+        _loadedComments.Add(new YouTubeComment(
+            comment.Id.Value,
+            authorName,
+            comment.Text,
+            comment.PublishedText,
+            Math.Max(comment.LikeCount.GetValueOrDefault(), 0),
+            parentId));
     }
 
     private bool HasMore()
     {
         lock (_gate)
+        {
             return _threadContinuation is not null || _replyContinuations.Count > 0;
+        }
     }
 
     private YouTubeCommentsResult Snapshot(string message, bool hasMore)
     {
         lock (_gate)
+        {
             return new YouTubeCommentsResult([.. _loadedComments], true, message, hasMore);
+        }
     }
 
     private static YouTubeCommentsResult Failure(string statusMessage)

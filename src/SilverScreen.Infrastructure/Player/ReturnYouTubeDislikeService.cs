@@ -10,22 +10,23 @@ using SilverScreen.Core.Preferences;
 namespace SilverScreen.Infrastructure.Player;
 
 /// <summary>
-/// Fetches dislike estimates from returnyoutubedislike.com. Off by default: unless
-/// <see cref="AppPreferences.RydEnabled"/> is true, every call fails closed to null —
-/// no HTTP traffic and no cached (possibly stale) entries are served. The per-video
-/// cache is bounded to <see cref="MaxCachedVideos"/> entries (oldest-inserted evicted).
+///     Fetches dislike estimates from returnyoutubedislike.com. Off by default: unless
+///     <see cref="AppPreferences.RydEnabled" /> is true, every call fails closed to null —
+///     no HTTP traffic and no cached (possibly stale) entries are served. The per-video
+///     cache is bounded to <see cref="MaxCachedVideos" /> entries (oldest-inserted evicted).
 /// </summary>
 public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisposable
 {
     /// <summary>Maximum cached videos; the oldest-inserted entry is evicted past this bound.</summary>
     internal const int MaxCachedVideos = 100;
+
     private static readonly ILogger Logger = Log.ForContext<ReturnYouTubeDislikeService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
     private readonly bool _disposeHttpClient;
     private readonly ConcurrentDictionary<string, VideoEngagement> _engagementByVideoId = new(StringComparer.Ordinal);
-    private readonly ConcurrentQueue<string> _insertionOrder = new();
     private readonly HttpClient _httpClient;
+    private readonly ConcurrentQueue<string> _insertionOrder = new();
     private readonly IPreferencesService? _preferencesService;
 
     public ReturnYouTubeDislikeService()

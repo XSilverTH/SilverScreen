@@ -5,45 +5,32 @@ using SilverScreen.Core.Browsing.Home;
 namespace SilverScreen.Features;
 
 /// <summary>
-/// Shared session-gate vocabulary for feed and account surfaces.
-///
-/// Home, History, and Account previously hand-rolled the same "is there a
-/// usable signed-in session" check and copied the same user-facing strings,
-/// so copy drifted (e.g. "session" vs "sign-in" wording for the same expired
-/// sign-in state). The Wave 1 plain-language strings live here as the single
-/// source of truth: signed-out vs error vs ok.
-///
-/// Batch scope: HomeFeedCoordinator and AccountViewModel consume this helper.
-/// HistoryViewModel, SubscriptionsViewModel, and the YoutubeApi* services
-/// still carry their own copies and adopt this helper in a follow-up; the
-/// HomeVideoListSource.MapState wrapper likewise keeps its older copy until
-/// its owner aligns it (Wave 1 uncertainty, unchanged here).
+///     Shared session-gate vocabulary for feed and account surfaces.
+///     Home, History, and Account previously hand-rolled the same "is there a
+///     usable signed-in session" check and copied the same user-facing strings,
+///     so copy drifted (e.g. "session" vs "sign-in" wording for the same expired
+///     sign-in state). The Wave 1 plain-language strings live here as the single
+///     source of truth: signed-out vs error vs ok.
+///     Batch scope: HomeFeedCoordinator and AccountViewModel consume this helper.
+///     HistoryViewModel, SubscriptionsViewModel, and the YoutubeApi* services
+///     still carry their own copies and adopt this helper in a follow-up; the
+///     HomeVideoListSource.MapState wrapper likewise keeps its older copy until
+///     its owner aligns it (Wave 1 uncertainty, unchanged here).
 /// </summary>
 public enum SessionGateState
 {
     SignedIn,
-    SignedOut,
+    SignedOut
 }
 
 public static class SessionGate
 {
-    public const string SignInActionLabel = "Sign In";
-    public const string HomeSignedOutMessage = "Sign in with Google or use cookies.txt to see your Home feed.";
+    private const string SignInActionLabel = "Sign In";
+    private const string HomeSignedOutMessage = "Sign in with Google or use cookies.txt to see your Home feed.";
     public const string HistorySignedOutMessage = "Sign in with Google or use cookies.txt to see your watch history.";
     public const string SessionNoLongerValidMessage = "Your YouTube sign-in is no longer valid.";
     public const string HomeLoadErrorMessage = "Could not load YouTube recommendations.";
-    public const string HomeEmptyMessage = "No recommendations are available right now.";
-
-    /// <summary>
-    /// Canonical gate: a session is usable only when the service reports a
-    /// signed-in manual session backed by non-empty cookie content. A null
-    /// service means "no gating" (preserves History's optional-service
-    /// semantics) and reports signed-in.
-    /// </summary>
-    public static SessionGateState GetSessionState(ISessionService? sessionService)
-    {
-        return RequireSignedIn(sessionService) ? SessionGateState.SignedIn : SessionGateState.SignedOut;
-    }
+    private const string HomeEmptyMessage = "No recommendations are available right now.";
 
     public static bool RequireSignedIn(ISessionService? sessionService)
     {
@@ -102,11 +89,11 @@ public static class SessionGate
     }
 
     /// <summary>
-    /// Maps a feed-level outcome to the Home state kind plus its user-facing
-    /// message: signed-out is decided by callers via <see cref="RequireSignedIn"/>
-    /// before reaching here; auth-invalid and generic errors stay distinct so
-    /// the UI can offer Sign In vs Retry respectively; loading/ready states
-    /// keep the engine's own message.
+    ///     Maps a feed-level outcome to the Home state kind plus its user-facing
+    ///     message: signed-out is decided by callers via <see cref="RequireSignedIn" />
+    ///     before reaching here; auth-invalid and generic errors stay distinct so
+    ///     the UI can offer Sign In vs Retry respectively; loading/ready states
+    ///     keep the engine's own message.
     /// </summary>
     public static (HomeFeedStateKind Kind, string? Message) MapHomeFeedOutcome(
         AuthenticatedHomeFeedStatus lastStatus,

@@ -177,12 +177,10 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private void OnWidgetUnmap(Widget sender, EventArgs args)
     {
         ClearBuffer(manual_editor);
-        if (_editing)
-        {
-            _editing = false;
-            manual_error_label.SetVisible(false);
-            Render();
-        }
+        if (!_editing) return;
+        _editing = false;
+        manual_error_label.SetVisible(false);
+        Render();
     }
 
     private void OnManualCancelButtonClicked(object? sender, EventArgs args)
@@ -216,13 +214,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
         return buffer.GetText(start, end, true);
     }
 
-    internal static void ClearBuffer(TextView textView)
+    private static void ClearBuffer(TextView textView)
     {
         var buffer = textView.Buffer;
-        if (buffer is null)
-            return;
 
-        buffer.SetText(string.Empty, 0);
+        buffer?.SetText(string.Empty, 0);
     }
 
 

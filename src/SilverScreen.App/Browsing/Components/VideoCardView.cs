@@ -5,9 +5,10 @@ using Gio;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
+using Constants = Gdk.Constants;
 using Task = System.Threading.Tasks.Task;
 using Functions = GLib.Functions;
 
@@ -28,10 +29,10 @@ public partial class VideoCardView : ViewBase<Bin>
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
     private readonly GestureClick _channelClick;
+    private readonly EventControllerKey _channelKeyController;
     private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
     private readonly EventControllerKey _keyController;
-    private readonly EventControllerKey _channelKeyController;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly GestureClick _rightClick;
@@ -93,8 +94,8 @@ public partial class VideoCardView : ViewBase<Bin>
         _keyController = EventControllerKey.New();
         _keyController.OnKeyPressed += OnKeyPressed;
         card.AddController(_keyController);
-
     }
+
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -301,29 +302,21 @@ public partial class VideoCardView : ViewBase<Bin>
         if (_disposed || _video is null)
             return false;
 
-        if (args.Keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+        switch (args.Keyval)
         {
-            StartPlay(_video);
-            return true;
-        }
-
-        if (args.Keyval is (uint)Gdk.Constants.KEY_Menu ||
-            (args.Keyval == (uint)Gdk.Constants.KEY_F10 && (args.State & ModifierType.ShiftMask) != 0))
-        {
-            ShowContextMenu();
-            return true;
-        }
-
-        if (args.Keyval is (uint)Gdk.Constants.KEY_c or (uint)Gdk.Constants.KEY_C)
-        {
-            if (_actions.OpenChannelAsync is { } openChannel)
-            {
+            case Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space:
+                StartPlay(_video);
+                return true;
+            case Constants.KEY_Menu:
+            case Constants.KEY_F10 when (args.State & ModifierType.ShiftMask) != 0:
+                ShowContextMenu();
+                return true;
+            case Constants.KEY_c or Constants.KEY_C when _actions.OpenChannelAsync is { } openChannel:
                 openChannel(_video).FireAndForget(Logger);
                 return true;
-            }
+            default:
+                return false;
         }
-
-        return false;
     }
 
     private bool OnChannelKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
@@ -331,23 +324,19 @@ public partial class VideoCardView : ViewBase<Bin>
         if (_disposed || _video is null)
             return false;
 
-        if (args.Keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+        switch (args.Keyval)
         {
-            if (_actions.OpenChannelAsync is { } openChannel)
-            {
+            case Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space
+                when _actions.OpenChannelAsync is { } openChannel:
                 openChannel(_video).FireAndForget(Logger);
                 return true;
-            }
+            case Constants.KEY_Menu:
+            case Constants.KEY_F10 when (args.State & ModifierType.ShiftMask) != 0:
+                ShowContextMenu();
+                return true;
+            default:
+                return false;
         }
-
-        if (args.Keyval is (uint)Gdk.Constants.KEY_Menu ||
-            (args.Keyval == (uint)Gdk.Constants.KEY_F10 && (args.State & ModifierType.ShiftMask) != 0))
-        {
-            ShowContextMenu();
-            return true;
-        }
-
-        return false;
     }
 
 
@@ -494,19 +483,19 @@ public partial class VideoCardView : ViewBase<Bin>
         return count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
     }
 
-    public static string FormatViewCount(long views)
+    private static string FormatViewCount(long views)
     {
         return views switch
         {
-            >= 1_000_000_000 => $"{(views / 1_000_000_000.0):0.#}B views",
-            >= 1_000_000 => $"{(views / 1_000_000.0):0.#}M views",
-            >= 1_000 => $"{(views / 1_000.0):0.#}K views",
+            >= 1_000_000_000 => $"{views / 1_000_000_000.0:0.#}B views",
+            >= 1_000_000 => $"{views / 1_000_000.0:0.#}M views",
+            >= 1_000 => $"{views / 1_000.0:0.#}K views",
             1 => "1 view",
             _ => $"{views:N0} views"
         };
     }
 
-    public static string FormatCardTooltip(VideoSummary video, long? viewCount = null)
+    private static string FormatCardTooltip(VideoSummary video, long? viewCount = null)
     {
         var publishedText = video.PublishedAt is { } publishedAt
             ? publishedAt.ToLocalTime().ToString("MMM d, yyyy")
@@ -517,7 +506,8 @@ public partial class VideoCardView : ViewBase<Bin>
         return FormatCardTooltip(video.Title, video.ChannelName, publishedText, viewCount);
     }
 
-    public static string FormatCardTooltip(string title, string channelName, string? publishedText, long? viewCount = null)
+    private static string FormatCardTooltip(string title, string channelName, string? publishedText,
+        long? viewCount = null)
     {
         var metaLine = FormatTooltipMeta(publishedText, viewCount);
 
@@ -526,7 +516,7 @@ public partial class VideoCardView : ViewBase<Bin>
             : $"{title}\n{channelName}\n{metaLine}";
     }
 
-    public static string FormatTooltipMeta(string? publishedText, long? viewCount = null)
+    private static string FormatTooltipMeta(string? publishedText, long? viewCount = null)
     {
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(publishedText))

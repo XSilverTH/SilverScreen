@@ -1,12 +1,14 @@
 using Serilog;
 using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
+using YoutubeAPI.Models.Common;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.ValueTypes;
+using YoutubeAPI.Models.Videos;
 using ApiChannelVideoSort = YoutubeAPI.Models.Enums.ChannelVideoSort;
 using ApiVideoSummary = YoutubeAPI.Models.Videos.VideoSummary;
+using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Channel;
 
@@ -26,7 +28,6 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         int count,
         CancellationToken cancellationToken)
     {
-
         try
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
@@ -35,7 +36,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             var continuation = continuationToken is null
                 ? null
                 : ChannelVideosContinuation.Import(continuationToken);
-            var apiSort = continuation is null ? ToApiSort(sort) : continuation.Sort;
+            var apiSort = continuation?.Sort ?? ToApiSort(sort);
 
             string channelName;
             string? description;
@@ -88,8 +89,8 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                 videos,
                 resultSort,
                 status,
-                IsSuccess: true,
-                NextContinuationToken: nextContinuationToken);
+                true,
+                nextContinuationToken);
         }
         catch (FormatException exception)
         {
@@ -166,7 +167,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
     private static VideoSummary MapVideo(
         ApiVideoSummary video,
         string channelName,
-        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
+        VideoPlaybackProgress? playbackProgress)
     {
         var thumbnailUrl = SelectThumbnail(video.Thumbnails) ?? string.Empty;
         var publishedAt = video.PublishedAt;
@@ -188,7 +189,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             YouTubePlaybackProgressMapper.Map(playbackProgress));
     }
 
-    private static string? SelectThumbnail(IReadOnlyList<YoutubeAPI.Models.Common.Thumbnail> thumbnails)
+    private static string? SelectThumbnail(IReadOnlyList<Thumbnail> thumbnails)
     {
         return thumbnails
             .OrderBy(thumbnail => (long)thumbnail.Width * thumbnail.Height)

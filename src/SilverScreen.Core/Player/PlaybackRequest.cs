@@ -4,14 +4,14 @@ using SilverScreen.Core.Browsing.Common;
 namespace SilverScreen.Core.Player;
 
 /// <summary>
-/// Immutable snapshot of the queue taken at the moment playback starts: a copied
-/// video list plus the start index into it. The copy is by value at construction
-/// time, so later queue edits never mutate an in-flight request; starting playback
-/// again takes a new snapshot. Sync is one-directional queue-to-request only:
-/// a request never writes back into <c>IQueueService</c>. External-list callers
-/// derive watch URLs (<see cref="BuildWatchUrl"/>) plus the effective start index,
-/// and an empty snapshot is a guidance status (<see cref="EmptyQueueMessage"/>,
-/// coordinator entry guard), never a throw.
+///     Immutable snapshot of the queue taken at the moment playback starts: a copied
+///     video list plus the start index into it. The copy is by value at construction
+///     time, so later queue edits never mutate an in-flight request; starting playback
+///     again takes a new snapshot. Sync is one-directional queue-to-request only:
+///     a request never writes back into <c>IQueueService</c>. External-list callers
+///     derive watch URLs (<see cref="BuildWatchUrl" />) plus the effective start index,
+///     and an empty snapshot is a guidance status (<see cref="EmptyQueueMessage" />,
+///     coordinator entry guard), never a throw.
 /// </summary>
 public sealed record PlaybackRequest(ImmutableArray<VideoSummary> Videos, int StartIndex = 0)
 {

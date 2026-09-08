@@ -11,34 +11,32 @@ internal interface IPlayerStatsProvider
     PlaybackStats? GetPlaybackStats();
 }
 
-internal sealed class PlayerStatsController : IDisposable
+internal sealed class PlayerStatsController(
+    Func<PlaybackStats?> statsProvider,
+    Revealer revealer,
+    Label label)
+    : IDisposable
 {
     private const uint RefreshIntervalMilliseconds = 350;
     private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
 
-    private readonly Label _label;
-    private readonly Revealer _revealer;
-    private readonly Func<PlaybackStats?> _statsProvider;
+    private readonly Label _label = label ?? throw new ArgumentNullException(nameof(label));
+    private readonly Revealer _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
+
+    private readonly Func<PlaybackStats?> _statsProvider =
+        statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
+
+    private bool _disposed;
+    private uint _refreshTimerSource;
 
     public PlayerStatsController(
         IPlayerStatsProvider statsProvider,
         Revealer revealer,
         Label label)
-        : this((statsProvider ?? throw new ArgumentNullException(nameof(statsProvider))).GetPlaybackStats, revealer, label)
+        : this((statsProvider ?? throw new ArgumentNullException(nameof(statsProvider))).GetPlaybackStats, revealer,
+            label)
     {
     }
-
-    public PlayerStatsController(
-        Func<PlaybackStats?> statsProvider,
-        Revealer revealer,
-        Label label)
-    {
-        _statsProvider = statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
-        _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
-        _label = label ?? throw new ArgumentNullException(nameof(label));
-    }
-    private bool _disposed;
-    private uint _refreshTimerSource;
 
     public bool IsOpen { get; private set; }
 

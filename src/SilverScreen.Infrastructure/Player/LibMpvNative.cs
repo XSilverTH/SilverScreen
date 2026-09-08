@@ -99,6 +99,7 @@ internal readonly struct LibMpvOpenGlFbo(int fbo, int width, int height, int int
     public readonly int Height = height;
     public readonly int InternalFormat = internalFormat;
 }
+
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct LibMpvEventLogMessage(nint prefix, nint level, nint text, LibMpvLogLevel logLevel)
 {
@@ -107,7 +108,6 @@ internal readonly struct LibMpvEventLogMessage(nint prefix, nint level, nint tex
     public readonly nint Text = text;
     public readonly LibMpvLogLevel LogLevel = logLevel;
 }
-
 
 internal interface ILibMpvNativeApi : IDisposable
 {
@@ -153,15 +153,15 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private readonly delegate* unmanaged[Cdecl]<nint, int> _initialize;
     private readonly delegate* unmanaged[Cdecl]<nint, ulong, byte*, LibMpvFormat, int> _observeProperty;
     private readonly delegate* unmanaged[Cdecl]<nint, LibMpvRenderParam*, int> _render;
+    private readonly delegate* unmanaged[Cdecl]<nint, byte*, int> _requestLogMessages;
     private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*, int> _setOptionString;
     private readonly delegate* unmanaged[Cdecl]<nint, byte*, LibMpvFormat, void*, int> _setProperty;
     private readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*, int> _setPropertyString;
     private readonly delegate* unmanaged[Cdecl]<nint, nint, nint, void> _setRenderUpdateCallback;
     private readonly delegate* unmanaged[Cdecl]<nint, double, LibMpvEvent*> _waitEvent;
     private readonly delegate* unmanaged[Cdecl]<nint, void> _wakeup;
-    private readonly delegate* unmanaged[Cdecl]<nint, byte*, int> _requestLogMessages;
-    private delegate* unmanaged[Cdecl]<uint, int*, void> _glGetIntegerv;
     private nint _epoxyLibrary;
+    private delegate* unmanaged[Cdecl]<uint, int*, void> _glGetIntegerv;
     private nint _mpvLibrary;
 
     public LibMpvNative()
@@ -214,6 +214,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
                 _glGetIntegerv =
                     (delegate* unmanaged[Cdecl]<uint, int*, void>)ResolveOpenGlProcAddress(functionNamePointer);
             }
+
             IsLoaded = true;
         }
         catch (Exception exception)
@@ -248,6 +249,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     {
         return _initialize(handle);
     }
+
     public int RequestLogMessages(nint handle, string minLevel)
     {
         var nativeMinLevel = Utf8(minLevel);

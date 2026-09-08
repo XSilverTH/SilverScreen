@@ -7,12 +7,12 @@ using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 using Action = System.Action;
+using Constants = Gdk.Constants;
 using Rectangle = Gdk.Rectangle;
 
 namespace SilverScreen.Browsing.Subscriptions;
@@ -21,13 +21,13 @@ public partial class SubscriptionsView : ViewBase<Box>
 {
     private const int AvatarSize = 56;
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsView>();
+    private readonly EventControllerKey _allKeyController;
 
     private readonly List<ChannelItemHolder> _channelItems = [];
     private readonly Action<string, string> _openChannel;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoListView _videoList;
     private readonly SubscriptionsViewModel _viewModel;
-    private readonly EventControllerKey _allKeyController;
     private CancellationTokenSource? _avatarsCancellation;
     private bool _disposed;
     private IReadOnlyList<SubscribedChannel> _renderedChannels = [];
@@ -206,28 +206,23 @@ public partial class SubscriptionsView : ViewBase<Box>
         keyController.OnKeyPressed += (_, args) =>
         {
             var keyval = args.Keyval;
-            if (keyval is (uint)Gdk.Constants.KEY_Return or (uint)Gdk.Constants.KEY_KP_Enter or (uint)Gdk.Constants.KEY_space)
+            if (keyval is Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space)
             {
                 _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
                 return true;
             }
 
-            if (keyval == (uint)Gdk.Constants.KEY_Left)
+            if (keyval == Constants.KEY_Left)
             {
                 var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
                 if (index > 0)
-                {
                     _channelItems[index - 1].ItemBox.GrabFocus();
-                }
-                else if (index == 0)
-                {
-                    all_channel_button.GrabFocus();
-                }
+                else if (index == 0) all_channel_button.GrabFocus();
 
                 return true;
             }
 
-            if (keyval == (uint)Gdk.Constants.KEY_Right)
+            if (keyval == Constants.KEY_Right)
             {
                 var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
                 if (index >= 0 && index < _channelItems.Count - 1)
@@ -386,7 +381,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private bool OnAllKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (args.Keyval == (uint)Gdk.Constants.KEY_Right && _channelItems.Count > 0)
+        if (args.Keyval == Constants.KEY_Right && _channelItems.Count > 0)
         {
             _channelItems[0].ItemBox.GrabFocus();
             return true;
@@ -422,9 +417,7 @@ public partial class SubscriptionsView : ViewBase<Box>
         var handle = ExtractHandle(channel.Url);
         if (!string.IsNullOrWhiteSpace(handle) &&
             !string.Equals(channel.Title, handle, StringComparison.OrdinalIgnoreCase))
-        {
             return $"{channel.Title} ({handle})";
-        }
 
         return channel.Title;
     }
@@ -441,16 +434,13 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private sealed class ChannelItemHolder : IDisposable
     {
-        private readonly SubscribedChannel _channel;
-        private readonly Box _itemBox;
-        private readonly Overlay _overlay;
-        private readonly PopoverMenu _popover;
-        private readonly GestureClick _leftClick;
-        private readonly EventControllerKey _keyController;
-        private readonly GestureClick _rightClick;
         private readonly SimpleActionGroup _actionGroup;
-        private readonly SimpleAction _openAction;
+        private readonly EventControllerKey _keyController;
+        private readonly GestureClick _leftClick;
         private readonly Menu _menu;
+        private readonly SimpleAction _openAction;
+        private readonly PopoverMenu _popover;
+        private readonly GestureClick _rightClick;
         private bool _disposed;
 
         public ChannelItemHolder(
@@ -465,9 +455,9 @@ public partial class SubscriptionsView : ViewBase<Box>
             SimpleAction openAction,
             Menu menu)
         {
-            _channel = channel;
-            _itemBox = itemBox;
-            _overlay = overlay;
+            Channel = channel;
+            ItemBox = itemBox;
+            Overlay = overlay;
             _popover = popover;
             _leftClick = leftClick;
             _keyController = keyController;
@@ -477,9 +467,12 @@ public partial class SubscriptionsView : ViewBase<Box>
             _menu = menu;
         }
 
-        public SubscribedChannel Channel => _channel;
-        public Box ItemBox => _itemBox;
-        public Overlay Overlay => _overlay;
+        public SubscribedChannel Channel { get; }
+
+        public Box ItemBox { get; }
+
+        public Overlay Overlay { get; }
+
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }
 
@@ -493,13 +486,13 @@ public partial class SubscriptionsView : ViewBase<Box>
             BoundTexture?.Dispose();
             BoundTexture = null;
 
-            _itemBox.RemoveController(_leftClick);
+            ItemBox.RemoveController(_leftClick);
             _leftClick.Dispose();
 
-            _itemBox.RemoveController(_keyController);
+            ItemBox.RemoveController(_keyController);
             _keyController.Dispose();
 
-            _itemBox.RemoveController(_rightClick);
+            ItemBox.RemoveController(_rightClick);
             _rightClick.Dispose();
 
             _popover.Popdown();
@@ -512,8 +505,8 @@ public partial class SubscriptionsView : ViewBase<Box>
             _actionGroup.Dispose();
             _menu.Dispose();
 
-            _overlay.Dispose();
-            _itemBox.Dispose();
+            Overlay.Dispose();
+            ItemBox.Dispose();
         }
     }
 }

@@ -6,6 +6,8 @@ using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.Feeds;
+using YoutubeAPI.Models.Videos;
+using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.History;
 
@@ -21,8 +23,8 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiHistoryService>();
     private readonly IYouTubeClientProvider _clientProvider;
+    private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
-    private readonly List<SilverScreen.Core.Browsing.Common.VideoSummary> _loadedVideos = [];
     private readonly ISessionService _sessionService;
     private string? _continuationToken;
 
@@ -38,16 +40,13 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         CancellationToken cancellationToken = default)
     {
         var pageSize = Math.Max(count, 1);
-        if (!IsSessionActive())
-        {
-            ClearCachedResults();
-            return new AuthenticatedHistoryResult(
-                AuthenticatedHistoryStatus.AuthenticationRequired,
-                FeedPage.Empty,
-                AuthenticationRequiredMessage);
-        }
-
-        return await FetchPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
+        if (IsSessionActive())
+            return await FetchPageAsync(null, true, cancellationToken).ConfigureAwait(false);
+        ClearCachedResults();
+        return new AuthenticatedHistoryResult(
+            AuthenticatedHistoryStatus.AuthenticationRequired,
+            FeedPage.Empty,
+            AuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedHistoryResult> LoadNextPageAsync(
@@ -66,7 +65,9 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
         string? token;
         lock (_lock)
+        {
             token = _continuationToken;
+        }
 
         if (string.IsNullOrWhiteSpace(token))
             return new AuthenticatedHistoryResult(
@@ -88,14 +89,16 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
                 InvalidContinuationMessage);
         }
 
-        return await FetchPageAsync(continuation, pageSize, false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(continuation, false, cancellationToken).ConfigureAwait(false);
     }
 
-    public void Dispose() => _sessionService.SessionChanged -= OnSessionChanged;
+    public void Dispose()
+    {
+        _sessionService.SessionChanged -= OnSessionChanged;
+    }
 
     private async Task<AuthenticatedHistoryResult> FetchPageAsync(
         HistoryContinuation? continuation,
-        int pageSize,
         bool isFirstPage,
         CancellationToken cancellationToken)
     {
@@ -173,7 +176,9 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
     private FeedPage GetHistory()
     {
         lock (_lock)
+        {
             return new FeedPage([.. _loadedVideos], _continuationToken);
+        }
     }
 
     private bool IsSessionActive()
@@ -181,7 +186,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
         return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is { Content: not null } && !string.IsNullOrWhiteSpace(cookies.Content);
+               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     private void ClearCachedResults()
@@ -193,20 +198,26 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         }
     }
 
-    private void OnSessionChanged(object? sender, EventArgs e) => ClearCachedResults();
+    private void OnSessionChanged(object? sender, EventArgs e)
+    {
+        ClearCachedResults();
+    }
 
-    private static bool IsAuthenticationFailure(YouTubeException exception) =>
-        exception is AuthenticationRequiredException or AuthenticationExpiredException or PermissionDeniedException;
+    private static bool IsAuthenticationFailure(YouTubeException exception)
+    {
+        return exception is AuthenticationRequiredException or AuthenticationExpiredException
+            or PermissionDeniedException;
+    }
 
-    private static SilverScreen.Core.Browsing.Common.VideoSummary MapVideo(
+    private static VideoSummary MapVideo(
         YoutubeAPI.Models.Videos.VideoSummary video,
-        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
+        VideoPlaybackProgress? playbackProgress)
     {
         var thumbnail = video.Thumbnails
             .OrderBy(item => (long)item.Width * item.Height)
             .LastOrDefault()?.Url.ToString() ?? string.Empty;
         var channel = video.Channel;
-        return new SilverScreen.Core.Browsing.Common.VideoSummary(
+        return new VideoSummary(
             video.Id.Value,
             video.Title,
             channel.Title,

@@ -3,8 +3,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Serilog;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Player;
 
 namespace SilverScreen.Infrastructure.Player;
 

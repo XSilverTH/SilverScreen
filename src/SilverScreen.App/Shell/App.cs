@@ -6,6 +6,7 @@ using Gtk;
 using Microsoft.Extensions.DependencyInjection;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
+using Window = Gtk.Window;
 
 namespace SilverScreen.Shell;
 
@@ -68,7 +69,10 @@ public partial class App
             return;
 
         if (Display.GetDefault() is { } display)
+        {
             IconTheme.GetForDisplay(display).AddResourcePath("/SilverScreen/Assets");
+            Window.SetDefaultIconName(ApplicationMetadata.IconName);
+        }
 
         _styles = CssProvider.New();
         _styles.LoadFromResource("/SilverScreen/Styles/main.css");

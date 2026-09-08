@@ -14,11 +14,12 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
-    private Action? _openWebLogin;
     private bool _disposed;
     private AuthenticatedHomeFeedStatus _lastStatus = AuthenticatedHomeFeedStatus.Success;
+    private Action? _openWebLogin;
 
-    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService, Action? openWebLogin = null)
+    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
+        Action? openWebLogin = null)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
         _openWebLogin = openWebLogin;

@@ -20,15 +20,15 @@ public sealed record SearchViewState(
 public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
 {
     /// <summary>
-    /// Single generic status line for every pasted URL that is not a playable video or Shorts
-    /// (channel, playlist, unknown or invalid). Shell shows the returned notice as a toast;
-    /// the search page also surfaces it in its empty status.
+    ///     Single generic status line for every pasted URL that is not a playable video or Shorts
+    ///     (channel, playlist, unknown or invalid). Shell shows the returned notice as a toast;
+    ///     the search page also surfaces it in its empty status.
     /// </summary>
-    public const string UnsupportedUrlMessage =
+    private const string UnsupportedUrlMessage =
         "That link isn't playable yet — paste a video or Shorts URL.";
 
     /// <summary>
-    /// User-visible guidance returned when an empty or whitespace search query is submitted.
+    ///     User-visible guidance returned when an empty or whitespace search query is submitted.
     /// </summary>
     public const string EmptyQueryMessage =
         "Enter search terms to find videos.";
@@ -80,42 +80,15 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     } = new([], "Search results will appear here.", false);
 
     /// <summary>
-    /// Label for the shell back button while the search page is visible. Read by MainWindow;
-    /// kept as a property (not a constant) so it can become query-aware without a shell change.
+    ///     Label for the shell back button while the search page is visible. Read by MainWindow;
+    ///     kept as a property (not a constant) so it can become query-aware without a shell change.
     /// </summary>
     public string BackLabel => "Exit Search";
+
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
     public bool IsLoadingMore => State.IsLoadingMore;
     public bool HasMore => State.HasMore;
-
-    /// <summary>
-    /// Checks if the provided text represents a direct YouTube video or Shorts URL.
-    /// </summary>
-    public static bool IsDirectVideoUrl(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var parsed = YouTubeUrlParser.Parse(text.Trim());
-        return parsed.Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts;
-    }
-
-    /// <summary>
-    /// Checks if the provided text represents a YouTube channel URL or handle.
-    /// </summary>
-    public static bool IsChannelTarget(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith('@') && !trimmed.Contains(' '))
-            return true;
-
-        var parsed = YouTubeUrlParser.Parse(trimmed);
-        return parsed.Kind == YouTubeUrlKind.Channel;
-    }
 
     public string? CurrentQuery
     {
@@ -163,6 +136,34 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         return _engine.LoadMoreAsync(count);
     }
 
+    /// <summary>
+    ///     Checks if the provided text represents a direct YouTube video or Shorts URL.
+    /// </summary>
+    public static bool IsDirectVideoUrl(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var parsed = YouTubeUrlParser.Parse(text.Trim());
+        return parsed.Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts;
+    }
+
+    /// <summary>
+    ///     Checks if the provided text represents a YouTube channel URL or handle.
+    /// </summary>
+    public static bool IsChannelTarget(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith('@') && !trimmed.Contains(' '))
+            return true;
+
+        var parsed = YouTubeUrlParser.Parse(trimmed);
+        return parsed.Kind == YouTubeUrlKind.Channel;
+    }
+
     public event EventHandler<SearchViewState>? StateChanged;
 
     public void Reset()
@@ -198,19 +199,16 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     }
 
     /// <summary>
-    /// Handles a submitted search entry. Returns null when the submit was handled cleanly
-    /// (video/Shorts playback started or a text search launched); otherwise returns a
-    /// user-visible guidance string the shell should surface as a transient toast.
-    /// Search-page state always reflects the outcome too, so nothing fails silently.
+    ///     Handles a submitted search entry. Returns null when the submit was handled cleanly
+    ///     (video/Shorts playback started or a text search launched); otherwise returns a
+    ///     user-visible guidance string the shell should surface as a transient toast.
+    ///     Search-page state always reflects the outcome too, so nothing fails silently.
     /// </summary>
     public async Task<string?> SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("Search submitted: {Text}", text);
         var query = text.Trim();
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return EmptyQueryMessage;
-        }
+        if (string.IsNullOrWhiteSpace(query)) return EmptyQueryMessage;
 
         try
         {
@@ -306,9 +304,9 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     }
 
     /// <summary>
-    /// Surfaces the generic unsupported-link status on the search page itself (via the engine
-    /// status the page already renders) and in view state, so a pasted non-video URL is never
-    /// a silent no-op. Cancels any in-flight text search first so it cannot overwrite the notice.
+    ///     Surfaces the generic unsupported-link status on the search page itself (via the engine
+    ///     status the page already renders) and in view state, so a pasted non-video URL is never
+    ///     a silent no-op. Cancels any in-flight text search first so it cannot overwrite the notice.
     /// </summary>
     private void ShowUnsupportedUrlNotice()
     {
@@ -331,13 +329,9 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         try
         {
             var result = await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
-            if (!PlaybackResult.IsSuccessStatus(result))
-            {
-                Logger.Warning("Playback failed for pasted URL {VideoId}: {Result}", parsedUrl.VideoId, result);
-                return result;
-            }
-
-            return null;
+            if (PlaybackResult.IsSuccessStatus(result)) return null;
+            Logger.Warning("Playback failed for pasted URL {VideoId}: {Result}", parsedUrl.VideoId, result);
+            return result;
         }
         catch (Exception exception)
         {

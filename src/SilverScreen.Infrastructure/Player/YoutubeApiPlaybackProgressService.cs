@@ -12,6 +12,7 @@ public sealed class YoutubeApiPlaybackProgressService(IYouTubeClientProvider cli
     : IYouTubePlaybackProgressService
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiPlaybackProgressService>();
+
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
 

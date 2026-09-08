@@ -1,30 +1,38 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Session;
+
 namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
-/// Creates and reaps 0600 cookie files inside 0700 per-lease temp directories.
-/// Lease-holder lifetimes are intentionally minimal; nothing holds a lease longer
-/// than its consumer needs it:
-/// <list type="bullet">
-/// <item>yt-dlp resolve (<c>YtDlpMediaResolver</c>): <c>using</c>-scoped to a single
-/// resolve call; disposed when the call returns. Shortest lifetime.</item>
-/// <item>External mpv (<c>ExternalMpvPlaybackService</c>): held only until the mpv
-/// process exits (or start fails), then disposed; never longer than the process.</item>
-/// <item>Embedded playback (<c>PlaybackSession</c>): held for the session lifetime
-/// and released in teardown/dispose.</item>
-/// </list>
-/// Disposal overwrites file bytes with zeros before deleting (best-effort; see
-/// <c>TryWipeAndDeleteFile</c>). Only cookie file paths — never their contents —
-/// are written to the logs.
+///     Creates and reaps 0600 cookie files inside 0700 per-lease temp directories.
+///     Lease-holder lifetimes are intentionally minimal; nothing holds a lease longer
+///     than its consumer needs it:
+///     <list type="bullet">
+///         <item>
+///             yt-dlp resolve (<c>YtDlpMediaResolver</c>): <c>using</c>-scoped to a single
+///             resolve call; disposed when the call returns. Shortest lifetime.
+///         </item>
+///         <item>
+///             External mpv (<c>ExternalMpvPlaybackService</c>): held only until the mpv
+///             process exits (or start fails), then disposed; never longer than the process.
+///         </item>
+///         <item>
+///             Embedded playback (<c>PlaybackSession</c>): held for the session lifetime
+///             and released in teardown/dispose.
+///         </item>
+///     </list>
+///     Disposal overwrites file bytes with zeros before deleting (best-effort; see
+///     <c>TryWipeAndDeleteFile</c>). Only cookie file paths — never their contents —
+///     are written to the logs.
 /// </summary>
 public static class TemporaryCookieFile
 {
     internal const string DirectoryPrefix = "silverscreen-cookies-";
-    internal const string IpcDirectoryPrefix = "silverscreen-mpv-";
+    private const string IpcDirectoryPrefix = "silverscreen-mpv-";
     private static readonly TimeSpan DefaultStaleAge = TimeSpan.FromHours(1);
     private static readonly ConcurrentDictionary<string, byte> ActiveLeaseDirectories = new();
 
@@ -34,28 +42,25 @@ public static class TemporaryCookieFile
     {
         AppDomain.CurrentDomain.ProcessExit += (_, _) => WipeActiveLeases();
 
-        if (OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux()) return;
+
+        try
         {
-            try
-            {
-                PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => WipeActiveLeases());
-                PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => WipeActiveLeases());
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Could not register POSIX signal handlers for cookie cleanup");
-            }
+            PosixSignalRegistration.Create(PosixSignal.SIGINT, _ => WipeActiveLeases());
+            PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ => WipeActiveLeases());
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Could not register POSIX signal handlers for cookie cleanup");
         }
     }
 
     public static string GetDefaultTempRoot()
     {
-        if (OperatingSystem.IsLinux())
-        {
-            var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-            if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg))
-                return xdg;
-        }
+        if (!OperatingSystem.IsLinux()) return Path.GetTempPath();
+        var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg))
+            return xdg;
 
         return Path.GetTempPath();
     }
@@ -75,10 +80,11 @@ public static class TemporaryCookieFile
             Logger.Debug(ex, "Failed to clean up active cookie leases during exit");
         }
     }
+
     /// <summary>
-    /// Best-effort lease creation. Never throws: returns <c>null</c> when there are
-    /// no cookies to persist or the temporary file could not be created, so playback
-    /// proceeds without saved sign-in instead of surfacing an exception to the UI.
+    ///     Best-effort lease creation. Never throws: returns <c>null</c> when there are
+    ///     no cookies to persist or the temporary file could not be created, so playback
+    ///     proceeds without saved sign-in instead of surfacing an exception to the UI.
     /// </summary>
     public static CookieFileLease? CreateLease(string? cookieContent, string? tempRoot = null)
     {
@@ -86,11 +92,11 @@ public static class TemporaryCookieFile
     }
 
     /// <summary>
-    /// Best-effort lease creation with a user-facing error string. Never throws.
-    /// The error is <c>null</c> when a lease was created or no cookies were needed;
-    /// otherwise it explains the failure for status-line guidance.
+    ///     Best-effort lease creation with a user-facing error string. Never throws.
+    ///     The error is <c>null</c> when a lease was created or no cookies were needed;
+    ///     otherwise it explains the failure for status-line guidance.
     /// </summary>
-    public static (CookieFileLease? Lease, string? ErrorMessage) TryCreateLease(
+    private static (CookieFileLease? Lease, string? ErrorMessage) TryCreateLease(
         string? cookieContent,
         string? tempRoot = null)
     {
@@ -131,10 +137,9 @@ public static class TemporaryCookieFile
             ActiveLeaseDirectories.TryAdd(directoryPath, 0);
             // Only the cookie file path (never its contents) reaches the logs.
             Logger.Debug("Created temporary cookie lease at {CookieFilePath}", cookieFilePath);
-            return (new CookieFileLease(cookieFilePath, directoryPath, () =>
-            {
-                ActiveLeaseDirectories.TryRemove(directoryPath, out _);
-            }), null);
+            return (
+                new CookieFileLease(cookieFilePath, directoryPath,
+                    () => { ActiveLeaseDirectories.TryRemove(directoryPath, out _); }), null);
         }
         catch (Exception ex)
         {
@@ -147,10 +152,10 @@ public static class TemporaryCookieFile
     }
 
     /// <summary>
-    /// Deletes orphaned 0700 cookie/IPC directories and 0600 cookie files matching our temp prefixes.
-    /// Orphaned directories from dead sessions or untracked leases are purged immediately;
-    /// otherwise entries older than <paramref name="maxAge"/> (default 1 hour) are deleted.
-    /// Best-effort, never throws.
+    ///     Deletes orphaned 0700 cookie/IPC directories and 0600 cookie files matching our temp prefixes.
+    ///     Orphaned directories from dead sessions or untracked leases are purged immediately;
+    ///     otherwise entries older than <paramref name="maxAge" /> (default 1 hour) are deleted.
+    ///     Best-effort, never throws.
     /// </summary>
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {
@@ -165,10 +170,7 @@ public static class TemporaryCookieFile
         SweepDirectory(defaultRoot, age);
 
         var fallbackRoot = Path.GetTempPath();
-        if (!string.Equals(defaultRoot, fallbackRoot, StringComparison.Ordinal))
-        {
-            SweepDirectory(fallbackRoot, age);
-        }
+        if (!string.Equals(defaultRoot, fallbackRoot, StringComparison.Ordinal)) SweepDirectory(fallbackRoot, age);
     }
 
     private static void SweepDirectory(string root, TimeSpan age)
@@ -196,7 +198,6 @@ public static class TemporaryCookieFile
                 }
 
                 foreach (var directory in directories)
-                {
                     try
                     {
                         if (!IsDirectoryOrphanedOrStale(directory, prefix, age, now))
@@ -214,12 +215,10 @@ public static class TemporaryCookieFile
                     {
                         Logger.Debug(ex, "Stale sweep could not remove directory {Directory}", directory.FullName);
                     }
-                }
 
                 try
                 {
                     foreach (var file in rootDirectory.EnumerateFiles($"{prefix}*"))
-                    {
                         try
                         {
                             if (!IsFileOrphanedOrStale(file, prefix, age, now))
@@ -232,7 +231,6 @@ public static class TemporaryCookieFile
                         {
                             Logger.Debug(ex, "Stale sweep could not remove file {File}", file.FullName);
                         }
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -250,30 +248,27 @@ public static class TemporaryCookieFile
         }
     }
 
-    private static bool IsDirectoryOrphanedOrStale(DirectoryInfo directory, string prefix, TimeSpan maxAge, DateTime now)
+    private static bool IsDirectoryOrphanedOrStale(DirectoryInfo directory, string prefix, TimeSpan maxAge,
+        DateTime now)
     {
-        if (TryExtractPid(directory.Name, prefix, out var pid))
-        {
-            if (pid == Environment.ProcessId)
-                return !IsActiveLease(directory.FullName);
+        if (!TryExtractPid(directory.Name, prefix, out var pid)) return now - directory.LastWriteTimeUtc >= maxAge;
+        if (pid == Environment.ProcessId)
+            return !IsActiveLease(directory.FullName);
 
-            if (!IsProcessAlive(pid))
-                return true;
-        }
+        if (!IsProcessAlive(pid))
+            return true;
 
         return now - directory.LastWriteTimeUtc >= maxAge;
     }
 
     private static bool IsFileOrphanedOrStale(FileInfo file, string prefix, TimeSpan maxAge, DateTime now)
     {
-        if (TryExtractPid(file.Name, prefix, out var pid))
-        {
-            if (pid == Environment.ProcessId)
-                return !IsActiveLeaseFile(file.FullName);
+        if (!TryExtractPid(file.Name, prefix, out var pid)) return now - file.LastWriteTimeUtc >= maxAge;
+        if (pid == Environment.ProcessId)
+            return !IsActiveLeaseFile(file.FullName);
 
-            if (!IsProcessAlive(pid))
-                return true;
-        }
+        if (!IsProcessAlive(pid))
+            return true;
 
         return now - file.LastWriteTimeUtc >= maxAge;
     }
@@ -284,7 +279,7 @@ public static class TemporaryCookieFile
         if (!name.StartsWith(prefix, StringComparison.Ordinal))
             return false;
 
-        var suffix = name.Substring(prefix.Length);
+        var suffix = name[prefix.Length..];
         var dashIndex = suffix.IndexOf('-');
         if (dashIndex <= 0)
             return false;
@@ -299,7 +294,7 @@ public static class TemporaryCookieFile
 
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            using var process = Process.GetProcessById(pid);
             return !process.HasExited;
         }
         catch (ArgumentException)
@@ -322,12 +317,9 @@ public static class TemporaryCookieFile
         try
         {
             var normalized = Path.GetFullPath(directoryFullName);
-            foreach (var key in ActiveLeaseDirectories.Keys)
-            {
-                if (string.Equals(Path.GetFullPath(key), normalized,
-                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                    return true;
-            }
+            if (ActiveLeaseDirectories.Keys.Any(key => string.Equals(Path.GetFullPath(key), normalized,
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+                return true;
         }
         catch
         {
@@ -361,7 +353,8 @@ public static class TemporaryCookieFile
                 return;
 
             // A half-written lease directory may already hold cookie bytes: wipe first.
-            foreach (var partialFile in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).ToList())
+            foreach (var partialFile in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
+                         .ToList())
                 TryWipeAndDeleteFile(partialFile);
             Directory.Delete(directoryPath, true);
         }
@@ -370,18 +363,19 @@ public static class TemporaryCookieFile
             Logger.Debug(ex, "Could not remove partial temporary cookie directory {Directory}", directoryPath);
         }
     }
+
     /// <summary>
-    /// Best-effort overwrite-before-delete: fills the file with zeros across its full
-    /// length, flushes to storage, then deletes it. Never throws. This is data hygiene,
-    /// not a guarantee against forensic recovery (copy-on-write filesystems, journals,
-    /// and SSD wear-levelling may retain copies). Logs only the file path.
+    ///     Best-effort overwrite-before-delete: fills the file with zeros across its full
+    ///     length, flushes to storage, then deletes it. Never throws. This is data hygiene,
+    ///     not a guarantee against forensic recovery (copy-on-write filesystems, journals,
+    ///     and SSD wear-levelling may retain copies). Logs only the file path.
     /// </summary>
     private static void TryWipeAndDeleteFile(string path)
     {
         try
         {
             var info = new FileInfo(path);
-            if (info.Exists && info.Length > 0)
+            if (info is { Exists: true, Length: > 0 })
             {
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
                 var zeros = new byte[4096];

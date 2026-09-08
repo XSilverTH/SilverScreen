@@ -11,21 +11,22 @@ using SilverScreen.Core.Player;
 namespace SilverScreen.Infrastructure.Player;
 
 /// <summary>
-/// Fetches skip segments from sponsor.ajay.app. Results are cached per video+categories request,
-/// bounded to <see cref="MaxCachedRequests"/> entries (oldest-inserted evicted). Callers gate
-/// network access behind the SponsorBlock toggles (no fetch unless auto-skip or display is on).
+///     Fetches skip segments from sponsor.ajay.app. Results are cached per video+categories request,
+///     bounded to <see cref="MaxCachedRequests" /> entries (oldest-inserted evicted). Callers gate
+///     network access behind the SponsorBlock toggles (no fetch unless auto-skip or display is on).
 /// </summary>
 public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 {
     /// <summary>Maximum cached video+categories requests; oldest-inserted entry evicted past this bound.</summary>
     internal const int MaxCachedRequests = 100;
+
     private static readonly ILogger Logger = Log.ForContext<SponsorBlockService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SkipSegmentsEndpoint = new("https://sponsor.ajay.app/api/skipSegments");
     private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
-    private readonly ConcurrentDictionary<string, IReadOnlyList<SponsorBlockSegment>> _segmentsByRequest = new();
     private readonly ConcurrentQueue<string> _insertionOrder = new();
+    private readonly ConcurrentDictionary<string, IReadOnlyList<SponsorBlockSegment>> _segmentsByRequest = new();
 
     public SponsorBlockService() : this(CreateDefaultHttpClient(), true)
     {
@@ -80,10 +81,9 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
                 if (response.StatusCode != HttpStatusCode.NotFound)
-                {
-                    Logger.Warning("SponsorBlock request for video {VideoId} (prefix {HashPrefix}) returned HTTP status {StatusCode}",
+                    Logger.Warning(
+                        "SponsorBlock request for video {VideoId} (prefix {HashPrefix}) returned HTTP status {StatusCode}",
                         videoId, hashPrefix, response.StatusCode);
-                }
                 return [];
             }
 
@@ -146,8 +146,10 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 }
 
 internal sealed record SponsorBlockVideoResponse(
-    [property: JsonPropertyName("videoID")] string? VideoId,
-    [property: JsonPropertyName("segments")] SponsorBlockSkipSegment[]? Segments);
+    [property: JsonPropertyName("videoID")]
+    string? VideoId,
+    [property: JsonPropertyName("segments")]
+    SponsorBlockSkipSegment[]? Segments);
 
 internal sealed record SponsorBlockSkipSegment(double[]? Segment, string? Uuid, string? Category, string? ActionType)
 {

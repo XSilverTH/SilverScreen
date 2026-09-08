@@ -6,8 +6,8 @@ namespace SilverScreen.Core.Player;
 public interface IYouTubePlaybackProgressService
 {
     /// <summary>
-    /// Gets YouTube's current playback state for a video. A null result means that YouTube did not provide
-    /// viewer-specific progress, including for unauthenticated or unavailable sessions.
+    ///     Gets YouTube's current playback state for a video. A null result means that YouTube did not provide
+    ///     viewer-specific progress, including for unauthenticated or unavailable sessions.
     /// </summary>
     Task<YouTubePlaybackProgress?> GetAsync(string videoId, CancellationToken cancellationToken = default);
 }

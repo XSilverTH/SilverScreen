@@ -165,8 +165,8 @@ public sealed class PreferencesViewModel
     }
 
     /// <summary>
-    /// Validates an executable path: non-empty, resolvable (direct path or PATH lookup),
-    /// and executable where the platform tracks an executable bit.
+    ///     Validates an executable path: non-empty, resolvable (direct path or PATH lookup),
+    ///     and executable where the platform tracks an executable bit.
     /// </summary>
     public static ExecutablePathStatus ValidateExecutablePath(string? rawPath)
     {

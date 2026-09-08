@@ -2,11 +2,13 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
-using YoutubeAPI.Models.Channels;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
+using YoutubeAPI.Models.Channels;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.Feeds;
+using YoutubeAPI.Models.Videos;
+using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Subscriptions;
 
@@ -24,8 +26,8 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiSubscriptionsService>();
     private readonly IYouTubeClientProvider _clientProvider;
+    private readonly List<VideoSummary> _loadedVideos = [];
     private readonly Lock _lock = new();
-    private readonly List<SilverScreen.Core.Browsing.Common.VideoSummary> _loadedVideos = [];
     private readonly ISessionService _sessionService;
     private string? _continuationToken;
 
@@ -41,16 +43,13 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         CancellationToken cancellationToken = default)
     {
         var pageSize = Math.Max(count, 1);
-        if (!IsSessionActive())
-        {
-            ClearCachedResults();
-            return new AuthenticatedSubscriptionsFeedResult(
-                AuthenticatedSubscriptionsStatus.AuthenticationRequired,
-                FeedPage.Empty,
-                AuthenticationRequiredMessage);
-        }
-
-        return await FetchFeedPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
+        if (IsSessionActive())
+            return await FetchFeedPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
+        ClearCachedResults();
+        return new AuthenticatedSubscriptionsFeedResult(
+            AuthenticatedSubscriptionsStatus.AuthenticationRequired,
+            FeedPage.Empty,
+            AuthenticationRequiredMessage);
     }
 
     public async Task<AuthenticatedSubscriptionsFeedResult> LoadNextFeedPageAsync(
@@ -69,7 +68,9 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
         string? token;
         lock (_lock)
+        {
             token = _continuationToken;
+        }
 
         if (string.IsNullOrWhiteSpace(token))
             return new AuthenticatedSubscriptionsFeedResult(
@@ -149,7 +150,10 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         }
     }
 
-    public void Dispose() => _sessionService.SessionChanged -= OnSessionChanged;
+    public void Dispose()
+    {
+        _sessionService.SessionChanged -= OnSessionChanged;
+    }
 
     private async Task<AuthenticatedSubscriptionsFeedResult> FetchFeedPageAsync(
         SubscriptionsContinuation? continuation,
@@ -231,7 +235,9 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
     private FeedPage GetFeed()
     {
         lock (_lock)
+        {
             return new FeedPage([.. _loadedVideos], _continuationToken);
+        }
     }
 
     private bool IsSessionActive()
@@ -239,7 +245,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         var session = _sessionService.GetCurrentSession();
         var cookies = _sessionService.GetManualSessionCookies();
         return session is { IsSignedIn: true, HasManualSession: true } &&
-               cookies is { Content: not null } && !string.IsNullOrWhiteSpace(cookies.Content);
+               cookies is not null && !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     private void ClearCachedFeed()
@@ -251,16 +257,25 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         }
     }
 
-    private void ClearCachedResults() => ClearCachedFeed();
+    private void ClearCachedResults()
+    {
+        ClearCachedFeed();
+    }
 
-    private void OnSessionChanged(object? sender, EventArgs e) => ClearCachedResults();
+    private void OnSessionChanged(object? sender, EventArgs e)
+    {
+        ClearCachedResults();
+    }
 
-    private static bool IsAuthenticationFailure(YouTubeException exception) =>
-        exception is AuthenticationRequiredException or AuthenticationExpiredException or PermissionDeniedException;
+    private static bool IsAuthenticationFailure(YouTubeException exception)
+    {
+        return exception is AuthenticationRequiredException or AuthenticationExpiredException
+            or PermissionDeniedException;
+    }
 
     private static SubscribedChannel MapChannel(ChannelSummary channel)
     {
-        var avatarUrl = channel.Thumbnails.FirstOrDefault()?.Url.ToString();
+        var avatarUrl = channel.Thumbnails.Count > 0 ? channel.Thumbnails[0].Url.ToString():null;
         return new SubscribedChannel(
             channel.Id.Value,
             channel.Title,
@@ -270,15 +285,15 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             channel.SubscriberCount);
     }
 
-    private static SilverScreen.Core.Browsing.Common.VideoSummary MapVideo(
+    private static VideoSummary MapVideo(
         YoutubeAPI.Models.Videos.VideoSummary video,
-        YoutubeAPI.Models.Videos.VideoPlaybackProgress? playbackProgress)
+        VideoPlaybackProgress? playbackProgress)
     {
         var thumbnail = video.Thumbnails
             .OrderBy(item => (long)item.Width * item.Height)
             .LastOrDefault()?.Url.ToString() ?? string.Empty;
         var channel = video.Channel;
-        return new SilverScreen.Core.Browsing.Common.VideoSummary(
+        return new VideoSummary(
             video.Id.Value,
             video.Title,
             channel.Title,

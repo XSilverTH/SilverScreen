@@ -9,10 +9,10 @@ public sealed class ApplicationConfiguration
     public string? DiscordApplicationId { get; init; } = DefaultDiscordApplicationId;
 
     /// <summary>
-    /// Optional Serilog level name override (e.g. <c>Debug</c>, <c>Information</c>).
-    /// Read from <c>SILVERSCREEN_LOG_LEVEL</c>; <c>null</c> means "no override".
-    /// Program.cs reads the same variable directly so startup logging never hard-depends
-    /// on this property (defensive against merge ordering); both sides converge.
+    ///     Optional Serilog level name override (e.g. <c>Debug</c>, <c>Information</c>).
+    ///     Read from <c>SILVERSCREEN_LOG_LEVEL</c>; <c>null</c> means "no override".
+    ///     Program.cs reads the same variable directly so startup logging never hard-depends
+    ///     on this property (defensive against merge ordering); both sides converge.
     /// </summary>
     public string? LogLevelOverride { get; init; }
 

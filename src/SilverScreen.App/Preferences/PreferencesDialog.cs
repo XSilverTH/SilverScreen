@@ -4,6 +4,7 @@ using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
+using Dialog = Adw.Dialog;
 using Functions = Gdk.Functions;
 
 namespace SilverScreen.Preferences;
@@ -11,15 +12,14 @@ namespace SilverScreen.Preferences;
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
+    private readonly EventControllerKey _keyController;
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
-    private bool _loading;
-    private readonly EventControllerKey _keyController;
     private bool _disposed;
-    public event EventHandler<string>? SaveFailed;
+    private bool _loading;
 
     public PreferencesDialog(IPreferencesService preferencesService)
     {
@@ -71,6 +71,30 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
 
         InitializeFields();
     }
+
+    public new void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        Widget.OnClosed -= OnClosed;
+
+        _keyController.OnKeyPressed -= OnKeyPressed;
+        Widget.RemoveController(_keyController);
+        _keyController.Dispose();
+
+        foreach (var button in _shortcutRows.Values)
+            button.OnClicked -= OnShortcutButtonClicked;
+
+        _capturingShortcut = null;
+        SaveFailed = null;
+
+        base.Dispose();
+        Builder.Dispose();
+        Widget.Dispose();
+    }
+
+    public event EventHandler<string>? SaveFailed;
 
     private void InitializeFields()
     {
@@ -138,7 +162,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
     {
         var values = shortcuts.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
         _shortcutValues[name] = values;
-        _shortcutRows[name].SetLabel(values.Length == 0 ? "Unassigned" : string.Join(" / ", values.Select(GetShortcutLabel)));
+        _shortcutRows[name]
+            .SetLabel(values.Length == 0 ? "Unassigned" : string.Join(" / ", values.Select(GetShortcutLabel)));
     }
 
     private void OnShortcutButtonClicked(object? sender, EventArgs args)
@@ -248,13 +273,12 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
     {
         var result = _viewModel.Save(CreateEditorState(), changedOption);
         ApplyEditorState(result.State);
-        if (!result.Succeeded)
-        {
-            var message = result.ErrorMessage ?? PreferencesViewModel.PersistenceErrorMessage;
-            Logger.Warning("Failed to persist preferences: {Error}", message);
-            SaveFailed?.Invoke(this, message);
-        }
+        if (result.Succeeded) return;
+        var message = result.ErrorMessage ?? PreferencesViewModel.PersistenceErrorMessage;
+        Logger.Warning("Failed to persist preferences: {Error}", message);
+        SaveFailed?.Invoke(this, message);
     }
+
     private void UpdatePathStatus()
     {
         SetPathStatus(ytdlp_status_row, ytdlp_status_label,
@@ -291,15 +315,11 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         {
             try
             {
-                if (response.ResponseId == (int)ResponseType.Accept)
-                {
-                    var path = chooser.GetFile()?.GetPath();
-                    if (!string.IsNullOrWhiteSpace(path))
-                    {
-                        applyPath(path);
-                        Save();
-                    }
-                }
+                if (response.ResponseId != (int)ResponseType.Accept) return;
+                var path = chooser.GetFile()?.GetPath();
+                if (string.IsNullOrWhiteSpace(path)) return;
+                applyPath(path);
+                Save();
             }
             finally
             {
@@ -379,30 +399,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         return CaptureShortcut(args.Keyval);
     }
 
-    private void OnClosed(Adw.Dialog sender, EventArgs args)
+    private void OnClosed(Dialog sender, EventArgs args)
     {
         Dispose();
-    }
-
-    public new void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        Widget.OnClosed -= OnClosed;
-
-        _keyController.OnKeyPressed -= OnKeyPressed;
-        Widget.RemoveController(_keyController);
-        _keyController.Dispose();
-
-        foreach (var button in _shortcutRows.Values)
-            button.OnClicked -= OnShortcutButtonClicked;
-
-        _capturingShortcut = null;
-        SaveFailed = null;
-
-        base.Dispose();
-        Builder.Dispose();
-        Widget.Dispose();
     }
 }

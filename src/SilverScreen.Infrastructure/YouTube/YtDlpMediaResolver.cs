@@ -6,43 +6,44 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
+using YoutubeAPI.Models.ValueTypes;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
-/// Resolves YouTube media streams directly by invoking yt-dlp with <c>--dump-single-json</c>
-/// and parsing adaptive/muxed format payloads.
+///     Resolves YouTube media streams directly by invoking yt-dlp with <c>--dump-single-json</c>
+///     and parsing adaptive/muxed format payloads.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Architectural Role &amp; Dormant Status:</b><br/>
-/// In standard playback, SilverScreen delegates media stream extraction directly to mpv's internal
-/// <c>ytdl_hook.lua</c> script, which natively invokes yt-dlp to stream videos directly from YouTube URLs.
-/// Consequently, <see cref="ResolveMediaAsync"/> is not currently invoked during the primary playback path.
-/// </para>
-/// <para>
-/// This direct extraction infrastructure is deliberately preserved as:
-/// <list type="bullet">
-/// <item>
-/// <description>
-/// A robust fallback pipeline in the event that mpv's internal <c>ytdl_hook.lua</c> fails, experiences
-/// compatibility issues with YouTube updates, or requires out-of-process stream resolution.
-/// </description>
-/// </item>
-/// <item>
-/// <description>
-/// A foundation for features outside the mpv playback engine, such as offline media downloading,
-/// headless extraction, stream URL inspection, or custom format muxing.
-/// </description>
-/// </item>
-/// <item>
-/// <description>
-/// The provider for video metadata via <see cref="GetVideoDetailsAsync"/>, consumed by UI components
-/// such as the video info/stats panel.
-/// </description>
-/// </item>
-/// </list>
-/// </para>
+///     <para>
+///         <b>Architectural Role &amp; Dormant Status:</b><br />
+///         In standard playback, SilverScreen delegates media stream extraction directly to mpv's internal
+///         <c>ytdl_hook.lua</c> script, which natively invokes yt-dlp to stream videos directly from YouTube URLs.
+///         Consequently, <see cref="ResolveMediaAsync" /> is not currently invoked during the primary playback path.
+///     </para>
+///     <para>
+///         This direct extraction infrastructure is deliberately preserved as:
+///         <list type="bullet">
+///             <item>
+///                 <description>
+///                     A robust fallback pipeline in the event that mpv's internal <c>ytdl_hook.lua</c> fails, experiences
+///                     compatibility issues with YouTube updates, or requires out-of-process stream resolution.
+///                 </description>
+///             </item>
+///             <item>
+///                 <description>
+///                     A foundation for features outside the mpv playback engine, such as offline media downloading,
+///                     headless extraction, stream URL inspection, or custom format muxing.
+///                 </description>
+///             </item>
+///             <item>
+///                 <description>
+///                     The provider for video metadata via <see cref="GetVideoDetailsAsync" />, consumed by UI components
+///                     such as the video info/stats panel.
+///                 </description>
+///             </item>
+///         </list>
+///     </para>
 /// </remarks>
 public sealed class YtDlpMediaResolver(
     ICookieFileProvider cookieFileProvider,
@@ -55,11 +56,11 @@ public sealed class YtDlpMediaResolver(
     : IYouTubeMediaResolver, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YtDlpMediaResolver>();
+    private readonly ConcurrentDictionary<string, CachedVideoEntry> _cache = new(StringComparer.Ordinal);
+    private readonly TimeSpan _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
 
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
-    private readonly ConcurrentDictionary<string, CachedVideoEntry> _cache = new(StringComparer.Ordinal);
-    private readonly TimeSpan _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
 
     private readonly ICookieFileProvider _cookieFileProvider =
         cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
@@ -96,7 +97,7 @@ public sealed class YtDlpMediaResolver(
 
         // Details-only entries carry no yt-dlp payload and must never satisfy media resolve.
         // They are a media-miss here; the fresh fetch below re-resolves via yt-dlp.
-        var cached = TryGetValidEntry(videoId, forceRefresh, requireMedia: true);
+        var cached = TryGetValidEntry(videoId, forceRefresh, true);
         if (cached is not null)
         {
             if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia))
@@ -122,7 +123,7 @@ public sealed class YtDlpMediaResolver(
         try
         {
             // Double check cache
-            cached = TryGetValidEntry(videoId, forceRefresh, requireMedia: true);
+            cached = TryGetValidEntry(videoId, forceRefresh, true);
             if (cached is not null)
             {
                 if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia) &&
@@ -298,10 +299,8 @@ public sealed class YtDlpMediaResolver(
         if (processResult.ExitCode != 0)
         {
             if (!string.IsNullOrWhiteSpace(processResult.StandardError))
-            {
                 Logger.Warning("yt-dlp extraction failed for {VideoId} with exit code {ExitCode}. Stderr: {StdErr}",
                     videoId, processResult.ExitCode, processResult.StandardError.Trim());
-            }
 
             var errorDetail = !string.IsNullOrWhiteSpace(processResult.StandardError)
                 ? $"the process exited with error code {processResult.ExitCode}: {processResult.StandardError.Trim()}"
@@ -310,18 +309,12 @@ public sealed class YtDlpMediaResolver(
             return (false, null, RuntimeDependencyGuidance.YtDlpFailed(errorDetail));
         }
 
-        if (string.IsNullOrWhiteSpace(processResult.StandardOutput))
-        {
-            if (!string.IsNullOrWhiteSpace(processResult.StandardError))
-            {
-                Logger.Warning("yt-dlp extraction returned empty output for {VideoId}. Stderr: {StdErr}",
-                    videoId, processResult.StandardError.Trim());
-            }
+        if (!string.IsNullOrWhiteSpace(processResult.StandardOutput)) return (true, processResult.StandardOutput, null);
+        if (!string.IsNullOrWhiteSpace(processResult.StandardError))
+            Logger.Warning("yt-dlp extraction returned empty output for {VideoId}. Stderr: {StdErr}",
+                videoId, processResult.StandardError.Trim());
 
-            return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
-        }
-
-        return (true, processResult.StandardOutput, null);
+        return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
     }
 
 
@@ -330,12 +323,11 @@ public sealed class YtDlpMediaResolver(
     {
         try
         {
-            var video = await _clientProvider.GetClient().Videos
-                .GetAsync(YoutubeAPI.Models.ValueTypes.VideoId.Parse(videoId), cancellationToken)
+            var (summary, description, _, _, _) = await _clientProvider.GetClient().Videos
+                .GetAsync(VideoId.Parse(videoId), cancellationToken)
                 .ConfigureAwait(false);
-            var summary = video.Summary;
             return (true, new YouTubeVideoDetails(
-                video.Description,
+                description,
                 summary.Statistics.ViewCount,
                 summary.PublishedAt,
                 summary.Title,

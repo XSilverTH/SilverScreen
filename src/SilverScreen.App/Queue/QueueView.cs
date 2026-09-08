@@ -1,9 +1,8 @@
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Queue;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Queue;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -60,8 +59,6 @@ public partial class QueueView : ViewBase<Box>
 
     public event EventHandler<string>? PlayFailed;
 
-    public string? LastPlayError { get; private set; }
-
     private void OnPlayButtonClicked(object? sender, EventArgs args)
     {
         PlayAllAndReportAsync().FireAndForget(Logger);
@@ -73,7 +70,6 @@ public partial class QueueView : ViewBase<Box>
         if (string.IsNullOrEmpty(error))
             return;
 
-        LastPlayError = error;
         PlayFailed?.Invoke(this, error);
     }
 
@@ -190,6 +186,7 @@ public partial class QueueView : ViewBase<Box>
             PlayAllAndReportAsync().FireAndForget(Logger);
         }
     }
+
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
     {
         if (args.Object is ListItem { Child: { } child } && _rowsByCell.TryGetValue(child, out var row))

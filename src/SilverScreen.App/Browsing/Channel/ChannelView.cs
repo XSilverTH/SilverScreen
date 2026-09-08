@@ -5,7 +5,6 @@ using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
@@ -213,6 +212,7 @@ public partial class ChannelView : ViewBase<Box>
         {
             channel_handle.Visible = false;
         }
+
         if (state.SubscriberCount is { } subsCount)
         {
             channel_subscribers.SetText(FormatSubscriberCount(subsCount));
@@ -498,22 +498,16 @@ public partial class ChannelView : ViewBase<Box>
     {
         if (string.IsNullOrWhiteSpace(description)) return null;
 
-        var lines = description.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var contactLines = new List<string>();
-
-        foreach (var line in lines)
-        {
-            if (line.Contains("contact", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("business", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("inquir", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("email", StringComparison.OrdinalIgnoreCase) ||
-                (line.Contains('@') && (line.Contains(".com", StringComparison.OrdinalIgnoreCase) ||
-                                        line.Contains(".org", StringComparison.OrdinalIgnoreCase) ||
-                                        line.Contains(".net", StringComparison.OrdinalIgnoreCase))))
-            {
-                contactLines.Add(line);
-            }
-        }
+        var lines = description.Split(['\r', '\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var contactLines = lines.Where(line => line.Contains("contact", StringComparison.OrdinalIgnoreCase) ||
+                                               line.Contains("business", StringComparison.OrdinalIgnoreCase) ||
+                                               line.Contains("inquir", StringComparison.OrdinalIgnoreCase) ||
+                                               line.Contains("email", StringComparison.OrdinalIgnoreCase) ||
+                                               (line.Contains('@') &&
+                                                (line.Contains(".com", StringComparison.OrdinalIgnoreCase) ||
+                                                 line.Contains(".org", StringComparison.OrdinalIgnoreCase) ||
+                                                 line.Contains(".net", StringComparison.OrdinalIgnoreCase)))).ToList();
 
         return contactLines.Count > 0 ? string.Join("\n", contactLines) : null;
     }

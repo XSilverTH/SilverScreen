@@ -1,42 +1,48 @@
 using System.Globalization;
 using System.Text.Json;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Player;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
-/// Evaluates and selects formats from yt-dlp JSON dumps (<c>--dump-single-json</c>), and provides
-/// the mapping from quality preference labels to mpv/yt-dlp format strings.
+///     Evaluates and selects formats from yt-dlp JSON dumps (<c>--dump-single-json</c>), and provides
+///     the mapping from quality preference labels to mpv/yt-dlp format strings.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Architectural Role:</b><br/>
-/// This class fulfills two distinct roles:
-/// <list type="bullet">
-/// <item>
-/// <description>
-/// <b>Active:</b> <see cref="ToMpvFormat(string)"/> provides the single source of truth mapping user-configured
-/// video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command builders.
-/// </description>
-/// </item>
-/// <item>
-/// <description>
-/// <b>Dormant Fallback Extraction:</b> <see cref="SelectMedia(string, string, YouTubeVideoDetails?)"/> contains
-/// the format selection engine that parses adaptive video/audio streams, muxed streams, and live HLS manifests,
-/// pairing streams and extracting expiration timestamps. Although standard playback uses mpv's internal
-/// <c>ytdl_hook.lua</c>, this logic is retained as a fallback extraction pipeline and for future offline downloading
-/// or headless stream resolution.
-/// </description>
-/// </item>
-/// </list>
-/// </para>
+///     <para>
+///         <b>Architectural Role:</b><br />
+///         This class fulfills two distinct roles:
+///         <list type="bullet">
+///             <item>
+///                 <description>
+///                     <b>Active:</b> <see cref="ToMpvFormat(string)" /> provides the single source of truth mapping
+///                     user-configured
+///                     video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command
+///                     builders.
+///                 </description>
+///             </item>
+///             <item>
+///                 <description>
+///                     <b>Dormant Fallback Extraction:</b>
+///                     <see cref="SelectMedia(string, string, YouTubeVideoDetails?)" /> contains
+///                     the format selection engine that parses adaptive video/audio streams, muxed streams, and live HLS
+///                     manifests,
+///                     pairing streams and extracting expiration timestamps. Although standard playback uses mpv's
+///                     internal
+///                     <c>ytdl_hook.lua</c>, this logic is retained as a fallback extraction pipeline and for future
+///                     offline downloading
+///                     or headless stream resolution.
+///                 </description>
+///             </item>
+///         </list>
+///     </para>
 /// </remarks>
 internal static class YtDlpFormatSelector
 {
     /// <summary>
-    /// Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
-    /// Null means "Best" (leave the player default in place). Pure: no I/O.
+    ///     Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
+    ///     Null means "Best" (leave the player default in place). Pure: no I/O.
     /// </summary>
     public static string? ToMpvFormat(string preferredQuality)
     {
@@ -72,73 +78,74 @@ internal static class YtDlpFormatSelector
         {
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return null;
-        var formats = ParseFormats(root);
-        if (formats.Count == 0)
-        {
-            // If there's a direct url at root
-            if (!root.TryGetProperty("url", out var directUrlProp) || directUrlProp.GetString() is not { } directUrl ||
-                string.IsNullOrWhiteSpace(directUrl)) return null;
-            var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(directUrl);
-            return new ResolvedMedia(directUrl, null, preferredQuality, expiry, details);
-        }
-
-        var maxTargetHeight = ParseTargetHeight(preferredQuality);
-
-        // Separate formats into muxed, video-only, audio-only
-        var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true }).ToList();
-        var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false }).ToList();
-        var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true }).ToList();
-
-        // 1. Try best video-only + best audio-only
-        ResolvedMediaStream? selectedVideo = null;
-        if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
-
-        ResolvedMediaStream? selectedAudio = null;
-        if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
-
-        if (selectedVideo is not null && selectedAudio is not null)
-        {
-            var expiry = MinExpiry(
-                YouTubeMediaExpiryParser.TryExtractExpiry(selectedVideo.Url),
-                YouTubeMediaExpiryParser.TryExtractExpiry(selectedAudio.Url));
-
-            return new ResolvedMedia(
-                selectedVideo.Url,
-                selectedAudio.Url,
-                preferredQuality,
-                expiry,
-                details);
-        }
-
-        // 2. If separate video/audio not fully available, try muxed stream
-        if (muxed.Count > 0)
-        {
-            var bestMuxed = SelectBestVideoStream(muxed, maxTargetHeight);
-            if (bestMuxed is not null)
+            var formats = ParseFormats(root);
+            if (formats.Count == 0)
             {
-                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(bestMuxed.Url);
+                // If there's a direct url at root
+                if (!root.TryGetProperty("url", out var directUrlProp) ||
+                    directUrlProp.GetString() is not { } directUrl ||
+                    string.IsNullOrWhiteSpace(directUrl)) return null;
+                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(directUrl);
+                return new ResolvedMedia(directUrl, null, preferredQuality, expiry, details);
+            }
+
+            var maxTargetHeight = ParseTargetHeight(preferredQuality);
+
+            // Separate formats into muxed, video-only, audio-only
+            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true }).ToList();
+            var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false }).ToList();
+            var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true }).ToList();
+
+            // 1. Try best video-only + best audio-only
+            ResolvedMediaStream? selectedVideo = null;
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
+
+            ResolvedMediaStream? selectedAudio = null;
+            if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
+
+            if (selectedVideo is not null && selectedAudio is not null)
+            {
+                var expiry = MinExpiry(
+                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedVideo.Url),
+                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedAudio.Url));
+
                 return new ResolvedMedia(
-                    bestMuxed.Url,
-                    null,
+                    selectedVideo.Url,
+                    selectedAudio.Url,
+                    preferredQuality,
+                    expiry,
+                    details);
+            }
+
+            // 2. If separate video/audio not fully available, try muxed stream
+            if (muxed.Count > 0)
+            {
+                var bestMuxed = SelectBestVideoStream(muxed, maxTargetHeight);
+                if (bestMuxed is not null)
+                {
+                    var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(bestMuxed.Url);
+                    return new ResolvedMedia(
+                        bestMuxed.Url,
+                        null,
+                        preferredQuality,
+                        expiry,
+                        details);
+                }
+            }
+
+            // 3. If only video or only audio or fallback
+            var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats.Count > 0 ? formats[0] : null);
+            if (fallback is null) return null;
+            {
+                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(fallback.Url);
+                return new ResolvedMedia(
+                    fallback.Url,
+                    selectedAudio?.Url,
                     preferredQuality,
                     expiry,
                     details);
             }
         }
-
-        // 3. If only video or only audio or fallback
-        var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats.Count > 0 ? formats[0] : null);
-        if (fallback is null) return null;
-        {
-            var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(fallback.Url);
-            return new ResolvedMedia(
-                fallback.Url,
-                selectedAudio?.Url,
-                preferredQuality,
-                expiry,
-                details);
-        }
-    }
     }
 
     private static int? ParseTargetHeight(string quality)

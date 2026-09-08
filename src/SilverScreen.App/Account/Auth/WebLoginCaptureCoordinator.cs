@@ -3,15 +3,15 @@ namespace SilverScreen.Account.Auth;
 internal sealed class WebLoginCaptureCoordinator : IDisposable
 {
     private static readonly TimeSpan DefaultDebounceDelay = TimeSpan.FromMilliseconds(500);
+    private readonly CancellationTokenSource _cts = new();
+    private readonly TimeSpan _debounceDelay;
+    private readonly Lock _gate = new();
 
     private readonly Func<string, bool> _persist;
     private readonly Action _persisted;
     private readonly Action _persistenceFailed;
     private readonly Action<Exception> _readFailed;
     private readonly Func<Task<string?>> _readReadyCookies;
-    private readonly TimeSpan _debounceDelay;
-    private readonly CancellationTokenSource _cts = new();
-    private readonly object _gate = new();
 
     private bool _captureRequested;
     private Task _drainTask = Task.CompletedTask;
@@ -31,6 +31,11 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
         _readFailed = readFailed;
         _persistenceFailed = persistenceFailed;
         _debounceDelay = debounceDelay ?? DefaultDebounceDelay;
+    }
+
+    public void Dispose()
+    {
+        _cts.Dispose();
     }
 
     internal void RequestCapture()
@@ -56,7 +61,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
 
         try
         {
-            _cts.Cancel();
+            await _cts.CancelAsync();
         }
         catch (ObjectDisposedException)
         {
@@ -100,10 +105,8 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
                         return;
 
                     if (_captureRequested)
-                    {
                         // Another capture request arrived during debounce; restart window to let cookies settle
                         continue;
-                    }
                 }
             }
 
@@ -159,10 +162,5 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
             _persisted();
             return;
         }
-    }
-
-    public void Dispose()
-    {
-        _cts.Dispose();
     }
 }
