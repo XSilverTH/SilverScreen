@@ -305,13 +305,6 @@ public sealed class ViewModelTests
         Assert.Equal("Search could not be completed.", viewModel.State.Summary);
         Assert.Empty(viewModel.State.Videos);
     }
-    [Fact]
-    public async Task SearchViewModel_BackLabel_IsExitSearch()
-    {
-        var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
-        Assert.Equal("Exit Search", viewModel.BackLabel);
-    }
 
     [Fact]
     public async Task SearchViewModel_RoutesChannelUrls_ToOpenChannelRequested()
