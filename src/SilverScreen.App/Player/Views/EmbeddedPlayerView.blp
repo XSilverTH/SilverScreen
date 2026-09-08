@@ -719,16 +719,14 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             visible: false;
             propagate-natural-height: true;
 
-            Gtk.TextView player_info_description {
-              editable: false;
-              cursor-visible: false;
+            Gtk.Label player_info_description {
+              xalign: 0;
+              yalign: 0;
+              wrap: true;
               wrap-mode: word;
-              accepts-tab: false;
-              monospace: false;
-              top-margin: 4;
-              bottom-margin: 4;
-              left-margin: 4;
-              right-margin: 4;
+              selectable: true;
+              use-markup: true;
+              hexpand: true;
 
               styles [
                 "player-info-description",

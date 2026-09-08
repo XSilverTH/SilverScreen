@@ -4,10 +4,13 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentRowView(Action<string> repliesToggleRequested) : ViewBase<Bin>
+public partial class CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated) : ViewBase<Bin>
 {
+    private readonly Func<string, bool> _linkActivated =
+        linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
     private readonly Action<string> _repliesToggleRequested =
         repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+    private bool _linkHandlerAttached;
 
     private string? _boundCommentId;
 
@@ -19,12 +22,18 @@ public partial class CommentRowView(Action<string> repliesToggleRequested) : Vie
 
     public void Bind(YouTubeComment comment, int replyCount, bool repliesVisible)
     {
+        if (!_linkHandlerAttached)
+        {
+            comment_text_label.OnActivateLink += (_, args) => _linkActivated(args.Uri);
+            _linkHandlerAttached = true;
+        }
+
         _boundCommentId = comment.Id;
         Widget.MarginStart = comment.ParentId is null ? 8 : 32;
         comment_author_label.SetText(comment.AuthorName);
         comment_published_time_label.SetText(comment.PublishedTimeText);
         comment_published_time_label.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
-        comment_text_label.SetText(comment.Text);
+        SetCommentText(comment.Text);
         comment_likes_label.SetText(FormatCount(comment.LikeCount));
         comment_replies_button.SetVisible(replyCount > 0);
         comment_replies_button.SetLabel(repliesVisible
@@ -43,6 +52,18 @@ public partial class CommentRowView(Action<string> repliesToggleRequested) : Vie
         comment_likes_label.SetText(string.Empty);
         comment_replies_button.SetVisible(false);
         comment_replies_button.SetLabel(string.Empty);
+    }
+
+    private void SetCommentText(string text)
+    {
+        try
+        {
+            comment_text_label.SetMarkup(RichText.RichLabelMarkup.Build(text));
+        }
+        catch (Exception)
+        {
+            comment_text_label.SetText(text);
+        }
     }
 
     private static string FormatCount(long value)

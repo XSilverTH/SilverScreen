@@ -11,6 +11,7 @@ public partial class CommentsView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
 
     private readonly Action _closeRequested;
+    private readonly Func<string, bool> _linkActivated;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
@@ -21,10 +22,11 @@ public partial class CommentsView : ViewBase<Box>
     private bool _disposed;
     private CommentsViewState _state;
 
-    public CommentsView(CommentsViewModel viewModel, Action closeRequested)
+    public CommentsView(CommentsViewModel viewModel, Action closeRequested, Func<string, bool> linkActivated)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
+        _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _state = _viewModel.State;
         _viewModel.StateChanged += OnViewModelStateChanged;
 
@@ -153,7 +155,7 @@ public partial class CommentsView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
-        var row = new CommentRowView(_viewModel.ToggleReplies);
+        var row = new CommentRowView(_viewModel.ToggleReplies, _linkActivated);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

@@ -63,7 +63,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _services = services;
         _disposeApplicationServices = disposeApplicationServices;
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
-            video => OpenChannelAsync(video).FireAndForget(Logger), services.Player);
+            video => OpenChannelAsync(video).FireAndForget(Logger),
+            video => PlayVideoAsync(video).FireAndForget(Logger),
+            OnSearchSubmitted,
+            services.Player);
         _playback = new PlaybackModeRoutingService(services.Preferences, services.Playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();

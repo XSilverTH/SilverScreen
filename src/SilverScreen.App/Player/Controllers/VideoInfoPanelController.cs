@@ -18,8 +18,9 @@ internal sealed class VideoInfoPanelController : IDisposable
     private readonly Button _closeButton;
     private readonly Action? _closed;
     private readonly Revealer _cueRevealer;
-    private readonly TextView _description;
+    private readonly Label _description;
     private readonly ScrolledWindow _descriptionScroller;
+    private readonly Func<string, bool> _linkActivated;
     private readonly IYouTubeMediaResolver _mediaResolver;
     private readonly Revealer _revealer;
     private readonly Label _statsLabel;
@@ -45,8 +46,9 @@ internal sealed class VideoInfoPanelController : IDisposable
         Label statsLabel,
         Label statusLabel,
         ScrolledWindow descriptionScroller,
-        TextView description,
+        Label description,
         Button closeButton,
+        Func<string, bool> linkActivated,
         Action? closed = null)
     {
         _mediaResolver = mediaResolver;
@@ -60,8 +62,10 @@ internal sealed class VideoInfoPanelController : IDisposable
         _statusLabel = statusLabel;
         _descriptionScroller = descriptionScroller;
         _description = description;
+        _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _closeButton = closeButton;
         _closed = closed;
+        _description.OnActivateLink += OnDescriptionLinkActivated;
 
         SetInfoContent(null);
     }
@@ -72,6 +76,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _description.OnActivateLink -= OnDescriptionLinkActivated;
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
@@ -251,8 +256,25 @@ internal sealed class VideoInfoPanelController : IDisposable
         _statusLabel.SetVisible(string.IsNullOrWhiteSpace(details.Description));
         _statusLabel.SetText("This video has no description.");
         _descriptionScroller.SetVisible(!string.IsNullOrWhiteSpace(details.Description));
-        if (_description.Buffer is { } buffer)
-            buffer.Text = details.Description ?? string.Empty;
+        SetDescriptionMarkup(details.Description ?? string.Empty);
+    }
+
+    private bool OnDescriptionLinkActivated(object? sender, Label.ActivateLinkSignalArgs args)
+    {
+        return _linkActivated(args.Uri);
+    }
+
+    private void SetDescriptionMarkup(string description)
+    {
+        try
+        {
+            _description.SetMarkup(RichText.RichLabelMarkup.Build(description));
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to render video description markup");
+            _description.SetText(description);
+        }
     }
 
     private static string BuildInfoStats(YouTubeVideoDetails details)

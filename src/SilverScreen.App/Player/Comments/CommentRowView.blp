@@ -54,7 +54,9 @@ Adw.Bin CommentRowView {
       Gtk.Label comment_text_label {
         xalign: 0;
         wrap: true;
+        wrap-mode: word;
         selectable: true;
+        use-markup: true;
       }
 
       Gtk.Box {

@@ -11,6 +11,7 @@ using SilverScreen.Core.Queue;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Comments;
 using SilverScreen.Player.Controllers;
+using SilverScreen.Player.RichText;
 using SilverScreen.Queue;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
@@ -37,6 +38,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private readonly Action _backRequested;
     private readonly Action<VideoSummary> _channelRequested;
+    private readonly PlayerLinkRouter _linkRouter;
+    private readonly Action<string> _searchRequested;
     private readonly PlayerChapterOverlay _chapterOverlay;
     private readonly PlayerChromeController _chromeController;
     private readonly CommentsView _commentsView;
@@ -46,12 +49,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerOsdController _osdController;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
-
     private readonly Action _presentRequested;
     private readonly IQueueService _queueService;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly PlayerResumeController _resumeController;
+    private readonly Action<VideoSummary> _videoRequested;
     private readonly PlaybackSession _session;
     private readonly PlayerShortcutController _shortcutController;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
@@ -70,13 +73,23 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private double _volume = 100;
 
     public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
+        Action<VideoSummary> videoRequested, Action<string> searchRequested,
         PlayerDependencies dependencies)
     {
         _presentRequested = presentRequested;
         _backRequested = backRequested;
         _channelRequested = channelRequested;
+        _videoRequested = videoRequested ?? throw new ArgumentNullException(nameof(videoRequested));
+        _searchRequested = searchRequested ?? throw new ArgumentNullException(nameof(searchRequested));
+        _linkRouter = new PlayerLinkRouter(
+            SeekToTimestamp,
+            video => _videoRequested(video),
+            (channelUrl, displayName) => OpenLinkedChannel(channelUrl, displayName),
+            tag => _searchRequested("#" + tag),
+            OpenExternalLink);
         _preferences = dependencies.Preferences;
-        _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments);
+        _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
+            OnRichLinkActivated);
         comments_sidebar_host.Append(_commentsView.Widget);
         _queueService = dependencies.Queue;
         _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
@@ -115,7 +128,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _infoPanel = new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, player_info_backdrop,
             player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
             player_info_stats_label, player_info_status_label, player_info_description_scroller,
-            player_info_description, player_info_close_button, () =>
+            player_info_description, player_info_close_button, OnRichLinkActivated, () =>
             {
                 if (_session.HasMedia) player_surface.GrabFocus();
             });
@@ -524,8 +537,82 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnResumeButtonClicked(object? sender, EventArgs args)
     {
-        if (_session.TryResume())
+        if (_resumeController.TryConsumeSeekPrompt(out var returnPosition))
+        {
+            SeekBackTo(returnPosition);
             RegisterActivity();
+        }
+        else if (_session.TryResume())
+        {
+            RegisterActivity();
+        }
+    }
+
+    private bool OnRichLinkActivated(string uri)
+    {
+        return _linkRouter.Activate(uri);
+    }
+
+    private void SeekToTimestamp(double positionSeconds)
+    {
+        if (!_session.HasMedia)
+            return;
+
+        var previousPosition = _timelineController.PlaybackPosition;
+        SeekAbsolute(positionSeconds);
+        _osdController.ShowSeek(SeekDeltaSeconds(previousPosition, positionSeconds));
+        _resumeController.ShowSeekPrompt(previousPosition);
+        RegisterActivity();
+    }
+
+    private void SeekBackTo(TimeSpan returnPosition)
+    {
+        var currentPosition = _timelineController.PlaybackPosition;
+        SeekAbsolute(returnPosition.TotalSeconds);
+        _osdController.ShowSeek(SeekDeltaSeconds(currentPosition, returnPosition.TotalSeconds));
+    }
+
+    private static int SeekDeltaSeconds(TimeSpan from, double toSeconds)
+    {
+        return (int)Math.Round(toSeconds - from.TotalSeconds, MidpointRounding.AwayFromZero);
+    }
+
+    private void OpenLinkedChannel(string channelUrl, string displayName)
+    {
+        var name = string.IsNullOrWhiteSpace(displayName) ? channelUrl : displayName;
+        _channelRequested(new VideoSummary(
+            string.Empty,
+            name,
+            name,
+            TimeSpan.Zero,
+            string.Empty,
+            false,
+            null,
+            null,
+            null,
+            channelUrl));
+    }
+
+    private void OpenExternalLink(string url)
+    {
+        try
+        {
+            if (Widget.GetRoot() is not Window parent)
+            {
+                Logger.Warning("Cannot open link {Url} without a parent window", url);
+                return;
+            }
+
+            UriLauncher.New(url).LaunchAsync(parent).ContinueWith(task =>
+            {
+                if (task.IsFaulted)
+                    Logger.Warning(task.Exception, "Failed to open link {Url} in browser", url);
+            }, TaskScheduler.Default);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to open link {Url} in browser", url);
+        }
     }
 
     private void OnRestartButtonClicked(object? sender, EventArgs args)

@@ -533,8 +533,8 @@ button.player-info-cue-button:focus-visible .player-info-cue-icon,
     font-size: 1.05em;
 }
 
-.player-info-description text {
-    background-color: transparent;
+.player-info-description link {
+    color: @accent_color;
 }
 
 .player-channel-button {

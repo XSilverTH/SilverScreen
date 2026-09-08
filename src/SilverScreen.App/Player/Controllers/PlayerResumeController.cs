@@ -20,6 +20,7 @@ internal sealed class PlayerResumeController : IDisposable
     private readonly PlaybackSession _session;
     private bool _disposed;
     private uint _promptHideSource;
+    private TimeSpan? _seekPromptPosition;
 
     public PlayerResumeController(
         PlaybackSession session,
@@ -96,9 +97,59 @@ internal sealed class PlayerResumeController : IDisposable
             return false;
         });
     }
+    /// <summary>
+    ///     Offers a jump back to <paramref name="returnPosition" /> (where playback was
+    ///     before a timestamp link seek) using the resume prompt UI. Consuming the
+    ///     prompt seeks back; it is not a repeat of the original jump.
+    /// </summary>
+    public void ShowSeekPrompt(TimeSpan returnPosition)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_disposed) return false;
+            _seekPromptPosition = returnPosition;
+            _resumeLabel.SetText($"Back to {PlayerTimelineEngine.FormatTime(returnPosition)}");
+            _resumeButton.SetTooltipText($"Return to {PlayerTimelineEngine.FormatTime(returnPosition)} (Enter)");
+            _resumeRevealer.RevealChild = true;
+            _restartRevealer.RevealChild = false;
+            SchedulePromptHide(false);
+            return false;
+        });
+    }
+
+    private void SchedulePromptHide(bool dismissSessionPrompt = true)
+    {
+        if (_promptHideSource != 0) SourceRemove(_promptHideSource);
+        _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
+        {
+            _promptHideSource = 0;
+            if (_disposed) return false;
+            _resumeRevealer.RevealChild = false;
+            _restartRevealer.RevealChild = false;
+            _seekPromptPosition = null;
+            if (dismissSessionPrompt)
+                _session.DismissResumePrompt();
+
+            return false;
+        });
+    }
+
+    public bool TryConsumeSeekPrompt(out TimeSpan position)
+    {
+        if (_seekPromptPosition is { } seekPosition)
+        {
+            position = seekPosition;
+            _seekPromptPosition = null;
+            return true;
+        }
+
+        position = TimeSpan.Zero;
+        return false;
+    }
 
     private void ShowResumePrompt(TimeSpan resumePosition)
     {
+        _seekPromptPosition = null;
         _resumeLabel.SetText($"Resume from {PlayerTimelineEngine.FormatTime(resumePosition)}");
         _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineEngine.FormatTime(resumePosition)} (Enter)");
         _resumeRevealer.RevealChild = true;
@@ -108,26 +159,12 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void ShowRestartPrompt()
     {
+        _seekPromptPosition = null;
         _restartLabel.SetText("Restart from beginning");
         _restartButton.SetTooltipText("Seek back to 0:00");
         _restartRevealer.RevealChild = true;
         _resumeRevealer.RevealChild = false;
         SchedulePromptHide();
-    }
-
-    private void SchedulePromptHide()
-    {
-        if (_promptHideSource != 0) SourceRemove(_promptHideSource);
-        _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
-        {
-            _promptHideSource = 0;
-            if (_disposed) return false;
-            _resumeRevealer.RevealChild = false;
-            _restartRevealer.RevealChild = false;
-            _session.DismissResumePrompt();
-
-            return false;
-        });
     }
 
     private void HidePrompt()
@@ -139,6 +176,7 @@ internal sealed class PlayerResumeController : IDisposable
         }
 
         if (_disposed) return;
+        _seekPromptPosition = null;
         _resumeRevealer.RevealChild = false;
         _restartRevealer.RevealChild = false;
     }
