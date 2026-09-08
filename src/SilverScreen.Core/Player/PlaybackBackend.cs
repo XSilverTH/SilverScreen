@@ -57,16 +57,5 @@ public static class PlaybackBackends
             ? PlaybackBackendKind.Embedded
             : PlaybackBackendKind.ExternalMpv;
     }
-
-    // Wave 1 compat forwards: string forms delegate to the enum core so existing callers keep
-    // compiling. Wave 2: mark [Obsolete] and delete after callers migrate to the enums.
-    public static bool IsEmbedded(string? backend)
-    {
-        return IsEmbedded(Parse(backend));
-    }
-
-    public static string Normalize(string? backend)
-    {
-        return Parse(backend).ToPersistedString();
-    }
 }
+

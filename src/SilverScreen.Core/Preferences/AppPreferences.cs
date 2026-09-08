@@ -41,28 +41,4 @@ public sealed record AppPreferences
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =
         [.. Player.SponsorBlockCategories.All];
-
-    // Wave 1 compat forwards: old string shapes delegate to the enum properties so existing
-    // callers (App.cs, player services) keep compiling. Wave 2: mark [Obsolete] and delete
-    // after callers migrate to the enums.
-    [JsonIgnore]
-    public string Theme
-    {
-        get => ThemeMode.ToPersistedString();
-        set => ThemeMode = ThemeModes.Parse(value);
-    }
-
-    [JsonIgnore]
-    public string PlaybackBackend
-    {
-        get => PlaybackBackendKind.ToPersistedString();
-        set => PlaybackBackendKind = PlaybackBackends.Parse(value);
-    }
-
-    [JsonIgnore]
-    public string VideoQuality
-    {
-        get => Quality.ToPersistedString();
-        set => Quality = VideoQualities.Parse(value);
-    }
 }

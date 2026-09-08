@@ -194,7 +194,7 @@ public sealed class YtDlpMediaResolverTests
 
     private sealed class FakePreferencesService : IPreferencesService
     {
-        public AppPreferences GetPreferences() => new() { YtDlpExecutablePath = "yt-dlp", VideoQuality = "1080p" };
+        public AppPreferences GetPreferences() => new() { YtDlpExecutablePath = "yt-dlp", Quality = VideoQuality.P1080 };
         public void SavePreferences(AppPreferences preferences) { }
 #pragma warning disable CS0067
         public event EventHandler<AppPreferences>? PreferencesChanged;

@@ -11,7 +11,7 @@ public sealed class RuntimeDependencyDiagnosticsTests
     [Fact]
     public void ExternalBackendChecksOnlyTheMpvExecutable()
     {
-        var preferences = new TestPreferences(PlaybackBackends.ExternalMpv);
+        var preferences = new TestPreferences(PlaybackBackendKind.ExternalMpv);
         var diagnostics = new RuntimeDependencyDiagnostics(preferences, new TestSecretService(true),
             path => path != "mpv",
             () => false);
@@ -25,7 +25,7 @@ public sealed class RuntimeDependencyDiagnosticsTests
     [Fact]
     public void EmbeddedBackendChecksOnlyLibMpvAndKeepsOtherWarnings()
     {
-        var preferences = new TestPreferences(PlaybackBackends.EmbeddedPlayer);
+        var preferences = new TestPreferences(PlaybackBackendKind.Embedded);
         var diagnostics =
             new RuntimeDependencyDiagnostics(preferences, new TestSecretService(false), _ => false, () => false);
 
@@ -38,11 +38,11 @@ public sealed class RuntimeDependencyDiagnosticsTests
             warning => warning.Contains("MPV could not be started", StringComparison.Ordinal));
     }
 
-    private sealed class TestPreferences(string playbackBackend) : IPreferencesService
+    private sealed class TestPreferences(PlaybackBackendKind playbackBackend) : IPreferencesService
     {
         private readonly AppPreferences _preferences = new()
         {
-            PlaybackBackend = playbackBackend,
+            PlaybackBackendKind = playbackBackend,
             MpvExecutablePath = "mpv",
             YtDlpExecutablePath = "yt-dlp"
         };

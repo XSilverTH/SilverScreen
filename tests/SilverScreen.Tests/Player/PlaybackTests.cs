@@ -311,7 +311,7 @@ public sealed class PlaybackTests
     {
         var embedded = new TrackingEmbeddedPresenter();
         var external = new TrackingPlaybackService();
-        var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.EmbeddedPlayer });
+        var preferences = new TestPreferences(new AppPreferences { PlaybackBackendKind = PlaybackBackendKind.Embedded });
         var routing = new PlaybackModeRoutingService(preferences, external, embedded);
         var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
 
@@ -328,7 +328,7 @@ public sealed class PlaybackTests
     {
         var embedded = new TrackingEmbeddedPresenter();
         var external = new TrackingPlaybackService();
-        var preferences = new TestPreferences(new AppPreferences { PlaybackBackend = PlaybackBackends.ExternalMpv });
+        var preferences = new TestPreferences(new AppPreferences { PlaybackBackendKind = PlaybackBackendKind.ExternalMpv });
         var routing = new PlaybackModeRoutingService(preferences, external, embedded);
         var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
 

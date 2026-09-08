@@ -353,7 +353,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             RegisterActivity();
             _chapterOverlay.Update([], TimeSpan.Zero);
 
-            SetControls(100, 1, NormalizeQuality(preferences.VideoQuality));
+            SetControls(100, 1, NormalizeQuality(preferences.Quality.ToPersistedString()));
             SetLoading(true);
             player_queue_controls.SetVisible(request.Videos.Length > 1);
             player_previous_queue_button.Sensitive = false;

@@ -17,7 +17,7 @@ internal sealed class PlaybackModeRoutingService(
 
     public Task<string> PlayAsync(PlaybackRequest request)
     {
-        var backend = preferencesService.GetPreferences().PlaybackBackend;
+        var backend = preferencesService.GetPreferences().PlaybackBackendKind;
         var firstVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
         Logger.Information("Routing playback for video {VideoId} ({Title}) using backend {Backend}", firstVideo?.Id,
             firstVideo?.Title, backend);
@@ -43,7 +43,7 @@ internal sealed class PlaybackModeRoutingService(
     /// </summary>
     public Task<string> PlayAlternateAsync(PlaybackRequest request)
     {
-        var backend = preferencesService.GetPreferences().PlaybackBackend;
+        var backend = preferencesService.GetPreferences().PlaybackBackendKind;
         var firstVideo = request.Videos.Length > 0 ? request.Videos[0] : null;
         Logger.Information("Routing alternate playback for video {VideoId} ({Title}) against backend {Backend}",
             firstVideo?.Id, firstVideo?.Title, backend);

@@ -106,10 +106,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         _loading = true;
         try
         {
-            theme_row.Selected = (uint)ThemeModes.Parse(state.Theme);
-            quality_row.Selected = (uint)VideoQualities.Parse(state.VideoQuality);
+            theme_row.Selected = (uint)state.Theme;
+            quality_row.Selected = (uint)state.VideoQuality;
             playback_backend_row.Selected =
-                PlaybackBackends.Parse(state.PlaybackBackend) == PlaybackBackendKind.Embedded ? 1u : 0u;
+                state.PlaybackBackend == PlaybackBackendKind.Embedded ? 1u : 0u;
             fullscreen_row.Active = state.OpenInFullscreen;
             auto_advance_next_video_row.Active = state.AutoAdvanceNextVideo;
             ((Editable)ytdlp_path_row).SetText(state.YtDlpExecutablePath);
@@ -326,13 +326,13 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
     {
         return _viewModel.EditorState with
         {
-            Theme = GetSelectedTheme(theme_row.Selected).ToPersistedString(),
-            VideoQuality = GetSelectedQuality(quality_row.Selected).ToPersistedString(),
+            Theme = GetSelectedTheme(theme_row.Selected),
+            VideoQuality = GetSelectedQuality(quality_row.Selected),
             YtDlpExecutablePath = ((Editable)ytdlp_path_row).GetText(),
             MpvExecutablePath = ((Editable)mpv_path_row).GetText(),
             PlaybackBackend = (playback_backend_row.Selected == 1
                 ? PlaybackBackendKind.Embedded
-                : PlaybackBackendKind.ExternalMpv).ToPersistedString(),
+                : PlaybackBackendKind.ExternalMpv),
             OpenInFullscreen = fullscreen_row.Active,
             PreferredSubtitleLanguage = ((Editable)subtitle_language_row).GetText(),
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,

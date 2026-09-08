@@ -56,12 +56,12 @@ public sealed class PreferencesTests : IDisposable
         var service = new FilePreferencesService(_tempFilePath);
         var newPrefs = new AppPreferences
         {
-            Theme = "Dark",
+            ThemeMode = ThemeMode.Dark,
             MpvExecutablePath = "/custom/mpv",
             YtDlpExecutablePath = "/custom/yt-dlp",
-            VideoQuality = "1080p",
+            Quality = VideoQuality.P1080,
             PreferredSubtitleLanguage = "en",
-            PlaybackBackend = PlaybackBackends.EmbeddedPlayer,
+            PlaybackBackendKind = PlaybackBackendKind.Embedded,
             OpenInFullscreen = false,
             AutoAdvanceNextVideo = false,
             MarkWatchedVideos = true,
@@ -87,12 +87,12 @@ public sealed class PreferencesTests : IDisposable
         var loaded = secondService.GetPreferences();
 
         Assert.NotNull(loaded);
-        Assert.Equal("Dark", loaded.Theme);
+        Assert.Equal(ThemeMode.Dark, loaded.ThemeMode);
         Assert.Equal("/custom/mpv", loaded.MpvExecutablePath);
         Assert.Equal("/custom/yt-dlp", loaded.YtDlpExecutablePath);
-        Assert.Equal("1080p", loaded.VideoQuality);
+        Assert.Equal(VideoQuality.P1080, loaded.Quality);
         Assert.Equal("en", loaded.PreferredSubtitleLanguage);
-        Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
+        Assert.Equal(PlaybackBackendKind.Embedded, loaded.PlaybackBackendKind);
         Assert.False(loaded.OpenInFullscreen);
         Assert.False(loaded.AutoAdvanceNextVideo);
         Assert.True(loaded.MarkWatchedVideos);
@@ -208,11 +208,11 @@ public sealed class PreferencesTests : IDisposable
         service.PreferencesChanged += (_, _) => eventRaised = true;
 
         var exception = Assert.Throws<PreferencesPersistenceException>(() =>
-            service.SavePreferences(new AppPreferences { Theme = "Dark" }));
+            service.SavePreferences(new AppPreferences { ThemeMode = ThemeMode.Dark }));
 
         Assert.Equal(_tempFilePath, exception.FilePath);
         Assert.True(Directory.Exists(_tempFilePath));
-        Assert.Equal(original.Theme, service.GetPreferences().Theme);
+        Assert.Equal(original.ThemeMode, service.GetPreferences().ThemeMode);
         Assert.False(eventRaised);
         Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(_tempFilePath)!,
             $".{Path.GetFileName(_tempFilePath)}.*.tmp"));
@@ -238,7 +238,7 @@ public sealed class PreferencesTests : IDisposable
         var events = 0;
         service.PreferencesChanged += (_, _) => events++;
 
-        service.SavePreferences(new AppPreferences { Theme = "Dark" });
+        service.SavePreferences(new AppPreferences { ThemeMode = ThemeMode.Dark });
 
         Assert.Equal(1, events);
         Assert.True(File.Exists(_tempFilePath));
@@ -295,12 +295,12 @@ public sealed class PreferencesTests : IDisposable
         var service = new FilePreferencesService(_tempFilePath);
         var loaded = service.GetPreferences();
 
-        Assert.Equal("Dark", loaded.Theme);
-        Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
+        Assert.Equal(ThemeMode.Dark, loaded.ThemeMode);
+        Assert.Equal(PlaybackBackendKind.Embedded, loaded.PlaybackBackendKind);
         Assert.False(loaded.OpenInFullscreen);
         Assert.False(loaded.AutoAdvanceNextVideo);
         Assert.Equal("/usr/bin/mpv", loaded.MpvExecutablePath);
-        Assert.Equal("720p", loaded.VideoQuality);
+        Assert.Equal(VideoQuality.P720, loaded.Quality);
         Assert.Equal("ja", loaded.PreferredSubtitleLanguage);
         Assert.Equal("/usr/bin/yt-dlp", loaded.YtDlpExecutablePath);
         Assert.True(loaded.MarkWatchedVideos);
@@ -360,26 +360,26 @@ public sealed class PreferencesTests : IDisposable
         var service = new FilePreferencesService(_tempFilePath);
         var original = new AppPreferences
         {
-            Theme = "Light",
+            ThemeMode = ThemeMode.Light,
             Shortcuts = new PlayerShortcutBindings { TogglePause = ["space"] }
         };
 
         service.SavePreferences(original);
 
         // Mutate original instance after saving
-        original.Theme = "Dark";
+        original.ThemeMode = ThemeMode.Dark;
         original.Shortcuts.TogglePause = ["mutated"];
 
         var current = service.GetPreferences();
-        Assert.Equal("Light", current.Theme);
+        Assert.Equal(ThemeMode.Light, current.ThemeMode);
         Assert.Equal(["space"], current.Shortcuts.TogglePause);
 
         // Mutate retrieved instance
-        current.Theme = "Dark";
+        current.ThemeMode = ThemeMode.Dark;
         current.Shortcuts.TogglePause = ["mutated_again"];
 
         var currentAgain = service.GetPreferences();
-        Assert.Equal("Light", currentAgain.Theme);
+        Assert.Equal(ThemeMode.Light, currentAgain.ThemeMode);
         Assert.Equal(["space"], currentAgain.Shortcuts.TogglePause);
     }
 }

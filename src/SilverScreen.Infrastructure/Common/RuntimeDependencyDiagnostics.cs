@@ -70,7 +70,7 @@ public sealed class RuntimeDependencyDiagnostics
             warnings.Add(msg);
         }
 
-        if (PlaybackBackends.IsEmbedded(preferences.PlaybackBackend))
+        if (PlaybackBackends.IsEmbedded(preferences.PlaybackBackendKind))
         {
             if (!_isLibMpvAvailable())
             {

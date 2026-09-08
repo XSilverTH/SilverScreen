@@ -11,7 +11,7 @@ public sealed class PreferencesViewModelTests
         var service = new FakePreferencesService(new AppPreferences { PreferredSubtitleLanguage = "ja" });
         var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { Theme = "Dark" });
+        var result = viewModel.Save(viewModel.EditorState with { Theme = ThemeMode.Dark });
 
         Assert.True(result.Succeeded);
         Assert.NotNull(service.Saved);
@@ -155,14 +155,14 @@ public sealed class PreferencesViewModelTests
     [Fact]
     public void Save_WhenPersistenceFails_ReturnsRevertedStateAndExactStatusMessage()
     {
-        var original = new AppPreferences { Theme = "Light", YtDlpExecutablePath = "/usr/bin/yt-dlp" };
+        var original = new AppPreferences { ThemeMode = ThemeMode.Light, YtDlpExecutablePath = "/usr/bin/yt-dlp" };
         var service = new FakePreferencesService(original) { ThrowOnSave = true };
         var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { Theme = "Dark", YtDlpExecutablePath = "/custom/yt-dlp" });
+        var result = viewModel.Save(viewModel.EditorState with { Theme = ThemeMode.Dark, YtDlpExecutablePath = "/custom/yt-dlp" });
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Light", result.State.Theme);
+        Assert.Equal(ThemeMode.Light, result.State.Theme);
         Assert.Equal("/usr/bin/yt-dlp", result.State.YtDlpExecutablePath);
         Assert.Equal(PreferencesViewModel.PersistenceErrorMessage, result.ErrorMessage);
         Assert.Null(service.Saved);

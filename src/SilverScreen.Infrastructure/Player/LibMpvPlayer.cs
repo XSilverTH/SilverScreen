@@ -207,9 +207,7 @@ public sealed class LibMpvPlayer : IDisposable
             _request = request;
             _preferences = preferences;
             _cookieFilePath = cookieFilePath;
-            _quality = MpvCommandBuilder.BuildYtdlFormat(preferences.VideoQuality) is null
-                ? "Best"
-                : preferences.VideoQuality;
+            _quality = preferences.Quality.ToPersistedString();
             _reload = null;
             _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [], Chapters = [] };
         }
