@@ -1,5 +1,6 @@
 using Gtk;
 using SilverScreen.Core.Preferences;
+using XSTH.Blueprint.Helpers;
 using Functions = Gdk.Functions;
 
 namespace SilverScreen.Player.Controllers;
@@ -33,7 +34,7 @@ public sealed class PlayerShortcutController : IDisposable
     private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> _shortcutMap = [];
     private readonly Widget _viewWidget;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
 
 
     private EventControllerKey? _keyboardController;
@@ -45,19 +46,19 @@ public sealed class PlayerShortcutController : IDisposable
 
         var key = EventControllerKey.New();
         key.SetPropagationPhase(PropagationPhase.Capture);
-        key.OnKeyPressed += OnKeyPressed;
-        _keyboardController = key;
+        _lifetime.Track(() => key.OnKeyPressed += OnKeyPressed, () => key.OnKeyPressed -= OnKeyPressed);
+        _keyboardController = _lifetime.Own(key);
     }
 
     public Func<uint, bool>? KeyInterceptor { get; set; }
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
+        if (_lifetime.IsDisposed) return;
         Detach();
         _actionHandlers.Clear();
         _shortcutMap.Clear();
-        _keyboardController?.Dispose();
+        _lifetime.Dispose();
         _keyboardController = null;
     }
 
@@ -99,10 +100,10 @@ public sealed class PlayerShortcutController : IDisposable
 
     public void Attach()
     {
-        if (_disposed || _keyboardController is null || _keyboardRoot is not null) return;
+        if (_lifetime.IsDisposed || _keyboardController is null || _keyboardRoot is not null) return;
         if (_viewWidget.GetRoot() is not Widget root) return;
 
-        ControllerDisposal.Attach(root, _keyboardController);
+        root.AddController(_keyboardController);
         _keyboardRoot = root;
     }
 

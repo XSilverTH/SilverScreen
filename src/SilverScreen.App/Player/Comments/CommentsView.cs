@@ -19,7 +19,6 @@ public partial class CommentsView : ViewBase<Box>
     private readonly Adjustment? _vadjustment;
     private readonly CommentsViewModel _viewModel;
     private string[] _displayedCommentIds = [];
-    private bool _disposed;
     private CommentsViewState _state;
 
     public CommentsView(CommentsViewModel viewModel, Action closeRequested, Func<string, bool> linkActivated)
@@ -28,19 +27,35 @@ public partial class CommentsView : ViewBase<Box>
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _state = _viewModel.State;
-        _viewModel.StateChanged += OnViewModelStateChanged;
+
+        Lifetime.Own(_viewModel);
+        Lifetime.Track(
+            () => _viewModel.StateChanged += OnViewModelStateChanged,
+            () => _viewModel.StateChanged -= OnViewModelStateChanged);
 
         _vadjustment = comments_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
-            _vadjustment.OnValueChanged += OnScrollValueChanged;
+        {
+            Lifetime.Track(
+                () => _vadjustment.OnValueChanged += OnScrollValueChanged,
+                () => _vadjustment.OnValueChanged -= OnScrollValueChanged);
+        }
 
-        _itemIds = StringList.New([]);
-        _selection = NoSelection.New(_itemIds);
-        _factory = SignalListItemFactory.New();
-        _factory.OnSetup += OnRowSetup;
-        _factory.OnBind += OnRowBind;
-        _factory.OnUnbind += OnRowUnbind;
-        _factory.OnTeardown += OnRowTeardown;
+        _itemIds = Lifetime.Own(StringList.New([]));
+        _selection = Lifetime.Own(NoSelection.New(_itemIds));
+        _factory = Lifetime.Own(SignalListItemFactory.New());
+        Lifetime.Track(
+            () => _factory.OnSetup += OnRowSetup,
+            () => _factory.OnSetup -= OnRowSetup);
+        Lifetime.Track(
+            () => _factory.OnBind += OnRowBind,
+            () => _factory.OnBind -= OnRowBind);
+        Lifetime.Track(
+            () => _factory.OnUnbind += OnRowUnbind,
+            () => _factory.OnUnbind -= OnRowUnbind);
+        Lifetime.Track(
+            () => _factory.OnTeardown += OnRowTeardown,
+            () => _factory.OnTeardown -= OnRowTeardown);
 
         comments_list.Model = _selection;
         comments_list.Factory = _factory;
@@ -69,7 +84,7 @@ public partial class CommentsView : ViewBase<Box>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (_disposed || _vadjustment is null ||
+        if (IsDisposed || _vadjustment is null ||
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 280)
             return;
 
@@ -83,11 +98,8 @@ public partial class CommentsView : ViewBase<Box>
 
     private void OnViewModelStateChanged(object? sender, CommentsViewState state)
     {
-        Functions.IdleAdd(0, () =>
+        Lifetime.Idle(() =>
         {
-            if (_disposed)
-                return false;
-
             Render(state);
             return false;
         });
@@ -189,29 +201,16 @@ public partial class CommentsView : ViewBase<Box>
         row.Dispose();
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
+        if (disposing)
+        {
+            foreach (var row in _rowsByCell.Values)
+                row.Dispose();
 
-        _disposed = true;
-        _viewModel.StateChanged -= OnViewModelStateChanged;
-        if (_vadjustment is not null)
-            _vadjustment.OnValueChanged -= OnScrollValueChanged;
+            _rowsByCell.Clear();
+        }
 
-        _viewModel.Dispose();
-        _factory.OnSetup -= OnRowSetup;
-        _factory.OnBind -= OnRowBind;
-        _factory.OnUnbind -= OnRowUnbind;
-        _factory.OnTeardown -= OnRowTeardown;
-        foreach (var row in _rowsByCell.Values)
-            row.Dispose();
-
-        _rowsByCell.Clear();
-        comments_list.Dispose();
-        _selection.Dispose();
-        _factory.Dispose();
-        _itemIds.Dispose();
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

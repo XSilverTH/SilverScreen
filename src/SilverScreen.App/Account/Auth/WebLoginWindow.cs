@@ -73,52 +73,54 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
             OnReadFailed,
             OnPersistenceFailed);
 
-        _cookieManager.OnChanged += OnCookieChanged;
-        _webView.OnLoadChanged += OnLoadChanged;
-        _webView.OnDecidePolicy += OnDecidePolicy;
-        Widget.OnCloseRequest += OnCloseRequest;
+        Lifetime.Track(() => _cookieManager.OnChanged += OnCookieChanged, () => _cookieManager.OnChanged -= OnCookieChanged);
+        Lifetime.Track(() => _webView.OnLoadChanged += OnLoadChanged, () => _webView.OnLoadChanged -= OnLoadChanged);
+        Lifetime.Track(() => _webView.OnDecidePolicy += OnDecidePolicy, () => _webView.OnDecidePolicy -= OnDecidePolicy);
+        Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest, () => Widget.OnCloseRequest -= OnCloseRequest);
         _webView.LoadUri(LoginUri);
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        // Double-dispose guard: exactly one thread wins disposal initiation.
-        if (Interlocked.Exchange(ref _disposeState, 1) == 0)
+        if (disposing)
         {
-            if (Environment.CurrentManagedThreadId == _uiThreadId)
-                DisposeOnMainThread();
-            else
-                Functions.IdleAdd(0, () =>
-                {
-                    try
+            // Double-dispose guard: exactly one thread wins disposal initiation.
+            if (Interlocked.Exchange(ref _disposeState, 1) == 0)
+            {
+                if (Environment.CurrentManagedThreadId == _uiThreadId)
+                    DisposeOnMainThread();
+                else
+                    Functions.IdleAdd(0, () =>
                     {
-                        DisposeOnMainThread();
-                    }
-                    catch (Exception exception)
-                    {
-                        Logger.Warning(exception, "WebLoginWindow UI-thread disposal failed");
-                        _teardownEvent.Set();
-                    }
+                        try
+                        {
+                            DisposeOnMainThread();
+                        }
+                        catch (Exception exception)
+                        {
+                            Logger.Warning(exception, "WebLoginWindow UI-thread disposal failed");
+                            _teardownEvent.Set();
+                        }
 
-                    return false;
-                });
+                        return false;
+                    });
+            }
+
+            // WebKit/GTK natives must be torn down on the UI thread, never on a
+            // threadpool thread. Marshal synchronously so the caller never
+            // outlives the teardown ordering (capture stopped and native handles disposed).
+            if (Environment.CurrentManagedThreadId != _uiThreadId)
+            {
+                if (!_teardownEvent.Wait(TimeSpan.FromSeconds(10)))
+                    Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
+            }
         }
 
-        // WebKit/GTK natives must be torn down on the UI thread, never on a
-        // threadpool thread. Marshal synchronously so the caller never
-        // outlives the teardown ordering (capture stopped and native handles disposed).
-        if (Environment.CurrentManagedThreadId == _uiThreadId) return;
-        if (!_teardownEvent.Wait(TimeSpan.FromSeconds(10)))
-            Logger.Warning("WebLoginWindow UI-thread disposal timed out; teardown remains queued on the main loop");
+        base.Dispose(disposing);
     }
 
     private void DisposeOnMainThread()
     {
-        _cookieManager.OnChanged -= OnCookieChanged;
-        _webView.OnLoadChanged -= OnLoadChanged;
-        _webView.OnDecidePolicy -= OnDecidePolicy;
-        Widget.OnCloseRequest -= OnCloseRequest;
-
         try
         {
             _webView.StopLoading();
@@ -421,7 +423,9 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
 
             try
             {
+#pragma warning disable BSG007 // WebLoginWindow genuinely requires native teardown of the ephemeral window widget
                 Widget.Dispose();
+#pragma warning restore BSG007
             }
             catch (Exception exception)
             {

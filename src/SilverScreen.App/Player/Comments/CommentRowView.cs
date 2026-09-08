@@ -4,16 +4,26 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated) : ViewBase<Bin>
+public partial class CommentRowView : ViewBase<Bin>
 {
-    private readonly Func<string, bool> _linkActivated =
-        linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
-    private readonly Action<string> _repliesToggleRequested =
-        repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
-    private bool _linkHandlerAttached;
-
+    private readonly Func<string, bool> _linkActivated;
+    private readonly Action<string> _repliesToggleRequested;
     private string? _boundCommentId;
 
+    public CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated)
+    {
+        _repliesToggleRequested = repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+        _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
+
+        Lifetime.Track(
+            () => comment_text_label.OnActivateLink += OnCommentTextActivateLink,
+            () => comment_text_label.OnActivateLink -= OnCommentTextActivateLink);
+    }
+
+    private bool OnCommentTextActivateLink(Gtk.Label sender, Gtk.Label.ActivateLinkSignalArgs args)
+    {
+        return _linkActivated(args.Uri);
+    }
     private void OnRepliesButtonClicked(object? sender, EventArgs args)
     {
         if (_boundCommentId is { } commentId)
@@ -22,12 +32,6 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
 
     public void Bind(YouTubeComment comment, int replyCount, bool repliesVisible)
     {
-        if (!_linkHandlerAttached)
-        {
-            comment_text_label.OnActivateLink += (_, args) => _linkActivated(args.Uri);
-            _linkHandlerAttached = true;
-        }
-
         _boundCommentId = comment.Id;
         Widget.MarginStart = comment.ParentId is null ? 8 : 32;
         comment_author_label.SetText(comment.AuthorName);

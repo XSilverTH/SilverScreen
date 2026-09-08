@@ -21,7 +21,6 @@ public partial class QueueView : ViewBase<Box>
     private readonly Action<int>? _trackJumpRequested;
     private readonly QueueViewModel _viewModel;
     private QueueItem[] _displayedItems = [];
-    private bool _disposed;
 
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails,
         Action closeRequested, Action<int>? trackJumpRequested = null)
@@ -31,19 +30,18 @@ public partial class QueueView : ViewBase<Box>
         _closeRequested = closeRequested;
         _trackJumpRequested = trackJumpRequested;
 
-        _itemIds = StringList.New([]);
-        _selection = NoSelection.New(_itemIds);
-        _factory = SignalListItemFactory.New();
-        _factory.OnSetup += OnRowSetup;
-        _factory.OnBind += OnRowBind;
-        _factory.OnUnbind += OnRowUnbind;
-        _factory.OnTeardown += OnRowTeardown;
+        _itemIds = Lifetime.Own(StringList.New([]));
+        _selection = Lifetime.Own(NoSelection.New(_itemIds));
+        _factory = Lifetime.Own(SignalListItemFactory.New());
+        Lifetime.Track(() => _factory.OnSetup += OnRowSetup, () => _factory.OnSetup -= OnRowSetup);
+        Lifetime.Track(() => _factory.OnBind += OnRowBind, () => _factory.OnBind -= OnRowBind);
+        Lifetime.Track(() => _factory.OnUnbind += OnRowUnbind, () => _factory.OnUnbind -= OnRowUnbind);
+        Lifetime.Track(() => _factory.OnTeardown += OnRowTeardown, () => _factory.OnTeardown -= OnRowTeardown);
 
         queue_list.Model = _selection;
         queue_list.Factory = _factory;
 
-
-        _viewModel.StateChanged += OnStateChanged;
+        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged, () => _viewModel.StateChanged -= OnStateChanged);
         Render(_viewModel.State);
     }
 
@@ -75,13 +73,20 @@ public partial class QueueView : ViewBase<Box>
 
     private void OnStateChanged(object? sender, QueuePresentationState state)
     {
-        Functions.IdleAdd(0, () =>
+        if (IsDisposed) return;
+        try
         {
-            if (!_disposed)
-                Render(state);
+            Lifetime.Idle(() =>
+            {
+                if (!IsDisposed)
+                    Render(state);
 
-            return false;
-        });
+                return false;
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void Render(QueuePresentationState state)
@@ -235,26 +240,17 @@ public partial class QueueView : ViewBase<Box>
                 : $"{duration.Seconds}s";
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
+        if (disposing)
+        {
+            foreach (var row in _rowsByCell.Values)
+                row.Dispose();
 
-        _disposed = true;
-        _viewModel.StateChanged -= OnStateChanged;
-        _factory.OnSetup -= OnRowSetup;
-        _factory.OnBind -= OnRowBind;
-        _factory.OnUnbind -= OnRowUnbind;
-        _factory.OnTeardown -= OnRowTeardown;
-        foreach (var row in _rowsByCell.Values)
-            row.Dispose();
+            _rowsByCell.Clear();
+            _viewModel.Dispose();
+        }
 
-        _rowsByCell.Clear();
-        queue_list.Dispose();
-        _selection.Dispose();
-        _factory.Dispose();
-        _itemIds.Dispose();
-        _viewModel.Dispose();
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

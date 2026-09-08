@@ -2,6 +2,7 @@ using System.Globalization;
 using Gtk;
 using SilverScreen.Core.Preferences;
 using static GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -209,7 +210,7 @@ internal sealed class PlayerOsdController : IDisposable
     private readonly Label _osdLabel;
     private readonly Revealer _osdRevealer;
     private readonly IPreferencesService _preferences;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private bool _enabled;
     private uint _hideTimeoutSource;
 
@@ -229,68 +230,70 @@ internal sealed class PlayerOsdController : IDisposable
         _holdDurationMilliseconds = holdDurationMilliseconds;
 
         _enabled = _preferences.GetPreferences().ShortcutOsdEnabled;
-        _preferences.PreferencesChanged += OnPreferencesChanged;
+        _lifetime.Track(
+            () => _preferences.PreferencesChanged += OnPreferencesChanged,
+            () => _preferences.PreferencesChanged -= OnPreferencesChanged);
     }
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         HideImmediate();
     }
 
     public void ShowSeek(int deltaSeconds)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessSeek(deltaSeconds);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowVolume(double volume, bool isMuted)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessVolume(volume, isMuted);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowPlayPause(bool isPaused)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessPlayPause(isPaused);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSpeed(double speed)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessSpeed(speed);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSeekToBeginning()
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessSeekToBeginning();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSubtitles(string trackOrOff)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessSubtitles(trackOrOff);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowQueue(bool isOpen)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessQueue(isOpen);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowVideoInfo(bool isOpen)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessVideoInfo(isOpen);
         ApplyAndScheduleHide(model);
     }
@@ -298,42 +301,42 @@ internal sealed class PlayerOsdController : IDisposable
 
     public void ShowFullscreen(bool isFullscreen)
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessFullscreen(isFullscreen);
         ApplyAndScheduleHide(model);
     }
 
     public void ShowNextVideo()
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessNextVideo();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowPreviousVideo()
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessPreviousVideo();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowResumed()
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessResumed();
         ApplyAndScheduleHide(model);
     }
 
     public void ShowSkippedSponsor()
     {
-        if (!_enabled || _disposed) return;
+        if (!_enabled || _lifetime.IsDisposed) return;
         var model = _state.ProcessSkippedSponsor();
         ApplyAndScheduleHide(model);
     }
 
     public void SetChromeVisible(bool visible)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         if (visible)
             _osdRevealer.RemoveCssClass("player-osd-chrome-hidden");
         else
@@ -342,7 +345,11 @@ internal sealed class PlayerOsdController : IDisposable
 
     public void HideImmediate()
     {
-        ControllerDisposal.ClearTimeout(ref _hideTimeoutSource);
+        if (_hideTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideTimeoutSource);
+            _hideTimeoutSource = 0;
+        }
 
         _osdRevealer.RevealChild = false;
         _state.Reset();
@@ -354,12 +361,16 @@ internal sealed class PlayerOsdController : IDisposable
         _osdLabel.SetText(model.Text);
         _osdRevealer.RevealChild = true;
 
-        ControllerDisposal.ClearTimeout(ref _hideTimeoutSource);
+        if (_hideTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideTimeoutSource);
+            _hideTimeoutSource = 0;
+        }
 
-        _hideTimeoutSource = TimeoutAdd(0, _holdDurationMilliseconds, () =>
+        _hideTimeoutSource = _lifetime.Timeout(_holdDurationMilliseconds, () =>
         {
             _hideTimeoutSource = 0;
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _osdRevealer.RevealChild = false;
             _state.Reset();
 

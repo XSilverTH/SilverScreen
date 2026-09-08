@@ -29,7 +29,7 @@ internal interface IEmbeddedPlayerPresenter
     Task TogglePauseAsync();
 }
 
-public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter, IDisposable
+public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter
 {
     private const double MinimumPlaybackSpeed = 0.25;
     private const double MaximumPlaybackSpeed = 4;
@@ -63,7 +63,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerTimelineController _timelineController;
 
     private string? _commentsVideoId;
-    private bool _disposed;
     private bool _isMuted;
     private PlaybackRequest? _loadedRequest;
     private bool _rendererReady;
@@ -88,61 +87,60 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             tag => _searchRequested("#" + tag),
             OpenExternalLink);
         _preferences = dependencies.Preferences;
-        _commentsView = new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
-            OnRichLinkActivated);
+        _commentsView = Lifetime.Own(new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
+            OnRichLinkActivated));
         comments_sidebar_host.Append(_commentsView.Widget);
         _queueService = dependencies.Queue;
-        _queueViewModel = new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this));
-        _queueView = new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
-            OnTrackJumpRequested);
+        _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this)));
+        _queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
+            OnTrackJumpRequested));
         player_queue_sidebar_host.Append(_queueView.Widget);
         player_queue_button.BindProperty("active", player_queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
-        _queueService.Changed += OnQueueChanged;
-        _player = new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
+        Lifetime.Track(() => _queueService.Changed += OnQueueChanged, () => _queueService.Changed -= OnQueueChanged);
+        _player = Lifetime.Own(new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
         {
-            if (!_disposed) action();
+            if (!IsDisposed) action();
             return false;
-        }));
-        _timelineController = new PlayerTimelineController(player_timeline, player_timeline_overlay, player_scrub_cue,
+        })));
+        _timelineController = Lifetime.Own(new PlayerTimelineController(player_timeline, player_timeline_overlay, player_scrub_cue,
             player_scrub_time_label, player_scrub_delta_label, player_scrub_chapter_label, player_position_label,
             player_duration_label,
-            (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity);
-        _desktopMedia = new DesktopMediaIntegration(_player, presentRequested);
-        _session = new PlaybackSession(dependencies, _desktopMedia);
-        _session.SeekRequested += SeekAbsolute;
-        _session.VideoChanged += OnSessionVideoChanged;
-        _session.SessionEnded += OnSessionEnded;
-        _session.Failed += OnSessionFailed;
-        _engagement = new PlayerEngagementController(_session, player_like_button, player_like_image,
-            player_likes_label, player_dislike_button, player_dislike_image, player_dislikes_label);
-        _chapterOverlay = new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
-            () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity);
-        _sponsorBlockController = new PlayerSponsorBlockController(_session, _preferences,
+            (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity));
+        _desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, presentRequested));
+        _session = Lifetime.Own(new PlaybackSession(dependencies, _desktopMedia));
+        Lifetime.Track(() => _session.SeekRequested += SeekAbsolute, () => _session.SeekRequested -= SeekAbsolute);
+        Lifetime.Track(() => _session.VideoChanged += OnSessionVideoChanged, () => _session.VideoChanged -= OnSessionVideoChanged);
+        Lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        Lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
+        _engagement = Lifetime.Own(new PlayerEngagementController(_session, player_like_button, player_like_image,
+            player_likes_label, player_dislike_button, player_dislike_image, player_dislikes_label));
+        _chapterOverlay = Lifetime.Own(new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
+            () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity));
+        _sponsorBlockController = Lifetime.Own(new PlayerSponsorBlockController(_session, _preferences,
             player_timeline,
             player_timeline_overlay, player_sponsorblock_revealer, player_sponsorblock_skip_button,
-            player_sponsorblock_label);
-        _resumeController = new PlayerResumeController(_session,
+            player_sponsorblock_label));
+        _resumeController = Lifetime.Own(new PlayerResumeController(_session,
             player_resume_revealer, player_resume_button, player_resume_label,
-            player_restart_revealer, player_restart_button, player_restart_label);
-        _infoPanel = new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, player_info_backdrop,
+            player_restart_revealer, player_restart_button, player_restart_label));
+        _infoPanel = Lifetime.Own(new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, player_info_backdrop,
             player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
             player_info_stats_label, player_info_status_label, player_info_description_scroller,
             player_info_description, player_info_close_button, OnRichLinkActivated, () =>
             {
                 if (_session.HasMedia) player_surface.GrabFocus();
-            });
-        _subtitleController = new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
+            }));
+        _subtitleController = Lifetime.Own(new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
             player_subtitle_model,
-            player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId));
-        _player.RenderRequested += OnRenderRequested;
-        _player.StateChanged += OnStateChanged;
-        _player.PlaybackFailed += OnPlaybackFailed;
+            player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId)));
+        Lifetime.Track(() => _player.RenderRequested += OnRenderRequested, () => _player.RenderRequested -= OnRenderRequested);
+        Lifetime.Track(() => _player.StateChanged += OnStateChanged, () => _player.StateChanged -= OnStateChanged);
+        Lifetime.Track(() => _player.PlaybackFailed += OnPlaybackFailed, () => _player.PlaybackFailed -= OnPlaybackFailed);
         SetControls(100, 1, "Best");
-        _osdController = new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label);
-        _statsController =
-            new PlayerStatsController(new PlayerStatsProvider(_player), player_stats_revealer, player_stats_label);
-        _chromeController = new PlayerChromeController(
+        _osdController = Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
+        _statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player), player_stats_revealer, player_stats_label));
+        _chromeController = Lifetime.Own(new PlayerChromeController(
             Widget,
             player_header_bar,
             player_center_controls,
@@ -150,9 +148,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
             () => _chapterOverlay.Layout(),
             UpdatePointer,
-            visible => _osdController.SetChromeVisible(visible));
+            visible => _osdController.SetChromeVisible(visible)));
         _osdController.SetChromeVisible(true);
-        _shortcutController = new PlayerShortcutController(Widget);
+        _shortcutController = Lifetime.Own(new PlayerShortcutController(Widget));
         _shortcutController.KeyInterceptor = keyval => _statsController.HandleKeyPress(keyval);
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
         {
@@ -255,54 +253,36 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 _osdController.ShowSkippedSponsor();
         });
         _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
-        Widget.OnNotify += (_, e) =>
-        {
-            if (e.Pspec.GetName() != "visible") return;
-            if (Widget.GetVisible())
-                _shortcutController.Attach();
-            else
-                _shortcutController.Detach();
-        };
+        Lifetime.Track(
+            () => _preferences.PreferencesChanged += OnPreferencesChanged,
+            () => _preferences.PreferencesChanged -= OnPreferencesChanged);
+        Lifetime.Track(
+            () => Widget.OnNotify += OnWidgetNotify,
+            () => Widget.OnNotify -= OnWidgetNotify);
     }
 
-    public new void Dispose()
+    private void OnWidgetNotify(GObject.Object sender, GObject.Object.NotifySignalArgs e)
     {
-        _timelineController.Dispose();
-        _infoPanel.Dispose();
-        _subtitleController.Dispose();
-        _engagement.Dispose();
-        _sponsorBlockController.Dispose();
-        _resumeController.Dispose();
-        _osdController.Dispose();
-        _chapterOverlay.Dispose();
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
-        _statsController.Dispose();
-        _chromeController.Dispose();
-        _commentsView.Dispose();
-        _queueService.Changed -= OnQueueChanged;
-        _queueView.Dispose();
-        _queueViewModel.Dispose();
-        _disposed = true;
-        _shortcutController.Dispose();
+        if (e.Pspec.GetName() != "visible") return;
+        if (Widget.GetVisible())
+            _shortcutController.Attach();
+        else
+            _shortcutController.Detach();
+    }
 
-        if (_rendererReady)
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
         {
-            player_surface.MakeCurrent();
-            _player.ShutdownRenderer();
-            _rendererReady = false;
+            if (_rendererReady)
+            {
+                player_surface.MakeCurrent();
+                _player.ShutdownRenderer();
+                _rendererReady = false;
+            }
         }
 
-        _player.RenderRequested -= OnRenderRequested;
-        _player.StateChanged -= OnStateChanged;
-        _player.PlaybackFailed -= OnPlaybackFailed;
-        _session.SeekRequested -= SeekAbsolute;
-        _session.VideoChanged -= OnSessionVideoChanged;
-        _session.SessionEnded -= OnSessionEnded;
-        _session.Failed -= OnSessionFailed;
-        _session.Dispose();
-        _player.Dispose();
-        _desktopMedia.Dispose();
-        GC.SuppressFinalize(this);
+        base.Dispose(disposing);
     }
 
     public bool HasMedia => _session.HasMedia;
@@ -411,7 +391,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private bool OnPlayerSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
     {
-        if (_disposed || !_rendererReady) return false;
+        if (IsDisposed || !_rendererReady) return false;
         _player.Render(player_surface.GetAllocatedWidth() * player_surface.GetScaleFactor(),
             player_surface.GetAllocatedHeight() * player_surface.GetScaleFactor());
         return true;
@@ -734,14 +714,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnRenderRequested(object? sender, EventArgs args)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
 
         player_surface.QueueRender();
     }
 
     private void OnStateChanged(object? sender, LibMpvPlaybackState state)
     {
-        if (_disposed) return;
+        if (IsDisposed) return;
         _speed = state.Speed;
         IsPaused = state.IsPaused;
         _volume = state.Volume;
@@ -914,7 +894,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || _syncingQueue || _session.Request is null)
+            if (IsDisposed || _syncingQueue || _session.Request is null)
                 return false;
 
             var currentVideos = _session.Request.Videos;

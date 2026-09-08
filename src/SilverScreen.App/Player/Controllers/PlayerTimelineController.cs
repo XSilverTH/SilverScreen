@@ -5,6 +5,7 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using Functions = GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -391,7 +392,7 @@ internal sealed class PlayerTimelineController : IDisposable
     private readonly EventControllerMotion _timelineMotionController;
     private readonly Overlay _timelineOverlay;
 
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private uint _throttledSeekSource;
     private bool _updatingControls;
 
@@ -421,19 +422,38 @@ internal sealed class PlayerTimelineController : IDisposable
         State = state ?? new PlayerTimelineState();
 
         _timelineMotionController = EventControllerMotion.New();
-        _timelineMotionController.OnMotion += OnTimelineMotion;
-        _timelineMotionController.OnLeave += OnTimelineLeave;
-        ControllerDisposal.Attach(_timelineOverlay, _timelineMotionController);
+        _lifetime.Attach(_timelineOverlay, _timelineMotionController,
+            c =>
+            {
+                c.OnMotion += OnTimelineMotion;
+                c.OnLeave += OnTimelineLeave;
+            },
+            c =>
+            {
+                c.OnMotion -= OnTimelineMotion;
+                c.OnLeave -= OnTimelineLeave;
+            });
 
         _timelineDragGesture = GestureDrag.New();
         _timelineDragGesture.Button = 1;
         _timelineDragGesture.SetPropagationPhase(PropagationPhase.Capture);
-        _timelineDragGesture.OnDragBegin += OnTimelineDragBegin;
-        _timelineDragGesture.OnDragUpdate += OnTimelineDragUpdate;
-        _timelineDragGesture.OnDragEnd += OnTimelineDragEnd;
-        ControllerDisposal.Attach(_timeline, _timelineDragGesture);
+        _lifetime.Attach(_timeline, _timelineDragGesture,
+            c =>
+            {
+                c.OnDragBegin += OnTimelineDragBegin;
+                c.OnDragUpdate += OnTimelineDragUpdate;
+                c.OnDragEnd += OnTimelineDragEnd;
+            },
+            c =>
+            {
+                c.OnDragBegin -= OnTimelineDragBegin;
+                c.OnDragUpdate -= OnTimelineDragUpdate;
+                c.OnDragEnd -= OnTimelineDragEnd;
+            });
 
-        _timeline.OnValueChanged += OnTimelineValueChanged;
+        _lifetime.Track(
+            () => _timeline.OnValueChanged += OnTimelineValueChanged,
+            () => _timeline.OnValueChanged -= OnTimelineValueChanged);
     }
 
     public bool IsScrubbing => State.IsScrubbing;
@@ -444,23 +464,14 @@ internal sealed class PlayerTimelineController : IDisposable
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         CancelThrottledSeek();
-        _timelineMotionController.OnMotion -= OnTimelineMotion;
-        _timelineMotionController.OnLeave -= OnTimelineLeave;
-        ControllerDisposal.Detach(_timelineOverlay, _timelineMotionController);
-
-        _timelineDragGesture.OnDragBegin -= OnTimelineDragBegin;
-        _timelineDragGesture.OnDragUpdate -= OnTimelineDragUpdate;
-        _timelineDragGesture.OnDragEnd -= OnTimelineDragEnd;
-        ControllerDisposal.Detach(_timeline, _timelineDragGesture);
-
-        _timeline.OnValueChanged -= OnTimelineValueChanged;
     }
 
     public void UpdatePosition(LibMpvPlaybackState state)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
 
         _updatingControls = true;
         try
@@ -534,7 +545,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
     {
-        if (_disposed || !State.HasMedia || State.Duration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        if (_lifetime.IsDisposed || !State.HasMedia || State.Duration <= TimeSpan.Zero || !_timeline.GetSensitive())
         {
             _scrubCue.SetVisible(false);
             return;
@@ -596,7 +607,7 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
     {
-        if (_disposed || !State.HasMedia || !_timeline.GetSensitive() || State.Duration <= TimeSpan.Zero)
+        if (_lifetime.IsDisposed || !State.HasMedia || !_timeline.GetSensitive() || State.Duration <= TimeSpan.Zero)
             return;
 
         State.BeginScrub(_timeline.GetValue());
@@ -643,10 +654,10 @@ internal sealed class PlayerTimelineController : IDisposable
             if (State.ShouldDispatchThrottledSeek(out var delay) && _throttledSeekSource == 0)
                 SeekAbsolute(State.LatestScrubPositionSeconds, false);
             else if (_throttledSeekSource == 0)
-                _throttledSeekSource = Functions.TimeoutAdd(0, delay, () =>
+                _throttledSeekSource = _lifetime.Timeout(delay, () =>
                 {
                     _throttledSeekSource = 0;
-                    if (_disposed || !IsScrubbing) return false;
+                    if (_lifetime.IsDisposed || !IsScrubbing) return false;
                     State.RecordThrottledSeekDispatched();
                     SeekAbsolute(State.LatestScrubPositionSeconds, false);
                     return false;
@@ -661,6 +672,8 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private void CancelThrottledSeek()
     {
-        ControllerDisposal.ClearTimeout(ref _throttledSeekSource);
+        if (_throttledSeekSource == 0) return;
+        _lifetime.Cancel(_throttledSeekSource);
+        _throttledSeekSource = 0;
     }
 }

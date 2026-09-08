@@ -20,7 +20,6 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
     private string? _avatarUrl;
-    private bool _disposed;
     private bool _editing;
 
     public AccountPopoverView(
@@ -33,20 +32,27 @@ public partial class AccountPopoverView : ViewBase<Bin>
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
-        _viewModel.StateChanged += OnStateChanged;
-        Widget.OnUnmap += OnWidgetUnmap;
+        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged, () => _viewModel.StateChanged -= OnStateChanged);
+        Lifetime.Track(() => Widget.OnUnmap += OnWidgetUnmap, () => Widget.OnUnmap -= OnWidgetUnmap);
         Render();
     }
 
     private void OnStateChanged(object? sender, EventArgs args)
     {
-        Functions.IdleAdd(0, () =>
+        if (IsDisposed) return;
+        try
         {
-            if (!_disposed)
-                Render();
+            Lifetime.Idle(() =>
+            {
+                if (!IsDisposed)
+                    Render();
 
-            return false;
-        });
+                return false;
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void Render()
@@ -121,30 +127,44 @@ public partial class AccountPopoverView : ViewBase<Bin>
         }
 
         var decodedPixbuf = pixbuf;
-        Functions.IdleAdd(0, () =>
+        if (IsDisposed || cancellationToken.IsCancellationRequested)
         {
-            try
-            {
-                if (_disposed || cancellationToken.IsCancellationRequested || !string.Equals(_avatarUrl, avatarUrl,
-                        StringComparison.Ordinal))
-                    return false;
+            decodedPixbuf?.Dispose();
+            return;
+        }
 
-                var pixbufForTexture = decodedPixbuf ??
-                                       throw new InvalidOperationException("Avatar image decode returned no pixbuf.");
-                var texture = Texture.NewForPixbuf(pixbufForTexture);
-                pixbufForTexture.Dispose();
-                decodedPixbuf = null;
-                signed_in_avatar.CustomImage = texture;
-                _avatarTexture = texture;
-                _sessionAppearanceChanged(true, _viewModel.DisplayName, texture);
-            }
-            finally
+        try
+        {
+            Lifetime.Idle(() =>
             {
-                decodedPixbuf?.Dispose();
-            }
+                try
+                {
+                    if (IsDisposed || cancellationToken.IsCancellationRequested || !string.Equals(_avatarUrl, avatarUrl,
+                            StringComparison.Ordinal))
+                        return false;
 
-            return false;
-        });
+                    var pixbufForTexture = decodedPixbuf ??
+                                           throw new InvalidOperationException("Avatar image decode returned no pixbuf.");
+                    var texture = Texture.NewForPixbuf(pixbufForTexture);
+                    pixbufForTexture.Dispose();
+                    decodedPixbuf = null;
+                    signed_in_avatar.CustomImage = texture;
+                    _avatarTexture?.Dispose();
+                    _avatarTexture = texture;
+                    _sessionAppearanceChanged(true, _viewModel.DisplayName, texture);
+                }
+                finally
+                {
+                    decodedPixbuf?.Dispose();
+                }
+
+                return false;
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            decodedPixbuf?.Dispose();
+        }
     }
 
     private void OpenManualEditor()
@@ -222,19 +242,20 @@ public partial class AccountPopoverView : ViewBase<Bin>
     }
 
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
-        _disposed = true;
-        Widget.OnUnmap -= OnWidgetUnmap;
-        ClearBuffer(manual_editor);
-        _avatarCancellation?.Cancel();
-        _avatarCancellation?.Dispose();
-        signed_in_avatar.CustomImage = null!;
-        _avatarTexture?.Dispose();
-        _viewModel.StateChanged -= OnStateChanged;
-        _viewModel.Dispose();
-        base.Dispose();
+        if (disposing)
+        {
+            ClearBuffer(manual_editor);
+            _avatarCancellation?.Cancel();
+            _avatarCancellation?.Dispose();
+            _avatarCancellation = null;
+            signed_in_avatar.CustomImage = null!;
+            _avatarTexture?.Dispose();
+            _avatarTexture = null;
+            _viewModel.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

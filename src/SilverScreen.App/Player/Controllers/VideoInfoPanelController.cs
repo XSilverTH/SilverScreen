@@ -5,6 +5,7 @@ using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using Functions = GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -29,7 +30,7 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
     private YouTubeVideoDetails? _loadedDetails;
@@ -65,7 +66,9 @@ internal sealed class VideoInfoPanelController : IDisposable
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _closeButton = closeButton;
         _closed = closed;
-        _description.OnActivateLink += OnDescriptionLinkActivated;
+        _lifetime.Track(
+            () => _description.OnActivateLink += OnDescriptionLinkActivated,
+            () => _description.OnActivateLink -= OnDescriptionLinkActivated);
 
         SetInfoContent(null);
     }
@@ -74,9 +77,11 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-        _description.OnActivateLink -= OnDescriptionLinkActivated;
-        ControllerDisposal.Cancel(ref _infoLoadCancellation);
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
+        _infoLoadCancellation?.Cancel();
+        _infoLoadCancellation?.Dispose();
+        _infoLoadCancellation = null;
     }
 
     public void Show()
@@ -87,7 +92,7 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private void Show(VideoSummary video)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         _currentVideo = video;
         IsOpen = true;
         _bottomEdgeActive = false;
@@ -208,7 +213,7 @@ internal sealed class VideoInfoPanelController : IDisposable
 
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed || generation != _infoLoadGeneration ||
+            if (_lifetime.IsDisposed || generation != _infoLoadGeneration ||
                 !string.Equals(_currentVideo?.Id, videoId, StringComparison.Ordinal))
                 return false;
 

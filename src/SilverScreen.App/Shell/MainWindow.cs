@@ -80,16 +80,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var actions = CreateVideoActions();
         _channelViewModel = new ChannelViewModel(browsing.Channels);
         _channel = new ChannelView(_channelViewModel, browsing.Thumbnails, actions);
-        _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged;
+        Lifetime.Track(() => _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged,
+            () => _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged);
         channel_host.Append(_channel.Widget);
         _home = new VideoListView(
             browsing.HomeFeed.GetVideoListSource(OpenWebLogin),
             browsing.Thumbnails,
             actions);
-        _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged;
+        Lifetime.Track(() => _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged,
+            () => _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged);
         _historyViewModel = new HistoryViewModel(browsing.History, account.Session, OpenWebLogin);
         _history = new VideoListView((IVideoListSource)_historyViewModel, browsing.Thumbnails, actions);
-        _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged;
+        Lifetime.Track(() => _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged,
+            () => _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged);
         _subscriptionsViewModel = new SubscriptionsViewModel(
             browsing.Subscriptions,
             browsing.Channels,
@@ -103,7 +106,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             (url, name) =>
                 OpenChannelAsync(new VideoSummary("", "", name, TimeSpan.Zero, "", false, "", null, null, url))
                     .FireAndForget(Logger));
-        _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged;
+        Lifetime.Track(() => _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged,
+            () => _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged);
         subscriptions_host.Append(_subscriptions.Widget);
         history_host.Append(_history.Widget);
         home_host.Append(_home.Widget);
@@ -116,20 +120,20 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                     : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
         _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
         search_popover.Child = _searchPopover.Widget;
-        search_popover.OnClosed += (_, _) => _searchPopover.OnClosed();
-        search_popover.OnNotify += (_, e) =>
-        {
-            if (e.Pspec.GetName() == "visible" && search_popover.GetVisible())
-                _searchPopover.OnOpened();
-        };
+        Lifetime.Track(() => search_popover.OnClosed += OnSearchPopoverClosed,
+            () => search_popover.OnClosed -= OnSearchPopoverClosed);
+        Lifetime.Track(() => search_popover.OnNotify += OnSearchPopoverNotify,
+            () => search_popover.OnNotify -= OnSearchPopoverNotify);
 
         _searchView = new VideoListView((IVideoListSource)_searchViewModel, browsing.Thumbnails, actions);
-        _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged;
+        Lifetime.Track(() => _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged,
+            () => _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged);
         search_host.Append(_searchView.Widget);
         _queueViewModel = new QueueViewModel(account.Queue, _playback);
         _queueView = new QueueView(_queueViewModel, browsing.Thumbnails, CloseQueue);
         queue_sidebar_host.Append(_queueView.Widget);
-        _queueView.PlayFailed += OnQueuePlayFailed;
+        Lifetime.Track(() => _queueView.PlayFailed += OnQueuePlayFailed,
+            () => _queueView.PlayFailed -= OnQueuePlayFailed);
         _accountViewModel = new AccountViewModel(account.AccountProfile, account.Session);
         _accountPopover = new AccountPopoverView(
             _accountViewModel,
@@ -149,17 +153,21 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         SetupDesktopBackShortcuts();
         _navigationService = new NavigationService(main_stack, view_stack);
-        _navigationService.PageChanged += OnNavigationPageChanged;
+        Lifetime.Track(() => _navigationService.PageChanged += OnNavigationPageChanged,
+            () => _navigationService.PageChanged -= OnNavigationPageChanged);
         _navigationService.Initialize();
         account_popover.Child = _accountPopover.Widget;
-        _playback.PlaybackStateChanged += OnPlaybackStateChanged;
+        Lifetime.Track(() => _playback.PlaybackStateChanged += OnPlaybackStateChanged,
+            () => _playback.PlaybackStateChanged -= OnPlaybackStateChanged);
         queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         RegisterApplicationActions();
-        _queueViewModel.StateChanged += OnQueueStateChanged;
+        Lifetime.Track(() => _queueViewModel.StateChanged += OnQueueStateChanged,
+            () => _queueViewModel.StateChanged -= OnQueueStateChanged);
         UpdateQueueButton(_queueViewModel.State);
         UpdateNowPlayingBar();
-        Widget.OnCloseRequest += OnCloseRequest;
+        Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest,
+            () => Widget.OnCloseRequest -= OnCloseRequest);
         ReportStartupDependencyWarnings();
     }
 
@@ -167,41 +175,58 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         var keyController = EventControllerKey.New();
         keyController.SetPropagationPhase(PropagationPhase.Bubble);
-        keyController.OnKeyPressed += (_, args) =>
-        {
-            if (Widget.GetFocus() is Editable or TextView)
-                return false;
-
-            if ((args.State & ModifierType.AltMask) != 0 && args.Keyval == Constants.KEY_Left)
-                if (_navigationService.CanGoBack)
-                {
-                    OnNavigationBackButtonClicked();
-                    return true;
-                }
-
-            if (args.Keyval == Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
-                if (_navigationService.CanGoBack)
-                {
-                    OnNavigationBackButtonClicked();
-                    return true;
-                }
-
-            return false;
-        };
-        Widget.AddController(keyController);
+        Lifetime.Attach(Widget, keyController,
+            c => c.OnKeyPressed += OnKeyPressed,
+            c => c.OnKeyPressed -= OnKeyPressed);
 
         var mouseController = GestureClick.New();
         mouseController.SetButton(0);
-        mouseController.OnPressed += (sender, _) =>
-        {
-            if (sender.GetCurrentButton() == 8)
-                if (_navigationService.CanGoBack)
-                {
-                    OnNavigationBackButtonClicked();
-                    sender.SetState(EventSequenceState.Claimed);
-                }
-        };
-        Widget.AddController(mouseController);
+        Lifetime.Attach(Widget, mouseController,
+            c => c.OnPressed += OnMousePressed,
+            c => c.OnPressed -= OnMousePressed);
+    }
+
+    private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+    {
+        if (Widget.GetFocus() is Editable or TextView)
+            return false;
+
+        if ((args.State & ModifierType.AltMask) != 0 && args.Keyval == Constants.KEY_Left)
+            if (_navigationService.CanGoBack)
+            {
+                OnNavigationBackButtonClicked();
+                return true;
+            }
+
+        if (args.Keyval == Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
+            if (_navigationService.CanGoBack)
+            {
+                OnNavigationBackButtonClicked();
+                return true;
+            }
+
+        return false;
+    }
+
+    private void OnMousePressed(GestureClick sender, GestureClick.PressedSignalArgs args)
+    {
+        if (sender.GetCurrentButton() == 8)
+            if (_navigationService.CanGoBack)
+            {
+                OnNavigationBackButtonClicked();
+                sender.SetState(EventSequenceState.Claimed);
+            }
+    }
+
+    private void OnSearchPopoverClosed(Popover sender, EventArgs args)
+    {
+        _searchPopover.OnClosed();
+    }
+
+    private void OnSearchPopoverNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "visible" && search_popover.GetVisible())
+            _searchPopover.OnOpened();
     }
 
 
@@ -486,15 +511,15 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void RegisterApplicationActions()
     {
-        var preferencesAction = SimpleAction.New("preferences", null);
+        var preferencesAction = Lifetime.Own(SimpleAction.New("preferences", null));
         preferencesAction.OnActivate += (_, _) => ShowPreferences();
         Widget.AddAction(preferencesAction);
 
-        var aboutAction = SimpleAction.New("about", null);
+        var aboutAction = Lifetime.Own(SimpleAction.New("about", null));
         aboutAction.OnActivate += (_, _) => PresentAboutDialog();
         Widget.AddAction(aboutAction);
 
-        var quitAction = SimpleAction.New("quit", null);
+        var quitAction = Lifetime.Own(SimpleAction.New("quit", null));
         quitAction.OnActivate += (_, _) => Widget.Close();
         Widget.AddAction(quitAction);
     }
@@ -614,13 +639,20 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OnPlaybackStateChanged(object? sender, EventArgs e)
     {
-        Functions.IdleAdd(0, () =>
+        if (IsDisposed) return;
+        try
         {
-            if (!_closed)
-                UpdateNowPlayingBar();
+            Lifetime.Idle(() =>
+            {
+                if (!IsDisposed && !_closed)
+                    UpdateNowPlayingBar();
 
-            return false;
-        });
+                return false;
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void UpdateNowPlayingBar()
@@ -686,33 +718,34 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         }
 
         _account.Preferences.SavePreferences(prefs);
-        _playback.PlaybackStateChanged -= OnPlaybackStateChanged;
-        _navigationService.PageChanged -= OnNavigationPageChanged;
-        _navigationService.Dispose();
-        _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
-        _queueView.PlayFailed -= OnQueuePlayFailed;
-        _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged;
-        _subscriptions.Dispose();
-        _subscriptionsViewModel.Dispose();
-        _searchView.Dispose();
-        _searchPopover.Dispose();
-        _searchViewModel.Dispose();
-        _history.Dispose();
-        _historyViewModel.Dispose();
-        _channel.Dispose();
-        _channelViewModel.Dispose();
-
-        _queueViewModel.StateChanged -= OnQueueStateChanged;
-        _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged;
-        _home.Dispose();
-        _queueView.Dispose();
-        _webLogin?.Dispose();
-        _webLogin = null;
-        _accountPopover.Dispose();
-        _embeddedPlayer.Dispose();
-        _disposeApplicationServices();
         Dispose();
 
         return false;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _navigationService.Dispose();
+            _subscriptions.Dispose();
+            _subscriptionsViewModel.Dispose();
+            _searchView.Dispose();
+            _searchPopover.Dispose();
+            _searchViewModel.Dispose();
+            _history.Dispose();
+            _historyViewModel.Dispose();
+            _channel.Dispose();
+            _channelViewModel.Dispose();
+            _home.Dispose();
+            _queueView.Dispose();
+            _webLogin?.Dispose();
+            _webLogin = null;
+            _accountPopover.Dispose();
+            _embeddedPlayer.Dispose();
+            _disposeApplicationServices();
+        }
+
+        base.Dispose(disposing);
     }
 }

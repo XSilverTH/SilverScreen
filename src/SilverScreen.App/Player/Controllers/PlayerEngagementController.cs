@@ -2,6 +2,7 @@ using Gtk;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using static GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -18,7 +19,7 @@ internal sealed class PlayerEngagementController : IDisposable
     private readonly Image _likeImage;
     private readonly Label _likesLabel;
     private readonly PlaybackSession _session;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
 
     public PlayerEngagementController(
         PlaybackSession session,
@@ -37,23 +38,19 @@ internal sealed class PlayerEngagementController : IDisposable
         _dislikeImage = dislikeImage;
         _dislikesLabel = dislikesLabel;
 
-        _session.EngagementChanged += OnEngagementChanged;
-        _session.RatingStateChanged += OnRatingStateChanged;
-        _session.VideoChanged += OnVideoChanged;
-        _session.SessionEnded += OnSessionEnded;
-        _session.Failed += OnSessionFailed;
+        _lifetime.Track(() => _session.EngagementChanged += OnEngagementChanged, () => _session.EngagementChanged -= OnEngagementChanged);
+        _lifetime.Track(() => _session.RatingStateChanged += OnRatingStateChanged, () => _session.RatingStateChanged -= OnRatingStateChanged);
+        _lifetime.Track(() => _session.VideoChanged += OnVideoChanged, () => _session.VideoChanged -= OnVideoChanged);
+        _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
 
         UpdateUi();
     }
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-        _session.EngagementChanged -= OnEngagementChanged;
-        _session.RatingStateChanged -= OnRatingStateChanged;
-        _session.VideoChanged -= OnVideoChanged;
-        _session.SessionEnded -= OnSessionEnded;
-        _session.Failed -= OnSessionFailed;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         SetReactionSensitive(false);
     }
 
@@ -61,7 +58,7 @@ internal sealed class PlayerEngagementController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _likesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Likes));
             _dislikesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Dislikes));
             return false;
@@ -72,7 +69,7 @@ internal sealed class PlayerEngagementController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             SetRatingState(ratingState);
             SetReactionSensitive(_session.CanVote);
             return false;
@@ -83,7 +80,7 @@ internal sealed class PlayerEngagementController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _likesLabel.SetText("—");
             _dislikesLabel.SetText("—");
             SetRatingState(YouTubeRatingState.None);
@@ -96,7 +93,7 @@ internal sealed class PlayerEngagementController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             Clear();
             return false;
         });
@@ -106,7 +103,7 @@ internal sealed class PlayerEngagementController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             Clear();
             return false;
         });

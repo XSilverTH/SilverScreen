@@ -1,6 +1,7 @@
 using Gtk;
 using SilverScreen.Core.Player;
 using static GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -18,7 +19,7 @@ internal sealed class PlayerResumeController : IDisposable
     private readonly Label _resumeLabel;
     private readonly Revealer _resumeRevealer;
     private readonly PlaybackSession _session;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private uint _promptHideSource;
     private TimeSpan? _seekPromptPosition;
 
@@ -39,17 +40,15 @@ internal sealed class PlayerResumeController : IDisposable
         _restartButton = restartButton;
         _restartLabel = restartLabel;
 
-        _session.ResumePromptChanged += OnResumePromptChanged;
-        _session.SessionEnded += OnSessionEnded;
-        _session.Failed += OnSessionFailed;
+        _lifetime.Track(() => _session.ResumePromptChanged += OnResumePromptChanged, () => _session.ResumePromptChanged -= OnResumePromptChanged);
+        _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
     }
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-        _session.ResumePromptChanged -= OnResumePromptChanged;
-        _session.SessionEnded -= OnSessionEnded;
-        _session.Failed -= OnSessionFailed;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         HidePrompt();
     }
 
@@ -57,7 +56,7 @@ internal sealed class PlayerResumeController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
 
             switch (mode)
             {
@@ -81,7 +80,7 @@ internal sealed class PlayerResumeController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             HidePrompt();
             return false;
         });
@@ -91,7 +90,7 @@ internal sealed class PlayerResumeController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             HidePrompt();
             return false;
         });
@@ -105,7 +104,7 @@ internal sealed class PlayerResumeController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _seekPromptPosition = returnPosition;
             _resumeLabel.SetText($"Back to {PlayerTimelineState.FormatTime(returnPosition)}");
             _resumeButton.SetTooltipText($"Return to {PlayerTimelineState.FormatTime(returnPosition)} (Enter)");
@@ -118,11 +117,11 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void SchedulePromptHide(bool dismissSessionPrompt = true)
     {
-        ControllerDisposal.ClearTimeout(ref _promptHideSource);
-        _promptHideSource = TimeoutAdd(0, PromptDurationMilliseconds, () =>
+        ClearPromptTimeout();
+        _promptHideSource = _lifetime.Timeout(PromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _resumeRevealer.RevealChild = false;
             _restartRevealer.RevealChild = false;
             _seekPromptPosition = null;
@@ -168,11 +167,18 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void HidePrompt()
     {
-        ControllerDisposal.ClearTimeout(ref _promptHideSource);
+        ClearPromptTimeout();
 
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         _seekPromptPosition = null;
         _resumeRevealer.RevealChild = false;
         _restartRevealer.RevealChild = false;
+    }
+
+    private void ClearPromptTimeout()
+    {
+        if (_promptHideSource == 0) return;
+        _lifetime.Cancel(_promptHideSource);
+        _promptHideSource = 0;
     }
 }

@@ -12,11 +12,9 @@ public partial class SearchPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
     private readonly Action _popdownAction;
-    private readonly EventControllerKey _searchKeyController;
     private readonly Action<string> _submitCallback;
     private readonly SearchViewModel _viewModel;
     private string[] _currentSuggestions = [];
-    private bool _disposed;
     private string _originalTypedQuery = string.Empty;
     private int _selectedSuggestionIndex = -1;
     private CancellationTokenSource? _suggestionDebounceCts;
@@ -37,34 +35,35 @@ public partial class SearchPopoverView : ViewBase<Box>
         suggestions_list.CanFocus = false;
         suggestions_list.FocusOnClick = false;
 
-        suggestions_list.OnRowActivated += OnSuggestionRowActivated;
+        Lifetime.Track(
+            () => suggestions_list.OnRowActivated += OnSuggestionRowActivated,
+            () => suggestions_list.OnRowActivated -= OnSuggestionRowActivated);
 
-        _searchKeyController = EventControllerKey.New();
-        _searchKeyController.SetPropagationPhase(PropagationPhase.Capture);
-        _searchKeyController.OnKeyPressed += OnSearchKeyPressed;
-        search_entry.AddController(_searchKeyController);
+        var searchKeyController = EventControllerKey.New();
+        searchKeyController.SetPropagationPhase(PropagationPhase.Capture);
+        Lifetime.Attach(search_entry, searchKeyController,
+            c => c.OnKeyPressed += OnSearchKeyPressed,
+            c => c.OnKeyPressed -= OnSearchKeyPressed);
     }
 
     public void OnOpened()
     {
-        if (_disposed)
+        if (IsDisposed)
             return;
 
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (IsDisposed) return false;
             search_entry.GrabFocus();
             search_entry.SelectRegion(0, -1);
-
             return false;
         });
     }
 
     public void OnClosed()
     {
-        if (_disposed)
+        if (IsDisposed)
             return;
-
         DismissSuggestions();
     }
 
@@ -87,9 +86,8 @@ public partial class SearchPopoverView : ViewBase<Box>
 
     private bool OnSearchKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (_disposed)
+        if (IsDisposed)
             return false;
-
         var keyval = Gdk.Functions.KeyvalToLower(args.Keyval);
         var keyName = Gdk.Functions.KeyvalName(keyval);
 
@@ -187,9 +185,8 @@ public partial class SearchPopoverView : ViewBase<Box>
 
     private void OnSearchTextChanged(object? sender = null, EventArgs? args = null)
     {
-        if (_disposed || _suppressSearchChanged)
+        if (IsDisposed || _suppressSearchChanged)
             return;
-
         _suggestionDebounceCts?.Cancel();
         _suggestionDebounceCts?.Dispose();
         _suggestionDebounceCts = new CancellationTokenSource();
@@ -210,13 +207,13 @@ public partial class SearchPopoverView : ViewBase<Box>
         var token = _suggestionDebounceCts.Token;
         Task.Delay(200, token).ContinueWith(async task =>
         {
-            if (task.IsCanceled || token.IsCancellationRequested || _disposed)
+            if (task.IsCanceled || token.IsCancellationRequested || IsDisposed)
                 return;
 
             var suggestions = await _viewModel.FetchSuggestionsAsync(text, token).ConfigureAwait(false);
             Functions.IdleAdd(0, () =>
             {
-                if (!token.IsCancellationRequested && !_disposed) UpdateSuggestions(text, suggestions);
+                if (!token.IsCancellationRequested && !IsDisposed) UpdateSuggestions(text, suggestions);
                 return false;
             });
         }, TaskScheduler.Default);
@@ -224,9 +221,8 @@ public partial class SearchPopoverView : ViewBase<Box>
 
     private void UpdateSuggestions(string query, IReadOnlyList<string> suggestions)
     {
-        if (_disposed)
+        if (IsDisposed)
             return;
-
         if (suggestions.Count == 0)
         {
             DismissSuggestions();
@@ -313,21 +309,15 @@ public partial class SearchPopoverView : ViewBase<Box>
         return $"{typedPart}<b>{completionPart}</b>";
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
+        if (disposing)
+        {
+            _suggestionDebounceCts?.Cancel();
+            _suggestionDebounceCts?.Dispose();
+            _suggestionDebounceCts = null;
+        }
 
-        _disposed = true;
-        _suggestionDebounceCts?.Cancel();
-        _suggestionDebounceCts?.Dispose();
-        _suggestionDebounceCts = null;
-
-        search_entry.RemoveController(_searchKeyController);
-        _searchKeyController.Dispose();
-
-        suggestions_list.OnRowActivated -= OnSuggestionRowActivated;
-
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

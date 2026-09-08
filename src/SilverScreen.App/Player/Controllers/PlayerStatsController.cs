@@ -2,6 +2,7 @@ using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
+using XSTH.Blueprint.Helpers;
 using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
@@ -26,7 +27,7 @@ internal sealed class PlayerStatsController(
     private readonly Func<PlaybackStats?> _statsProvider =
         statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
 
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private uint _refreshTimerSource;
 
     public PlayerStatsController(
@@ -44,7 +45,8 @@ internal sealed class PlayerStatsController(
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         StopTimer();
     }
 
@@ -67,7 +69,7 @@ internal sealed class PlayerStatsController(
 
     private void Show()
     {
-        if (_disposed || IsOpen) return;
+        if (_lifetime.IsDisposed || IsOpen) return;
 
         IsOpen = true;
         _revealer.RevealChild = true;
@@ -77,7 +79,7 @@ internal sealed class PlayerStatsController(
 
     public void Close()
     {
-        if (_disposed || !IsOpen) return;
+        if (_lifetime.IsDisposed || !IsOpen) return;
 
         IsOpen = false;
         _revealer.RevealChild = false;
@@ -154,7 +156,7 @@ internal sealed class PlayerStatsController(
 
     private void RefreshContent()
     {
-        if (_disposed || !IsOpen) return;
+        if (_lifetime.IsDisposed || !IsOpen) return;
 
         try
         {
@@ -186,9 +188,9 @@ internal sealed class PlayerStatsController(
     private void StartTimer()
     {
         StopTimer();
-        _refreshTimerSource = TimeoutAdd(0, RefreshIntervalMilliseconds, () =>
+        _refreshTimerSource = _lifetime.Timeout(RefreshIntervalMilliseconds, () =>
         {
-            if (_disposed || !IsOpen)
+            if (_lifetime.IsDisposed || !IsOpen)
             {
                 _refreshTimerSource = 0;
                 return false;
@@ -201,6 +203,8 @@ internal sealed class PlayerStatsController(
 
     private void StopTimer()
     {
-        ControllerDisposal.ClearTimeout(ref _refreshTimerSource);
+        if (_refreshTimerSource == 0) return;
+        _lifetime.Cancel(_refreshTimerSource);
+        _refreshTimerSource = 0;
     }
 }

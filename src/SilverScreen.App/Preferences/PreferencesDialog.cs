@@ -9,16 +9,14 @@ using Functions = Gdk.Functions;
 
 namespace SilverScreen.Preferences;
 
-public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDisposable
+public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
-    private readonly EventControllerKey _keyController;
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
-    private bool _disposed;
     private bool _loading;
 
     public PreferencesDialog(IPreferencesService preferencesService)
@@ -61,40 +59,21 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         };
 
         foreach (var button in _shortcutRows.Values)
-            button.OnClicked += OnShortcutButtonClicked;
+            Lifetime.Track(() => button.OnClicked += OnShortcutButtonClicked,
+                () => button.OnClicked -= OnShortcutButtonClicked);
 
-        _keyController = EventControllerKey.New();
-        _keyController.SetPropagationPhase(PropagationPhase.Capture);
-        _keyController.OnKeyPressed += OnKeyPressed;
-        Widget.AddController(_keyController);
-        Widget.OnClosed += OnClosed;
+        var keyController = EventControllerKey.New();
+        keyController.SetPropagationPhase(PropagationPhase.Capture);
+        Lifetime.Attach(Widget, keyController,
+            controller => controller.OnKeyPressed += OnKeyPressed,
+            controller => controller.OnKeyPressed -= OnKeyPressed);
+        Lifetime.Track(() => Widget.OnClosed += OnClosed, () => Widget.OnClosed -= OnClosed);
 
         InitializeFields();
     }
 
-    public new void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        Widget.OnClosed -= OnClosed;
-
-        _keyController.OnKeyPressed -= OnKeyPressed;
-        Widget.RemoveController(_keyController);
-        _keyController.Dispose();
-
-        foreach (var button in _shortcutRows.Values)
-            button.OnClicked -= OnShortcutButtonClicked;
-
-        _capturingShortcut = null;
-        SaveFailed = null;
-
-        base.Dispose();
-        Builder.Dispose();
-        Widget.Dispose();
-    }
-
     public event EventHandler<string>? SaveFailed;
+
 
     private void InitializeFields()
     {
@@ -395,5 +374,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
     private void OnClosed(Dialog sender, EventArgs args)
     {
         Dispose();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
     }
 }

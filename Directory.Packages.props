@@ -20,7 +20,7 @@
     <PackageVersion Include="GirCore.Adw-1" Version="0.8.1" />
     <PackageVersion Include="GirCore.Soup-3.0" Version="0.8.1" />
     <PackageVersion Include="GirCore.WebKit-6.0" Version="0.8.1" />
-    <PackageVersion Include="XSTH.Blueprint.Helpers" Version="3.0.0" />
+    <PackageVersion Include="XSTH.Blueprint.Helpers" Version="3.1.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />

@@ -26,7 +26,6 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
-    private bool _disposed;
     private Label? _paginationErrorLabel;
     private Button? _paginationErrorRetryButton;
     private Revealer? _paginationErrorRevealer;
@@ -46,23 +45,39 @@ public partial class VideoListView : ViewBase<Bin>
 
         Vadjustment = video_list_scrolled_window.Vadjustment;
         if (Vadjustment is not null)
-            Vadjustment.OnValueChanged += OnScrollValueChanged;
+            Lifetime.Track(
+                () => Vadjustment.OnValueChanged += OnScrollValueChanged,
+                () => Vadjustment.OnValueChanged -= OnScrollValueChanged);
 
-        _videoIds = StringList.New([]);
-        _videoSelection = NoSelection.New(_videoIds);
-        _videoFactory = SignalListItemFactory.New();
-        _videoFactory.OnSetup += OnVideoCardSetup;
-        _videoFactory.OnBind += OnVideoCardBind;
-        _videoFactory.OnUnbind += OnVideoCardUnbind;
-        _videoFactory.OnTeardown += OnVideoCardTeardown;
+        _videoIds = Lifetime.Own(StringList.New([]));
+        _videoSelection = Lifetime.Own(NoSelection.New(_videoIds));
+        _videoFactory = Lifetime.Own(SignalListItemFactory.New());
+        Lifetime.Track(
+            () =>
+            {
+                _videoFactory.OnSetup += OnVideoCardSetup;
+                _videoFactory.OnBind += OnVideoCardBind;
+                _videoFactory.OnUnbind += OnVideoCardUnbind;
+                _videoFactory.OnTeardown += OnVideoCardTeardown;
+            },
+            () =>
+            {
+                _videoFactory.OnSetup -= OnVideoCardSetup;
+                _videoFactory.OnBind -= OnVideoCardBind;
+                _videoFactory.OnUnbind -= OnVideoCardUnbind;
+                _videoFactory.OnTeardown -= OnVideoCardTeardown;
+            });
         video_list_grid.Model = _videoSelection;
-        video_list_grid.Factory = _videoFactory;
-        _source.StateChanged += OnStateChanged;
+        Lifetime.Track(
+            () => video_list_grid.Factory = _videoFactory,
+            () => video_list_grid.Factory = null);
+        Lifetime.Own(_source);
+        Lifetime.Track(
+            () => _source.StateChanged += OnStateChanged,
+            () => _source.StateChanged -= OnStateChanged);
         EnsurePaginationErrorFooter();
         Render(_source.State);
     }
-
-
     public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
 
     public Adjustment? Vadjustment { get; }
@@ -116,7 +131,7 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void ScrollToTop()
     {
-        if (_disposed || Vadjustment is null)
+        if (IsDisposed || Vadjustment is null)
             return;
 
         Vadjustment.SetValue(Vadjustment.Lower);
@@ -127,7 +142,7 @@ public partial class VideoListView : ViewBase<Bin>
         if (_refreshScrollSource == 0)
             return;
 
-        Functions.SourceRemove(_refreshScrollSource);
+        Lifetime.Cancel(_refreshScrollSource);
         _refreshScrollSource = 0;
     }
 
@@ -138,13 +153,12 @@ public partial class VideoListView : ViewBase<Bin>
             _refreshScrollPass = 0;
         _refreshScrollPending = true;
 
-        _refreshScrollSource = Functions.TimeoutAdd(
-            0,
+        _refreshScrollSource = Lifetime.Timeout(
             RefreshScrollStabilizationMilliseconds,
             () =>
             {
                 _refreshScrollSource = 0;
-                if (_disposed || generation != _refreshGeneration)
+                if (IsDisposed || generation != _refreshGeneration)
                     return false;
 
                 ScrollToTop();
@@ -171,7 +185,7 @@ public partial class VideoListView : ViewBase<Bin>
         }
         finally
         {
-            if (!_disposed && generation == _refreshGeneration)
+            if (!IsDisposed && generation == _refreshGeneration)
                 ScheduleRefreshScroll(generation);
         }
     }
@@ -215,12 +229,15 @@ public partial class VideoListView : ViewBase<Bin>
         box.Append(label);
 
         var retry = Button.NewWithLabel("Retry");
-        retry.OnClicked += OnPaginationRetryClicked;
+        Lifetime.Track(
+            () => retry.OnClicked += OnPaginationRetryClicked,
+            () => retry.OnClicked -= OnPaginationRetryClicked);
         box.Append(retry);
 
         revealer.Child = box;
-        video_list_content_overlay.AddOverlay(revealer);
-
+        Lifetime.Track(
+            () => video_list_content_overlay.AddOverlay(revealer),
+            () => video_list_content_overlay.RemoveOverlay(revealer));
         _paginationErrorRevealer = revealer;
         _paginationErrorLabel = label;
         _paginationErrorRetryButton = retry;
@@ -241,7 +258,7 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (_disposed || _refreshScrollPending || _source.State.IsLoading || _source.State.IsLoadingMore ||
+        if (IsDisposed || _refreshScrollPending || _source.State.IsLoading || _source.State.IsLoadingMore ||
             Vadjustment is null ||
             Vadjustment.Value + Vadjustment.PageSize < Vadjustment.Upper - 240)
             return;
@@ -253,9 +270,8 @@ public partial class VideoListView : ViewBase<Bin>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed)
+            if (IsDisposed)
                 return false;
-
             RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
             Render(state);
 
@@ -386,45 +402,18 @@ public partial class VideoListView : ViewBase<Bin>
         card.Dispose();
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        CancelRefreshScroll();
-        _source.StateChanged -= OnStateChanged;
-        if (Vadjustment is not null)
-            Vadjustment.OnValueChanged -= OnScrollValueChanged;
-
-        video_list_grid.Factory = null;
-        foreach (var association in _cardsByListItem)
-            DisposeVideoCardCell(association.Key, association.Value);
-        _cardsByListItem.Clear();
-
-        _videoFactory.OnSetup -= OnVideoCardSetup;
-        _videoFactory.OnBind -= OnVideoCardBind;
-        _videoFactory.OnUnbind -= OnVideoCardUnbind;
-        _videoFactory.OnTeardown -= OnVideoCardTeardown;
-
-        video_list_scrolled_window.Child = null;
-        if (_paginationErrorRevealer is not null)
+        if (disposing)
         {
-            if (_paginationErrorRetryButton is not null)
-                _paginationErrorRetryButton.OnClicked -= OnPaginationRetryClicked;
-            video_list_content_overlay.RemoveOverlay(_paginationErrorRevealer);
-            _paginationErrorRevealer.Dispose();
-            _paginationErrorRevealer = null;
-            _paginationErrorLabel = null;
-            _paginationErrorRetryButton = null;
+            CancelRefreshScroll();
+            foreach (var association in _cardsByListItem)
+                DisposeVideoCardCell(association.Key, association.Value);
+            _cardsByListItem.Clear();
+
+            RefreshLoadingChanged = null;
         }
 
-        video_list_grid.Dispose();
-        _videoSelection.Dispose();
-        _videoFactory.Dispose();
-        _videoIds.Dispose();
-        _source.Dispose();
-
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

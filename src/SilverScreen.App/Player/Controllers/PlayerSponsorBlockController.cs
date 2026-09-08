@@ -3,6 +3,7 @@ using Gtk;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using static GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -21,7 +22,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private readonly Scale _timeline;
     private readonly DrawingArea _timelineDrawingArea;
     private readonly Overlay _timelineOverlay;
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private uint _promptHideSource;
     private string? _skipButtonColorClass;
 
@@ -49,19 +50,16 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _timelineDrawingArea.SetDrawFunc(DrawTimeline);
         _timelineOverlay.AddOverlay(_timelineDrawingArea);
 
-        _session.SponsorBlockSegmentsChanged += OnSegmentsChanged;
-        _session.SponsorBlockPromptChanged += OnPromptChanged;
-        _session.SessionEnded += OnSessionEnded;
-        _session.Failed += OnSessionFailed;
+        _lifetime.Track(() => _session.SponsorBlockSegmentsChanged += OnSegmentsChanged, () => _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged);
+        _lifetime.Track(() => _session.SponsorBlockPromptChanged += OnPromptChanged, () => _session.SponsorBlockPromptChanged -= OnPromptChanged);
+        _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
     }
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-        _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged;
-        _session.SponsorBlockPromptChanged -= OnPromptChanged;
-        _session.SessionEnded -= OnSessionEnded;
-        _session.Failed -= OnSessionFailed;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         HideManualPrompt();
         _timelineOverlay.RemoveOverlay(_timelineDrawingArea);
         _timelineDrawingArea.Dispose();
@@ -69,7 +67,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     public void Redraw()
     {
-        if (!_disposed)
+        if (!_lifetime.IsDisposed)
             _timelineDrawingArea.QueueDraw();
     }
 
@@ -77,7 +75,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _timelineDrawingArea.QueueDraw();
             return false;
         });
@@ -87,7 +85,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             if (segment is not null)
                 ShowManualPrompt(segment);
             else
@@ -100,7 +98,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             HideManualPrompt();
             _timelineDrawingArea.QueueDraw();
             return false;
@@ -111,7 +109,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     {
         IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             HideManualPrompt();
             _timelineDrawingArea.QueueDraw();
             return false;
@@ -156,11 +154,11 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
         _skipRevealer.RevealChild = true;
-        ControllerDisposal.ClearTimeout(ref _promptHideSource);
-        _promptHideSource = TimeoutAdd(0, SkipPromptDurationMilliseconds, () =>
+        ClearPromptTimeout();
+        _promptHideSource = _lifetime.Timeout(SkipPromptDurationMilliseconds, () =>
         {
             _promptHideSource = 0;
-            if (_disposed) return false;
+            if (_lifetime.IsDisposed) return false;
             _skipRevealer.RevealChild = false;
             _session.DismissSponsorBlockPrompt();
 
@@ -170,11 +168,18 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void HideManualPrompt()
     {
-        ControllerDisposal.ClearTimeout(ref _promptHideSource);
+        ClearPromptTimeout();
 
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         _skipRevealer.RevealChild = false;
         ClearSkipButtonColor();
+    }
+
+    private void ClearPromptTimeout()
+    {
+        if (_promptHideSource == 0) return;
+        _lifetime.Cancel(_promptHideSource);
+        _promptHideSource = 0;
     }
 
     private void SetSkipButtonColor(string category)

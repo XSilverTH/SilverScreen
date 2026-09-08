@@ -21,7 +21,6 @@ public partial class SubscriptionsView : ViewBase<Box>
 {
     private const int AvatarSize = 56;
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsView>();
-    private readonly EventControllerKey _allKeyController;
 
     private readonly List<ChannelItemHolder> _channelItems = [];
     private readonly Action<string, string> _openChannel;
@@ -29,7 +28,6 @@ public partial class SubscriptionsView : ViewBase<Box>
     private readonly VideoListView _videoList;
     private readonly SubscriptionsViewModel _viewModel;
     private CancellationTokenSource? _avatarsCancellation;
-    private bool _disposed;
     private IReadOnlyList<SubscribedChannel> _renderedChannels = [];
 
     public SubscriptionsView(
@@ -42,18 +40,24 @@ public partial class SubscriptionsView : ViewBase<Box>
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _openChannel = openChannel ?? throw new ArgumentNullException(nameof(openChannel));
-
-        _videoList = new VideoListView(
+        _videoList = Lifetime.Own(new VideoListView(
             viewModel.GetVideoListSource(openWebLogin),
             thumbnails,
-            videoActions ?? throw new ArgumentNullException(nameof(videoActions)));
+            videoActions ?? throw new ArgumentNullException(nameof(videoActions))));
         subscriptions_video_list_host.Append(_videoList.Widget);
+        Lifetime.Track(
+            () => _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged,
+            () => _videoList.RefreshLoadingChanged -= OnVideoListRefreshLoadingChanged);
 
-        _allKeyController = EventControllerKey.New();
-        _allKeyController.OnKeyPressed += OnAllKeyControllerKeyPressed;
-        all_channel_button.AddController(_allKeyController);
 
-        _viewModel.StateChanged += OnStateChanged;
+        var allKeyController = EventControllerKey.New();
+        Lifetime.Attach(all_channel_button, allKeyController,
+            c => c.OnKeyPressed += OnAllKeyControllerKeyPressed,
+            c => c.OnKeyPressed -= OnAllKeyControllerKeyPressed);
+
+        Lifetime.Track(
+            () => _viewModel.StateChanged += OnStateChanged,
+            () => _viewModel.StateChanged -= OnStateChanged);
         Render(_viewModel.State);
     }
 
@@ -80,7 +84,7 @@ public partial class SubscriptionsView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed)
+            if (IsDisposed)
                 return false;
 
             RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
@@ -91,8 +95,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private void Render(SubscriptionsViewState state)
     {
-        if (_disposed) return;
-
+        if (IsDisposed) return;
         // Update "All" toggle button state
         if (state.SelectedChannel is null)
         {
@@ -193,16 +196,21 @@ public partial class SubscriptionsView : ViewBase<Box>
         itemBox.Append(avatarOverlay);
         itemBox.Append(nameLabel);
 
+        var holder = new ChannelItemHolder(channel, itemBox, avatarOverlay);
+
         // Primary click: Filter by this channel
         var leftClick = GestureClick.New();
         leftClick.Button = 1;
-        leftClick.OnReleased += (_, _) =>
+        void OnLeftClickReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
         {
             _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
-        };
-        itemBox.AddController(leftClick);
+        }
+        holder.Lifetime.Attach(itemBox, leftClick,
+            c => c.OnReleased += OnLeftClickReleased,
+            c => c.OnReleased -= OnLeftClickReleased);
+
         var keyController = EventControllerKey.New();
-        keyController.OnKeyPressed += (_, args) =>
+        bool OnKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
         {
             var keyval = args.Keyval;
             if (keyval is Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space)
@@ -232,27 +240,44 @@ public partial class SubscriptionsView : ViewBase<Box>
             }
 
             return false;
-        };
-        itemBox.AddController(keyController);
-
+        }
+        holder.Lifetime.Attach(itemBox, keyController,
+            c => c.OnKeyPressed += OnKeyControllerKeyPressed,
+            c => c.OnKeyPressed -= OnKeyControllerKeyPressed);
 
         // Secondary / context click: Go to channel page
-        var menu = Menu.New();
+        var menu = holder.Lifetime.Own(Menu.New());
         menu.Append("Go to Channel page", "channel-item.open-channel");
 
-        var actionGroup = SimpleActionGroup.New();
-        var openAction = SimpleAction.New("open-channel", null);
-        openAction.OnActivate += (_, _) => { _openChannel(channel.Url, channel.Title); };
+        var actionGroup = holder.Lifetime.Own(SimpleActionGroup.New());
+        var openAction = holder.Lifetime.Own(SimpleAction.New("open-channel", null));
+        void OnOpenActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
+        {
+            _openChannel(channel.Url, channel.Title);
+        }
+        holder.Lifetime.Track(
+            () => openAction.OnActivate += OnOpenActionActivated,
+            () => openAction.OnActivate -= OnOpenActionActivated);
         actionGroup.AddAction(openAction);
 
         var popover = PopoverMenu.NewFromModel(menu);
-        popover.SetParent(itemBox);
         popover.HasArrow = false;
-        popover.InsertActionGroup("channel-item", actionGroup);
+        holder.Lifetime.Track(
+            () =>
+            {
+                popover.SetParent(itemBox);
+                popover.InsertActionGroup("channel-item", actionGroup);
+            },
+            () =>
+            {
+                popover.Popdown();
+                popover.Unparent();
+                popover.InsertActionGroup("channel-item", null);
+            });
 
         var rightClick = GestureClick.New();
         rightClick.Button = 3;
-        rightClick.OnPressed += (sender, args) =>
+        void OnRightClickPressed(GestureClick sender, GestureClick.PressedSignalArgs args)
         {
             sender.SetState(EventSequenceState.Claimed);
             var rect = new Rectangle
@@ -264,21 +289,10 @@ public partial class SubscriptionsView : ViewBase<Box>
             };
             popover.SetPointingTo(rect);
             popover.Popup();
-        };
-        itemBox.AddController(rightClick);
-
-        var holder = new ChannelItemHolder(
-            channel,
-            itemBox,
-            avatarOverlay,
-            popover,
-            leftClick,
-            keyController,
-            rightClick,
-            actionGroup,
-            openAction,
-            menu);
-
+        }
+        holder.Lifetime.Attach(itemBox, rightClick,
+            c => c.OnPressed += OnRightClickPressed,
+            c => c.OnPressed -= OnRightClickPressed);
         // Asynchronously load circular avatar
         if (!string.IsNullOrWhiteSpace(channel.AvatarUrl))
             LoadAvatarAsync(holder, channel.AvatarUrl, cancellationToken).FireAndForget(Logger);
@@ -314,7 +328,7 @@ public partial class SubscriptionsView : ViewBase<Box>
         {
             try
             {
-                if (_disposed || cancellationToken.IsCancellationRequested)
+                if (IsDisposed || cancellationToken.IsCancellationRequested)
                     return false;
 
                 Texture? texture = null;
@@ -389,26 +403,19 @@ public partial class SubscriptionsView : ViewBase<Box>
         return false;
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (disposing)
+        {
+            _avatarsCancellation?.Cancel();
+            _avatarsCancellation?.Dispose();
+            _avatarsCancellation = null;
 
-        _viewModel.StateChanged -= OnStateChanged;
-        _videoList.RefreshLoadingChanged -= OnVideoListRefreshLoadingChanged;
-        _avatarsCancellation?.Cancel();
-        _avatarsCancellation?.Dispose();
-        _avatarsCancellation = null;
+            ClearChannelItems();
+            RefreshLoadingChanged = null;
+        }
 
-        _allKeyController.OnKeyPressed -= OnAllKeyControllerKeyPressed;
-        all_channel_button.RemoveController(_allKeyController);
-        _allKeyController.Dispose();
-
-        ClearChannelItems();
-        _videoList.Dispose();
-        base.Dispose();
-        Builder.Dispose();
-        Widget.Dispose();
+        base.Dispose(disposing);
     }
 
     private static string FormatChannelTooltip(SubscribedChannel channel)
@@ -433,38 +440,20 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private sealed class ChannelItemHolder : IDisposable
     {
-        private readonly SimpleActionGroup _actionGroup;
-        private readonly EventControllerKey _keyController;
-        private readonly GestureClick _leftClick;
-        private readonly Menu _menu;
-        private readonly SimpleAction _openAction;
-        private readonly PopoverMenu _popover;
-        private readonly GestureClick _rightClick;
+        private readonly DisposeScope _lifetime = new();
         private bool _disposed;
 
         public ChannelItemHolder(
             SubscribedChannel channel,
             Box itemBox,
-            Overlay overlay,
-            PopoverMenu popover,
-            GestureClick leftClick,
-            EventControllerKey keyController,
-            GestureClick rightClick,
-            SimpleActionGroup actionGroup,
-            SimpleAction openAction,
-            Menu menu)
+            Overlay overlay)
         {
             Channel = channel;
             ItemBox = itemBox;
             Overlay = overlay;
-            _popover = popover;
-            _leftClick = leftClick;
-            _keyController = keyController;
-            _rightClick = rightClick;
-            _actionGroup = actionGroup;
-            _openAction = openAction;
-            _menu = menu;
         }
+
+        public DisposeScope Lifetime => _lifetime;
 
         public SubscribedChannel Channel { get; }
 
@@ -485,27 +474,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             BoundTexture?.Dispose();
             BoundTexture = null;
 
-            ItemBox.RemoveController(_leftClick);
-            _leftClick.Dispose();
-
-            ItemBox.RemoveController(_keyController);
-            _keyController.Dispose();
-
-            ItemBox.RemoveController(_rightClick);
-            _rightClick.Dispose();
-
-            _popover.Popdown();
-            _popover.Unparent();
-            _popover.InsertActionGroup("channel-item", null);
-            _popover.Dispose();
-
-            _actionGroup.RemoveAction(_openAction.Name!);
-            _openAction.Dispose();
-            _actionGroup.Dispose();
-            _menu.Dispose();
-
-            Overlay.Dispose();
-            ItemBox.Dispose();
+            _lifetime.Dispose();
         }
     }
 }

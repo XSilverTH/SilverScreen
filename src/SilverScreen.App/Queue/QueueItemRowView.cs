@@ -36,7 +36,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private bool _disposed;
     private int _index;
     private CancellationTokenSource? _thumbnailCancellation;
 
@@ -54,7 +53,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _playRequested = playRequested;
 
 
-        _actions = SimpleActionGroup.New();
+        _actions = Lifetime.Own(SimpleActionGroup.New());
         _playNowAction = CreateAction("play-now", () =>
         {
             if (Item is { } item)
@@ -73,41 +72,58 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions.AddAction(_removeAction);
         menu.InsertActionGroup("queue", _actions);
 
+        _dragPaintable = Lifetime.Own(WidgetPaintable.New(Widget));
         _dragSource = DragSource.New();
         _dragSource.Actions = DragAction.Move;
-        _dragSource.OnPrepare += (_, _) =>
-        {
-            if (Item is not { } item)
-                return null;
-
-            using var value = new Value(item.Id.ToString());
-            return ContentProvider.NewForValue(value);
-        };
-        grip.AddController(_dragSource);
-        _dragPaintable = WidgetPaintable.New(Widget);
         _dragSource.SetIcon(_dragPaintable, 0, 0);
+        Lifetime.Attach(grip, _dragSource,
+            c => c.OnPrepare += OnDragPrepare,
+            c => c.OnPrepare -= OnDragPrepare);
 
         _dropTarget = DropTarget.New(Type.String, DragAction.Move);
-        _dropTarget.OnMotion += OnDropMotion;
-        _dropTarget.OnLeave += OnDropLeave;
-        _dropTarget.OnDrop += (_, args) => HandleDrop(args.Value.GetString(), args.Y);
-        Widget.AddController(_dropTarget);
+        Lifetime.Attach(Widget, _dropTarget,
+            c =>
+            {
+                c.OnMotion += OnDropMotion;
+                c.OnLeave += OnDropLeave;
+                c.OnDrop += OnDrop;
+            },
+            c =>
+            {
+                c.OnMotion -= OnDropMotion;
+                c.OnLeave -= OnDropLeave;
+                c.OnDrop -= OnDrop;
+            });
 
         var detailsClick = GestureClick.New();
-        detailsClick.OnReleased += (_, _) =>
-        {
-            if (Item is { } item)
-                _playRequested?.Invoke(item.Id, _index);
-        };
-        details.AddController(detailsClick);
+        Lifetime.Attach(details, detailsClick,
+            c => c.OnReleased += OnDetailsOrThumbnailClicked,
+            c => c.OnReleased -= OnDetailsOrThumbnailClicked);
 
         var thumbnailClick = GestureClick.New();
-        thumbnailClick.OnReleased += (_, _) =>
-        {
-            if (Item is { } item)
-                _playRequested?.Invoke(item.Id, _index);
-        };
-        thumbnail.AddController(thumbnailClick);
+        Lifetime.Attach(thumbnail, thumbnailClick,
+            c => c.OnReleased += OnDetailsOrThumbnailClicked,
+            c => c.OnReleased -= OnDetailsOrThumbnailClicked);
+    }
+
+    private ContentProvider? OnDragPrepare(DragSource sender, DragSource.PrepareSignalArgs args)
+    {
+        if (Item is not { } item)
+            return null;
+
+        using var value = new Value(item.Id.ToString());
+        return ContentProvider.NewForValue(value);
+    }
+
+    private bool OnDrop(DropTarget sender, DropTarget.DropSignalArgs args)
+    {
+        return HandleDrop(args.Value.GetString(), args.Y);
+    }
+
+    private void OnDetailsOrThumbnailClicked(GestureClick sender, GestureClick.ReleasedSignalArgs args)
+    {
+        if (Item is { } item)
+            _playRequested?.Invoke(item.Id, _index);
     }
 
     public QueueItem? Item { get; private set; }
@@ -120,7 +136,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         Unbind();
         Item = item;
         _index = index;
@@ -262,52 +278,65 @@ public partial class QueueItemRowView : ViewBase<Box>
         }
 
         var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
-        Functions.IdleAdd(0, () =>
+        if (IsDisposed || cancellationToken.IsCancellationRequested)
         {
-            try
-            {
-                if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
-                    thumbnail.GetRoot() is null)
-                    return false;
+            decodedPixbuf.Dispose();
+            return;
+        }
 
-                Texture? texture = null;
-                Picture? picture = null;
+        try
+        {
+            Lifetime.Idle(() =>
+            {
                 try
                 {
-                    texture = Texture.NewForPixbuf(decodedPixbuf);
-                    decodedPixbuf.Dispose();
-                    decodedPixbuf = null;
-                    picture = Picture.NewForPaintable(texture);
-                    picture.AlternativeText = $"{video.Title} thumbnail";
-                    picture.ContentFit = ContentFit.Cover;
-                    picture.WidthRequest = ThumbnailWidth;
-                    picture.HeightRequest = ThumbnailHeight;
-                    picture.Hexpand = true;
-                    picture.Vexpand = true;
-                    ClearThumbnail();
-                    thumbnail.Child = picture;
-                    _boundTexture = texture;
-                    _boundPicture = picture;
-                    texture = null;
-                    picture = null;
+                    if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
+                        thumbnail.GetRoot() is null)
+                        return false;
+
+                    Texture? texture = null;
+                    Picture? picture = null;
+                    try
+                    {
+                        texture = Texture.NewForPixbuf(decodedPixbuf);
+                        decodedPixbuf.Dispose();
+                        decodedPixbuf = null;
+                        picture = Picture.NewForPaintable(texture);
+                        picture.AlternativeText = $"{video.Title} thumbnail";
+                        picture.ContentFit = ContentFit.Cover;
+                        picture.WidthRequest = ThumbnailWidth;
+                        picture.HeightRequest = ThumbnailHeight;
+                        picture.Hexpand = true;
+                        picture.Vexpand = true;
+                        ClearThumbnail();
+                        thumbnail.Child = picture;
+                        _boundTexture = texture;
+                        _boundPicture = picture;
+                        texture = null;
+                        picture = null;
+                    }
+                    finally
+                    {
+                        picture?.Dispose();
+                        texture?.Dispose();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Logger.Warning(exception, "Failed to render thumbnail texture for queue item {VideoId}", video.Id);
                 }
                 finally
                 {
-                    picture?.Dispose();
-                    texture?.Dispose();
+                    decodedPixbuf?.Dispose();
                 }
-            }
-            catch (Exception exception)
-            {
-                Logger.Warning(exception, "Failed to render thumbnail texture for queue item {VideoId}", video.Id);
-            }
-            finally
-            {
-                decodedPixbuf?.Dispose();
-            }
 
-            return false;
-        });
+                return false;
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            decodedPixbuf?.Dispose();
+        }
     }
 
     private void ClearThumbnail()
@@ -345,21 +374,13 @@ public partial class QueueItemRowView : ViewBase<Box>
                 : $"{duration.Seconds}s";
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
+        if (disposing)
+        {
+            Unbind();
+        }
 
-        _disposed = true;
-        Unbind();
-        grip.RemoveController(_dragSource);
-        Widget.RemoveController(_dropTarget);
-        _dropTarget.OnMotion -= OnDropMotion;
-        _dropTarget.OnLeave -= OnDropLeave;
-        _dragPaintable.Dispose();
-        _dragSource.Dispose();
-        _dropTarget.Dispose();
-        _actions.Dispose();
-        base.Dispose();
+        base.Dispose(disposing);
     }
 }

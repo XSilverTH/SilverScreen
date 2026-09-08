@@ -2,6 +2,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -14,18 +15,19 @@ internal sealed class PlayerSubtitleController(
     : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<PlayerSubtitleController>();
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private bool _suppressSelectionChanged;
     private IReadOnlyList<LibMpvSubtitleTrack> _tracks = [];
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
     }
 
     public void UpdateTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks, bool suppressSelectionChanged)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         if (_tracks.SequenceEqual(tracks))
         {
             UpdateButton();
@@ -58,7 +60,7 @@ internal sealed class PlayerSubtitleController(
 
     public void OnSelectionChanged()
     {
-        if (_disposed || _suppressSelectionChanged) return;
+        if (_lifetime.IsDisposed || _suppressSelectionChanged) return;
 
         var selected = dropdown.GetSelected();
         if (selected is 0 or > int.MaxValue || selected > _tracks.Count)
@@ -74,7 +76,7 @@ internal sealed class PlayerSubtitleController(
 
     public string ShowPreferredSubtitle()
     {
-        if (_disposed) return "Off";
+        if (_lifetime.IsDisposed) return "Off";
 
         var preferredLanguage = preferences.GetPreferences().PreferredSubtitleLanguage;
         var track = _tracks.FirstOrDefault(track =>

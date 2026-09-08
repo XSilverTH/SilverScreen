@@ -1,5 +1,6 @@
 using Gtk;
 using SilverScreen.Infrastructure.Player;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -11,22 +12,23 @@ internal sealed class PlayerChapterOverlay(
     Action registerActivity)
     : IDisposable
 {
+    private readonly DisposeScope _lifetime = new();
     private readonly List<Button> _markers = [];
     private IReadOnlyList<LibMpvChapter> _chapters = [];
-    private bool _disposed;
     private TimeSpan _duration;
     private int _trackStart = -1;
     private int _trackWidth = -1;
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
         ClearMarkers();
     }
 
     public void Update(IReadOnlyList<LibMpvChapter> chapters, TimeSpan duration)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         if (!_chapters.SequenceEqual(chapters))
         {
             ClearMarkers();

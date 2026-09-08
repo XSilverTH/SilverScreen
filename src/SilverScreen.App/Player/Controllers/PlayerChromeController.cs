@@ -1,5 +1,6 @@
 using Gtk;
 using Functions = GLib.Functions;
+using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -20,11 +21,10 @@ internal sealed class PlayerChromeController : IDisposable
 
     private readonly Widget _viewWidget;
 
-    private bool _disposed;
+    private readonly DisposeScope _lifetime = new();
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
-    private uint _timeoutSource;
 
     public PlayerChromeController(
         Widget viewWidget,
@@ -46,20 +46,21 @@ internal sealed class PlayerChromeController : IDisposable
         _onControlsVisibilityChanged = onControlsVisibilityChanged;
         _motionController = EventControllerMotion.New();
         _motionController.SetPropagationPhase(PropagationPhase.Capture);
-        _motionController.OnMotion += OnMotion;
-        ControllerDisposal.Attach(_viewWidget, _motionController);
+        _lifetime.Attach(_viewWidget, _motionController,
+            c => c.OnMotion += OnMotion,
+            c => c.OnMotion -= OnMotion);
 
         _clickGesture = GestureClick.New();
         _clickGesture.Button = 0;
         _clickGesture.SetPropagationPhase(PropagationPhase.Capture);
-        _clickGesture.OnPressed += OnPressed;
-        ControllerDisposal.Attach(_viewWidget, _clickGesture);
+        _lifetime.Attach(_viewWidget, _clickGesture,
+            c => c.OnPressed += OnPressed,
+            c => c.OnPressed -= OnPressed);
 
         RegisterActivity();
 
-        _timeoutSource = Functions.TimeoutAdd(0, ControlsVisibilityCheckMilliseconds, () =>
+        _lifetime.Timeout(ControlsVisibilityCheckMilliseconds, () =>
         {
-            if (_disposed) return false;
             if (ControlsVisible &&
                 !hasOpenPopover() &&
                 Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
@@ -73,20 +74,13 @@ internal sealed class PlayerChromeController : IDisposable
 
     public void Dispose()
     {
-        if (!ControllerDisposal.TryBeginDispose(ref _disposed)) return;
-
-        ControllerDisposal.ClearTimeout(ref _timeoutSource);
-
-        _motionController.OnMotion -= OnMotion;
-        ControllerDisposal.Detach(_viewWidget, _motionController);
-
-        _clickGesture.OnPressed -= OnPressed;
-        ControllerDisposal.Detach(_viewWidget, _clickGesture);
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
     }
 
     public void RegisterActivity()
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         _lastActivityMilliseconds = Environment.TickCount64;
         _onActivity?.Invoke();
         SetControlsVisible(true);
@@ -94,7 +88,7 @@ internal sealed class PlayerChromeController : IDisposable
 
     private void RegisterPointerActivity(double x, double y)
     {
-        if (_disposed) return;
+        if (_lifetime.IsDisposed) return;
         if (Math.Abs(x - _lastPointerX) < 0.2 && Math.Abs(y - _lastPointerY) < 0.2) return;
         _lastPointerX = x;
         _lastPointerY = y;

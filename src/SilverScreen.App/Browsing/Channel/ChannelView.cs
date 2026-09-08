@@ -20,12 +20,9 @@ public partial class ChannelView : ViewBase<Box>
     private const double TopHoverZoneThreshold = 40.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
-    private readonly EventControllerScroll _scrollController;
     private readonly IThumbnailService _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly VideoListView _videoList;
-
-    private readonly EventControllerMotion _videoMotionController;
     private readonly ChannelViewModel _viewModel;
 
     private int _avatarBindingGeneration;
@@ -33,7 +30,6 @@ public partial class ChannelView : ViewBase<Box>
     private Picture? _boundAvatarPicture;
     private Texture? _boundAvatarTexture;
     private string? _currentAvatarUrl;
-    private bool _disposed;
 
     private bool _isHeaderCollapsed;
     private bool _isUserScrollingUp;
@@ -51,29 +47,44 @@ public partial class ChannelView : ViewBase<Box>
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
 
-        _videoList = new VideoListView(
+        _videoList = Lifetime.Own(new VideoListView(
             (IVideoListSource)viewModel,
             thumbnails,
-            videoActions ?? throw new ArgumentNullException(nameof(videoActions)));
+            videoActions ?? throw new ArgumentNullException(nameof(videoActions))));
         channel_video_list_host.Append(_videoList.Widget);
 
         _vadjustment = _videoList.Vadjustment;
         if (_vadjustment is not null)
-            _vadjustment.OnValueChanged += OnScrollValueChanged;
+            Lifetime.Track(
+                () => _vadjustment.OnValueChanged += OnScrollValueChanged,
+                () => _vadjustment.OnValueChanged -= OnScrollValueChanged);
 
-        _scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
-        _scrollController.SetPropagationPhase(PropagationPhase.Capture);
-        _scrollController.OnScroll += OnScrollEvent;
-        _videoList.ScrolledWindow.AddController(_scrollController);
+        var scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
+        scrollController.SetPropagationPhase(PropagationPhase.Capture);
+        Lifetime.Attach(_videoList.ScrolledWindow, scrollController,
+            c => c.OnScroll += OnScrollEvent,
+            c => c.OnScroll -= OnScrollEvent);
 
-        _videoMotionController = EventControllerMotion.New();
-        _videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
-        _videoMotionController.OnEnter += OnVideoPointerEnter;
-        _videoMotionController.OnMotion += OnVideoPointerMotion;
-        _videoList.ScrolledWindow.AddController(_videoMotionController);
-        _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged;
+        var videoMotionController = EventControllerMotion.New();
+        videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
+        Lifetime.Attach(_videoList.ScrolledWindow, videoMotionController,
+            c =>
+            {
+                c.OnEnter += OnVideoPointerEnter;
+                c.OnMotion += OnVideoPointerMotion;
+            },
+            c =>
+            {
+                c.OnEnter -= OnVideoPointerEnter;
+                c.OnMotion -= OnVideoPointerMotion;
+            });
+        Lifetime.Track(
+            () => _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged,
+            () => _videoList.RefreshLoadingChanged -= OnVideoListRefreshLoadingChanged);
 
-        _viewModel.StateChanged += OnStateChanged;
+        Lifetime.Track(
+            () => _viewModel.StateChanged += OnStateChanged,
+            () => _viewModel.StateChanged -= OnStateChanged);
         Render(_viewModel.State);
     }
 
@@ -96,9 +107,8 @@ public partial class ChannelView : ViewBase<Box>
         {
             Functions.IdleAdd(0, () =>
             {
-                if (!_disposed)
+                if (!IsDisposed)
                     SetHeaderCollapsed(false);
-
                 return false;
             });
         }
@@ -111,7 +121,7 @@ public partial class ChannelView : ViewBase<Box>
 
     private bool OnScrollEvent(EventControllerScroll sender, EventControllerScroll.ScrollSignalArgs args)
     {
-        if (_disposed) return false;
+        if (IsDisposed) return false;
 
         switch (args.Dy)
         {
@@ -131,7 +141,7 @@ public partial class ChannelView : ViewBase<Box>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (_disposed || _vadjustment is null) return;
+        if (IsDisposed || _vadjustment is null) return;
 
         var currentY = _vadjustment.Value;
         var now = Environment.TickCount64;
@@ -169,7 +179,7 @@ public partial class ChannelView : ViewBase<Box>
 
     private void CheckHoverReveal(double y)
     {
-        if (_disposed || !_isHeaderCollapsed) return;
+        if (IsDisposed || !_isHeaderCollapsed) return;
 
         var now = Environment.TickCount64;
         if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs) return;
@@ -190,9 +200,8 @@ public partial class ChannelView : ViewBase<Box>
     {
         Functions.IdleAdd(0, () =>
         {
-            if (_disposed) return false;
+            if (IsDisposed) return false;
             Render(state);
-
             return false;
         });
     }
@@ -349,7 +358,7 @@ public partial class ChannelView : ViewBase<Box>
     {
         try
         {
-            if (_updatingSortDropdown || _disposed) return;
+            if (_updatingSortDropdown || IsDisposed) return;
 
             var selected = channel_sort_dropdown.Selected;
             await _viewModel.SetSortSelection(selected, GetBatchSize());
@@ -392,7 +401,7 @@ public partial class ChannelView : ViewBase<Box>
         {
             try
             {
-                if (_disposed || cancellationToken.IsCancellationRequested || _avatarBindingGeneration != generation ||
+                if (IsDisposed || cancellationToken.IsCancellationRequested || _avatarBindingGeneration != generation ||
                     channel_avatar_overlay.GetRoot() is null)
                     return false;
 
@@ -457,31 +466,18 @@ public partial class ChannelView : ViewBase<Box>
         texture?.Dispose();
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (disposing)
+        {
+            _avatarCancellation?.Cancel();
+            _avatarCancellation?.Dispose();
+            _avatarCancellation = null;
+            ClearAvatar();
+            RefreshLoadingChanged = null;
+        }
 
-        if (_vadjustment is not null) _vadjustment.OnValueChanged -= OnScrollValueChanged;
-        _scrollController.OnScroll -= OnScrollEvent;
-        _videoList.ScrolledWindow.RemoveController(_scrollController);
-        _scrollController.Dispose();
-
-        _videoMotionController.OnEnter -= OnVideoPointerEnter;
-        _videoMotionController.OnMotion -= OnVideoPointerMotion;
-        _videoList.ScrolledWindow.RemoveController(_videoMotionController);
-        _videoMotionController.Dispose();
-        _viewModel.StateChanged -= OnStateChanged;
-
-        _avatarCancellation?.Cancel();
-        _avatarCancellation?.Dispose();
-        _avatarCancellation = null;
-        ClearAvatar();
-
-        _videoList.RefreshLoadingChanged -= OnVideoListRefreshLoadingChanged;
-        _videoList.Dispose();
-
-        base.Dispose();
+        base.Dispose(disposing);
     }
 
     private static string? ExtractHandle(string? url)

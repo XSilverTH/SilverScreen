@@ -28,19 +28,13 @@ public partial class VideoCardView : ViewBase<Bin>
     private const int ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
-    private readonly GestureClick _channelClick;
-    private readonly EventControllerKey _channelKeyController;
-    private readonly GestureClick _click;
     private readonly PopoverMenu _contextMenu;
-    private readonly EventControllerKey _keyController;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
-    private readonly GestureClick _rightClick;
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private bool _disposed;
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
     private VideoSummary? _video;
@@ -50,7 +44,7 @@ public partial class VideoCardView : ViewBase<Bin>
         _thumbnails = thumbnails;
         _actions = actions;
 
-        _menuActions = SimpleActionGroup.New();
+        _menuActions = Lifetime.Own(SimpleActionGroup.New());
         _menuActionItems =
         [
             CreateMenuAction("play"),
@@ -61,44 +55,72 @@ public partial class VideoCardView : ViewBase<Bin>
         ];
         foreach (var action in _menuActionItems)
         {
-            action.OnActivate += OnMenuActionActivated;
+            Lifetime.Own(action);
+            Lifetime.Track(
+                () => action.OnActivate += OnMenuActionActivated,
+                () => action.OnActivate -= OnMenuActionActivated);
             _menuActions.AddAction(action);
         }
 
-        menu.InsertActionGroup("video", _menuActions);
-        card.InsertActionGroup("video", _menuActions);
+        Lifetime.Track(
+            () =>
+            {
+                menu.InsertActionGroup("video", _menuActions);
+                card.InsertActionGroup("video", _menuActions);
+            },
+            () =>
+            {
+                menu.InsertActionGroup("video", null);
+                card.InsertActionGroup("video", null);
+            });
 
         _contextMenu = PopoverMenu.NewFromModel(menu.MenuModel!);
-        _contextMenu.SetParent(card);
         _contextMenu.HasArrow = false;
-        _contextMenu.InsertActionGroup("video", _menuActions);
+        Lifetime.Track(
+            () =>
+            {
+                _contextMenu.SetParent(card);
+                _contextMenu.InsertActionGroup("video", _menuActions);
+            },
+            () =>
+            {
+                _contextMenu.Popdown();
+                _contextMenu.Unparent();
+                _contextMenu.InsertActionGroup("video", null);
+            });
 
-        _click = GestureClick.New();
-        _click.Button = 0;
-        _click.OnReleased += OnCardReleased;
-        card.AddController(_click);
+        var click = GestureClick.New();
+        click.Button = 0;
+        Lifetime.Attach(card, click,
+            c => c.OnReleased += OnCardReleased,
+            c => c.OnReleased -= OnCardReleased);
 
-        _rightClick = GestureClick.New();
-        _rightClick.Button = 3;
-        _rightClick.OnPressed += OnCardRightClicked;
-        card.AddController(_rightClick);
-        _channelClick = GestureClick.New();
-        _channelClick.Button = 1;
-        _channelClick.OnReleased += OnChannelReleased;
-        channel.AddController(_channelClick);
+        var rightClick = GestureClick.New();
+        rightClick.Button = 3;
+        Lifetime.Attach(card, rightClick,
+            c => c.OnPressed += OnCardRightClicked,
+            c => c.OnPressed -= OnCardRightClicked);
 
-        _channelKeyController = EventControllerKey.New();
-        _channelKeyController.OnKeyPressed += OnChannelKeyPressed;
-        channel.AddController(_channelKeyController);
+        var channelClick = GestureClick.New();
+        channelClick.Button = 1;
+        Lifetime.Attach(channel, channelClick,
+            c => c.OnReleased += OnChannelReleased,
+            c => c.OnReleased -= OnChannelReleased);
 
-        _keyController = EventControllerKey.New();
-        _keyController.OnKeyPressed += OnKeyPressed;
-        card.AddController(_keyController);
+        var channelKeyController = EventControllerKey.New();
+        Lifetime.Attach(channel, channelKeyController,
+            c => c.OnKeyPressed += OnChannelKeyPressed,
+            c => c.OnKeyPressed -= OnChannelKeyPressed);
+
+        var keyController = EventControllerKey.New();
+        Lifetime.Attach(card, keyController,
+            c => c.OnKeyPressed += OnKeyPressed,
+            c => c.OnKeyPressed -= OnKeyPressed);
     }
 
     public void Bind(VideoSummary video, CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         Unbind();
 
         _video = video;
@@ -195,7 +217,7 @@ public partial class VideoCardView : ViewBase<Bin>
         {
             try
             {
-                if (_disposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
+                if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
                     return false;
 
                 Texture? texture = null;
@@ -274,7 +296,7 @@ public partial class VideoCardView : ViewBase<Bin>
 
     private void ShowContextMenu(int x = -1, int y = -1)
     {
-        if (_video is null)
+        if (IsDisposed || _video is null)
             return;
 
         var rect = new Rectangle
@@ -299,7 +321,7 @@ public partial class VideoCardView : ViewBase<Bin>
 
     private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (_disposed || _video is null)
+        if (IsDisposed || _video is null)
             return false;
 
         switch (args.Keyval)
@@ -321,7 +343,7 @@ public partial class VideoCardView : ViewBase<Bin>
 
     private bool OnChannelKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (_disposed || _video is null)
+        if (IsDisposed || _video is null)
             return false;
 
         switch (args.Keyval)
@@ -528,47 +550,13 @@ public partial class VideoCardView : ViewBase<Bin>
         return string.Join(" • ", parts);
     }
 
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        Unbind();
-
-        _click.OnReleased -= OnCardReleased;
-        card.RemoveController(_click);
-        _click.Dispose();
-        _rightClick.OnPressed -= OnCardRightClicked;
-        card.RemoveController(_rightClick);
-        _rightClick.Dispose();
-        _channelClick.OnReleased -= OnChannelReleased;
-        channel.RemoveController(_channelClick);
-        _channelClick.Dispose();
-        _channelKeyController.OnKeyPressed -= OnChannelKeyPressed;
-        channel.RemoveController(_channelKeyController);
-        _channelKeyController.Dispose();
-        _keyController.OnKeyPressed -= OnKeyPressed;
-        card.RemoveController(_keyController);
-        _keyController.Dispose();
-
-        _contextMenu.Popdown();
-        _contextMenu.Unparent();
-        _contextMenu.Dispose();
-
-        menu.MenuModel = null;
-        menu.InsertActionGroup("video", null);
-        card.InsertActionGroup("video", null);
-        foreach (var action in _menuActionItems)
+        if (disposing)
         {
-            action.OnActivate -= OnMenuActionActivated;
-            _menuActions.RemoveAction(action.Name!);
-            action.Dispose();
+            Unbind();
         }
 
-        _menuActions.Dispose();
-        base.Dispose();
-        Builder.Dispose();
-        Widget.Dispose();
+        base.Dispose(disposing);
     }
 }
