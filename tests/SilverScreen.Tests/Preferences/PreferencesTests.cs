@@ -296,7 +296,7 @@ public sealed class PreferencesTests : IDisposable
         var loaded = service.GetPreferences();
 
         Assert.Equal("Dark", loaded.Theme);
-        Assert.Equal("embedded-player", loaded.PlaybackBackend);
+        Assert.Equal(PlaybackBackends.EmbeddedPlayer, loaded.PlaybackBackend);
         Assert.False(loaded.OpenInFullscreen);
         Assert.False(loaded.AutoAdvanceNextVideo);
         Assert.Equal("/usr/bin/mpv", loaded.MpvExecutablePath);

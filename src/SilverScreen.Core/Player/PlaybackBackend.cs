@@ -1,3 +1,5 @@
+using SilverScreen.Core.Preferences;
+
 namespace SilverScreen.Core.Player;
 
 public static class PlaybackBackends
@@ -14,19 +16,57 @@ public static class PlaybackBackends
     public const string ExternalMpvShortName = "External MPV";
     private const string EmbeddedShortName = "Built-in";
 
+    public static bool IsEmbedded(PlaybackBackendKind kind)
+    {
+        return kind == PlaybackBackendKind.Embedded;
+    }
+
+    public static string ToPersistedString(this PlaybackBackendKind kind)
+    {
+        return kind == PlaybackBackendKind.Embedded ? EmbeddedPlayer : ExternalMpv;
+    }
+
+    public static string ToDisplayName(this PlaybackBackendKind kind)
+    {
+        return kind == PlaybackBackendKind.Embedded ? EmbeddedDisplayName : ExternalMpvDisplayName;
+    }
+
+    public static string ToShortName(this PlaybackBackendKind kind)
+    {
+        return kind == PlaybackBackendKind.Embedded ? EmbeddedShortName : ExternalMpvShortName;
+    }
+
+    /// <summary>
+    ///     Single legacy-string parser. Accepts persisted values, chooser labels, and historical
+    ///     aliases (case-insensitive); anything unrecognized maps to
+    ///     <see cref="PlaybackBackendKind.ExternalMpv" />, matching the old Normalize behavior.
+    /// </summary>
+    public static PlaybackBackendKind Parse(string? backend)
+    {
+        if (string.IsNullOrWhiteSpace(backend))
+            return PlaybackBackendKind.ExternalMpv;
+
+        var value = backend.Trim();
+        return value.Equals(EmbeddedPlayer, StringComparison.OrdinalIgnoreCase) ||
+               value.Equals(EmbeddedDisplayName, StringComparison.OrdinalIgnoreCase) ||
+               value.Equals(EmbeddedShortName, StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Internal player", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Embedded", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("LibMpv", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("embedded-player", StringComparison.OrdinalIgnoreCase)
+            ? PlaybackBackendKind.Embedded
+            : PlaybackBackendKind.ExternalMpv;
+    }
+
+    // Wave 1 compat forwards: string forms delegate to the enum core so existing callers keep
+    // compiling. Wave 2: mark [Obsolete] and delete after callers migrate to the enums.
     public static bool IsEmbedded(string? backend)
     {
-        return string.Equals(backend, EmbeddedPlayer, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, EmbeddedDisplayName, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, EmbeddedShortName, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, "Internal player", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, "Embedded", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, "LibMpv", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(backend, "embedded-player", StringComparison.OrdinalIgnoreCase);
+        return IsEmbedded(Parse(backend));
     }
 
     public static string Normalize(string? backend)
     {
-        return IsEmbedded(backend) ? EmbeddedPlayer : ExternalMpv;
+        return Parse(backend).ToPersistedString();
     }
 }

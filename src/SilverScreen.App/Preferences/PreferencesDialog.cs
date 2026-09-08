@@ -106,9 +106,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         _loading = true;
         try
         {
-            theme_row.Selected = (uint)GetSelectionIndex(theme_model, state.Theme);
-            quality_row.Selected = (uint)GetSelectionIndex(quality_model, state.VideoQuality);
-            playback_backend_row.Selected = (uint)(PlaybackBackends.IsEmbedded(state.PlaybackBackend) ? 1 : 0);
+            theme_row.Selected = (uint)ThemeModes.Parse(state.Theme);
+            quality_row.Selected = (uint)VideoQualities.Parse(state.VideoQuality);
+            playback_backend_row.Selected =
+                PlaybackBackends.Parse(state.PlaybackBackend) == PlaybackBackendKind.Embedded ? 1u : 0u;
             fullscreen_row.Active = state.OpenInFullscreen;
             auto_advance_next_video_row.Active = state.AutoAdvanceNextVideo;
             ((Editable)ytdlp_path_row).SetText(state.YtDlpExecutablePath);
@@ -228,22 +229,14 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
         };
     }
 
-    private static int GetSelectionIndex(StringList model, string value)
+    private static ThemeMode GetSelectedTheme(uint selected)
     {
-        for (uint i = 0; i < model.GetNItems(); i++)
-            if (model.GetString(i) == value)
-                return (int)i;
-
-        return -1;
+        return selected <= (uint)ThemeMode.Dark ? (ThemeMode)selected : ThemeMode.System;
     }
 
-    private static string GetSelectedValue(StringList model, uint selected, string fallback)
+    private static VideoQuality GetSelectedQuality(uint selected)
     {
-        var selectedIndex = (int)selected;
-        var itemCount = (int)model.GetNItems();
-        return selectedIndex >= 0 && selectedIndex < itemCount
-            ? model.GetString(selected) ?? fallback
-            : fallback;
+        return selected <= (uint)VideoQuality.P360 ? (VideoQuality)selected : VideoQuality.Best;
     }
 
     private void OnRowNotify(object? sender, EventArgs e)
@@ -333,13 +326,13 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>, IDispo
     {
         return _viewModel.EditorState with
         {
-            Theme = GetSelectedValue(theme_model, theme_row.Selected, "System"),
-            VideoQuality = GetSelectedValue(quality_model, quality_row.Selected, "Best"),
+            Theme = GetSelectedTheme(theme_row.Selected).ToPersistedString(),
+            VideoQuality = GetSelectedQuality(quality_row.Selected).ToPersistedString(),
             YtDlpExecutablePath = ((Editable)ytdlp_path_row).GetText(),
             MpvExecutablePath = ((Editable)mpv_path_row).GetText(),
-            PlaybackBackend = playback_backend_row.Selected == 1
-                ? PlaybackBackends.EmbeddedPlayer
-                : PlaybackBackends.ExternalMpv,
+            PlaybackBackend = (playback_backend_row.Selected == 1
+                ? PlaybackBackendKind.Embedded
+                : PlaybackBackendKind.ExternalMpv).ToPersistedString(),
             OpenInFullscreen = fullscreen_row.Active,
             PreferredSubtitleLanguage = ((Editable)subtitle_language_row).GetText(),
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,

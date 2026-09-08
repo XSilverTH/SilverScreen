@@ -1,16 +1,28 @@
+using System.Text.Json.Serialization;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
+using VideoQualityEnum = SilverScreen.Core.Preferences.VideoQuality;
 
 namespace SilverScreen.Core.Preferences;
 
 public sealed record AppPreferences
 {
-    public string Theme { get; set; } = "System"; // "System", "Light", "Dark"
-    public string PlaybackBackend { get; set; } = PlaybackBackends.EmbeddedPlayer;
+    [JsonPropertyName("Theme")]
+    [JsonConverter(typeof(ThemeModeConverter))]
+    public ThemeMode ThemeMode { get; set; } = ThemeMode.System;
+
+    [JsonPropertyName("PlaybackBackend")]
+    [JsonConverter(typeof(PlaybackBackendKindConverter))]
+    public PlaybackBackendKind PlaybackBackendKind { get; set; } = PlaybackBackendKind.Embedded;
+
     public bool OpenInFullscreen { get; set; } = true;
     public bool AutoAdvanceNextVideo { get; set; } = true;
     public string MpvExecutablePath { get; set; } = "mpv";
-    public string VideoQuality { get; set; } = "Best"; // "Best", "1080p", "720p", "480p", "360p"
+
+    [JsonPropertyName("VideoQuality")]
+    [JsonConverter(typeof(VideoQualityConverter))]
+    public VideoQualityEnum Quality { get; set; } = VideoQualityEnum.Best;
+
     public string PreferredSubtitleLanguage { get; set; } = string.Empty;
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public bool MarkWatchedVideos { get; set; }
@@ -29,4 +41,28 @@ public sealed record AppPreferences
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =
         [.. Player.SponsorBlockCategories.All];
+
+    // Wave 1 compat forwards: old string shapes delegate to the enum properties so existing
+    // callers (App.cs, player services) keep compiling. Wave 2: mark [Obsolete] and delete
+    // after callers migrate to the enums.
+    [JsonIgnore]
+    public string Theme
+    {
+        get => ThemeMode.ToPersistedString();
+        set => ThemeMode = ThemeModes.Parse(value);
+    }
+
+    [JsonIgnore]
+    public string PlaybackBackend
+    {
+        get => PlaybackBackendKind.ToPersistedString();
+        set => PlaybackBackendKind = PlaybackBackends.Parse(value);
+    }
+
+    [JsonIgnore]
+    public string VideoQuality
+    {
+        get => Quality.ToPersistedString();
+        set => Quality = VideoQualities.Parse(value);
+    }
 }

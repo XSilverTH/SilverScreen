@@ -1,3 +1,4 @@
+using VideoQualityEnum = SilverScreen.Core.Preferences.VideoQuality;
 using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
@@ -8,11 +9,11 @@ public sealed record ExecutablePathStatus(bool Found, string Detail);
 
 public sealed record PreferencesEditorState
 {
-    public string Theme { get; init; } = "System";
-    public string VideoQuality { get; init; } = "Best";
+    public string Theme { get; init; } = ThemeMode.System.ToPersistedString();
+    public string VideoQuality { get; init; } = VideoQualityEnum.Best.ToPersistedString();
     public string YtDlpExecutablePath { get; init; } = "yt-dlp";
     public string MpvExecutablePath { get; init; } = "mpv";
-    public string PlaybackBackend { get; init; } = PlaybackBackends.EmbeddedPlayer;
+    public string PlaybackBackend { get; init; } = PlaybackBackendKind.Embedded.ToPersistedString();
     public bool OpenInFullscreen { get; init; } = true;
     public bool AutoAdvanceNextVideo { get; init; } = true;
     public bool MarkWatchedVideos { get; init; }
@@ -114,11 +115,11 @@ public sealed class PreferencesViewModel
     {
         return new PreferencesEditorState
         {
-            Theme = preferences.Theme,
-            VideoQuality = preferences.VideoQuality,
+            Theme = preferences.ThemeMode.ToPersistedString(),
+            VideoQuality = preferences.Quality.ToPersistedString(),
             YtDlpExecutablePath = preferences.YtDlpExecutablePath,
             MpvExecutablePath = preferences.MpvExecutablePath,
-            PlaybackBackend = preferences.PlaybackBackend,
+            PlaybackBackend = preferences.PlaybackBackendKind.ToPersistedString(),
             OpenInFullscreen = preferences.OpenInFullscreen,
             AutoAdvanceNextVideo = preferences.AutoAdvanceNextVideo,
             MarkWatchedVideos = preferences.MarkWatchedVideos,
@@ -141,11 +142,11 @@ public sealed class PreferencesViewModel
     {
         return new AppPreferences
         {
-            Theme = state.Theme,
-            VideoQuality = state.VideoQuality,
+            ThemeMode = ThemeModes.Parse(state.Theme),
+            Quality = VideoQualities.Parse(state.VideoQuality),
             YtDlpExecutablePath = state.YtDlpExecutablePath,
             MpvExecutablePath = state.MpvExecutablePath,
-            PlaybackBackend = state.PlaybackBackend,
+            PlaybackBackendKind = PlaybackBackends.Parse(state.PlaybackBackend),
             OpenInFullscreen = state.OpenInFullscreen,
             AutoAdvanceNextVideo = state.AutoAdvanceNextVideo,
             MarkWatchedVideos = state.MarkWatchedVideos,
