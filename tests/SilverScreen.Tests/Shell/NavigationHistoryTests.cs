@@ -32,20 +32,21 @@ public sealed class NavigationHistoryTests
     }
 
     [Fact]
-    public void NavigateTo_DifferentPages_PushesToBackStackAndGoesBackInReverseOrder()
+    public void NavigateTo_DetailPages_PushesToBackStackAndGoesBackInReverseOrder()
     {
         using var nav = new NavigationService();
         nav.Initialize(NavigationPage.Home);
 
-        Assert.True(nav.NavigateTo(NavigationPage.Subscriptions));
-        Assert.True(nav.NavigateTo(NavigationPage.History));
+        Assert.True(nav.NavigateTo(NavigationPage.Search, "query"));
+        var channel = new ChannelNavigationArgs("https://youtube.com/@channel", "Channel");
+        Assert.True(nav.NavigateTo(NavigationPage.Channel, channel));
 
-        Assert.Equal(NavigationPage.History, nav.CurrentPage);
-        Assert.Equal(NavigationPage.Subscriptions, nav.PreviousPage);
+        Assert.Equal(NavigationPage.Channel, nav.CurrentPage);
+        Assert.Equal(NavigationPage.Search, nav.PreviousPage);
         Assert.True(nav.CanGoBack);
 
         Assert.True(nav.GoBack());
-        Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
+        Assert.Equal(NavigationPage.Search, nav.CurrentPage);
         Assert.Equal(NavigationPage.Home, nav.PreviousPage);
 
         Assert.True(nav.GoBack());
@@ -147,7 +148,7 @@ public sealed class NavigationHistoryTests
     }
 
     [Fact]
-    public void SyncFromViewStack_PushesCurrentAndUpdatesPage()
+    public void SyncFromViewStack_SelectsNewRootWithoutCreatingBackEntry()
     {
         using var nav = new NavigationService();
         nav.Initialize(NavigationPage.Home);
@@ -155,12 +156,49 @@ public sealed class NavigationHistoryTests
         nav.SyncFromViewStack("subscriptions");
 
         Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
-        Assert.Equal(NavigationPage.Home, nav.PreviousPage);
-        Assert.True(nav.CanGoBack);
+        Assert.Null(nav.PreviousPage);
+        Assert.False(nav.CanGoBack);
 
-        // Syncing to the same page is a no-op
-        nav.SyncFromViewStack("subscriptions");
-        Assert.Equal(NavigationPage.Home, nav.PreviousPage);
+        nav.NavigateTo(NavigationPage.Search, "query");
+        Assert.Equal(NavigationPage.Subscriptions, nav.PreviousPage);
+
+        Assert.True(nav.GoBack());
+        Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
+        Assert.False(nav.CanGoBack);
+    }
+
+    [Fact]
+    public void NavigatingFromPlayerToChannel_DoesNotAddPlayerToBackStack()
+    {
+        using var nav = new NavigationService();
+        nav.Initialize(NavigationPage.Subscriptions);
+
+        Assert.True(nav.NavigateTo(NavigationPage.Player));
+        var channel = new ChannelNavigationArgs("https://youtube.com/@channel", "Channel");
+        Assert.True(nav.NavigateTo(NavigationPage.Channel, channel));
+
+        Assert.Equal(NavigationPage.Subscriptions, nav.PreviousPage);
+        Assert.True(nav.GoBack());
+        Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
+        Assert.False(nav.CanGoBack);
+    }
+
+    [Fact]
+    public void NavigatingBetweenChannelsThroughPlayer_ReturnsToPageBeforeVideo()
+    {
+        using var nav = new NavigationService();
+        nav.Initialize(NavigationPage.Home);
+        var channelA = new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A");
+        var channelB = new ChannelNavigationArgs("https://youtube.com/@channelB", "Channel B");
+
+        Assert.True(nav.NavigateTo(NavigationPage.Channel, channelA));
+        Assert.True(nav.NavigateTo(NavigationPage.Player));
+        Assert.True(nav.NavigateTo(NavigationPage.Channel, channelB));
+
+        Assert.Equal(NavigationPage.Channel, nav.PreviousPage);
+        Assert.Equal(channelA, nav.PreviousParameter);
+        Assert.True(nav.GoBack());
+        Assert.Equal(channelA, nav.CurrentParameter);
     }
 
     [Fact]

@@ -18,6 +18,8 @@ public enum NavigationPage
 
 /// <summary>
 ///     Represents a navigation history entry with a target page and optional parameter payload.
+///     Player entries are transient: they preserve the return route while open, but are never
+///     added as a destination when navigating elsewhere.
 /// </summary>
 public sealed record NavigationEntry(NavigationPage Page, object? Parameter = null);
 
@@ -165,11 +167,16 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_backStack.Count == 0)
-            return false;
+        while (_backStack.Count > 0)
+        {
+            var target = _backStack.Pop();
+            if (target.Page == NavigationPage.Player)
+                continue;
 
-        var target = _backStack.Pop();
-        return NavigateInternal(target, false, true);
+            return NavigateInternal(target, false, true);
+        }
+
+        return false;
     }
 
     public void SyncFromViewStack(string? childName)
@@ -187,7 +194,9 @@ public sealed class NavigationService : INavigationService, IDisposable
         if (_registry.TryGetValue(previous.Page, out var prevEntry))
             prevEntry.OnLeave?.Invoke();
 
-        _backStack.Push(previous);
+        // Selecting a shell tab establishes a new navigation root. Tab changes and
+        // detail/search navigation must not share the same back history.
+        _backStack.Clear();
         CurrentEntry = new NavigationEntry(page);
 
         if (_registry.TryGetValue(page, out var entry))
@@ -212,6 +221,7 @@ public sealed class NavigationService : INavigationService, IDisposable
     public void Initialize(NavigationPage initialPage = NavigationPage.Home, object? parameter = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _backStack.Clear();
         CurrentEntry = new NavigationEntry(initialPage, parameter);
         if (!_registry.TryGetValue(initialPage, out var entry)) return;
         if (entry.IsShellPage)
@@ -231,6 +241,7 @@ public sealed class NavigationService : INavigationService, IDisposable
                 _mainStack.VisibleChildName = entry.StackName;
         }
     }
+
 
     private bool NavigateInternal(NavigationEntry target, bool pushToBackStack, bool isBackNavigation)
     {
@@ -267,8 +278,13 @@ public sealed class NavigationService : INavigationService, IDisposable
                     !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
                     _mainStack.VisibleChildName = entry.StackName;
             }
-
-            if (pushToBackStack) _backStack.Push(previous);
+            if (pushToBackStack)
+            {
+                if (IsShellRoot(target.Page))
+                    _backStack.Clear();
+                else if (previous.Page != NavigationPage.Player)
+                    _backStack.Push(previous);
+            }
             CurrentEntry = target;
             entry.OnEnter?.Invoke();
         }
@@ -281,6 +297,10 @@ public sealed class NavigationService : INavigationService, IDisposable
         return true;
     }
 
+    private static bool IsShellRoot(NavigationPage page)
+    {
+        return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History;
+    }
     public bool TryGetPage(string stackName, out NavigationPage page)
     {
         return _viewStackNameToPage.TryGetValue(stackName, out page);

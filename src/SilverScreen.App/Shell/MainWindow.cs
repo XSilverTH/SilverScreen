@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Adw;
 using Gdk;
 using Gio;
@@ -142,8 +141,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _navigationService.PageChanged += OnNavigationPageChanged;
         _navigationService.Initialize();
         account_popover.Child = _accountPopover.Widget;
-        _searchViewModel.PropertyChanged += OnBackLabelChanged;
-        _channelViewModel.PropertyChanged += OnBackLabelChanged;
         _playback.PlaybackStateChanged += OnPlaybackStateChanged;
         queue_button.BindProperty("active", queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
@@ -564,18 +561,35 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateBackButton()
     {
-        var (visible, label, tooltip) = _navigationService.CurrentPage switch
+        var visible = (_navigationService.CurrentPage is NavigationPage.Search or NavigationPage.Channel) &&
+                      _navigationService.CanGoBack;
+        navigation_back_button.Visible = visible;
+        navigation_back_button.TooltipText = visible ? GetBackButtonTooltip() : "Back";
+    }
+
+    private string GetBackButtonTooltip()
+    {
+        var previous = _navigationService.PreviousEntry;
+        if (previous is null)
+            return "Back";
+
+        var destination = previous.Page switch
         {
-            NavigationPage.Search => (true, _searchViewModel.BackLabel, "Exit Search"),
-            NavigationPage.Channel => (true, _channelViewModel.BackLabel, _channelViewModel.BackTooltip),
-            _ => (false, "Back", "Back")
+            NavigationPage.Home => "Home",
+            NavigationPage.Subscriptions => "Subscriptions",
+            NavigationPage.History => "History",
+            NavigationPage.Search when previous.Parameter is string query &&
+                                       !string.IsNullOrWhiteSpace(query) => $"Search results for “{query}”",
+            NavigationPage.Search => "Search",
+            NavigationPage.Channel when previous.Parameter is ChannelNavigationArgs channel &&
+                                        !string.IsNullOrWhiteSpace(channel.Name) => channel.Name,
+            NavigationPage.Channel => "Channel",
+            _ => "the previous page"
         };
 
-        var text = string.IsNullOrWhiteSpace(label) ? "Back" : label;
-        navigation_back_button.Visible = visible;
-        navigation_back_button.SetLabel(text);
-        navigation_back_button.TooltipText = tooltip;
+        return $"Back to {destination}";
     }
+
 
     private void OnNowPlayingToggleClicked(object? sender = null, EventArgs? args = null)
     {
@@ -615,19 +629,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         }
     }
 
-    private void OnBackLabelChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (!string.Equals(args.PropertyName, "BackLabel", StringComparison.Ordinal) &&
-            !string.Equals(args.PropertyName, "BackTooltip", StringComparison.Ordinal))
-            return;
-        Functions.IdleAdd(0, () =>
-        {
-            if (!_closed)
-                UpdateBackButton();
-
-            return false;
-        });
-    }
 
     private void OnQueuePlayFailed(object? sender, string error)
     {
@@ -678,8 +679,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _navigationService.PageChanged -= OnNavigationPageChanged;
         _navigationService.Dispose();
         _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged;
-        _searchViewModel.PropertyChanged -= OnBackLabelChanged;
-        _channelViewModel.PropertyChanged -= OnBackLabelChanged;
         _queueView.PlayFailed -= OnQueuePlayFailed;
         _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged;
         _subscriptions.Dispose();

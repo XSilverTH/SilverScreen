@@ -74,16 +74,11 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             OnPropertyChanged(nameof(IsLoading));
             OnPropertyChanged(nameof(IsLoadingMore));
             OnPropertyChanged(nameof(HasMore));
-            OnPropertyChanged(nameof(BackLabel));
             StateChanged?.Invoke(this, value);
         }
     } = new([], "Search results will appear here.", false);
 
-    /// <summary>
-    ///     Label for the shell back button while the search page is visible. Read by MainWindow;
-    ///     kept as a property (not a constant) so it can become query-aware without a shell change.
-    /// </summary>
-    public string BackLabel => "Exit Search";
+
 
     public string Summary => State.Summary;
     public bool IsLoading => State.IsLoading;
