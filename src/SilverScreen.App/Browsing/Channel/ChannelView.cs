@@ -52,7 +52,7 @@ public partial class ChannelView : ViewBase<Box>
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
 
         _videoList = new VideoListView(
-            viewModel,
+            (IVideoListSource)viewModel,
             thumbnails,
             videoActions ?? throw new ArgumentNullException(nameof(videoActions)));
         channel_video_list_host.Append(_videoList.Widget);

@@ -44,10 +44,9 @@ public partial class SubscriptionsView : ViewBase<Box>
         _openChannel = openChannel ?? throw new ArgumentNullException(nameof(openChannel));
 
         _videoList = new VideoListView(
-            viewModel,
+            viewModel.GetVideoListSource(openWebLogin),
             thumbnails,
-            videoActions ?? throw new ArgumentNullException(nameof(videoActions)),
-            openWebLogin);
+            videoActions ?? throw new ArgumentNullException(nameof(videoActions)));
         subscriptions_video_list_host.Append(_videoList.Widget);
 
         _allKeyController = EventControllerKey.New();

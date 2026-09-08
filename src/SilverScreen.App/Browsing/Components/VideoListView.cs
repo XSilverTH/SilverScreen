@@ -2,11 +2,6 @@ using System.Runtime.CompilerServices;
 using Adw;
 using Gtk;
 using Serilog;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.History;
-using SilverScreen.Browsing.Home;
-using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
@@ -67,51 +62,6 @@ public partial class VideoListView : ViewBase<Bin>
         Render(_source.State);
     }
 
-    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
-    public VideoListView(
-        HomeFeedCoordinator coordinator,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
-        : this((IVideoListSource)coordinator, thumbnails, videoActions)
-    {
-    }
-
-    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
-    public VideoListView(
-        SearchViewModel viewModel,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, videoActions)
-    {
-    }
-
-    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
-    public VideoListView(
-        HistoryViewModel viewModel,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, videoActions)
-    {
-    }
-
-    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
-    public VideoListView(
-        ChannelViewModel viewModel,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
-        : this((IVideoListSource)viewModel, thumbnails, videoActions)
-    {
-    }
-
-    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
-    public VideoListView(
-        SubscriptionsViewModel viewModel,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions,
-        Action? openWebLogin = null)
-        : this(viewModel.GetVideoListSource(openWebLogin), thumbnails, videoActions)
-    {
-    }
 
     public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
 
