@@ -64,6 +64,23 @@ public sealed class ApplicationServices(
     public PlayerDependencies Player { get; } = player;
 }
 
+/// <summary>Narrow facade over browsing services (additive; <see cref="ApplicationServices" /> stays canonical).</summary>
+public sealed record BrowsingServices(
+    ISearchService Search,
+    ISearchSuggestionService SearchSuggestions,
+    IChannelService Channels,
+    IThumbnailService Thumbnails,
+    HomeFeedCoordinator HomeFeed,
+    IAuthenticatedHistoryService History,
+    IAuthenticatedSubscriptionsService Subscriptions);
+
+/// <summary>Narrow facade over account/session services (additive; <see cref="ApplicationServices" /> stays canonical).</summary>
+public sealed record AccountServices(
+    ISessionService Session,
+    IAccountProfileService AccountProfile,
+    IPreferencesService Preferences,
+    IQueueService Queue);
+
 /// <summary>Registers the application's production services.</summary>
 public static class ApplicationServiceCollectionExtensions
 {
@@ -117,6 +134,19 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IAuthenticatedSubscriptionsService, YoutubeApiSubscriptionsService>();
         services.AddSingleton<HomeFeedCoordinator>();
         services.AddSingleton<RuntimeDependencyDiagnostics>();
+        services.AddSingleton(static provider => new BrowsingServices(
+            provider.GetRequiredService<ISearchService>(),
+            provider.GetRequiredService<ISearchSuggestionService>(),
+            provider.GetRequiredService<IChannelService>(),
+            provider.GetRequiredService<IThumbnailService>(),
+            provider.GetRequiredService<HomeFeedCoordinator>(),
+            provider.GetRequiredService<IAuthenticatedHistoryService>(),
+            provider.GetRequiredService<IAuthenticatedSubscriptionsService>()));
+        services.AddSingleton(static provider => new AccountServices(
+            provider.GetRequiredService<ISessionService>(),
+            provider.GetRequiredService<IAccountProfileService>(),
+            provider.GetRequiredService<IPreferencesService>(),
+            provider.GetRequiredService<IQueueService>()));
         services.AddSingleton<PlayerDependencies>();
         services.AddSingleton<ApplicationServices>();
         return services;

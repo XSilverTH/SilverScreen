@@ -4,10 +4,10 @@ using Gio;
 using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
-
 namespace SilverScreen.Shell;
 
 [Subclass<Application>]
@@ -22,6 +22,12 @@ public partial class App
         ApplicationId = ApplicationMetadata.ApplicationId;
         Flags = ApplicationFlags.FlagsNone;
         OnActivate += Activate;
+        OnShutdown += (_, _) =>
+        {
+            _styles?.Dispose();
+            _styles = null;
+            DisposeServices();
+        };
     }
 
     public void UseServices(IServiceProvider serviceProvider)
@@ -50,6 +56,12 @@ public partial class App
 
     private static void ApplyTheme(string theme)
     {
+        if (Display.GetDefault() is null)
+        {
+            Log.Debug("Skipping theme apply: no display available");
+            return;
+        }
+
         Functions.IdleAdd(0, () =>
         {
             var styleManager = StyleManager.GetDefault();
@@ -68,16 +80,20 @@ public partial class App
         if (_styles is not null)
             return;
 
-        if (Display.GetDefault() is { } display)
+        var display = Display.GetDefault();
+        if (display is null)
         {
-            IconTheme.GetForDisplay(display).AddResourcePath("/SilverScreen/Assets");
-            Window.SetDefaultIconName(ApplicationMetadata.IconName);
+            Log.Debug("Skipping style install: no display available");
+            return;
         }
+
+        IconTheme.GetForDisplay(display).AddResourcePath("/SilverScreen/Assets");
+        Window.SetDefaultIconName(ApplicationMetadata.IconName);
 
         _styles = CssProvider.New();
         _styles.LoadFromResource("/SilverScreen/Styles/main.css");
 
-        StyleContext.AddProviderForDisplay(Display.GetDefault()!, _styles, 600);
+        StyleContext.AddProviderForDisplay(display, _styles, 600);
     }
 
     private void DisposeServices()

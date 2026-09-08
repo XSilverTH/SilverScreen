@@ -15,35 +15,20 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///     and parsing adaptive/muxed format payloads.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Architectural Role &amp; Dormant Status:</b><br />
-///         In standard playback, SilverScreen delegates media stream extraction directly to mpv's internal
-///         <c>ytdl_hook.lua</c> script, which natively invokes yt-dlp to stream videos directly from YouTube URLs.
-///         Consequently, <see cref="ResolveMediaAsync" /> is not currently invoked during the primary playback path.
-///     </para>
-///     <para>
-///         This direct extraction infrastructure is deliberately preserved as:
-///         <list type="bullet">
-///             <item>
-///                 <description>
-///                     A robust fallback pipeline in the event that mpv's internal <c>ytdl_hook.lua</c> fails, experiences
-///                     compatibility issues with YouTube updates, or requires out-of-process stream resolution.
-///                 </description>
-///             </item>
-///             <item>
-///                 <description>
-///                     A foundation for features outside the mpv playback engine, such as offline media downloading,
-///                     headless extraction, stream URL inspection, or custom format muxing.
-///                 </description>
-///             </item>
-///             <item>
-///                 <description>
-///                     The provider for video metadata via <see cref="GetVideoDetailsAsync" />, consumed by UI components
-///                     such as the video info/stats panel.
-///                 </description>
-///             </item>
-///         </list>
-///     </para>
+///     Primary playback delegates extraction to mpv's internal <c>ytdl_hook.lua</c>; this resolver is the
+///     fallback/direct-extraction pipeline (out-of-process recovery, offline tooling, URL inspection).
+///     <see cref="GetVideoDetailsAsync" /> also feeds UI metadata (info/stats panel).
+///     Wave-2 wiring: inject <see cref="IYouTubeMediaResolver" /> into the mpv playback service and call
+///     <see cref="TryResolveAsFallbackAsync" /> when ytdl_hook fails (snippet below).
+///     <example>
+///     <code>
+///     var fallback = await mediaResolver.TryResolveAsFallbackAsync(videoId, cancellationToken);
+///     if (fallback.IsSuccess &amp;&amp; fallback.Media?.VideoUrl is { } directUrl)
+///         command = MpvCommandBuilder.BuildForDirectUrl(command, directUrl, fallback.Media.AudioUrl);
+///     else
+///         return fallback.StatusMessage;
+///     </code>
+///     </example>
 /// </remarks>
 public sealed class YtDlpMediaResolver(
     ICookieFileProvider cookieFileProvider,
@@ -167,6 +152,43 @@ public sealed class YtDlpMediaResolver(
         {
             fetchLock.Release();
         }
+    }
+
+    /// <summary>
+    ///     Fallback entry for mpv ytdl_hook failures: accepts a bare video id or watch/shorts/share URL,
+    ///     then delegates to <see cref="ResolveMediaAsync" /> (cache/timeout reuse). Never throws.
+    /// </summary>
+    public async Task<YouTubeMediaResolutionResult> TryResolveAsFallbackAsync(
+        string videoIdOrUrl,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var videoId = NormalizeToVideoId(videoIdOrUrl);
+            if (videoId is null)
+                return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+            return await ResolveMediaAsync(videoId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Fallback media resolution failed for {Input}", videoIdOrUrl);
+            return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+        }
+    }
+
+    private static string? NormalizeToVideoId(string? videoIdOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(videoIdOrUrl))
+            return null;
+        var text = videoIdOrUrl.Trim();
+        if (PlaybackRequest.LooksLikeYouTubeVideoId(text))
+            return text;
+        var parsed = YouTubeUrlParser.Parse(text);
+        return parsed.VideoId;
     }
 
     public async Task<YouTubeVideoDetailsResult> GetVideoDetailsAsync(

@@ -12,22 +12,33 @@ var applicationStateDirectory = Path.Combine(
     "state",
     "SilverScreen");
 var logDirectory = Path.Combine(applicationStateDirectory, "logs");
-Directory.CreateDirectory(logDirectory);
-
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Is(ResolveLogLevel())
-    .WriteTo.Console()
-    .WriteTo.File(
-        Path.Combine(logDirectory, "silverscreen-.log"),
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 14,
-        shared: true)
-    .CreateLogger();
-
-using var serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
+try
+{
+    Directory.CreateDirectory(logDirectory);
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Is(ResolveLogLevel())
+        .WriteTo.Console()
+        .WriteTo.File(
+            Path.Combine(logDirectory, "silverscreen-.log"),
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 14,
+            shared: true)
+        .CreateLogger();
+}
+catch (Exception setupException)
+{
+    // Headless/read-only homes must never fail startup: fall back to console-only logging.
+    Console.Error.WriteLine(
+        $"SilverScreen: file log setup failed ({setupException.Message}); continuing with console logging.");
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Is(ResolveLogLevel())
+        .WriteTo.Console()
+        .CreateLogger();
+}
 
 try
 {
+    using var serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
     Log.Information(
         "Starting SilverScreen {Version} on {RuntimeIdentifier} ({OSArchitecture}, {Framework})",
         ApplicationMetadata.Version,
@@ -47,7 +58,7 @@ try
 catch (Exception exception)
 {
     Log.Fatal(exception, "SilverScreen terminated unexpectedly");
-    throw;
+    return 1;
 }
 finally
 {
