@@ -40,7 +40,7 @@ public partial class VideoListView : ViewBase<Bin>
     private bool _refreshScrollPending;
     private uint _refreshScrollSource;
 
-    private VideoListView(
+    public VideoListView(
         IVideoListSource source,
         IThumbnailService thumbnails,
         VideoCardActions videoActions)
@@ -67,6 +67,7 @@ public partial class VideoListView : ViewBase<Bin>
         Render(_source.State);
     }
 
+    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
     public VideoListView(
         HomeFeedCoordinator coordinator,
         IThumbnailService thumbnails,
@@ -75,6 +76,7 @@ public partial class VideoListView : ViewBase<Bin>
     {
     }
 
+    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
     public VideoListView(
         SearchViewModel viewModel,
         IThumbnailService thumbnails,
@@ -83,6 +85,7 @@ public partial class VideoListView : ViewBase<Bin>
     {
     }
 
+    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
     public VideoListView(
         HistoryViewModel viewModel,
         IThumbnailService thumbnails,
@@ -91,6 +94,7 @@ public partial class VideoListView : ViewBase<Bin>
     {
     }
 
+    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
     public VideoListView(
         ChannelViewModel viewModel,
         IThumbnailService thumbnails,
@@ -99,6 +103,7 @@ public partial class VideoListView : ViewBase<Bin>
     {
     }
 
+    // Wave 2: mark Obsolete + delete (use the IVideoListSource overload).
     public VideoListView(
         SubscriptionsViewModel viewModel,
         IThumbnailService thumbnails,
