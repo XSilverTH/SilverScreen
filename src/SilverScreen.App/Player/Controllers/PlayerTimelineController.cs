@@ -18,8 +18,7 @@ public enum ResumePromptState
 /// <summary>
 ///     Pure timeline/playback-position state: scrubbing lifecycle, seek reconciliation,
 ///     chapter hit-testing, time formatting, SponsorBlock evaluation, and resume evaluation.
-///     Single owner of the logic formerly in <c>PlayerTimelineEngine</c>; composed by
-///     <see cref="PlayerTimelineController" /> and subclassed (obsolete) by the compat shim.
+///     Composed by <see cref="PlayerTimelineController" />.
 /// </summary>
 public class PlayerTimelineState(
     uint seekThrottleIntervalMs = PlayerTimelineState.DefaultSeekThrottleIntervalMilliseconds,
@@ -407,7 +406,7 @@ internal sealed class PlayerTimelineController : IDisposable
         Label durationLabel,
         Action<double, bool> seekAbsolute,
         Action registerActivity,
-        PlayerTimelineEngine? engine = null)
+        PlayerTimelineState? state = null)
     {
         _timeline = timeline;
         _timelineOverlay = timelineOverlay;
@@ -419,7 +418,7 @@ internal sealed class PlayerTimelineController : IDisposable
         _durationLabel = durationLabel;
         _seekAbsolute = seekAbsolute;
         _registerActivity = registerActivity;
-        State = engine ?? new PlayerTimelineState();
+        State = state ?? new PlayerTimelineState();
 
         _timelineMotionController = EventControllerMotion.New();
         _timelineMotionController.OnMotion += OnTimelineMotion;

@@ -27,9 +27,8 @@ public enum OsdActionKind
 public sealed record OsdDisplayModel(string IconName, string Text);
 
 /// <summary>
-///     Pure OSD aggregation state: coalesces rapid key repeats (seek accumulation) into
-///     display models. Single owner of the logic formerly in <c>PlayerOsdEngine</c>;
-///     composed by <see cref="PlayerOsdController" /> and subclassed (obsolete) by the compat shim.
+///     Pure OSD aggregation state: coalesces rapid key repeats (seek accumulation) into display models.
+///     Composed by <see cref="PlayerOsdController" />.
 /// </summary>
 public class PlayerOsdState(
     uint aggregationWindowMilliseconds = PlayerOsdState.DefaultAggregationWindowMilliseconds,
@@ -219,14 +218,14 @@ internal sealed class PlayerOsdController : IDisposable
         Revealer osdRevealer,
         Image osdIcon,
         Label osdLabel,
-        PlayerOsdEngine? engine = null,
+        PlayerOsdState? state = null,
         uint holdDurationMilliseconds = PlayerOsdState.DefaultHoldDurationMilliseconds)
     {
         _preferences = preferences;
         _osdRevealer = osdRevealer;
         _osdIcon = osdIcon;
         _osdLabel = osdLabel;
-        _state = engine ?? new PlayerOsdState();
+        _state = state ?? new PlayerOsdState();
         _holdDurationMilliseconds = holdDurationMilliseconds;
 
         _enabled = _preferences.GetPreferences().ShortcutOsdEnabled;
