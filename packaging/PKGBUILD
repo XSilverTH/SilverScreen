@@ -31,10 +31,8 @@ prepare() {
 
 build() {
   cd SilverScreen
-  export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
   dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
-    -c Release -r linux-x64 \
-    /p:DebugType=None \ /p:DebugSymbols=false \
+    /p:DebugType=None /p:DebugSymbols=false \
     -o "$srcdir/SilverScreen/publish"
 }
 
