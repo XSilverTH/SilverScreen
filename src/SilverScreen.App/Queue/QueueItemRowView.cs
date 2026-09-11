@@ -30,7 +30,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly SimpleAction _moveUpAction;
     private readonly SimpleAction _playNowAction;
     private readonly Action<Guid, int>? _playRequested;
-    private readonly SimpleAction _removeAction;
     private readonly Action<Guid> _removeRequested;
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
@@ -61,15 +60,9 @@ public partial class QueueItemRowView : ViewBase<Box>
         });
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
         _moveDownAction = CreateAction("move-down", () => MoveBy(1));
-        _removeAction = CreateAction("remove", () =>
-        {
-            if (Item is { } item)
-                _removeRequested(item.Id);
-        });
         _actions.AddAction(_playNowAction);
         _actions.AddAction(_moveUpAction);
         _actions.AddAction(_moveDownAction);
-        _actions.AddAction(_removeAction);
         menu.InsertActionGroup("queue", _actions);
 
         _dragPaintable = Lifetime.Own(WidgetPaintable.New(Widget));
@@ -126,47 +119,44 @@ public partial class QueueItemRowView : ViewBase<Box>
             _playRequested?.Invoke(item.Id, _index);
     }
 
-    public QueueItem? Item { get; private set; }
-
     private void OnRemoveButtonClicked(object? sender, EventArgs args)
     {
         if (Item is { } item)
             _removeRequested(item.Id);
     }
 
+    public QueueItem? Item { get; private set; }
+
+
     public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         Unbind();
         Item = item;
-        _index = index;
         position.SetText((index + 1).ToString());
         title.SetText(item.Video.Title);
         channel.SetText(item.Video.ChannelName);
-        var formattedDuration = FormatDuration(item.Video.Duration);
-        duration.SetText(formattedDuration);
-        duration_pill.SetText(formattedDuration);
+        duration_pill.SetText(FormatDuration(item.Video.Duration));
         SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
         _playNowAction.Enabled = _playRequested is not null && index != currentPlayingIndex;
         _moveUpAction.Enabled = index > 0;
         _moveDownAction.Enabled = index < itemCount - 1;
-        _removeAction.Enabled = true;
 
-        if (index == currentPlayingIndex)
+        var isPlaying = index == currentPlayingIndex;
+        position.SetVisible(!isPlaying);
+        playing_icon.SetVisible(isPlaying);
+        if (isPlaying)
         {
-            state_stack.VisibleChildName = "playing";
             Widget.AddCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
         else if (currentPlayingIndex >= 0 && index < currentPlayingIndex)
         {
-            state_stack.VisibleChildName = "index";
             Widget.RemoveCssClass("now-playing");
             Widget.AddCssClass("played");
         }
         else
         {
-            state_stack.VisibleChildName = "index";
             Widget.RemoveCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
@@ -184,9 +174,9 @@ public partial class QueueItemRowView : ViewBase<Box>
         position.SetText(string.Empty);
         title.SetText(string.Empty);
         channel.SetText(string.Empty);
-        duration.SetText(string.Empty);
         duration_pill.SetText(string.Empty);
-        state_stack.VisibleChildName = "index";
+        position.SetVisible(true);
+        playing_icon.SetVisible(false);
         Widget.RemoveCssClass("now-playing");
         Widget.RemoveCssClass("played");
         Widget.RemoveCssClass("queue-drop-before");
@@ -194,7 +184,6 @@ public partial class QueueItemRowView : ViewBase<Box>
         _playNowAction.Enabled = false;
         _moveUpAction.Enabled = false;
         _moveDownAction.Enabled = false;
-        _removeAction.Enabled = false;
         _thumbnailCancellation?.Cancel();
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;

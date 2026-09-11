@@ -101,6 +101,23 @@ listview child:active {
     padding: 1px 4px;
 }
 
+.queue-position-pill {
+    background-color: alpha(#000000, 0.82);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+}
+
+.queue-position-pill.queue-now-playing-icon {
+    color: #ffffff;
+    -gtk-icon-size: 12px;
+    padding: 2px 5px;
+}
+
+/* Row action buttons stay flat and square so the stacked pair fits inside the card. */
+
 .queue-indicator {
     min-height: 0;
     min-width: 0;

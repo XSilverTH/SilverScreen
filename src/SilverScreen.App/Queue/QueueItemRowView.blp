@@ -15,11 +15,6 @@ menu queue_item_actions {
     label: "Move down";
     action: "queue.move-down";
   }
-
-  item {
-    label: "Remove";
-    action: "queue.remove";
-  }
 }
 
 Gtk.Box QueueItemRowView {
@@ -45,44 +40,6 @@ Gtk.Box QueueItemRowView {
     valign: center;
   }
 
-  Gtk.Stack state_stack {
-    valign: center;
-    width-request: 20;
-    hhomogeneous: true;
-    vhomogeneous: true;
-
-    Gtk.StackPage {
-      name: "index";
-
-      child: Gtk.Label position {
-        label: "";
-
-        styles [
-          "caption",
-          "dim-label",
-        ]
-
-        halign: center;
-        valign: center;
-      };
-    }
-
-    Gtk.StackPage {
-      name: "playing";
-
-      child: Gtk.Image playing_icon {
-        icon-name: "audio-volume-high-symbolic";
-        tooltip-text: "Now playing";
-        halign: center;
-        valign: center;
-
-        styles [
-          "queue-now-playing-icon",
-        ]
-      };
-    }
-  }
-
   Overlay thumbnail {
     width-request: 96;
     height-request: 54;
@@ -98,6 +55,36 @@ Gtk.Box QueueItemRowView {
       halign: center;
       valign: center;
     };
+
+    [overlay]
+    Gtk.Label position {
+      label: "";
+      halign: start;
+      valign: start;
+      margin-start: 4;
+      margin-top: 4;
+
+      styles [
+        "caption",
+        "queue-position-pill",
+      ]
+    }
+
+    [overlay]
+    Gtk.Image playing_icon {
+      icon-name: "audio-volume-high-symbolic";
+      tooltip-text: "Now playing";
+      halign: start;
+      valign: start;
+      margin-start: 4;
+      margin-top: 4;
+      visible: false;
+
+      styles [
+        "queue-position-pill",
+        "queue-now-playing-icon",
+      ]
+    }
 
     [overlay]
     Gtk.ProgressBar watched_progress {
@@ -142,57 +129,51 @@ Gtk.Box QueueItemRowView {
       hexpand: true;
     }
 
-    Box metadata {
-      orientation: horizontal;
-      spacing: 6;
+    Label channel {
+      label: "";
+      xalign: 0;
+      ellipsize: end;
+      hexpand: true;
 
-      Label channel {
-        label: "";
-        xalign: 0;
-        ellipsize: end;
-        hexpand: true;
-
-        styles [
-          "caption",
-          "dim-label",
-        ]
-      }
-
-      Label duration {
-        label: "";
-        xalign: 1;
-
-        styles [
-          "caption",
-          "dim-label",
-        ]
-      }
+      styles [
+        "caption",
+        "dim-label",
+      ]
     }
   }
 
-  Button remove_button {
-    icon-name: "user-trash-symbolic";
-    tooltip-text: "Remove from queue";
-
-    styles [
-      "flat",
-      "circular",
-    ]
-
+  Box actions {
+    orientation: vertical;
+    spacing: 2;
     valign: center;
-    clicked => $OnRemoveButtonClicked();
-  }
 
-  MenuButton menu {
-    icon-name: "view-more-symbolic";
-    tooltip-text: "Queue item actions";
+    Button remove_button {
+      icon-name: "window-close-symbolic";
+      tooltip-text: "Remove from queue";
 
-    styles [
-      "flat",
-      "circular",
-    ]
+      styles [
+        "flat",
+        "destructive-action",
+        "square",
+      ]
 
-    valign: center;
-    menu-model: queue_item_actions;
+      valign: center;
+      halign: center;
+      clicked => $OnRemoveButtonClicked();
+    }
+
+    MenuButton menu {
+      icon-name: "view-more-symbolic";
+      tooltip-text: "Queue item actions";
+
+      styles [
+        "flat",
+        "square",
+      ]
+
+      valign: center;
+      halign: center;
+      menu-model: queue_item_actions;
+    }
   }
 }
