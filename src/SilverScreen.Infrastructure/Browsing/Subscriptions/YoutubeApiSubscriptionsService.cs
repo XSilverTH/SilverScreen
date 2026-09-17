@@ -182,10 +182,18 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
             if (videos.Length == 0 && isFirstPage)
             {
-                TryClearCachedFeed(generation);
+                lock (_lock)
+                {
+                    if (generation == _requestGeneration && IsSessionActive())
+                    {
+                        _loadedVideos.Clear();
+                        _continuationToken = nextToken;
+                    }
+                }
+
                 return new AuthenticatedSubscriptionsFeedResult(
                     AuthenticatedSubscriptionsStatus.Empty,
-                    FeedPage.Empty,
+                    new FeedPage(videos, nextToken),
                     EmptySubscriptionsMessage);
             }
             lock (_lock)

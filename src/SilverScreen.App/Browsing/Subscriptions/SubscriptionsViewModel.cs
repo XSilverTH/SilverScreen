@@ -543,7 +543,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 !IsSessionActive())
                 return new FeedPageResult(
                     res.FeedPage.Videos,
-                    res.Status == AuthenticatedSubscriptionsStatus.Success ? res.FeedPage.ContinuationToken : null,
+                    res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty
+                        ? res.FeedPage.ContinuationToken : null,
                     res.Status is AuthenticatedSubscriptionsStatus.Success
                         or AuthenticatedSubscriptionsStatus.Empty,
                     res.StatusMessage);
@@ -567,7 +568,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
         return new FeedPageResult(
             res.FeedPage.Videos,
-            res.Status == AuthenticatedSubscriptionsStatus.Success ? res.FeedPage.ContinuationToken : null,
+            res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty
+                ? res.FeedPage.ContinuationToken : null,
             feedSuccess,
             res.StatusMessage);
     }

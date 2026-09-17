@@ -52,7 +52,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
                     ? SessionGate.SessionNoLongerValidMessage
                     : res.StatusMessage;
                 var isSuccess = res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
-                var hasContinuation = res.Status == AuthenticatedHistoryStatus.Success &&
+                var hasContinuation = (res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty) &&
                                       !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
 
                 return new FeedPageResult(

@@ -122,10 +122,18 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
             if (videos.Length == 0 && isFirstPage)
             {
-                TryClearCachedResults(generation);
+                lock (_lock)
+                {
+                    if (generation == _requestGeneration && IsSessionActive())
+                    {
+                        _loadedVideos.Clear();
+                        _continuationToken = nextToken;
+                    }
+                }
+
                 return new AuthenticatedHistoryResult(
                     AuthenticatedHistoryStatus.Empty,
-                    FeedPage.Empty,
+                    new FeedPage(videos, nextToken),
                     EmptyHistoryMessage);
             }
 

@@ -270,6 +270,24 @@ public sealed class SubscriptionsViewModelTests
     }
 
     [Fact]
+    public async Task LoadAsync_WhenFirstPageOnlyContainsShorts_PreservesContinuation()
+    {
+        var shortVideo = CreateVideo("short", "Short", "C1", "u1") with { IsShort = true };
+        var longVideo = CreateVideo("long", "Long", "C1", "u1");
+        var subsService = new FakeSubscriptionsService(
+            [],
+            [shortVideo],
+            [longVideo],
+            firstPageStatus: AuthenticatedSubscriptionsStatus.Empty);
+        using var viewModel = new SubscriptionsViewModel(subsService, new FakeChannelService(), CreateSession());
+
+        await viewModel.LoadAsync(20);
+
+        Assert.Empty(viewModel.State.Videos);
+        Assert.True(viewModel.State.HasMore);
+    }
+
+    [Fact]
     public async Task LoadMoreAsync_WhenFeedPageFails_RetainsVideosAndPresentsPaginationError()
     {
         var firstPage = new List<VideoSummary> { CreateVideo("v1", "V1", "C1", "u1") };
@@ -436,7 +454,8 @@ public sealed class SubscriptionsViewModelTests
         IReadOnlyList<VideoSummary>? secondFeedPage = null,
         IReadOnlyList<VideoSummary>? thirdFeedPage = null,
         AuthenticatedSubscriptionsStatus secondPageStatus = AuthenticatedSubscriptionsStatus.Success,
-        string? secondPageMessage = null) : IAuthenticatedSubscriptionsService
+        string? secondPageMessage = null,
+        AuthenticatedSubscriptionsStatus firstPageStatus = AuthenticatedSubscriptionsStatus.Success) : IAuthenticatedSubscriptionsService
     {
         private int _feedPageCalls;
 
@@ -444,10 +463,9 @@ public sealed class SubscriptionsViewModelTests
             int count = VideoFeedConstants.DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
-            _feedPageCalls = 1;
             var continuation = secondFeedPage is { Count: > 0 } || secondPageStatus != AuthenticatedSubscriptionsStatus.Success ? "21" : null;
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
-                AuthenticatedSubscriptionsStatus.Success,
+                firstPageStatus,
                 new FeedPage(firstFeedPage, continuation),
                 "Success"));
         }

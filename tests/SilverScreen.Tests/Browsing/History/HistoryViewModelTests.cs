@@ -32,6 +32,30 @@ public sealed class HistoryViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
     [Fact]
+    public async Task LoadAsync_WhenFirstPageOnlyContainsShorts_PreservesContinuation()
+    {
+        var service = new FakeHistoryService
+        {
+            FirstPage = new AuthenticatedHistoryResult(
+                AuthenticatedHistoryStatus.Empty,
+                new FeedPage([CreateVideo("short", isShort: true)], "next"),
+                "No watch history was returned."),
+            NextPage = new AuthenticatedHistoryResult(
+                AuthenticatedHistoryStatus.Success,
+                new FeedPage([CreateVideo("long")]),
+                "Watch history loaded.")
+        };
+        using var viewModel = new HistoryViewModel(service, CreateSession());
+
+        await viewModel.LoadAsync();
+
+        Assert.Empty(viewModel.State.Videos);
+        Assert.True(viewModel.State.HasMore);
+        await viewModel.LoadMoreAsync();
+        Assert.Equal(["long"], viewModel.State.Videos.Select(video => video.Id));
+    }
+
+    [Fact]
     public async Task RefreshAndLoadMoreAsync_WithCustomCount_PropagatesCountToService()
     {
         var service = new FakeHistoryService
@@ -61,9 +85,9 @@ public sealed class HistoryViewModelTests
 
 
 
-    private static VideoSummary CreateVideo(string id)
+    private static VideoSummary CreateVideo(string id, bool isShort = false)
     {
-        return new VideoSummary(id, $"Video {id}", "Channel", TimeSpan.FromMinutes(3), "thumbnail", false);
+        return new VideoSummary(id, $"Video {id}", "Channel", TimeSpan.FromMinutes(3), "thumbnail", isShort);
     }
 
     private sealed class FakeHistoryService : IAuthenticatedHistoryService
