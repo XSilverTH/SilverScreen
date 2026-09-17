@@ -32,6 +32,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
         _handlerFactory = handlerFactory;
+        _preferences.PreferencesChanged += OnPreferencesChanged;
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
@@ -80,6 +81,19 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         foreach (var tracked in sessions) tracked.Retire();
     }
 
+    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
+    {
+        var enabled = preferences is { YouTubePlaybackTelemetryEnabled: true, MarkWatchedVideos: false };
+        TelemetrySession[] sessions;
+        lock (_sessionsLock)
+        {
+            if (_disposed || enabled) return;
+            sessions = [.. _sessions];
+        }
+
+        foreach (var session in sessions) session.DisableConsent();
+    }
+
     public void Dispose()
     {
         TelemetrySession[] sessions;
@@ -91,6 +105,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             _sessions.Clear();
         }
 
+        _preferences.PreferencesChanged -= OnPreferencesChanged;
         _sessionService.SessionChanged -= OnSessionChanged;
         foreach (var session in sessions) session.Dispose();
     }
@@ -185,7 +200,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             VideoTelemetrySession? video;
             lock (_lock)
             {
-                if (_disposed || state.PlaylistIndex < 0 || state.PlaylistIndex >= _request.Videos.Length) return;
+                if (!_owner.IsEnabled() || _disposed || state.PlaylistIndex < 0 ||
+                    state.PlaylistIndex >= _request.Videos.Length) return;
 
                 var videoId = _request.Videos[state.PlaylistIndex].Id;
                 if (!string.Equals(_currentVideoId, videoId, StringComparison.Ordinal))
@@ -213,6 +229,19 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
 
             previous?.Dispose();
+        }
+        public void DisableConsent()
+        {
+            VideoTelemetrySession[] videos;
+            lock (_lock)
+            {
+                if (_disposed) return;
+                videos = [.. _videos.Values];
+                _videos.Clear();
+                _currentVideoId = null;
+            }
+
+            foreach (var video in videos) video.InvalidateConsent();
         }
 
         public void Dispose()
@@ -250,6 +279,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     {
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
         private readonly string _cpn = CreateCpn();
+        private readonly Lock _consentLock = new();
+        private readonly CancellationTokenSource _consentCancellation = new();
         private HttpClient? _client;
         private bool _disposed;
         private Task<TrackingEndpoints?>? _endpointsTask;
@@ -307,11 +338,26 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             _client = null;
             DisposeClientAfterSendsAsync(_sendTail, client).FireAndForget(Logger);
         }
+        public void InvalidateConsent()
+        {
+            lock (_consentLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _playing = false;
+                _lastPosition = TimeSpan.Zero;
+                _segmentStart = TimeSpan.Zero;
+                _consentCancellation.Cancel();
+                _client?.Dispose();
+                _client = null;
+            }
+        }
 
         public void Retire()
         {
             if (_disposed) return;
             _disposed = true;
+            _consentCancellation.Cancel();
             _client?.Dispose();
             _client = null;
         }
@@ -325,20 +371,28 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         {
             _sendTail = SendAfterAsync(_sendTail, telemetryEvent);
         }
-
         private async Task SendAfterAsync(Task previous, TelemetryEvent telemetryEvent)
         {
+            var cancellationToken = _consentCancellation.Token;
             try
             {
                 await previous.ConfigureAwait(false);
-                if (_disposed || !owner.IsEnabled()) return;
-                var endpoints = await GetEndpointsAsync().ConfigureAwait(false);
-                if (_disposed || endpoints is null || _client is null) return;
+                if (!CanSend(cancellationToken)) return;
+                var endpoints = await GetEndpointsAsync(cancellationToken).ConfigureAwait(false);
+                if (!CanSend(cancellationToken) || endpoints is null) return;
+
                 var uri = telemetryEvent.BuildUri(endpoints, _cpn);
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 request.Headers.Referrer = new Uri($"https://www.youtube.com/watch?v={videoId}");
-                using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
-                    .ConfigureAwait(false);
+                Task<HttpResponseMessage> sendTask;
+                lock (_consentLock)
+                {
+                    if (!CanSend(cancellationToken) || _client is null) return;
+                    sendTask = _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                }
+
+                using var response = await sendTask.ConfigureAwait(false);
+                if (!CanSend(cancellationToken)) return;
                 if (!response.IsSuccessStatusCode)
                     Logger.Debug("YouTube playback telemetry returned {StatusCode}", response.StatusCode);
             }
@@ -348,27 +402,43 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
         }
 
-        private async Task<TrackingEndpoints?> GetEndpointsAsync()
+        private bool CanSend(CancellationToken cancellationToken)
         {
-            _endpointsTask ??= InitializeEndpointsAsync();
+            return !cancellationToken.IsCancellationRequested && !_disposed && owner.IsEnabled();
+        }
+
+        private async Task<TrackingEndpoints?> GetEndpointsAsync(CancellationToken cancellationToken)
+        {
+            _endpointsTask ??= InitializeEndpointsAsync(cancellationToken);
             return await _endpointsTask.ConfigureAwait(false);
         }
 
-        private async Task<TrackingEndpoints?> InitializeEndpointsAsync()
+        private async Task<TrackingEndpoints?> InitializeEndpointsAsync(CancellationToken cancellationToken)
         {
-            _client = owner.CreateAuthenticatedClient();
-            if (_client is null) return null;
+            var client = owner.CreateAuthenticatedClient();
+            if (client is null) return null;
+
+            lock (_consentLock)
+            {
+                if (!CanSend(cancellationToken))
+                {
+                    client.Dispose();
+                    return null;
+                }
+
+                _client = client;
+            }
 
             try
             {
                 var pageUri =
                     new Uri(
                         $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}&bpctr=9999999999&has_verified=1");
-                using var response = await _client.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead)
-                    .ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) return null;
-                var page = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                return TrackingEndpoints.TryParse(page);
+                using var response = await client.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken).ConfigureAwait(false);
+                if (!CanSend(cancellationToken) || !response.IsSuccessStatusCode) return null;
+                var page = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                return CanSend(cancellationToken) ? TrackingEndpoints.TryParse(page) : null;
             }
             catch (Exception exception)
             {

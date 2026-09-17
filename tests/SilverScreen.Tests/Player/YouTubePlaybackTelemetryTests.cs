@@ -89,6 +89,52 @@ public sealed class YouTubePlaybackTelemetryTests
     }
 
 
+    [Fact]
+    public async Task OptingOutWhileBeaconIsPendingCancelsTheBeacon()
+    {
+        var handler = new BlockingBeaconHandler();
+        var preferences = new MutablePreferencesService(true);
+        using var service = new YouTubePlaybackTelemetryService(preferences, new ManualSessionService(), _ => handler);
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        await handler.BeaconStarted.WaitAsync(TimeSpan.FromSeconds(2));
+
+        preferences.SetEnabled(false);
+        handler.ReleaseBeacon();
+        await Task.Delay(100);
+
+        Assert.Equal(0, handler.BeaconCount);
+    }
+
+    [Fact]
+    public async Task TogglingConsentOffAndOnStartsFreshWatchtimeSegments()
+    {
+        var handler = new TrackingHandler();
+        var preferences = new MutablePreferencesService(true);
+        using var service = new YouTubePlaybackTelemetryService(preferences, new ManualSessionService(), _ => handler);
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        telemetry.UpdateState(State(12, false));
+        await handler.WaitUntilCountAsync(2);
+
+        preferences.SetEnabled(false);
+        telemetry.UpdateState(State(60, false));
+        preferences.SetEnabled(true);
+        telemetry.UpdateState(State(20, false));
+        telemetry.UpdateState(State(32, true));
+        await handler.WaitUntilCountAsync(4);
+
+        var beacons = handler.Snapshot;
+        Assert.Equal(4, beacons.Count);
+        Assert.Equal(1, beacons.Count(uri => uri.AbsolutePath == "/api/stats/watchtime" &&
+            QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "12"));
+        Assert.Contains(beacons, uri => uri.AbsolutePath == "/api/stats/playback" && QueryValue(uri, "cmt") == "20");
+        Assert.Contains(beacons, uri => uri.AbsolutePath == "/api/stats/watchtime" &&
+            QueryValue(uri, "st") == "20" && QueryValue(uri, "et") == "32");
+    }
+
     private static PlaybackRequest CreateRequest()
     {
         return new PlaybackRequest([
@@ -125,6 +171,10 @@ public sealed class YouTubePlaybackTelemetryTests
         public AppPreferences GetPreferences()
         {
             return _preferences;
+        }
+        public void SetEnabled(bool enabled)
+        {
+            SavePreferences(_preferences with { YouTubePlaybackTelemetryEnabled = enabled });
         }
 
         public void SavePreferences(AppPreferences preferences)
@@ -194,6 +244,21 @@ public sealed class YouTubePlaybackTelemetryTests
                 lock (_lock) return [.. _referrers];
             }
         }
+        public IReadOnlyList<Uri> Snapshot
+        {
+            get
+            {
+                lock (_lock) return [.. _beacons];
+            }
+        }
+
+        public async Task WaitUntilCountAsync(int expectedCount)
+        {
+            var timeout = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (BeaconCount < expectedCount && DateTime.UtcNow < timeout)
+                await Task.Delay(10);
+            Assert.True(BeaconCount >= expectedCount, $"Expected at least {expectedCount} beacons.");
+        }
 
         public int BeaconCount
         {
@@ -232,6 +297,43 @@ public sealed class YouTubePlaybackTelemetryTests
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+    }
+    private sealed class BlockingBeaconHandler : HttpMessageHandler
+    {
+        private const string PlayerResponse = """
+                                              <script>var ytInitialPlayerResponse = {"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback"},"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime"}}};</script>
+                                              """;
+        private readonly TaskCompletionSource _beaconStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releaseBeacon = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _beaconCount;
+
+        public Task BeaconStarted => _beaconStarted.Task;
+        public int BeaconCount => Volatile.Read(ref _beaconCount);
+
+        public void ReleaseBeacon()
+        {
+            _releaseBeacon.TrySetResult();
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { Host: "www.youtube.com", AbsolutePath: "/watch" })
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(PlayerResponse)
+                });
+
+            _beaconStarted.TrySetResult();
+            return WaitForBeaconReleaseAsync(cancellationToken);
+        }
+
+        private async Task<HttpResponseMessage> WaitForBeaconReleaseAsync(CancellationToken cancellationToken)
+        {
+            await _releaseBeacon.Task.WaitAsync(cancellationToken);
+            Interlocked.Increment(ref _beaconCount);
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
     }
 }
