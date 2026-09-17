@@ -213,7 +213,14 @@ public sealed class PlaybackTests
 
         Assert.Equal(TimeSpan.FromSeconds(42.5), state.Position);
         Assert.Equal(TimeSpan.FromMinutes(3), state.Duration);
-        Assert.False(state.IsPaused);
+
+        // Verify pause remains authority: position change does not clear paused flag
+        state = state with { IsPaused = true };
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"request_id":100,"data":55.0}""", ref state, out var newPosProp));
+        Assert.Equal("time-pos", newPosProp);
+        Assert.Equal(TimeSpan.FromSeconds(55.0), state.Position);
+        Assert.True(state.IsPaused);
         Assert.Equal(1, state.PlaylistIndex);
     }
 

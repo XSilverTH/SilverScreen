@@ -75,9 +75,9 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
                 var state = PlaybackPresenceState.CreateInitial(DateTimeOffset.UtcNow);
                 var hasPause = false;
                 var hasTimeline = false;
+                var hasPlaylistPosition = false;
                 while (await reader.ReadLineAsync(_cancellation.Token).ConfigureAwait(false) is { } line)
                 {
-                    var previousPosition = state.Position;
                     if (!MpvIpcPlaybackProtocol.TryApply(line, ref state, out var property)) continue;
                     switch (property)
                     {
@@ -87,11 +87,12 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
                         case "time-pos" or "duration":
                             hasTimeline = true;
                             break;
+                        case "playlist-pos":
+                            hasPlaylistPosition = true;
+                            break;
                     }
 
-                    if (property == "time-pos" && state.Position > previousPosition)
-                        state = state with { IsPaused = false };
-                    if (hasPause && hasTimeline) _stateChanged(state);
+                    if (hasPause && hasTimeline && hasPlaylistPosition) _stateChanged(state);
                 }
             }
             finally
