@@ -187,7 +187,7 @@ public sealed class NavigationService : INavigationService, IDisposable
         if (!_viewStackNameToPage.TryGetValue(childName, out var page))
             return;
 
-        if (CurrentEntry.Page == page && CurrentEntry.Parameter is null)
+        if (CurrentEntry.Page == page)
             return;
 
         var previous = CurrentEntry;

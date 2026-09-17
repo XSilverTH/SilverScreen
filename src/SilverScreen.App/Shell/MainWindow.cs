@@ -57,6 +57,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private bool _closed;
     private WebLoginWindow? _webLogin;
+    private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
+    private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
+
 
     public MainWindow(
         BrowsingServices browsing,
@@ -156,6 +159,28 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => _navigationService.PageChanged += OnNavigationPageChanged,
             () => _navigationService.PageChanged -= OnNavigationPageChanged);
         _navigationService.Initialize();
+        _navigationService.RegisterPage(
+            NavigationPage.Home,
+            "home",
+            onEnter: ClearBrowsingHistory);
+        _navigationService.RegisterPage(
+            NavigationPage.Subscriptions,
+            "subscriptions",
+            onEnter: ClearBrowsingHistory);
+        _navigationService.RegisterPage(
+            NavigationPage.History,
+            "history",
+            onEnter: ClearBrowsingHistory);
+        _navigationService.RegisterPage(
+            NavigationPage.Search,
+            "search",
+            onEnter: RestoreSearchBrowsingState,
+            onLeave: CaptureSearchBrowsingState);
+        _navigationService.RegisterPage(
+            NavigationPage.Channel,
+            "channel",
+            onEnter: RestoreChannelBrowsingState,
+            onLeave: CaptureChannelBrowsingState);
         account_popover.Child = _accountPopover.Widget;
         Lifetime.Track(() => _playback.PlaybackStateChanged += OnPlaybackStateChanged,
             () => _playback.PlaybackStateChanged -= OnPlaybackStateChanged);
@@ -429,6 +454,71 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (!_closed && _navigationService.CurrentPage == NavigationPage.Channel)
             UpdateHomeRefreshButton(_channel.IsLoading);
     }
+    private sealed record SearchBrowsingState(SearchNavigationState ViewModel, double ScrollValue);
+
+    private sealed record ChannelBrowsingState(ChannelNavigationState ViewModel, double ScrollValue);
+
+    private void ClearBrowsingHistory()
+    {
+        _searchBrowsingStates.Clear();
+        _channelBrowsingStates.Clear();
+    }
+
+    private void CaptureSearchBrowsingState()
+    {
+        var entry = _navigationService.CurrentEntry;
+        _searchBrowsingStates[entry] = new SearchBrowsingState(
+            _searchViewModel.CaptureNavigationState(),
+            _searchView.Vadjustment?.Value ?? 0);
+    }
+
+    private void RestoreSearchBrowsingState()
+    {
+        var entry = _navigationService.CurrentEntry;
+        if (_searchBrowsingStates.TryGetValue(entry, out var browsingState))
+        {
+            _searchViewModel.RestoreNavigationState(browsingState.ViewModel);
+            RestoreScrollPosition(_searchView.Vadjustment, browsingState.ScrollValue);
+            return;
+        }
+
+        _searchViewModel.Reset();
+    }
+
+    private void CaptureChannelBrowsingState()
+    {
+        var entry = _navigationService.CurrentEntry;
+        _channelBrowsingStates[entry] = new ChannelBrowsingState(
+            _channelViewModel.CaptureNavigationState(),
+            _channel.Vadjustment?.Value ?? 0);
+    }
+
+    private void RestoreChannelBrowsingState()
+    {
+        var entry = _navigationService.CurrentEntry;
+        if (_channelBrowsingStates.TryGetValue(entry, out var browsingState))
+        {
+            _channelViewModel.RestoreNavigationState(browsingState.ViewModel);
+            RestoreScrollPosition(_channel.Vadjustment, browsingState.ScrollValue);
+            return;
+        }
+
+        _channelViewModel.Clear();
+    }
+
+    private static void RestoreScrollPosition(Adjustment? adjustment, double value)
+    {
+        Functions.IdleAdd(0, () =>
+        {
+            if (adjustment is null)
+                return false;
+
+            var maximum = Math.Max(adjustment.Lower, adjustment.Upper - adjustment.PageSize);
+            adjustment.SetValue(Math.Clamp(value, adjustment.Lower, maximum));
+            return false;
+        });
+    }
+
 
     private void OnHistoryRefreshLoadingChanged(object? sender, bool isLoading)
     {
@@ -460,20 +550,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         UpdateBackButton();
         UpdateNowPlayingBar();
 
-        if (e.IsBackNavigation)
-        {
-            if (e.CurrentPage == NavigationPage.Channel && e.CurrentParameter is ChannelNavigationArgs channelArgs)
-                _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? "Channel",
-                        _channel.GetBatchSize())
-                    .FireAndForget(Logger);
-            else if (e.CurrentPage == NavigationPage.Search && e.CurrentParameter is string query)
-                SubmitSearchAsync(query, _searchView.GetBatchSize()).FireAndForget(Logger);
-        }
-
-        if (e.PreviousPage == NavigationPage.Channel && e.CurrentPage != NavigationPage.Channel)
-            _channelViewModel.Clear();
-
-        if (e.PreviousPage == NavigationPage.Search && e.CurrentPage != NavigationPage.Search) _searchViewModel.Reset();
 
         var childChanged = e.CurrentPage != e.PreviousPage;
         switch (e.CurrentPage)

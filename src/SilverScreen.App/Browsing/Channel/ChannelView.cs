@@ -89,6 +89,8 @@ public partial class ChannelView : ViewBase<Box>
     }
 
     public bool IsLoading => _videoList.IsLoading;
+    public Adjustment? Vadjustment => _vadjustment;
+
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 

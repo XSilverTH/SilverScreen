@@ -26,6 +26,15 @@ public sealed record ChannelViewState(
 }
 
 public sealed record ChannelNavigationArgs(string Url, string? Name = null);
+public sealed record ChannelNavigationState(
+    string? Url,
+    string Name,
+    string? Description,
+    string? AvatarUrl,
+    long? SubscriberCount,
+    ChannelVideoSort Sort,
+    FeedEngineSnapshot Feed);
+
 
 public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 {
@@ -147,6 +156,40 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.Reset();
         State = ChannelViewState.Empty;
     }
+    public ChannelNavigationState CaptureNavigationState()
+    {
+        ThrowIfDisposed();
+        lock (_lock)
+        {
+            return new ChannelNavigationState(
+                _url,
+                _name,
+                _description,
+                _avatarUrl,
+                _subscriberCount,
+                _sort,
+                _engine.CaptureSnapshot());
+        }
+    }
+
+    public void RestoreNavigationState(ChannelNavigationState navigationState)
+    {
+        ArgumentNullException.ThrowIfNull(navigationState);
+        ThrowIfDisposed();
+        lock (_lock)
+        {
+            _url = navigationState.Url;
+            _name = navigationState.Name;
+            _description = navigationState.Description;
+            _avatarUrl = navigationState.AvatarUrl;
+            _subscriberCount = navigationState.SubscriberCount;
+            _sort = navigationState.Sort;
+        }
+
+        _engine.SetLoadingMessage($"Loading {navigationState.Name}…");
+        _engine.RestoreSnapshot(navigationState.Feed);
+    }
+
 
     private async Task LoadAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
         int count = VideoFeedConstants.DefaultPageSize)

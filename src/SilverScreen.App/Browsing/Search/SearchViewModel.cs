@@ -16,6 +16,8 @@ public sealed record SearchViewState(
     bool IsLoadingMore = false,
     bool HasMore = false,
     bool IsSuccess = true);
+public sealed record SearchNavigationState(string? Query, FeedEngineSnapshot Feed);
+
 
 public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
 {
@@ -169,6 +171,20 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
             "Search results will appear here.");
     }
+    public SearchNavigationState CaptureNavigationState()
+    {
+        ThrowIfDisposed();
+        return new SearchNavigationState(CurrentQuery, _engine.CaptureSnapshot());
+    }
+
+    public void RestoreNavigationState(SearchNavigationState navigationState)
+    {
+        ArgumentNullException.ThrowIfNull(navigationState);
+        ThrowIfDisposed();
+        CurrentQuery = navigationState.Query;
+        _engine.RestoreSnapshot(navigationState.Feed);
+    }
+
 
     public async Task<IReadOnlyList<string>> FetchSuggestionsAsync(string text,
         CancellationToken cancellationToken = default)

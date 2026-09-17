@@ -166,6 +166,21 @@ public sealed class NavigationHistoryTests
         Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
         Assert.False(nav.CanGoBack);
     }
+    [Fact]
+    public void SyncFromViewStack_WhenTypedEntryAlreadyVisible_PreservesEntryAndHistory()
+    {
+        using var nav = new NavigationService();
+        nav.Initialize(NavigationPage.Home);
+        nav.NavigateTo(NavigationPage.Search, "query");
+
+        nav.SyncFromViewStack("search");
+
+        Assert.Equal(NavigationPage.Search, nav.CurrentPage);
+        Assert.Equal("query", nav.CurrentParameter);
+        Assert.Equal(NavigationPage.Home, nav.PreviousPage);
+        Assert.True(nav.CanGoBack);
+    }
+
 
     [Fact]
     public void NavigatingFromPlayerToChannel_DoesNotAddPlayerToBackStack()

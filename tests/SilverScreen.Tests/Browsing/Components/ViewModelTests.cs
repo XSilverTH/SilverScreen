@@ -76,6 +76,34 @@ public sealed class ViewModelTests
         viewModel.Reset();
         Assert.Null(viewModel.CurrentQuery);
     }
+    [Fact]
+    public async Task NavigationState_RestoresLoadedSearchPagesWithoutFetchingAgain()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+        var firstVideo = new VideoSummary("first123456", "First", "Channel", TimeSpan.FromMinutes(1), "", false);
+        var secondVideo = new VideoSummary("second12345", "Second", "Channel", TimeSpan.FromMinutes(1), "", false);
+
+        var firstSearch = viewModel.SubmitAsync("first query");
+        service.Requests[0].Completion.SetResult(new SearchResultPage([firstVideo], ContinuationToken: "next"));
+        await firstSearch;
+        var loadMore = viewModel.LoadMoreAsync();
+        service.Requests[1].Completion.SetResult(new SearchResultPage([secondVideo]));
+        await loadMore;
+
+        var saved = viewModel.CaptureNavigationState();
+        var secondSearch = viewModel.SubmitAsync("second query");
+        service.Requests[2].Completion.SetResult(new SearchResultPage([]));
+        await secondSearch;
+
+        viewModel.RestoreNavigationState(saved);
+
+        Assert.Equal("first query", viewModel.CurrentQuery);
+        Assert.Equal([firstVideo, secondVideo], viewModel.State.Videos);
+        Assert.False(viewModel.HasMore);
+        Assert.Equal(3, service.Requests.Count);
+    }
+
 
     [Fact]
     public async Task ResetCancelsPendingSearchAndClearsResults()

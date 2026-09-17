@@ -38,6 +38,17 @@ public sealed record FeedEngineState(
     bool IsSuccess,
     Exception? LastError,
     string? PaginationError = null);
+public sealed record FeedEngineSnapshot(
+    IReadOnlyList<VideoSummary> Videos,
+    string? ContinuationToken,
+    bool HasMore,
+    string? StatusMessage,
+    bool IsSuccess,
+    Exception? LastError,
+    string? PaginationError,
+    VideoListStatus? ExplicitStatus = null);
+
+
 
 public class PagedFeedEngine : IVideoListSource
 {
@@ -336,6 +347,46 @@ public class PagedFeedEngine : IVideoListSource
             _lastError = null;
             _paginationError = null;
             _explicitStatus = status;
+            UpdateStateUnsafe();
+        }
+
+        PublishState();
+    }
+
+    public FeedEngineSnapshot CaptureSnapshot()
+    {
+        lock (_lock)
+        {
+            return new FeedEngineSnapshot(
+                [.. _videos],
+                _continuationToken,
+                _hasMore,
+                _statusMessage,
+                _isSuccess,
+                _lastError,
+                _paginationError,
+                _explicitStatus);
+        }
+    }
+
+    public void RestoreSnapshot(FeedEngineSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (_lock)
+        {
+            CancelPendingRequestsUnsafe();
+            _videos.Clear();
+            _videos.AddRange(snapshot.Videos.Where(v => !v.IsShort).DistinctBy(v => v.Id));
+            _continuationToken = snapshot.ContinuationToken;
+            _hasMore = snapshot.HasMore;
+            _isLoading = false;
+            _isLoadingMore = false;
+            _statusMessage = snapshot.StatusMessage;
+            _lastResult = null;
+            _lastError = snapshot.LastError;
+            _paginationError = snapshot.PaginationError;
+            _isSuccess = snapshot.IsSuccess;
+            _explicitStatus = snapshot.ExplicitStatus;
             UpdateStateUnsafe();
         }
 

@@ -109,6 +109,29 @@ public sealed class ChannelViewModelTests
         Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, "next", 40),
             service.LastRequest);
     }
+    [Fact]
+    public async Task NavigationState_RestoresLoadedPagesAndSortWithoutFetchingAgain()
+    {
+        var service = new FakeChannelService();
+        using var viewModel = new ChannelViewModel(service);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        await viewModel.LoadMoreAsync();
+        await viewModel.SetSortSelection(2);
+        await viewModel.LoadMoreAsync();
+        var saved = viewModel.CaptureNavigationState();
+        var requestsBeforeRestore = service.RequestCount;
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@other", "Other");
+        viewModel.RestoreNavigationState(saved);
+
+        Assert.Equal(requestsBeforeRestore + 1, service.RequestCount);
+        Assert.Equal("https://www.youtube.com/@example", viewModel.State.Url);
+        Assert.Equal(ChannelVideoSort.Popular, viewModel.State.Sort);
+        Assert.Equal(["dQw4w9WgXcQ", "abc123def45"], viewModel.State.Videos.Select(video => video.Id));
+        Assert.False(viewModel.State.HasMore);
+    }
+
 
     [Fact]
     public async Task LoadMoreAsync_DoesNotOverwriteExistingMetadataWithNullOrEmpty()
@@ -187,10 +210,13 @@ public sealed class ChannelViewModelTests
             get;
             private set;
         }
+        public int RequestCount { get; private set; }
+
 
         public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
             string? continuationToken, int count, CancellationToken cancellationToken)
         {
+            RequestCount++;
             LastRequest = (channelUrl, fallbackName, sort, continuationToken, count);
             var video = continuationToken is null
                 ? new VideoSummary("dQw4w9WgXcQ", "Video", "Example Channel", TimeSpan.FromSeconds(42),
