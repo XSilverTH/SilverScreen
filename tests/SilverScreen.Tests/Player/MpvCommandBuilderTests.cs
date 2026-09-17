@@ -287,6 +287,37 @@ public sealed class MpvCommandBuilderTests
     }
 
     [Fact]
+    public void Build_WithCustomPlaybackUrls_PreservesRequestQueueAndAppliesTransportUrls()
+    {
+        var v1 = CreateVideo("vid1_123456");
+        var v2 = CreateVideo("vid2_123456");
+        var request = new PlaybackRequest([v1, v2], 1);
+        var transportUrls = new[] { "https://example.com/stream1", "https://example.com/stream2" };
+
+        var command = MpvCommandBuilder.Build(request, new PlaybackOptions(), playbackUrls: transportUrls);
+
+        Assert.Contains("--playlist-start=1", command.Arguments);
+        Assert.Equal("https://example.com/stream1", command.Arguments[^2]);
+        Assert.Equal("https://example.com/stream2", command.Arguments[^1]);
+        // Original video identities/watch URLs untouched
+        Assert.Equal(2, request.Videos.Length);
+        Assert.Equal("vid1_123456", request.Videos[0].Id);
+        Assert.Equal("vid2_123456", request.Videos[1].Id);
+    }
+
+    [Fact]
+    public void Build_ThrowsWhenCustomPlaybackUrlCountDiffersFromQueueCount()
+    {
+        var v1 = CreateVideo("vid1_123456");
+        var v2 = CreateVideo("vid2_123456");
+        var request = new PlaybackRequest([v1, v2], 0);
+        var transportUrls = new[] { "https://example.com/stream1" };
+
+        Assert.Throws<ArgumentException>(() =>
+            MpvCommandBuilder.Build(request, new PlaybackOptions(), playbackUrls: transportUrls));
+    }
+
+    [Fact]
     public void GetPlaybackUrls_ThrowsWhenUrlIsNotHttpOrHttps()
     {
         var request = new PlaybackRequest([CreateVideo("abc12345678", watchUrl: "file:///local/video.mp4")]);

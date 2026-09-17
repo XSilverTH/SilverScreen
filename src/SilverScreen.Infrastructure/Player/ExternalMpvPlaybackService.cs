@@ -77,7 +77,8 @@ public sealed class ExternalMpvPlaybackService(
     private async Task<string> LaunchMpvAsync(
         PlaybackRequest request,
         bool isFallbackRetry,
-        IReadOnlyList<string>? extraArguments = null)
+        IReadOnlyList<string>? extraArguments = null,
+        IReadOnlyList<string>? playbackUrls = null)
     {
         CookieFileLease? cookieFile = null;
         DirectoryInfo? ipcDirectory = null;
@@ -92,7 +93,7 @@ public sealed class ExternalMpvPlaybackService(
             var ipcEndpoint = Path.Combine(ipcDirectory.FullName, "mpv.sock");
 
             var command =
-                MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint);
+                MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, playbackUrls);
             if (extraArguments is { Count: > 0 })
                 command = command with { Arguments = [..command.Arguments, ..extraArguments] };
             Logger.Information(
@@ -102,10 +103,17 @@ public sealed class ExternalMpvPlaybackService(
                 CommandUsesCookiesOption(command),
                 request.Videos.Length,
                 request.EffectiveStartIndex);
-
             var startInfo = MpvCommandBuilder.BuildStartInfo(command);
             var launchTimestamp = DateTimeOffset.UtcNow;
-            var started = await Task.Run(() => Process.Start(startInfo)).ConfigureAwait(false);
+            var started = await Task.Run(() =>
+            {
+                lock (_activeObserversLock)
+                {
+                    if (_disposed)
+                        return null;
+                    return Process.Start(startInfo);
+                }
+            }).ConfigureAwait(false);
             if (started is null)
             {
                 Logger.Warning("MPV process start returned no process");
@@ -301,11 +309,22 @@ public sealed class ExternalMpvPlaybackService(
         }
 
         Logger.Information("MPV fallback resolved direct media for {VideoId}; relaunching once", video.Id);
-        var retryRequest = new PlaybackRequest([video with { WatchUrl = media.VideoUrl }]);
+        var retryPlaybackUrls = MpvCommandBuilder.GetPlaybackUrls(request).ToArray();
+        retryPlaybackUrls[request.EffectiveStartIndex] = media.VideoUrl;
         IReadOnlyList<string>? extraArguments = string.IsNullOrWhiteSpace(media.AudioUrl)
             ? null
             : [$"--audio-file={media.AudioUrl}"];
-        var status = await LaunchMpvAsync(retryRequest, isFallbackRetry: true, extraArguments: extraArguments)
+        if (Volatile.Read(ref _disposed))
+        {
+            Logger.Information("Skipping MPV fallback relaunch because the playback service is disposed");
+            return;
+        }
+
+        var status = await LaunchMpvAsync(
+                request,
+                isFallbackRetry: true,
+                extraArguments: extraArguments,
+                playbackUrls: retryPlaybackUrls)
             .ConfigureAwait(false);
         Logger.Information("MPV fallback relaunch finished: {Status}", status);
     }

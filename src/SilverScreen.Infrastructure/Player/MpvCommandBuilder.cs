@@ -15,7 +15,8 @@ public sealed class MpvCommandBuilder
     ///     playlist itself. Resolved direct URLs are never used here. Pure: no I/O.
     /// </summary>
     public static MpvPlaybackCommand Build(PlaybackRequest request, PlaybackOptions options,
-        string? cookieFilePath = null, string? inputIpcServerPath = null)
+        string? cookieFilePath = null, string? inputIpcServerPath = null,
+        IReadOnlyList<string>? playbackUrls = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(options);
@@ -28,7 +29,9 @@ public sealed class MpvCommandBuilder
 
         // Throws PlaybackRequest.EmptyQueueMessage when the snapshot is empty; the service
         // returns that text as the status string instead of throwing out of PlayAsync.
-        var playbackUrls = GetPlaybackUrls(request);
+        playbackUrls ??= GetPlaybackUrls(request);
+        if (playbackUrls.Count != request.Videos.Length)
+            throw new ArgumentException("Playback URL count must match the request queue.", nameof(playbackUrls));
 
         var arguments = new List<string>();
         if (options.Fullscreen)
