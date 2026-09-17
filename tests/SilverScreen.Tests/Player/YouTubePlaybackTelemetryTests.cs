@@ -47,6 +47,24 @@ public sealed class YouTubePlaybackTelemetryTests
     }
 
     [Fact]
+    public async Task SignOutRetiresInProgressTelemetryAndRefusesFutureBeacons()
+    {
+        var handler = new TrackingHandler();
+        var session = new ManualSessionService();
+        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true), session, _ => handler);
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        await handler.WaitForBeaconsAsync(1);
+
+        session.ClearSession();
+        telemetry.UpdateState(State(12, true));
+
+        await Task.Delay(100);
+        Assert.Equal(1, handler.BeaconCount);
+    }
+
+    [Fact]
     public async Task QueueReorderKeepsWatchtimeBeaconOnTheCurrentVideo()
     {
         var handler = new TrackingHandler();
@@ -174,6 +192,14 @@ public sealed class YouTubePlaybackTelemetryTests
             get
             {
                 lock (_lock) return [.. _referrers];
+            }
+        }
+
+        public int BeaconCount
+        {
+            get
+            {
+                lock (_lock) return _beacons.Count;
             }
         }
 

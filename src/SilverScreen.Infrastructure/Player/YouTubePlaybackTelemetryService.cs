@@ -11,19 +11,29 @@ using SilverScreen.Core.Preferences;
 namespace SilverScreen.Infrastructure.Player;
 
 /// <summary>Sends YouTube's normal playback and incremental watchtime beacons while media is playing.</summary>
-public sealed class YouTubePlaybackTelemetryService(
-    IPreferencesService preferences,
-    ISessionService sessionService,
-    Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
-    : IYouTubePlaybackTelemetryService
+public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryService
 {
     // Bounded live-session set: Start-without-Dispose callers must not grow memory without limit,
     // so the oldest-tracked session is evicted (disposed) past the cap.
     private const int MaxActiveSessions = 200;
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
+    private readonly IPreferencesService _preferences;
+    private readonly ISessionService _sessionService;
+    private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
     private bool _disposed;
+
+    public YouTubePlaybackTelemetryService(
+        IPreferencesService preferences,
+        ISessionService sessionService,
+        Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
+    {
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _handlerFactory = handlerFactory;
+        _sessionService.SessionChanged += OnSessionChanged;
+    }
 
     public IYouTubePlaybackTelemetrySession Start(PlaybackRequest request)
     {
@@ -57,6 +67,19 @@ public sealed class YouTubePlaybackTelemetryService(
         return session;
     }
 
+    private void OnSessionChanged(object? sender, EventArgs e)
+    {
+        TelemetrySession[] sessions;
+        lock (_sessionsLock)
+        {
+            if (_disposed) return;
+            sessions = [.. _sessions];
+            _sessions.Clear();
+        }
+
+        foreach (var tracked in sessions) tracked.Retire();
+    }
+
     public void Dispose()
     {
         TelemetrySession[] sessions;
@@ -68,13 +91,14 @@ public sealed class YouTubePlaybackTelemetryService(
             _sessions.Clear();
         }
 
+        _sessionService.SessionChanged -= OnSessionChanged;
         foreach (var session in sessions) session.Dispose();
     }
 
     private bool IsEnabled()
     {
-        var preferences1 = preferences.GetPreferences();
-        return preferences1 is { YouTubePlaybackTelemetryEnabled: true, MarkWatchedVideos: false };
+        var currentPreferences = _preferences.GetPreferences();
+        return currentPreferences is { YouTubePlaybackTelemetryEnabled: true, MarkWatchedVideos: false };
     }
 
     private void Remove(TelemetrySession session)
@@ -87,12 +111,12 @@ public sealed class YouTubePlaybackTelemetryService(
 
     private HttpClient? CreateAuthenticatedClient()
     {
-        var cookies = sessionService.CreateCookieContainer();
+        var cookies = _sessionService.CreateCookieContainer();
         if (cookies is null) return null;
 
         try
         {
-            var handler = handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
+            var handler = _handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
             {
                 CookieContainer = cookies,
                 AllowAutoRedirect = true,
@@ -205,6 +229,21 @@ public sealed class YouTubePlaybackTelemetryService(
             foreach (var video in videos) video.Dispose();
             _owner.Remove(this);
         }
+
+        public void Retire()
+        {
+            VideoTelemetrySession[] videos;
+            lock (_lock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                videos = [.. _videos.Values];
+                _videos.Clear();
+            }
+
+            foreach (var video in videos) video.Retire();
+            _owner.Remove(this);
+        }
     }
 
     private sealed class VideoTelemetrySession(YouTubePlaybackTelemetryService owner, string videoId)
@@ -268,6 +307,14 @@ public sealed class YouTubePlaybackTelemetryService(
             _client = null;
             DisposeClientAfterSendsAsync(_sendTail, client).FireAndForget(Logger);
         }
+
+        public void Retire()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _client?.Dispose();
+            _client = null;
+        }
         private void FlushSegment(TimeSpan end)
         {
             if (!_playing || end <= _segmentStart) return;
@@ -284,9 +331,9 @@ public sealed class YouTubePlaybackTelemetryService(
             try
             {
                 await previous.ConfigureAwait(false);
-                if (!owner.IsEnabled()) return;
+                if (_disposed || !owner.IsEnabled()) return;
                 var endpoints = await GetEndpointsAsync().ConfigureAwait(false);
-                if (endpoints is null || _client is null) return;
+                if (_disposed || endpoints is null || _client is null) return;
                 var uri = telemetryEvent.BuildUri(endpoints, _cpn);
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 request.Headers.Referrer = new Uri($"https://www.youtube.com/watch?v={videoId}");
