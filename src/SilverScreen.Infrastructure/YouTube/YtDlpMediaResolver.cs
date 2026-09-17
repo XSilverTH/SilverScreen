@@ -118,9 +118,9 @@ public sealed class YtDlpMediaResolver(
                 return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
                                                             "Failed to extract video formats.");
             var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!details.IsSuccess || details.Details is null)
-                return YouTubeMediaResolutionResult.Failure(details.ErrorMessage ??
-                                                            "Failed to load video details.");
+            if (!details.IsSuccess)
+                Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
+                    videoId, details.ErrorMessage);
 
             var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details.Details, videoId);
             if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
@@ -190,7 +190,7 @@ public sealed class YtDlpMediaResolver(
             return new YouTubeVideoDetailsResult(null, false, "Video details are unavailable for this video.");
 
         var cached = TryGetValidEntry(videoId, forceRefresh);
-        if (cached is not null)
+        if (cached?.Details is not null)
             return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
         var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
@@ -198,7 +198,7 @@ public sealed class YtDlpMediaResolver(
         try
         {
             cached = TryGetValidEntry(videoId, forceRefresh);
-            if (cached is not null)
+            if (cached?.Details is not null)
                 return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
             var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
@@ -354,7 +354,7 @@ public sealed class YtDlpMediaResolver(
 
     private sealed record CachedVideoEntry(
         string RawJsonOutput,
-        YouTubeVideoDetails Details,
+        YouTubeVideoDetails? Details,
         DateTimeOffset CachedAt,
         DateTimeOffset? MediaExpiresAt,
         ConcurrentDictionary<string, ResolvedMedia> FormatsByQuality);

@@ -148,6 +148,23 @@ public sealed class YtDlpMediaResolverTests
         Assert.False(result.IsSuccess);
         Assert.Contains("the process returned no output", result.StatusMessage);
     }
+    [Fact]
+    public async Task ResolveMediaAsync_WhenMetadataLookupFails_ReturnsResolvedMedia()
+    {
+        var runner = new FakeYtDlpRunner
+        {
+            Result = new ProcessResult(0, """{"url":"https://cdn.example/video.mp4"}""", "")
+        };
+        using var resolver = CreateResolver(runner);
+
+        var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Media);
+        Assert.Equal("https://cdn.example/video.mp4", result.Media.VideoUrl);
+        Assert.Null(result.Details);
+    }
+
 
     [Fact]
     public async Task ResolveMediaAsync_Timeout_ReturnsTimedOutGuidance()
