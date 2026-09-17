@@ -252,7 +252,15 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     private async Task SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        var identityChanged = !string.Equals(CurrentQuery, query, StringComparison.Ordinal);
         CurrentQuery = query;
+        if (identityChanged)
+        {
+            _engine.Reset(
+                new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
+                null);
+        }
+
         _engine.SetLoadingMessage($"Searching YouTube for “{query}”…");
         await _engine.RefreshAsync(count).ConfigureAwait(false);
     }

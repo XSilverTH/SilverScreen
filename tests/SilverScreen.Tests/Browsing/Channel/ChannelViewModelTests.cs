@@ -48,6 +48,39 @@ public sealed class ChannelViewModelTests
     }
 
     [Fact]
+    public async Task ChannelSortChange_FailedFetchDoesNotRetainPreviousResultsOrContinuation()
+    {
+        var service = new IdentityChangingChannelService();
+        using var viewModel = new ChannelViewModel(service);
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+
+        Assert.Single(viewModel.State.Videos);
+        Assert.True(viewModel.State.HasMore);
+
+        await viewModel.SetSortSelection(2);
+
+        Assert.Empty(viewModel.State.Videos);
+        Assert.False(viewModel.State.HasMore);
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Equal("Could not load channel.", viewModel.State.Summary);
+    }
+
+
+    [Fact]
+    public async Task ChannelChange_FailedFetchDoesNotRetainPreviousResultsOrContinuation()
+    {
+        var service = new IdentityChangingChannelService();
+        using var viewModel = new ChannelViewModel(service);
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@other", "Other");
+
+        Assert.Empty(viewModel.State.Videos);
+        Assert.False(viewModel.State.HasMore);
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Equal("Could not load channel.", viewModel.State.Summary);
+    }
+    [Fact]
     public async Task LoadMoreAsync_AppendsTheNextChannelPage()
     {
         var service = new FakeChannelService();
@@ -88,13 +121,30 @@ public sealed class ChannelViewModelTests
         Assert.Equal("Original Description", viewModel.State.Description);
         Assert.Equal("https://example.com/avatar.jpg", viewModel.State.AvatarUrl);
         Assert.Equal(42000L, viewModel.State.SubscriberCount);
-
         await viewModel.LoadMoreAsync();
 
         Assert.Equal("Original Channel", viewModel.State.Name);
         Assert.Equal("Original Description", viewModel.State.Description);
         Assert.Equal("https://example.com/avatar.jpg", viewModel.State.AvatarUrl);
         Assert.Equal(42000L, viewModel.State.SubscriberCount);
+    }
+
+    private sealed class IdentityChangingChannelService : IChannelService
+    {
+        public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
+            string? continuationToken, int count, CancellationToken cancellationToken)
+        {
+            if (sort == ChannelVideoSort.Popular || channelUrl.Contains("@other", StringComparison.Ordinal))
+            {
+                var message = sort == ChannelVideoSort.Popular ? "Popular failed" : "Other failed";
+                return Task.FromResult(ChannelPage.Failed(channelUrl, fallbackName, sort, message));
+            }
+
+            var video = new VideoSummary("old-channel-video", "Old", fallbackName, TimeSpan.FromMinutes(1), "", false,
+                ChannelUrl: channelUrl);
+            return Task.FromResult(new ChannelPage(channelUrl, fallbackName, null, null, null, [video], sort,
+                "Loaded", true, "old-next"));
+        }
     }
 
     private sealed class FakeMetadataPaginatingChannelService : IChannelService

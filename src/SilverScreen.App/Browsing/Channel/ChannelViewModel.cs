@@ -152,12 +152,18 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
+        bool identityChanged;
         lock (_lock)
         {
+            identityChanged = !string.Equals(_url, channelUrl, StringComparison.Ordinal)
+                              || _sort != sort;
             _url = channelUrl;
             _name = fallbackName;
             _sort = sort;
         }
+
+        if (identityChanged)
+            _engine.Reset();
 
         _engine.SetLoadingMessage($"Loading {fallbackName}…");
         await _engine.RefreshAsync(count).ConfigureAwait(false);

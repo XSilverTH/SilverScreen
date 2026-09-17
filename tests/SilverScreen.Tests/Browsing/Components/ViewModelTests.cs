@@ -33,6 +33,32 @@ public sealed class ViewModelTests
     }
 
     [Fact]
+    public async Task SearchQueryChange_FailedFetchDoesNotRetainPreviousResultsOrContinuation()
+    {
+        var service = new ControlledSearchService();
+        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
+        var oldVideo = new VideoSummary("old12345678", "Old", "Channel", TimeSpan.FromMinutes(1), "", false);
+
+        var first = viewModel.SubmitAsync("old query");
+        service.Requests[0].Completion.SetResult(new SearchResultPage([oldVideo], ContinuationToken: "old-next"));
+        await first;
+
+        var second = viewModel.SubmitAsync("new query");
+        Assert.Empty(viewModel.State.Videos);
+        Assert.False(viewModel.HasMore);
+        service.Requests[1].Completion.SetResult(new SearchResultPage([], StatusMessage: "New query failed",
+            IsSuccess: false));
+        await second;
+
+        Assert.Empty(viewModel.State.Videos);
+        Assert.False(viewModel.HasMore);
+        Assert.False(viewModel.State.IsSuccess);
+        Assert.Contains("New query failed", viewModel.State.Summary);
+        await viewModel.LoadMoreAsync();
+        Assert.Equal(2, service.Requests.Count);
+    }
+
+    [Fact]
     public async Task SearchTracksCurrentQuery_AndClearsOnReset()
     {
         var service = new ControlledSearchService();
