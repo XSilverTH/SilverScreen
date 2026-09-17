@@ -46,6 +46,30 @@ public sealed class YouTubePlaybackTelemetryTests
         Assert.All(beacons, beacon => Assert.Equal("2", QueryValue(beacon, "ver")));
     }
 
+    [Fact]
+    public async Task QueueReorderKeepsWatchtimeBeaconOnTheCurrentVideo()
+    {
+        var handler = new TrackingHandler();
+        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true),
+            new ManualSessionService(), _ => handler);
+        var first = new VideoSummary("abc123_X-yZ", "First", "Channel", TimeSpan.FromMinutes(1),
+            "https://i.ytimg.com/vi/abc123_X-yZ/default.jpg", false);
+        var second = new VideoSummary("dQw4w9WgXcQ", "Second", "Channel", TimeSpan.FromMinutes(1),
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", false);
+        using var telemetry = service.Start(new PlaybackRequest([first, second]));
+
+        telemetry.UpdateState(new PlaybackPresenceState(1, TimeSpan.Zero, TimeSpan.FromMinutes(1), false, 1,
+            DateTimeOffset.UtcNow));
+        telemetry.UpdateQueue(new PlaybackRequest([second, first]), 0);
+        telemetry.UpdateState(new PlaybackPresenceState(0, TimeSpan.Zero, TimeSpan.FromMinutes(1), false, 1,
+            DateTimeOffset.UtcNow));
+        telemetry.UpdateState(new PlaybackPresenceState(0, TimeSpan.FromSeconds(12), TimeSpan.FromMinutes(1), true, 1,
+            DateTimeOffset.UtcNow));
+
+        await handler.WaitForBeaconsAsync(2);
+        Assert.All(handler.Referrers, referrer => Assert.EndsWith("dQw4w9WgXcQ", referrer));
+    }
+
 
     private static PlaybackRequest CreateRequest()
     {
@@ -116,11 +140,11 @@ public sealed class YouTubePlaybackTelemetryTests
         {
             return null;
         }
-
         public CookieContainer? CreateCookieContainer()
         {
             return NetscapeCookieParser.CreateCookieContainer(".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
         }
+
 
         public void SetManualSession(string cookieContent, SessionCookieFormat format)
         {
@@ -140,11 +164,27 @@ public sealed class YouTubePlaybackTelemetryTests
                                               """;
 
         private readonly List<Uri> _beacons = [];
+        private readonly List<string> _referrers = [];
         private readonly TaskCompletionSource<IReadOnlyList<Uri>> _beaconsReceived = new();
         private readonly Lock _lock = new();
+        private int _expectedBeaconCount = 3;
 
-        public Task<IReadOnlyList<Uri>> WaitForBeaconsAsync()
+        public IReadOnlyList<string> Referrers
         {
+            get
+            {
+                lock (_lock) return [.. _referrers];
+            }
+        }
+
+        public Task<IReadOnlyList<Uri>> WaitForBeaconsAsync(int expectedCount = 3)
+        {
+            lock (_lock)
+            {
+                _expectedBeaconCount = expectedCount;
+                if (_beacons.Count >= expectedCount) _beaconsReceived.TrySetResult([.. _beacons]);
+            }
+
             return _beaconsReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
         }
 
@@ -161,7 +201,8 @@ public sealed class YouTubePlaybackTelemetryTests
                     });
 
                 _beacons.Add(uri);
-                if (_beacons.Count == 3) _beaconsReceived.TrySetResult([.. _beacons]);
+                if (request.Headers.Referrer is { } referrer) _referrers.Add(referrer.ToString());
+                if (_beacons.Count >= _expectedBeaconCount) _beaconsReceived.TrySetResult([.. _beacons]);
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));

@@ -112,48 +112,83 @@ public sealed class YouTubePlaybackTelemetryService(
         }
     }
 
-    private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
-        : IYouTubePlaybackTelemetrySession
+    private sealed class TelemetrySession : IYouTubePlaybackTelemetrySession
     {
-        // Bounded per-video map: keys are playlist indices (already playlist-bounded), capped as
-        // defense in depth so an adversarial playlist length cannot grow this dict without limit.
-        // The evicted entry is never the index being added, which is absent by construction.
+        // Video identity, rather than playlist index, is the stable key across queue
+        // reorders and removals. The active queue snapshot is replaced atomically
+        // with the current entry so a later state update cannot address another video.
         private const int MaxVideosPerSession = 200;
+        private readonly YouTubePlaybackTelemetryService _owner;
         private readonly Lock _lock = new();
-        private readonly Dictionary<int, VideoTelemetrySession> _videos = [];
+        private readonly Dictionary<string, VideoTelemetrySession> _videos = new(StringComparer.Ordinal);
+        private PlaybackRequest _request;
+        private string? _currentVideoId;
         private bool _disposed;
+
+        public TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
+        {
+            _owner = owner;
+            _request = request;
+        }
+
+        public void UpdateQueue(PlaybackRequest request, int currentIndex)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            VideoTelemetrySession? previous = null;
+            lock (_lock)
+            {
+                if (_disposed || currentIndex < 0 || currentIndex >= request.Videos.Length) return;
+
+                _request = request;
+                var videoId = request.Videos[currentIndex].Id;
+                if (!string.Equals(_currentVideoId, videoId, StringComparison.Ordinal))
+                {
+                    if (_currentVideoId is not null)
+                        _videos.Remove(_currentVideoId, out previous);
+                    _currentVideoId = videoId;
+                }
+
+            }
+
+            previous?.Dispose();
+        }
 
         public void UpdateState(PlaybackPresenceState state)
         {
-            if (!owner.IsEnabled() || state.PlaylistIndex < 0 || state.PlaylistIndex >= request.Videos.Length) return;
+            if (!_owner.IsEnabled()) return;
 
-            VideoTelemetrySession? evicted = null;
+            VideoTelemetrySession? previous = null;
+            VideoTelemetrySession? video;
             lock (_lock)
             {
-                if (_disposed) return;
-                VideoTelemetrySession video;
-                if (!_videos.TryGetValue(state.PlaylistIndex, out var existing))
+                if (_disposed || state.PlaylistIndex < 0 || state.PlaylistIndex >= _request.Videos.Length) return;
+
+                var videoId = _request.Videos[state.PlaylistIndex].Id;
+                if (!string.Equals(_currentVideoId, videoId, StringComparison.Ordinal))
+                {
+                    if (_currentVideoId is not null)
+                        _videos.Remove(_currentVideoId, out previous);
+                    _currentVideoId = videoId;
+                }
+
+                if (!_videos.TryGetValue(videoId, out video))
                 {
                     if (_videos.Count >= MaxVideosPerSession)
                     {
                         using var entries = _videos.GetEnumerator();
                         entries.MoveNext();
-                        evicted = entries.Current.Value;
+                        previous ??= entries.Current.Value;
                         _videos.Remove(entries.Current.Key);
                     }
 
-                    video = new VideoTelemetrySession(owner, request.Videos[state.PlaylistIndex].Id);
-                    _videos.Add(state.PlaylistIndex, video);
-                }
-                else
-                {
-                    video = existing;
+                    video = new VideoTelemetrySession(_owner, videoId);
+                    _videos.Add(videoId, video);
                 }
 
                 video.UpdateState(state);
             }
 
-            evicted?.Dispose();
+            previous?.Dispose();
         }
 
         public void Dispose()
@@ -168,7 +203,7 @@ public sealed class YouTubePlaybackTelemetryService(
             }
 
             foreach (var video in videos) video.Dispose();
-            owner.Remove(this);
+            _owner.Remove(this);
         }
     }
 
@@ -222,12 +257,17 @@ public sealed class YouTubePlaybackTelemetryService(
         public void Dispose()
         {
             if (_disposed) return;
+            if (_playing)
+            {
+                FlushSegment(_lastPosition);
+                _playing = false;
+            }
+
             _disposed = true;
             var client = _client;
             _client = null;
             DisposeClientAfterSendsAsync(_sendTail, client).FireAndForget(Logger);
         }
-
         private void FlushSegment(TimeSpan end)
         {
             if (!_playing || end <= _segmentStart) return;
@@ -244,7 +284,7 @@ public sealed class YouTubePlaybackTelemetryService(
             try
             {
                 await previous.ConfigureAwait(false);
-                if (_disposed || !owner.IsEnabled()) return;
+                if (!owner.IsEnabled()) return;
                 var endpoints = await GetEndpointsAsync().ConfigureAwait(false);
                 if (endpoints is null || _client is null) return;
                 var uri = telemetryEvent.BuildUri(endpoints, _cpn);
@@ -455,6 +495,10 @@ public sealed class YouTubePlaybackTelemetryService(
     private sealed class NoopTelemetrySession : IYouTubePlaybackTelemetrySession
     {
         public static NoopTelemetrySession Instance { get; } = new();
+
+        public void UpdateQueue(PlaybackRequest request, int currentIndex)
+        {
+        }
 
         public void UpdateState(PlaybackPresenceState state)
         {

@@ -179,31 +179,20 @@ internal sealed class PlaybackSession : IDisposable
 
         HasMedia = state.HasMedia;
 
-        if (Request is not null && state.HasMedia && _playbackId != 0)
-        {
-            var playbackState = new PlaybackPresenceState(
-                state.PlaylistIndex,
-                state.Position,
-                state.Duration,
-                state.IsPaused,
-                state.Speed,
-                DateTimeOffset.UtcNow);
-
-            _coordinator.UpdateActivePlayback(_playbackId, playbackState);
-        }
-
-        _desktopMedia?.UpdatePlayback(Request, state);
-
-        if (PlaybackCoordinator.TryResolveVideoChange(
+        var coherentIndex = state.PlaylistIndex;
+        if (Request is not null &&
+            PlaybackCoordinator.TryResolveVideoChange(
                 Request,
                 CurrentPlaylistIndex,
                 CurrentVideo?.Id,
                 state.PlaylistIndex,
                 out var video,
-                out var videoChanged) && video is not null)
+                out var videoChanged) &&
+            video is not null)
         {
             CurrentPlaylistIndex = state.PlaylistIndex;
             CurrentVideo = video;
+            coherentIndex = CurrentPlaylistIndex;
 
             if (videoChanged)
             {
@@ -212,15 +201,29 @@ internal sealed class PlaybackSession : IDisposable
             }
         }
 
+        var coherentState = new PlaybackPresenceState(
+            coherentIndex,
+            state.Position,
+            state.Duration,
+            state.IsPaused,
+            state.Speed,
+            DateTimeOffset.UtcNow);
+
+        if (Request is not null && state.HasMedia && _playbackId != 0)
+            _coordinator.UpdateActivePlayback(_playbackId, coherentState, CurrentVideo?.Id);
+
+        var coherentPlaybackState = state with { PlaylistIndex = coherentIndex };
+        _desktopMedia?.UpdatePlayback(Request, coherentPlaybackState);
+
         if (state.HasMedia && CurrentVideo is not null)
         {
-            EvaluateResume(state);
-            EvaluateSponsorBlock(state);
+            EvaluateResume(coherentPlaybackState);
+            EvaluateSponsorBlock(coherentPlaybackState);
         }
 
         _lastPlaybackVideoId = CurrentVideo?.Id;
         _wasPaused = state.IsPaused;
-        LastPlaybackState = state;
+        LastPlaybackState = coherentPlaybackState;
     }
 
     public string UpdateQueue(ImmutableArray<VideoSummary> newVideos)
@@ -241,9 +244,17 @@ internal sealed class PlaybackSession : IDisposable
         if (newIndex < 0)
             newIndex = Math.Clamp(CurrentPlaylistIndex, 0, newVideos.Length - 1);
 
+        var previousVideoId = CurrentVideo?.Id;
         Request = new PlaybackRequest(newVideos, newIndex);
         CurrentPlaylistIndex = newIndex;
         CurrentVideo = newVideos[newIndex];
+        if (!string.Equals(previousVideoId, CurrentVideo.Id, StringComparison.Ordinal))
+        {
+            LoadVideo(CurrentVideo);
+            VideoChanged?.Invoke(CurrentVideo, CurrentPlaylistIndex);
+        }
+
+        _coordinator.UpdateActivePlaybackQueue(_playbackId, Request, CurrentPlaylistIndex);
         QueueUpdated?.Invoke(Request);
         return newVideos.Length == 1 ? "Queue updated (1 video)." : $"Queue updated ({newVideos.Length} videos).";
     }

@@ -125,6 +125,31 @@ public sealed class PlaybackSessionTests : IDisposable
     }
 
     [Fact]
+    public void UpdateQueue_RemoveAppendAndReorderWhilePlayingKeepsIdentityCoherent()
+    {
+        var first = CreateVideo("vid1", "First");
+        var second = CreateVideo("vid2", "Second");
+        var third = CreateVideo("vid3", "Third");
+        _session.Start(new PlaybackRequest([first, second]));
+        _session.UpdatePlayback(CreateState(1, 20, 180));
+
+        _session.UpdateQueue([first]);
+        Assert.Equal("vid1", _session.CurrentVideo?.Id);
+        Assert.Equal(0, _session.CurrentPlaylistIndex);
+
+        _session.UpdateQueue([first, third]);
+        Assert.Equal("vid1", _session.CurrentVideo?.Id);
+        Assert.Equal(0, _session.CurrentPlaylistIndex);
+
+        _session.UpdateQueue([third, first]);
+        Assert.Equal("vid1", _session.CurrentVideo?.Id);
+        Assert.Equal(1, _session.CurrentPlaylistIndex);
+        var latestPresence = _coordinator.PresenceCalls[^1];
+        Assert.Equal("vid1", latestPresence.Request.Videos[latestPresence.State.PlaylistIndex].Id);
+        Assert.Equal(1, latestPresence.State.PlaylistIndex);
+    }
+
+    [Fact]
     public void EndSession_ResetsState_AndFiresSessionEnded()
     {
         var v1 = CreateVideo("vid1", "V1");
@@ -594,7 +619,7 @@ public sealed class PlaybackSessionTests : IDisposable
 
         public PlaybackCoordinator Coordinator { get; }
         public List<PlaybackPresenceState> PresenceUpdates => _presence.SetCalls.Select(c => c.State).ToList();
-
+        public List<(PlaybackRequest Request, PlaybackPresenceState State)> PresenceCalls => _presence.SetCalls;
         public TrackingCoordinator()
         {
             Coordinator = new PlaybackCoordinator(_cookieProvider, _presence, _telemetry);
@@ -732,7 +757,13 @@ public sealed class PlaybackSessionTests : IDisposable
         {
             public PlaybackRequest Request { get; } = request;
             public List<PlaybackPresenceState> Updates { get; } = [];
+            public List<(PlaybackRequest Request, int CurrentIndex)> QueueUpdates { get; } = [];
             public bool IsDisposed { get; private set; }
+
+            public void UpdateQueue(PlaybackRequest request, int currentIndex)
+            {
+                QueueUpdates.Add((request, currentIndex));
+            }
 
             public void UpdateState(PlaybackPresenceState state) => Updates.Add(state);
             public void Dispose() => IsDisposed = true;

@@ -71,6 +71,35 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void PlaybackCoordinator_QueueEditsKeepPresenceAndTelemetryOnCurrentVideo()
+    {
+        var presence = new TrackingPresence();
+        var telemetry = new TrackingTelemetry();
+        using var coordinator = new PlaybackCoordinator(null, presence, telemetry);
+        var first = CreateVideo("vid1");
+        var current = CreateVideo("vid2");
+        var appended = CreateVideo("vid3");
+        var playbackId = coordinator.RegisterActivePlayback(new PlaybackRequest([first, current]));
+
+        coordinator.UpdateActivePlayback(playbackId, new PlaybackPresenceState(
+            1, TimeSpan.FromSeconds(12), TimeSpan.FromMinutes(3), false, 1, DateTimeOffset.UtcNow));
+        var reordered = new PlaybackRequest([current, first, appended], 0);
+        coordinator.UpdateActivePlaybackQueue(playbackId, reordered, 0);
+
+        var presenceUpdate = Assert.Single(presence.SetCalls.Skip(1));
+        Assert.Equal(reordered, presenceUpdate.Request);
+        Assert.Equal(0, presenceUpdate.State.PlaylistIndex);
+        var session = Assert.Single(telemetry.Sessions).Session;
+        var queueUpdate = Assert.Single(session.QueueUpdates);
+        Assert.Equal(reordered, queueUpdate.Request);
+        Assert.Equal(0, queueUpdate.CurrentIndex);
+
+        coordinator.UpdateActivePlayback(playbackId, new PlaybackPresenceState(
+            0, TimeSpan.FromSeconds(13), TimeSpan.FromMinutes(3), false, 1, DateTimeOffset.UtcNow));
+        Assert.Equal(0, session.Updates[^1].PlaylistIndex);
+    }
+
+    [Fact]
     public void PlaybackCoordinator_RestoresMostRecentPlaybackPresenceOnCompletion()
     {
         var presence = new TrackingPresence();
@@ -392,7 +421,13 @@ public sealed class PlaybackTests
     {
         public PlaybackRequest Request { get; } = request;
         public List<PlaybackPresenceState> Updates { get; } = [];
+        public List<(PlaybackRequest Request, int CurrentIndex)> QueueUpdates { get; } = [];
         public bool IsDisposed { get; private set; }
+
+        public void UpdateQueue(PlaybackRequest request, int currentIndex)
+        {
+            QueueUpdates.Add((request, currentIndex));
+        }
 
         public void UpdateState(PlaybackPresenceState state)
         {
