@@ -42,7 +42,7 @@
     <content_attribute id="social-info">moderate</content_attribute>
     <content_attribute id="violence-realistic">mild</content_attribute>
   </content_rating>
-  <developer>
+  <developer id="io.github.silverscreen">
     <name>XSilverTH</name>
   </developer>
   <categories>

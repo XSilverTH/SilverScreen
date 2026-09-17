@@ -18,7 +18,7 @@ Only attribution is given here; see each upstream for its full license text.
 | Serilog (+ `Serilog.Sinks.Console`, `Serilog.Sinks.File`) — logging | 4.4.0 / 6.1.1 / 7.0.0 | Apache-2.0 | https://github.com/serilog/serilog |
 | `Microsoft.Extensions.DependencyInjection` (+ Abstractions) | 10.0.11 | MIT | https://github.com/dotnet/runtime |
 | `Tmds.DBus.Protocol` (+ Generator) — D-Bus / MPRIS wiring | 0.95.0 | See upstream | https://github.com/tmds/Tmds.DBus |
-| `XSTH.Blueprint.Helpers` — Blueprint UI helpers | 3.0.0 | See package page | https://www.nuget.org/packages/XSTH.Blueprint.Helpers |
+| `XSTH.Blueprint.Helpers` — Blueprint UI helpers | 3.1.0 | See package page | https://www.nuget.org/packages/XSTH.Blueprint.Helpers |
 
 ## External runtime tools
 

@@ -108,6 +108,8 @@ if [ "$UNINSTALL" -eq 1 ]; then
   rm -f "${TARGET_META_DIR}/io.github.silverscreen.SilverScreen.metainfo.xml"
   rm -f "${TARGET_ICON_DIR}/io.github.silverscreen.SilverScreen.svg"
   rm -f "${TARGET_LIC_DIR}/LICENSE"
+  rm -f "${TARGET_LIC_DIR}/DiscordRPC.LICENSE"
+  rm -f "${TARGET_LIC_DIR}/YoutubeAPI.LICENSE"
   rmdir "${TARGET_LIC_DIR}" 2>/dev/null || true
   rm -f "${TARGET_DOC_DIR}/THIRD-PARTY.md"
   rmdir "${TARGET_DOC_DIR}" 2>/dev/null || true
@@ -170,6 +172,16 @@ DOC_SRC="$(find_file \
   "${SCRIPT_DIR}/THIRD-PARTY.md" \
   "${SCRIPT_DIR}/../THIRD-PARTY.md" || true)"
 
+DISCORD_LICENSE_SRC="$(find_file \
+  "${SCRIPT_DIR}/share/licenses/silverscreen/DiscordRPC.LICENSE" \
+  "${SCRIPT_DIR}/lib/Hi3Helper.SharpDiscordRPC/LICENSE" \
+  "${SCRIPT_DIR}/../lib/Hi3Helper.SharpDiscordRPC/LICENSE" || true)"
+
+YOUTUBE_LICENSE_SRC="$(find_file \
+  "${SCRIPT_DIR}/share/licenses/silverscreen/YoutubeAPI.LICENSE" \
+  "${SCRIPT_DIR}/lib/YoutubeAPI/LICENSE" \
+  "${SCRIPT_DIR}/../lib/YoutubeAPI/LICENSE" || true)"
+
 if [ -z "${BIN_SRC}" ]; then
   echo "Error: SilverScreen executable not found in ${SCRIPT_DIR}." >&2
   exit 1
@@ -198,6 +210,15 @@ mkdir -p "${TARGET_META_DIR}"
 mkdir -p "${TARGET_ICON_DIR}"
 
 install -m 755 "${BIN_SRC}" "${TARGET_BIN_DIR}/SilverScreen"
+if [ -n "${DISCORD_LICENSE_SRC}" ]; then
+  mkdir -p "${TARGET_LIC_DIR}"
+  install -m 644 "${DISCORD_LICENSE_SRC}" "${TARGET_LIC_DIR}/DiscordRPC.LICENSE"
+fi
+
+if [ -n "${YOUTUBE_LICENSE_SRC}" ]; then
+  mkdir -p "${TARGET_LIC_DIR}"
+  install -m 644 "${YOUTUBE_LICENSE_SRC}" "${TARGET_LIC_DIR}/YoutubeAPI.LICENSE"
+fi
 ln -sf "SilverScreen" "${TARGET_BIN_DIR}/silverscreen"
 
 install -m 644 "${DESKTOP_SRC}" "${TARGET_APP_DIR}/io.github.silverscreen.SilverScreen.desktop"

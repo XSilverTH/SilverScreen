@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.112
+      - name: Install native build and validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            blueprint-compiler \
+            desktop-file-utils \
+            appstream
+      - name: Build
+        run: dotnet build SilverScreen.slnx --configuration Release
+      - name: Test
+        run: dotnet test tests/SilverScreen.Tests/SilverScreen.Tests.csproj --configuration Release --no-build
+      - name: Publish linux-x64
+        run: dotnet publish src/SilverScreen.App/SilverScreen.App.csproj --configuration Release --runtime linux-x64 --self-contained true --output artifacts/publish/linux-x64
+      - name: Validate desktop entry
+        run: desktop-file-validate packaging/io.github.silverscreen.SilverScreen.desktop
+      - name: Validate AppStream metadata
+        run: appstreamcli validate packaging/io.github.silverscreen.SilverScreen.metainfo.xml

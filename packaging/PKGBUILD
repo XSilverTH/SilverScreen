@@ -46,4 +46,8 @@ package() {
     "$pkgdir/usr/share/metainfo/io.github.silverscreen.SilverScreen.metainfo.xml"
   install -Dm644 packaging/io.github.silverscreen.SilverScreen.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.silverscreen.SilverScreen.svg"
+  install -Dm644 lib/Hi3Helper.SharpDiscordRPC/LICENSE \
+    "$pkgdir/usr/share/licenses/$pkgname/DiscordRPC.LICENSE"
+  install -Dm644 lib/YoutubeAPI/LICENSE \
+    "$pkgdir/usr/share/licenses/$pkgname/YoutubeAPI.LICENSE"
 }
