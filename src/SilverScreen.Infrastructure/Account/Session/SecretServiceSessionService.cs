@@ -24,6 +24,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
     private readonly ICookieSecretStore _store;
     private readonly string? _tempRoot;
+    private readonly string _signOutIntentPath;
     private readonly Task _restoreTask;
     private readonly SemaphoreSlim _persistenceGate = new(1, 1);
     private bool _isAvailable = true;
@@ -53,6 +54,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         _profileServiceFactory = profileServiceFactory;
         _feedServiceFactory = feedServiceFactory;
         _tempRoot = tempRoot;
+        _signOutIntentPath = GetSignOutIntentPath(tempRoot);
         _restoreTask = Task.Run(RestoreStoredCookiesAsync);
     }
 
@@ -60,6 +62,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
         CancelValidation();
     }
+
+    internal Task WaitForRestoreAsync() => _restoreTask;
 
     public bool IsAvailable
     {
@@ -234,6 +238,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             try
             {
                 await _store.SaveAsync(encodedCookies).ConfigureAwait(false);
+                ClearSignOutIntent();
                 lock (_gate)
                 {
                     _isAvailable = true;
@@ -277,9 +282,11 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         {
             CancelValidation();
             bool changed;
+            PersistSignOutIntent();
             try
             {
                 await _store.DeleteAsync().ConfigureAwait(false);
+                ClearSignOutIntent();
                 lock (_gate)
                 {
                     _isAvailable = true;
@@ -293,21 +300,13 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             {
                 lock (_gate)
                 {
-                    if (_manualCookies is null)
-                    {
-                        Logger.Debug(ex,
-                            "YouTube session already cleared; treating empty Secret Service clear as success");
-                        changed = false;
-                    }
-                    else
-                    {
-                        Logger.Warning(ex,
-                            "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
-                        _isAvailable = false;
-                        changed = true;
-                        _manualCookies = null;
-                    }
+                    _isAvailable = false;
+                    changed = _manualCookies is not null;
+                    _manualCookies = null;
                 }
+
+                Logger.Warning(ex,
+                    "Failed to clear YouTube session in Secret Service; recovering local sign-out state and retaining sign-out intent for retry");
             }
 
             if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
@@ -322,6 +321,19 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
         try
         {
+            if (File.Exists(_signOutIntentPath))
+            {
+                lock (_gate)
+                {
+                    _manualCookies = null;
+                    _isAvailable = true;
+                }
+
+                Logger.Information("Skipping YouTube session restoration because a pending sign-out intent exists");
+                SessionChanged?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
             var restoredCookies = await LoadStoredCookiesAsync().ConfigureAwait(false);
             lock (_gate)
             {
@@ -346,7 +358,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }
-
     private async Task<ManualSessionCookies?> LoadStoredCookiesAsync()
     {
         byte[]? encodedCookies = null;
@@ -388,6 +399,73 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         {
             if (encodedCookies is not null) CryptographicOperations.ZeroMemory(encodedCookies);
         }
+    }
+
+    private void PersistSignOutIntent()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_signOutIntentPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+            var temporaryPath = Path.Combine(
+                directory ?? Directory.GetCurrentDirectory(),
+                $".{Path.GetFileName(_signOutIntentPath)}.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var stream = new FileStream(
+                           temporaryPath,
+                           FileMode.CreateNew,
+                           FileAccess.Write,
+                           FileShare.None,
+                           64,
+                           FileOptions.WriteThrough))
+                {
+                    stream.WriteByte((byte)'1');
+                    stream.Flush(true);
+                }
+
+                File.Move(temporaryPath, _signOutIntentPath, true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception,
+                "Could not persist the pending sign-out intent; keyring deletion will still be attempted");
+        }
+    }
+
+    private void ClearSignOutIntent()
+    {
+        try
+        {
+            File.Delete(_signOutIntentPath);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Could not clear the persisted sign-out intent");
+        }
+    }
+
+    private static string GetSignOutIntentPath(string? tempRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(tempRoot))
+            return Path.Combine(tempRoot, ".silverscreen-signed-out");
+
+        var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        if (string.IsNullOrWhiteSpace(configHome))
+        {
+            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            configHome = string.IsNullOrWhiteSpace(userHome)
+                ? Path.GetTempPath()
+                : Path.Combine(userHome, ".config");
+        }
+
+        return Path.Combine(configHome, "SilverScreen", "sign-out-intent");
     }
 
     private static byte[] Encode(string cookieContent)

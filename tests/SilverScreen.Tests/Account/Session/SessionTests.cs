@@ -114,16 +114,16 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public void SecretServiceSessionRecoversLocalSignOutWhenKeyringDeletionFails()
+    public async Task SecretServiceSessionSignOutIntentSurvivesKeyringDeletionFailureAndRestart()
     {
+        using var tempRoot = new TemporaryDirectory();
         var store = new FakeCookieSecretStore();
-        var service = new SecretServiceSessionService(store);
+        var service = new SecretServiceSessionService(store, tempRoot.Path);
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
         var changes = 0;
         service.SessionChanged += (_, _) => changes++;
 
         store.FailDelete = true;
-        // Local sign-out must succeed in-memory, mark unavailable, and raise state change without throwing
         service.ClearSession();
 
         Assert.False(service.IsAvailable);
@@ -132,9 +132,19 @@ public sealed class SessionTests
         Assert.Equal(FakeCookieContent, store.StoredContent);
         Assert.Equal(1, changes);
 
-        // Subsequent clear when already cleared succeeds without throwing
-        service.ClearSession();
-        Assert.Equal(1, changes);
+        var restartedService = new SecretServiceSessionService(store, tempRoot.Path);
+        await restartedService.WaitForRestoreAsync();
+        Assert.False(restartedService.GetCurrentSession().IsSignedIn);
+        Assert.Null(restartedService.GetManualSessionCookies());
+
+        store.FailDelete = false;
+        restartedService.ClearSession();
+        Assert.Null(store.StoredContent);
+
+        // A successful retry clears the intent, so a later startup remains signed out.
+        var clearedService = new SecretServiceSessionService(store, tempRoot.Path);
+        await clearedService.WaitForRestoreAsync();
+        Assert.False(clearedService.GetCurrentSession().IsSignedIn);
     }
 
     [Fact]
