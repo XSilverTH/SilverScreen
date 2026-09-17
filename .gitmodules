@@ -3,4 +3,4 @@
 	url = https://github.com/CollapseLauncher/Hi3Helper.SharpDiscordRPC.git
 [submodule "lib/YoutubeAPI"]
 	path = lib/YoutubeAPI
-	url = https://github.com/XSilverTH/YoutubeAPI.git
+	url = https://fjo.xsth.ir/XSilverTH/YoutubeAPI.git
