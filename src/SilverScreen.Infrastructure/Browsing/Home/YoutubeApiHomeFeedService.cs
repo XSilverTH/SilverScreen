@@ -126,9 +126,9 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 cancellationToken.ThrowIfCancellationRequested();
                 var currentToken = currentContinuation?.Export();
                 var page = currentContinuation is null
-                    ? await _clientProvider.GetClient().Feeds.GetHomePageAsync(cancellationToken)
+                    ? await _clientProvider.GetAuthenticatedClient().Feeds.GetHomePageAsync(cancellationToken)
                         .ConfigureAwait(false)
-                    : await _clientProvider.GetClient().Feeds.GetHomePageAsync(currentContinuation, cancellationToken)
+                    : await _clientProvider.GetAuthenticatedClient().Feeds.GetHomePageAsync(currentContinuation, cancellationToken)
                         .ConfigureAwait(false);
 
                 videos.AddRange(page.Items.OfType<VideoFeedItem>().Where(item => !item.Video.IsShort)

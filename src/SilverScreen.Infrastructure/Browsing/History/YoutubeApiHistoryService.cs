@@ -109,8 +109,9 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         try
         {
             var page = continuation is null
-                ? await _clientProvider.GetClient().Feeds.GetHistoryPageAsync(cancellationToken).ConfigureAwait(false)
-                : await _clientProvider.GetClient().Feeds.GetHistoryPageAsync(continuation, cancellationToken)
+                ? await _clientProvider.GetAuthenticatedClient().Feeds.GetHistoryPageAsync(cancellationToken)
+                    .ConfigureAwait(false)
+                : await _clientProvider.GetAuthenticatedClient().Feeds.GetHistoryPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
             var videos = page.Items
                 .Select(entry => entry.Item)

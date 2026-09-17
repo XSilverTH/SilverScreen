@@ -463,6 +463,7 @@ public sealed class SubscriptionsViewModelTests
             int count = VideoFeedConstants.DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
+            _feedPageCalls = 1;
             var continuation = secondFeedPage is { Count: > 0 } || secondPageStatus != AuthenticatedSubscriptionsStatus.Success ? "21" : null;
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
                 firstPageStatus,

@@ -30,7 +30,7 @@ public sealed class YoutubeApiRatingService(
 
         try
         {
-            var rating = await _clientProvider.GetClient().Ratings
+            var rating = await _clientProvider.GetAuthenticatedClient().Ratings
                 .GetAsync(parsedVideoId, cancellationToken)
                 .ConfigureAwait(false);
             if (!HasAuthenticatedSession())
@@ -95,7 +95,7 @@ public sealed class YoutubeApiRatingService(
 
         try
         {
-            await _clientProvider.GetClient().Ratings
+            await _clientProvider.GetAuthenticatedClient().Ratings
                 .SetAsync(parsedVideoId, rating, cancellationToken)
                 .ConfigureAwait(false);
             return HasAuthenticatedSession();

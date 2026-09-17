@@ -47,7 +47,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         try
         {
             Logger.Information("Fetching YouTube account profile");
-            var profile = await _clientProvider.GetClient().Account
+            var profile = await _clientProvider.GetAuthenticatedClient().Account
                 .GetProfileAsync(cancellationToken)
                 .ConfigureAwait(false);
             if (!HasAuthenticatedSession() || string.IsNullOrWhiteSpace(profile.DisplayName))

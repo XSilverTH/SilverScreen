@@ -115,7 +115,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         {
             // Channel pages have their own typed continuation protocol. The first page is the complete
             // channel-page request exposed by the Core contract; unlike the video feed it is not accumulated.
-            var page = await _clientProvider.GetClient().Feeds.GetSubscribedChannelsPageAsync(cancellationToken)
+            var page = await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscribedChannelsPageAsync(cancellationToken)
                 .ConfigureAwait(false);
             var channels = page.Items.Select(MapChannel).ToArray();
             return new SubscribedChannelsResult(
@@ -169,9 +169,9 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         try
         {
             var page = continuation is null
-                ? await _clientProvider.GetClient().Feeds.GetSubscriptionsPageAsync(cancellationToken)
+                ? await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscriptionsPageAsync(cancellationToken)
                     .ConfigureAwait(false)
-                : await _clientProvider.GetClient().Feeds.GetSubscriptionsPageAsync(continuation, cancellationToken)
+                : await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscriptionsPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
             var videos = page.Items
                 .OfType<VideoFeedItem>()

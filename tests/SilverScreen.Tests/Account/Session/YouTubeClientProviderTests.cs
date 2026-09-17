@@ -20,6 +20,19 @@ public sealed class YouTubeClientProviderTests
     }
 
     [Fact]
+    public void GetAuthenticatedClient_WithCorruptedSessionCookies_RejectsSession()
+    {
+        var sessionService = new InMemorySessionService();
+        sessionService.SetManualSession("corrupted_cookie_content_not_valid_netscape",
+            SessionCookieFormat.NetscapeCookiesText);
+
+        using var provider = new YouTubeClientProvider(sessionService);
+
+        Assert.Throws<YoutubeAPI.Exceptions.AuthenticationRequiredException>(
+            provider.GetAuthenticatedClient);
+    }
+
+    [Fact]
     public void GetClient_WithValidSessionCookies_ReturnsClient()
     {
         var sessionService = new InMemorySessionService();

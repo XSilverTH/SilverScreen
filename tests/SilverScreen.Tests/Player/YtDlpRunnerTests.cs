@@ -204,5 +204,6 @@ public sealed class YtDlpMediaResolverTests
     private sealed class FakeYouTubeClientProvider : IYouTubeClientProvider
     {
         public YouTubeClient GetClient() => throw new NotImplementedException();
+        public YouTubeClient GetAuthenticatedClient() => throw new NotImplementedException();
     }
 }

@@ -2,6 +2,8 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Infrastructure.Account.Session;
+using SilverScreen.Infrastructure.Browsing.Home;
+using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests.Account.Session;
 
@@ -59,6 +61,24 @@ public sealed class SessionValidationTests
         var result = await sessionService.ValidateSessionAsync();
 
         Assert.Equal(SessionValidationFormatter.NoActiveSessionMessage, result);
+    }
+
+    [Fact]
+    public async Task ValidateSessionAsync_WithMalformedCookies_RejectsSessionInsteadOfAnonymousSuccess()
+    {
+        IAuthenticatedHomeFeedService? homeFeed = null;
+        using var sessionService = new InMemorySessionService(() => homeFeed!);
+        sessionService.SetManualSession("corrupted_cookie_content_not_valid_netscape",
+            SessionCookieFormat.NetscapeCookiesText);
+        using var provider = new YouTubeClientProvider(sessionService);
+        using var service = new YoutubeApiHomeFeedService(sessionService, provider);
+        homeFeed = service;
+
+        var result = await sessionService.ValidateSessionAsync();
+
+        Assert.Contains("Validation failed.", result);
+        Assert.Contains("Authentication required: yes", result);
+        Assert.Contains("The YouTube session was rejected or has expired.", result);
     }
 
     [Fact]

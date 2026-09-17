@@ -3,6 +3,7 @@ using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using YoutubeAPI;
+using YoutubeAPI.Exceptions;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
@@ -10,6 +11,8 @@ namespace SilverScreen.Infrastructure.YouTube;
 public interface IYouTubeClientProvider
 {
     YouTubeClient GetClient();
+
+    YouTubeClient GetAuthenticatedClient();
 }
 
 /// <summary>
@@ -54,6 +57,16 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
 
     public YouTubeClient GetClient()
     {
+        return GetClient(requireAuthentication: false);
+    }
+
+    public YouTubeClient GetAuthenticatedClient()
+    {
+        return GetClient(requireAuthentication: true);
+    }
+
+    private YouTubeClient GetClient(bool requireAuthentication)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var cookies = _sessionService.GetManualSessionCookies();
@@ -61,6 +74,40 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             ? cookies.Content
             : string.Empty;
         var sessionKey = HashSessionCookies(cookieContent);
+
+        YouTubeCookieAuthentication? authentication = null;
+        if (!string.IsNullOrWhiteSpace(cookieContent))
+            try
+            {
+                authentication = YouTubeCookieAuthentication.FromNetscape(cookieContent);
+                if (!authentication.HasAuthenticationCookies)
+                {
+                    if (requireAuthentication)
+                        throw new AuthenticationRequiredException(
+                            "Stored YouTube session does not contain authentication cookies.");
+
+                    authentication = null;
+                }
+            }
+            catch (AuthenticationRequiredException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is ArgumentException or FormatException)
+            {
+                if (requireAuthentication)
+                    throw new AuthenticationRequiredException(
+                        "Stored YouTube session cookies are invalid or corrupted.", exception);
+
+                Logger.Warning(exception,
+                    "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
+                authentication = null;
+            }
+        else if (requireAuthentication)
+        {
+            throw new AuthenticationRequiredException(
+                "This operation requires a valid authenticated YouTube session.");
+        }
 
         List<YouTubeClient>? evicted = null;
         YouTubeClient client;
@@ -73,19 +120,6 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 _lru.AddLast(hit);
                 return hit.Value.Client;
             }
-
-            YouTubeCookieAuthentication? authentication = null;
-            if (!string.IsNullOrWhiteSpace(cookieContent))
-                try
-                {
-                    authentication = YouTubeCookieAuthentication.FromNetscape(cookieContent);
-                }
-                catch (Exception exception) when (exception is ArgumentException or FormatException)
-                {
-                    Logger.Warning(exception,
-                        "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
-                    authentication = null;
-                }
 
             client = new YouTubeClient(new YouTubeClientOptions
             {
