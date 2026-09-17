@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 
@@ -29,7 +30,7 @@ namespace SilverScreen.Infrastructure.Account.Session;
 ///     <c>TryWipeAndDeleteFile</c>). Only cookie file paths — never their contents —
 ///     are written to the logs.
 /// </summary>
-public static class TemporaryCookieFile
+public static partial class TemporaryCookieFile
 {
     internal const string DirectoryPrefix = "silverscreen-cookies-";
     private const string IpcDirectoryPrefix = "silverscreen-mpv-";
@@ -151,11 +152,12 @@ public static class TemporaryCookieFile
         }
     }
 
-    /// <summary>
-    ///     Deletes orphaned 0700 cookie/IPC directories and 0600 cookie files matching our temp prefixes.
-    ///     Orphaned directories from dead sessions or untracked leases are purged immediately;
-    ///     otherwise entries older than <paramref name="maxAge" /> (default 1 hour) are deleted.
-    ///     Best-effort, never throws.
+    ///     Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
+    ///     leases must match the exact process-id/GUID directory pattern and contain only the
+    ///     expected regular, non-symlink cookies.txt file. Unexpected entries are never
+    ///     traversed or deleted. Orphaned directories from dead sessions or untracked leases
+    ///     are purged immediately; otherwise entries older than <paramref name="maxAge" />
+    ///     (default 1 hour) are deleted. Best-effort, never throws.
     /// </summary>
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {
@@ -178,7 +180,7 @@ public static class TemporaryCookieFile
         try
         {
             var rootDirectory = new DirectoryInfo(root);
-            if (!rootDirectory.Exists)
+            if (!IsSafeDirectory(rootDirectory))
                 return;
 
             var now = DateTime.UtcNow;
@@ -200,44 +202,29 @@ public static class TemporaryCookieFile
                 foreach (var directory in directories)
                     try
                     {
-                        if (!IsDirectoryOrphanedOrStale(directory, prefix, age, now))
+                        // Cookie directories have a deliberately strict name shape. A prefix
+                        // alone is not proof that the application created the entry.
+                        if (prefix == DirectoryPrefix && !TryExtractCookieLeasePid(directory.Name, out _))
                             continue;
-                        // Only our own empty-or-cookie directories are removed. Cookie bytes
-                        // are overwritten before the recursive remove (sockets under the IPC
-                        // prefix fail the overwrite and fall through to plain delete).
-                        foreach (var staleFile in directory.EnumerateFiles("*", SearchOption.AllDirectories).ToList())
-                            TryWipeAndDeleteFile(staleFile.FullName);
-                        directory.Delete(true);
-                        removed++;
-                        Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
+                        if (!IsSafeDirectory(directory) ||
+                            !IsDirectoryOrphanedOrStale(directory, prefix, age, now))
+                            continue;
+
+                        if (TryRemoveOwnedDirectory(directory, prefix))
+                        {
+                            removed++;
+                            Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
+                        }
                     }
                     catch (Exception ex)
                     {
                         Logger.Debug(ex, "Stale sweep could not remove directory {Directory}", directory.FullName);
                     }
-
-                try
-                {
-                    foreach (var file in rootDirectory.EnumerateFiles($"{prefix}*"))
-                        try
-                        {
-                            if (!IsFileOrphanedOrStale(file, prefix, age, now))
-                                continue;
-                            TryWipeAndDeleteFile(file.FullName);
-                            removed++;
-                            Logger.Debug("Removed stale temporary file {File}", file.FullName);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Debug(ex, "Stale sweep could not remove file {File}", file.FullName);
-                        }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Debug(ex, "Stale sweep could not enumerate files with prefix {Prefix}", prefix);
-                }
             }
 
+            // The application never creates files directly under the temp root. In particular,
+            // do not treat a root-level prefix match as ownership: it could be an arbitrary file
+            // or a link planted by another process.
             if (removed > 0)
                 Logger.Information("Removed {Count} stale temporary cookie/IPC entries from {TempRoot}", removed,
                     root);
@@ -246,6 +233,134 @@ public static class TemporaryCookieFile
         {
             Logger.Warning(ex, "Stale temporary file sweep failed in {TempRoot}", root);
         }
+    }
+
+    private static bool TryRemoveOwnedDirectory(DirectoryInfo directory, string prefix)
+    {
+        if (!IsSafeDirectory(directory))
+            return false;
+
+        // Never recurse from a directory selected by a filename prefix. A nested directory,
+        // link, or unexpected file is untrusted and must remain untouched.
+        foreach (var entry in directory.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly).ToList())
+        {
+            if (prefix == DirectoryPrefix)
+            {
+                if (entry is FileInfo file && IsOwnedCookieFile(file))
+                    TryWipeAndDeleteFile(file.FullName);
+            }
+            else if (entry is FileInfo ipcFile && ipcFile.Name == "mpv.sock" && IsOwnedIpcSocket(ipcFile))
+            {
+                // mpv's endpoint is not a cookie and is not wiped, but it is still constrained
+                // to the exact application-owned entry name.
+                TryDeleteFile(ipcFile.FullName);
+            }
+        }
+
+        try
+        {
+            // A non-recursive delete is essential: if an attacker races in an entry, the
+            // directory remains and Directory.Delete can never remove that entry for us.
+            directory.Delete(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Stale sweep left non-empty temporary directory {Directory}", directory.FullName);
+            return false;
+        }
+    }
+
+    private static bool IsSafeDirectory(DirectoryInfo directory)
+    {
+        try
+        {
+            return directory.Exists &&
+                   (directory.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) ==
+                   FileAttributes.Directory;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Stale sweep could not inspect directory {Directory}", directory.FullName);
+            return false;
+        }
+    }
+
+    private static bool IsRegularNonSymlink(FileInfo file)
+    {
+        try
+        {
+            if (!file.Exists ||
+                (file.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
+                return false;
+
+            if (!OperatingSystem.IsLinux())
+                return true;
+
+            return LStat(file.FullName, out var stat) == 0 &&
+                   (stat.Mode & UnixFileTypeMask) == UnixRegularFile;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Stale sweep could not inspect file {File}", file.FullName);
+            return false;
+        }
+    }
+
+    private static bool IsOwnedIpcSocket(FileInfo file)
+    {
+        try
+        {
+            if (!file.Exists || (file.Attributes & FileAttributes.ReparsePoint) != 0 ||
+                !OperatingSystem.IsLinux())
+                return false;
+
+            return LStat(file.FullName, out var stat) == 0 &&
+                   (stat.Mode & UnixFileTypeMask) == UnixSocket;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Stale sweep could not inspect IPC entry {File}", file.FullName);
+            return false;
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Could not delete temporary entry {Path}", path);
+        }
+    }
+
+    private static bool TryExtractCookieLeasePid(string name, out int pid)
+    {
+        pid = 0;
+        if (!name.StartsWith(DirectoryPrefix, StringComparison.Ordinal))
+            return false;
+
+        var suffix = name[DirectoryPrefix.Length..];
+        var dashIndex = suffix.IndexOf('-');
+        if (dashIndex <= 0 || dashIndex == suffix.Length - 1 ||
+            suffix.IndexOf('-', dashIndex + 1) >= 0 ||
+            !int.TryParse(suffix.AsSpan(0, dashIndex), out pid) || pid <= 0)
+            return false;
+
+        return Guid.TryParseExact(suffix[(dashIndex + 1)..], "N", out _);
+    }
+
+    private static bool IsOwnedCookieFile(FileInfo file)
+    {
+        if (!string.Equals(file.Name, "cookies.txt", StringComparison.Ordinal) ||
+            !IsRegularNonSymlink(file))
+            return false;
+
+        var directory = file.Directory;
+        return directory is not null && TryExtractCookieLeasePid(directory.Name, out _);
     }
 
     private static bool IsDirectoryOrphanedOrStale(DirectoryInfo directory, string prefix, TimeSpan maxAge,
@@ -261,17 +376,6 @@ public static class TemporaryCookieFile
         return now - directory.LastWriteTimeUtc >= maxAge;
     }
 
-    private static bool IsFileOrphanedOrStale(FileInfo file, string prefix, TimeSpan maxAge, DateTime now)
-    {
-        if (!TryExtractPid(file.Name, prefix, out var pid)) return now - file.LastWriteTimeUtc >= maxAge;
-        if (pid == Environment.ProcessId)
-            return !IsActiveLeaseFile(file.FullName);
-
-        if (!IsProcessAlive(pid))
-            return true;
-
-        return now - file.LastWriteTimeUtc >= maxAge;
-    }
 
     private static bool TryExtractPid(string name, string prefix, out int pid)
     {
@@ -329,34 +433,14 @@ public static class TemporaryCookieFile
         return false;
     }
 
-    private static bool IsActiveLeaseFile(string fileFullName)
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(fileFullName);
-            if (directory is not null)
-                return IsActiveLease(directory);
-        }
-        catch
-        {
-            // Ignore path normalization errors
-        }
-
-        return false;
-    }
 
     private static void DeleteDirectoryRecursively(string directoryPath)
     {
         try
         {
-            if (!Directory.Exists(directoryPath))
-                return;
-
-            // A half-written lease directory may already hold cookie bytes: wipe first.
-            foreach (var partialFile in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
-                         .ToList())
-                TryWipeAndDeleteFile(partialFile);
-            Directory.Delete(directoryPath, true);
+            var directory = new DirectoryInfo(directoryPath);
+            if (IsSafeDirectory(directory))
+                TryRemoveOwnedDirectory(directory, DirectoryPrefix);
         }
         catch (Exception ex)
         {
@@ -375,19 +459,25 @@ public static class TemporaryCookieFile
         try
         {
             var info = new FileInfo(path);
-            if (info is { Exists: true, Length: > 0 })
-            {
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
-                var zeros = new byte[4096];
-                var remaining = info.Length;
-                while (remaining > 0)
-                {
-                    var chunk = (int)Math.Min(zeros.Length, remaining);
-                    stream.Write(zeros, 0, chunk);
-                    remaining -= chunk;
-                }
+            if (!IsOwnedCookieFile(info))
+                return;
 
-                stream.Flush(true);
+            if (info.Length > 0)
+            {
+                using var stream = OpenCookieFileForWipe(path);
+                if (stream is not null)
+                {
+                    var zeros = new byte[4096];
+                    var remaining = info.Length;
+                    while (remaining > 0)
+                    {
+                        var chunk = (int)Math.Min(zeros.Length, remaining);
+                        stream.Write(zeros, 0, chunk);
+                        remaining -= chunk;
+                    }
+
+                    stream.Flush(true);
+                }
             }
         }
         catch (Exception ex)
@@ -397,11 +487,64 @@ public static class TemporaryCookieFile
 
         try
         {
-            File.Delete(path);
+            // File.Delete unlinks a link rather than following it, but the ownership check
+            // above prevents links and non-regular entries from being selected in the first place.
+            if (IsOwnedCookieFile(new FileInfo(path)))
+                File.Delete(path);
         }
         catch (Exception ex)
         {
             Logger.Debug(ex, "Could not delete temporary file {CookieFilePath}", path);
         }
     }
+
+    private static FileStream? OpenCookieFileForWipe(string path)
+    {
+        if (!OperatingSystem.IsLinux())
+            return new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+
+        // O_NOFOLLOW prevents a check-then-open race from redirecting the overwrite through a
+        // link. O_NONBLOCK also ensures an unexpected FIFO cannot stall startup.
+        var descriptor = OpenNoFollow(path, OpenWriteOnly | OpenCloseOnExec | OpenNoFollowFlag | OpenNonBlock);
+        if (descriptor < 0)
+            throw new IOException($"Could not open temporary cookie file (errno {Marshal.GetLastWin32Error()}).");
+
+        var handle = new SafeFileHandle((nint)descriptor, ownsHandle: true);
+        try
+        {
+            return new FileStream(handle, FileAccess.Write, 4096, isAsync: false);
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    private const int OpenWriteOnly = 1;
+    private const int OpenNonBlock = 0x800;
+    private const int OpenCloseOnExec = 0x80000;
+    private const int OpenNoFollowFlag = 0x20000;
+    private const uint UnixFileTypeMask = 0xF000;
+    private const uint UnixRegularFile = 0x8000;
+    private const uint UnixSocket = 0xC000;
+
+    [StructLayout(LayoutKind.Sequential, Size = 256)]
+    private struct UnixStat
+    {
+        public ulong Device;
+        public ulong Inode;
+        public ulong LinkCount;
+        public uint Mode;
+        public uint UserId;
+        public uint GroupId;
+        public uint Padding;
+    }
+
+    [LibraryImport("libc", EntryPoint = "lstat", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int LStat(string path, out UnixStat stat);
+
+    [LibraryImport("libc", EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int OpenNoFollow(string path, int flags);
+
 }

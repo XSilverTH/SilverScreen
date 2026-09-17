@@ -310,18 +310,17 @@ public sealed class SessionTests
     public void TemporaryCookieFile_SweepStale_RemovesEntriesOlderThanOneHour()
     {
         using var tempRoot = new TemporaryDirectory();
-        var oldDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}old");
-        var newDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}new");
+        var oldDir = Path.Combine(tempRoot.Path, LeaseDirectoryName(FindDeadPid()));
         Directory.CreateDirectory(oldDir);
-        Directory.CreateDirectory(newDir);
         File.WriteAllText(Path.Combine(oldDir, "cookies.txt"), "old-cookies");
-        File.WriteAllText(Path.Combine(newDir, "cookies.txt"), "new-cookies");
-
-        // Set oldDir write time to 2 hours ago
         Directory.SetLastWriteTimeUtc(oldDir, DateTime.UtcNow.AddHours(-2));
         File.SetLastWriteTimeUtc(Path.Combine(oldDir, "cookies.txt"), DateTime.UtcNow.AddHours(-2));
 
-        // Sweep with default stale age (1 hour)
+        using var activeLease = TemporaryCookieFile.CreateLease(FakeCookieContent, tempRoot.Path);
+        Assert.NotNull(activeLease);
+        var newDir = Path.GetDirectoryName(activeLease.Path);
+        Assert.NotNull(newDir);
+
         TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
 
         Assert.False(Directory.Exists(oldDir));
@@ -333,7 +332,7 @@ public sealed class SessionTests
     {
         using var tempRoot = new TemporaryDirectory();
         var deadPid = FindDeadPid();
-        var deadDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}{deadPid}-orphaned");
+        var deadDir = Path.Combine(tempRoot.Path, LeaseDirectoryName(deadPid));
         Directory.CreateDirectory(deadDir);
         File.WriteAllText(Path.Combine(deadDir, "cookies.txt"), "dead-session-cookies");
 
@@ -343,7 +342,6 @@ public sealed class SessionTests
         Assert.NotNull(activeDir);
         Assert.True(Directory.Exists(activeDir));
 
-        // Sweep without waiting for 1 hour
         TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
 
         Assert.False(Directory.Exists(deadDir));
@@ -354,15 +352,78 @@ public sealed class SessionTests
     public void TemporaryCookieFile_SweepStale_PurgesUntrackedDirectoryMatchingCurrentPid()
     {
         using var tempRoot = new TemporaryDirectory();
-        var untrackedDir = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}{Environment.ProcessId}-untracked");
+        var untrackedDir = Path.Combine(tempRoot.Path, LeaseDirectoryName(Environment.ProcessId));
         Directory.CreateDirectory(untrackedDir);
         File.WriteAllText(Path.Combine(untrackedDir, "cookies.txt"), "untracked-session-cookies");
 
-        // Untracked lease matching current PID is purged on sweep (e.g. startup cleanup)
         TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
 
         Assert.False(Directory.Exists(untrackedDir));
     }
+
+    [Fact]
+    public void TemporaryCookieFile_SweepStale_IgnoresSymlinkCookie()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+
+        using var tempRoot = new TemporaryDirectory();
+        using var outsideRoot = new TemporaryDirectory();
+        var directory = Path.Combine(tempRoot.Path, LeaseDirectoryName(FindDeadPid()));
+        var outside = Path.Combine(outsideRoot.Path, "outside-cookie.txt");
+        var link = Path.Combine(directory, "cookies.txt");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(outside, "must survive");
+        File.CreateSymbolicLink(link, outside);
+        Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow.AddHours(-2));
+
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.True(File.Exists(link));
+        Assert.Equal("must survive", File.ReadAllText(outside));
+    }
+
+    [Fact]
+    public void TemporaryCookieFile_SweepStale_DoesNotRecurseIntoUnexpectedEntries()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var directory = Path.Combine(tempRoot.Path, LeaseDirectoryName(FindDeadPid()));
+        var nested = Path.Combine(directory, "nested");
+        var nestedFile = Path.Combine(nested, "do-not-delete.txt");
+        var cookieFile = Path.Combine(directory, "cookies.txt");
+        Directory.CreateDirectory(nested);
+        File.WriteAllText(nestedFile, "must survive");
+        File.WriteAllText(cookieFile, "owned cookie");
+        Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow.AddHours(-2));
+
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.True(Directory.Exists(directory));
+        Assert.True(File.Exists(nestedFile));
+        Assert.False(File.Exists(cookieFile));
+    }
+
+    [Fact]
+    public void TemporaryCookieFile_SweepStale_IgnoresUnexpectedNames()
+    {
+        using var tempRoot = new TemporaryDirectory();
+        var matchingRootFile = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}unexpected");
+        var malformedDirectory = Path.Combine(tempRoot.Path, $"{TemporaryCookieFile.DirectoryPrefix}not-a-lease");
+        var unexpectedFile = Path.Combine(malformedDirectory, "not-cookies.txt");
+        File.WriteAllText(matchingRootFile, "must survive");
+        Directory.CreateDirectory(malformedDirectory);
+        File.WriteAllText(unexpectedFile, "must survive");
+        File.SetLastWriteTimeUtc(matchingRootFile, DateTime.UtcNow.AddHours(-2));
+        Directory.SetLastWriteTimeUtc(malformedDirectory, DateTime.UtcNow.AddHours(-2));
+
+        TemporaryCookieFile.SweepStale(tempRoot: tempRoot.Path);
+
+        Assert.True(File.Exists(matchingRootFile));
+        Assert.True(File.Exists(unexpectedFile));
+        Assert.True(Directory.Exists(malformedDirectory));
+    }
+
+    private static string LeaseDirectoryName(int pid) =>
+        $"{TemporaryCookieFile.DirectoryPrefix}{pid}-{Guid.NewGuid():N}";
 
     private static async Task WaitForSessionAsync(SecretServiceSessionService service, bool signedIn)
     {
