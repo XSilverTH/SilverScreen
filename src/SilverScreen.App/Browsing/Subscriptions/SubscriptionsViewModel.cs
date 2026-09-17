@@ -19,7 +19,8 @@ public sealed record SubscriptionsViewState(
     bool HasMore,
     AuthenticatedSubscriptionsStatus Status,
     string Summary,
-    bool IsSuccess)
+    bool IsSuccess,
+    string? PaginationError = null)
 {
     public static SubscriptionsViewState Empty { get; } = new(
         [],
@@ -641,7 +642,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 ? AuthenticatedSubscriptionsStatus.Success
                 : AuthenticatedSubscriptionsStatus.TemporaryBackendFailure
             : feedStatus;
-
         State = new SubscriptionsViewState(
             channelsSnapshot,
             selectedChannel,
@@ -651,7 +651,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             engineState.HasMore,
             status,
             engineState.StatusMessage ?? string.Empty,
-            engineState.IsSuccess);
+            engineState.IsSuccess,
+            engineState.PaginationError);
     }
 
     private bool IsSessionActive()

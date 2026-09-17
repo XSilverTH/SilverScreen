@@ -270,6 +270,28 @@ public sealed class SubscriptionsViewModelTests
     }
 
     [Fact]
+    public async Task LoadMoreAsync_WhenFeedPageFails_RetainsVideosAndPresentsPaginationError()
+    {
+        var firstPage = new List<VideoSummary> { CreateVideo("v1", "V1", "C1", "u1") };
+        var subsService = new FakeSubscriptionsService(
+            [],
+            firstPage,
+            secondFeedPage: [],
+            secondPageStatus: AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
+            secondPageMessage: "Could not load the next page.");
+
+        using var viewModel = new SubscriptionsViewModel(subsService, new FakeChannelService(), CreateSession());
+        var source = (IVideoListSource)viewModel;
+
+        await viewModel.LoadAsync(20);
+        await viewModel.LoadMoreAsync(20);
+
+        Assert.Single(source.State.Videos);
+        Assert.Equal("v1", source.State.Videos[0].Id);
+        Assert.Equal("Could not load the next page.", source.State.PaginationError);
+    }
+
+    [Fact]
     public async Task LoadMoreAsync_PaginatesChannelWhenFilterActive()
     {
         var channel = new SubscribedChannel("UC1", "Channel 1", "https://www.youtube.com/@chan1", null);
@@ -385,6 +407,7 @@ public sealed class SubscriptionsViewModelTests
         Assert.Equal("Sign in to see subscriptions", source.State.Status.Title);
     }
 
+
     private static InMemorySessionService CreateSession()
     {
         var session = new InMemorySessionService();
@@ -411,7 +434,9 @@ public sealed class SubscriptionsViewModelTests
         IReadOnlyList<SubscribedChannel> channels,
         IReadOnlyList<VideoSummary> firstFeedPage,
         IReadOnlyList<VideoSummary>? secondFeedPage = null,
-        IReadOnlyList<VideoSummary>? thirdFeedPage = null) : IAuthenticatedSubscriptionsService
+        IReadOnlyList<VideoSummary>? thirdFeedPage = null,
+        AuthenticatedSubscriptionsStatus secondPageStatus = AuthenticatedSubscriptionsStatus.Success,
+        string? secondPageMessage = null) : IAuthenticatedSubscriptionsService
     {
         private int _feedPageCalls;
 
@@ -420,7 +445,7 @@ public sealed class SubscriptionsViewModelTests
             CancellationToken cancellationToken = default)
         {
             _feedPageCalls = 1;
-            var continuation = secondFeedPage is { Count: > 0 } ? "21" : null;
+            var continuation = secondFeedPage is { Count: > 0 } || secondPageStatus != AuthenticatedSubscriptionsStatus.Success ? "21" : null;
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.Success,
                 new FeedPage(firstFeedPage, continuation),
@@ -438,10 +463,12 @@ public sealed class SubscriptionsViewModelTests
                 _ => thirdFeedPage ?? []
             };
             var continuation = _feedPageCalls == 2 && thirdFeedPage is { Count: > 0 } ? "41" : null;
+            var status = _feedPageCalls == 2 ? secondPageStatus : AuthenticatedSubscriptionsStatus.Success;
+            var message = _feedPageCalls == 2 ? secondPageMessage ?? "Success" : "Success";
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
-                AuthenticatedSubscriptionsStatus.Success,
+                status,
                 new FeedPage(videos, continuation),
-                "Success"));
+                message));
         }
 
         public Task<SubscribedChannelsResult> LoadSubscribedChannelsAsync(

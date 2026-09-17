@@ -441,6 +441,7 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
     public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
         string? paginationError = null)
     {
+        paginationError ??= state.PaginationError;
         VideoListStatus status;
         switch (state.Status)
         {
@@ -519,7 +520,6 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
             "Loading more videos…",
             paginationError);
     }
-
     private void OnStateChanged(object? sender, SubscriptionsViewState state)
     {
         if (!_disposed)
