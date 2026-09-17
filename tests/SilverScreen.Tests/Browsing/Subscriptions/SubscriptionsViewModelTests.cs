@@ -212,6 +212,43 @@ public sealed class SubscriptionsViewModelTests
     }
 
     [Fact]
+    public async Task SelectChannelAsync_AfterMultipleFeedPages_RestoresAllPagesAndContinuation()
+    {
+        var channel = new SubscribedChannel("UC1", "Channel 1", "https://www.youtube.com/@chan1", null);
+        var firstPage = new List<VideoSummary>
+        {
+            CreateVideo("v1", "V1", "Channel 1", "https://www.youtube.com/@chan1")
+        };
+        var secondPage = new List<VideoSummary>
+        {
+            CreateVideo("v2", "V2", "Channel 2", "https://www.youtube.com/@chan2")
+        };
+        var thirdPage = new List<VideoSummary>
+        {
+            CreateVideo("v3", "V3", "Channel 1", "https://www.youtube.com/@chan1")
+        };
+
+        var subsService = new FakeSubscriptionsService([channel], firstPage, secondPage, thirdPage);
+        using var viewModel = new SubscriptionsViewModel(subsService, new FakeChannelService(), CreateSession());
+
+        await viewModel.LoadAsync(20);
+        await viewModel.LoadMoreAsync(20);
+        Assert.Equal(["v1", "v2"], viewModel.State.Videos.Select(video => video.Id));
+        Assert.True(viewModel.State.HasMore);
+
+        await viewModel.SelectChannelAsync(channel);
+        await viewModel.SelectChannelAsync(null);
+
+        Assert.Equal(["v1", "v2"], viewModel.State.Videos.Select(video => video.Id));
+        Assert.True(viewModel.State.HasMore);
+
+        await viewModel.LoadMoreAsync(20);
+
+        Assert.Equal(["v1", "v2", "v3"], viewModel.State.Videos.Select(video => video.Id));
+        Assert.False(viewModel.State.HasMore);
+    }
+
+    [Fact]
     public async Task LoadMoreAsync_PaginatesFeedWhenNoFilterActive()
     {
         var firstPage = new List<VideoSummary> { CreateVideo("v1", "V1", "C1", "u1") };
@@ -373,7 +410,8 @@ public sealed class SubscriptionsViewModelTests
     private sealed class FakeSubscriptionsService(
         IReadOnlyList<SubscribedChannel> channels,
         IReadOnlyList<VideoSummary> firstFeedPage,
-        IReadOnlyList<VideoSummary>? secondFeedPage = null) : IAuthenticatedSubscriptionsService
+        IReadOnlyList<VideoSummary>? secondFeedPage = null,
+        IReadOnlyList<VideoSummary>? thirdFeedPage = null) : IAuthenticatedSubscriptionsService
     {
         private int _feedPageCalls;
 
@@ -394,10 +432,15 @@ public sealed class SubscriptionsViewModelTests
             CancellationToken cancellationToken = default)
         {
             _feedPageCalls++;
-            var videos = secondFeedPage ?? [];
+            var videos = _feedPageCalls switch
+            {
+                2 => secondFeedPage ?? [],
+                _ => thirdFeedPage ?? []
+            };
+            var continuation = _feedPageCalls == 2 && thirdFeedPage is { Count: > 0 } ? "41" : null;
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.Success,
-                new FeedPage(videos, null),
+                new FeedPage(videos, continuation),
                 "Success"));
         }
 

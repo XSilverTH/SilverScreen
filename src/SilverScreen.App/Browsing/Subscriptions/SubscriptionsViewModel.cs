@@ -535,6 +535,14 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
         lock (_lock)
         {
+            if (res.Status == AuthenticatedSubscriptionsStatus.Success)
+            {
+                foreach (var video in res.FeedPage.Videos
+                             .Where(v => !v.IsShort)
+                             .Where(video => _feedVideos.All(existing => existing.Id != video.Id)))
+                    _feedVideos.Add(video);
+            }
+
             _feedStatus = res.Status;
             _feedSummary = res.StatusMessage;
             _feedSuccess =
