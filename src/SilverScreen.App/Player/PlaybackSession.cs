@@ -227,7 +227,23 @@ internal sealed class PlaybackSession : IDisposable
     {
         if (_disposed || Request is null) return "Playback is not active, ignoring the queue update.";
         if (newVideos.IsDefaultOrEmpty) return "Queue is empty, keeping the current playback queue.";
-        Request = PlaybackCoordinator.UpdateQueue(newVideos);
+
+        var currentId = CurrentVideo?.Id;
+        var newIndex = -1;
+        if (currentId is not null)
+            for (var i = 0; i < newVideos.Length; i++)
+                if (newVideos[i].Id == currentId)
+                {
+                    newIndex = i;
+                    break;
+                }
+
+        if (newIndex < 0)
+            newIndex = Math.Clamp(CurrentPlaylistIndex, 0, newVideos.Length - 1);
+
+        Request = new PlaybackRequest(newVideos, newIndex);
+        CurrentPlaylistIndex = newIndex;
+        CurrentVideo = newVideos[newIndex];
         QueueUpdated?.Invoke(Request);
         return newVideos.Length == 1 ? "Queue updated (1 video)." : $"Queue updated ({newVideos.Length} videos).";
     }

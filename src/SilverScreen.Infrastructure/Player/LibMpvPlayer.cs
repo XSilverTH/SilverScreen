@@ -276,6 +276,37 @@ public sealed class LibMpvPlayer : IDisposable
     {
         Enqueue(() => Check(_native.Command(_handle, "loadfile", url, "append-play")));
     }
+    /// <summary>
+    ///     Updates the request used by renderer reloads without restarting the current
+    ///     playlist. Live queue edits are applied to mpv separately by the caller.
+    /// </summary>
+    public void UpdatePlaylistRequest(PlaybackRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        lock (_gate)
+        {
+            if (IsDisposing) return;
+
+            var currentIndex = _state.PlaylistIndex >= 0
+                ? _state.PlaylistIndex
+                : _reload?.PlaylistIndex ?? -1;
+            var currentId = _request is not null && currentIndex < _request.Videos.Length
+                && currentIndex >= 0
+                ? _request.Videos[currentIndex].Id
+                : null;
+            var newIndex = -1;
+            for (var i = 0; i < request.Videos.Length; i++)
+                if (request.Videos[i].Id == currentId)
+                {
+                    newIndex = i;
+                    break;
+                }
+            _request = request;
+            if (_reload is not null && newIndex >= 0)
+                _reload = _reload with { PlaylistIndex = newIndex };
+        }
+    }
+
 
     public void SeekRelative(double seconds)
     {

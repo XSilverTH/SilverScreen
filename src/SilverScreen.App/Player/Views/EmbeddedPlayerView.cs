@@ -935,8 +935,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 if (QueuePlaylistMove.TryTranslate(currentVideos, newVideos, out var fromIndex, out var toIndex))
                     _player.MovePlaylistItem(fromIndex, toIndex);
             }
-
             _session.UpdateQueue(newVideos);
+            if (_session.Request is { } updatedRequest)
+            {
+                _player.UpdatePlaylistRequest(updatedRequest);
+                _loadedRequest = updatedRequest;
+            }
             player_queue_controls.SetVisible(newVideos.Length > 1);
             player_previous_queue_button.Sensitive = _session.CurrentPlaylistIndex > 0;
             player_next_queue_button.Sensitive = _session.CurrentPlaylistIndex < newVideos.Length - 1;

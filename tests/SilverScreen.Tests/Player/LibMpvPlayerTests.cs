@@ -379,6 +379,47 @@ public sealed class LibMpvPlayerTests
         Assert.True(stats.Tracks[0].IsSelected);
     }
 
+    [Fact]
+    public void UpdatePlaylistRequest_SyncsReloadSourceSoRemovedEntryDoesNotReappearOnReload()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences();
+        var video1 = Video("vid1_123456");
+        var video2 = Video("vid2_123456");
+        var video3 = Video("vid3_123456");
+        var initialRequest = new PlaybackRequest([video1, video2, video3], 0);
+        player.Load(initialRequest, preferences, null);
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 3, TimeSpan.FromSeconds(2)));
+
+        player.HandleFileLoaded();
+
+        // Clear commands recorded from initial load
+        while (native.Commands.TryTake(out _)) { }
+
+        // Simulate removing vid2 from the queue and updating player's saved request
+        var updatedRequest = new PlaybackRequest([video1, video3], 0);
+        player.UpdatePlaylistRequest(updatedRequest);
+
+        // Trigger quality change which invokes LoadCurrentRequest using the saved request
+        player.SetQuality("720p");
+
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Any(c => c.StartsWith("loadfile|", StringComparison.Ordinal)), TimeSpan.FromSeconds(2)));
+        // Allow enqueued commands to finish
+        Thread.Sleep(50);
+
+        // Verify the reloaded URLs only contain vid1 and vid3, not the removed vid2
+        var loadedUrls = native.Commands
+            .Where(c => c.StartsWith("loadfile|", StringComparison.Ordinal))
+            .Select(c => c.Split('|')[1])
+            .ToList();
+
+        Assert.Equal(2, loadedUrls.Count);
+        Assert.Contains(loadedUrls, url => url.Contains("vid1"));
+        Assert.Contains(loadedUrls, url => url.Contains("vid3"));
+        Assert.DoesNotContain(loadedUrls, url => url.Contains("vid2"));
+    }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);
