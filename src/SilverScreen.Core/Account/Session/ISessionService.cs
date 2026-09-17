@@ -14,10 +14,19 @@ public interface ISessionService : ICookieFileProvider
     AccountSession GetCurrentSession();
 
     ManualSessionCookies? GetManualSessionCookies();
-
     void SetManualSession(string cookieContent, SessionCookieFormat format);
 
+    Task SetManualSessionAsync(string cookieContent, SessionCookieFormat format)
+    {
+        return Task.Run(() => SetManualSession(cookieContent, format));
+    }
+
     void ClearSession();
+
+    Task ClearSessionAsync()
+    {
+        return Task.Run(ClearSession);
+    }
 
     CookieFileLease? AcquireCookieFileLease();
 

@@ -188,6 +188,12 @@ public sealed class InMemorySessionService(
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public Task SetManualSessionAsync(string cookieContent, SessionCookieFormat format)
+    {
+        SetManualSession(cookieContent, format);
+        return Task.CompletedTask;
+    }
+
     public void ClearSession()
     {
         CancelValidation();
@@ -200,5 +206,11 @@ public sealed class InMemorySessionService(
 
         if (changed)
             SessionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public Task ClearSessionAsync()
+    {
+        ClearSession();
+        return Task.CompletedTask;
     }
 }

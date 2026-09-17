@@ -7,7 +7,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
     private readonly TimeSpan _debounceDelay;
     private readonly Lock _gate = new();
 
-    private readonly Func<string, bool> _persist;
+    private readonly Func<string, Task<bool>> _persist;
     private readonly Action _persisted;
     private readonly Action _persistenceFailed;
     private readonly Action<Exception> _readFailed;
@@ -19,7 +19,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
 
     internal WebLoginCaptureCoordinator(
         Func<Task<string?>> readReadyCookies,
-        Func<string, bool> persist,
+        Func<string, Task<bool>> persist,
         Action persisted,
         Action<Exception> readFailed,
         Action persistenceFailed,
@@ -31,6 +31,18 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
         _readFailed = readFailed;
         _persistenceFailed = persistenceFailed;
         _debounceDelay = debounceDelay ?? DefaultDebounceDelay;
+    }
+
+    internal WebLoginCaptureCoordinator(
+        Func<Task<string?>> readReadyCookies,
+        Func<string, bool> persist,
+        Action persisted,
+        Action<Exception> readFailed,
+        Action persistenceFailed,
+        TimeSpan? debounceDelay = null)
+        : this(readReadyCookies, text => Task.FromResult(persist(text)), persisted, readFailed, persistenceFailed,
+            debounceDelay)
+    {
     }
 
     public void Dispose()
@@ -137,7 +149,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
                     continue;
             }
 
-            if (!_persist(cookieText))
+            if (!await _persist(cookieText).ConfigureAwait(false))
             {
                 bool shouldReport;
                 lock (_gate)

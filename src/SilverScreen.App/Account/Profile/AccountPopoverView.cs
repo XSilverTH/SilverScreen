@@ -187,11 +187,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
     }
 
 
-    private void OnClearButtonClicked(object? sender, EventArgs args)
+    private async void OnClearButtonClicked(object? sender, EventArgs args)
     {
         Logger.Information("AccountPopoverView clear session button clicked");
         ClearBuffer(manual_editor);
-        _viewModel.ClearSession();
+        await _viewModel.ClearSessionAsync();
     }
 
     private void OnWidgetUnmap(Widget sender, EventArgs args)
@@ -211,9 +211,9 @@ public partial class AccountPopoverView : ViewBase<Bin>
         Render();
     }
 
-    private void OnManualSaveButtonClicked(object? sender, EventArgs args)
+    private async void OnManualSaveButtonClicked(object? sender, EventArgs args)
     {
-        if (!_viewModel.SaveManualSession(GetText(manual_editor)))
+        if (!await _viewModel.SaveManualSessionAsync(GetText(manual_editor)))
         {
             manual_error_label.SetText(_viewModel.ManualSessionError ?? "Could not save the session. Try again.");
             manual_error_label.SetVisible(true);

@@ -44,7 +44,7 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public void SecretServiceSessionPersistsAcrossRestartAndClearsStoredCookies()
+    public async Task SecretServiceSessionPersistsAcrossRestartAndClearsStoredCookies()
     {
         var store = new FakeCookieSecretStore();
         var firstService = new SecretServiceSessionService(store);
@@ -52,8 +52,8 @@ public sealed class SessionTests
         var setEvents = 0;
         firstService.SessionChanged += (_, _) =>
         {
-            Assert.Equal(FakeCookieContent, firstService.GetManualSessionCookies()?.Content);
-            setEvents++;
+            if (firstService.GetManualSessionCookies() is not null)
+                setEvents++;
         };
 
         firstService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
@@ -61,14 +61,15 @@ public sealed class SessionTests
         Assert.Equal(1, setEvents);
         Assert.Equal(FakeCookieContent, store.StoredContent);
         var restartedService = new SecretServiceSessionService(store);
+        await WaitForSessionAsync(restartedService, signedIn: true);
         Assert.True(restartedService.GetCurrentSession().IsSignedIn);
         Assert.Equal(SessionCookieFormat.NetscapeCookiesText, restartedService.GetCurrentSession().CookieFormat);
         Assert.Equal(FakeCookieContent, restartedService.GetManualSessionCookies()?.Content);
         var clearEvents = 0;
         restartedService.SessionChanged += (_, _) =>
         {
-            Assert.Null(restartedService.GetManualSessionCookies());
-            clearEvents++;
+            if (restartedService.GetManualSessionCookies() is null)
+                clearEvents++;
         };
 
         restartedService.ClearSession();
@@ -76,6 +77,7 @@ public sealed class SessionTests
         Assert.Equal(1, clearEvents);
         Assert.Null(store.StoredContent);
         var clearedService = new SecretServiceSessionService(store);
+        await WaitForSessionAsync(clearedService, signedIn: false);
         Assert.False(clearedService.GetCurrentSession().IsSignedIn);
     }
 
@@ -154,13 +156,13 @@ public sealed class SessionTests
         Assert.Contains("Usable videos: 0", result);
         Assert.Equal(1, profileCalls);
     }
-
     [Fact]
-    public void SecretServiceSessionRecoversAfterStartupKeyringFailure()
+    public async Task SecretServiceSessionRecoversAfterStartupKeyringFailure()
     {
         var store = new FakeCookieSecretStore { FailLoad = true };
         var service = new SecretServiceSessionService(store);
 
+        await WaitForAvailabilityAsync(service, available: false);
         Assert.False(service.GetCurrentSession().IsSignedIn);
         Assert.False(service.IsAvailable);
 
@@ -171,6 +173,28 @@ public sealed class SessionTests
         Assert.True(service.GetCurrentSession().IsSignedIn);
         Assert.Equal(FakeCookieContent, store.StoredContent);
     }
+    [Fact]
+    public async Task SecretServiceSession_RestoresWithoutBlockingConstruction()
+    {
+        var store = new ControllableCookieSecretStore();
+        var service = new SecretServiceSessionService(store);
+        var restored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.SessionChanged += (_, _) =>
+        {
+            if (service.GetCurrentSession().IsSignedIn)
+                restored.TrySetResult();
+        };
+
+        Assert.False(service.GetCurrentSession().IsSignedIn);
+        Assert.True(store.LoadStarted.Wait(TimeSpan.FromSeconds(5)));
+
+        store.ReleaseLoad(Encoding.UTF8.GetBytes(FakeCookieContent));
+        await restored.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(service.GetCurrentSession().IsSignedIn);
+        Assert.Equal(FakeCookieContent, service.GetManualSessionCookies()?.Content);
+    }
+
 
 [Fact]
     public void SessionService_CreatesTempFileWithExpectedContent()
@@ -330,6 +354,54 @@ public sealed class SessionTests
         Assert.False(Directory.Exists(untrackedDir));
     }
 
+    private static async Task WaitForSessionAsync(SecretServiceSessionService service, bool signedIn)
+    {
+        if (service.GetCurrentSession().IsSignedIn == signedIn)
+            return;
+
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? _, EventArgs __)
+        {
+            if (service.GetCurrentSession().IsSignedIn == signedIn)
+                changed.TrySetResult();
+        }
+
+        service.SessionChanged += OnChanged;
+        try
+        {
+            if (service.GetCurrentSession().IsSignedIn != signedIn)
+                await changed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            service.SessionChanged -= OnChanged;
+        }
+    }
+
+    private static async Task WaitForAvailabilityAsync(SecretServiceSessionService service, bool available)
+    {
+        if (service.IsAvailable == available)
+            return;
+
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? _, EventArgs __)
+        {
+            if (service.IsAvailable == available)
+                changed.TrySetResult();
+        }
+
+        service.SessionChanged += OnChanged;
+        try
+        {
+            if (service.IsAvailable != available)
+                await changed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            service.SessionChanged -= OnChanged;
+        }
+    }
+
     private static int FindDeadPid()
     {
         for (var pid = 999999; pid > 100000; pid--)
@@ -390,6 +462,7 @@ public sealed class SessionTests
 
         public string? StoredContent => _stored is null ? null : Encoding.UTF8.GetString(_stored);
 
+
         public byte[]? Load()
         {
             return FailLoad
@@ -410,6 +483,31 @@ public sealed class SessionTests
 
             _stored = null;
         }
+    }
+    private sealed class ControllableCookieSecretStore : ICookieSecretStore
+    {
+        private readonly TaskCompletionSource<byte[]?> _load =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ManualResetEventSlim LoadStarted { get; } = new();
+
+        public byte[]? Load() => throw new InvalidOperationException("Synchronous load was invoked.");
+
+        public Task<byte[]?> LoadAsync()
+        {
+            LoadStarted.Set();
+            return _load.Task;
+        }
+
+        public void Save(byte[] secret)
+        {
+        }
+
+        public void Delete()
+        {
+        }
+
+        public void ReleaseLoad(byte[]? secret) => _load.TrySetResult(secret);
     }
 
     private sealed class TemporaryDirectory : IDisposable

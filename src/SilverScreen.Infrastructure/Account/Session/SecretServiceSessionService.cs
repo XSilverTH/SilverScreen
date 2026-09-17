@@ -10,9 +10,9 @@ using SilverScreen.Core.Browsing.Home;
 namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
-///     Persists the manual YouTube session in Secret Service. Construction performs a single
-///     synchronous restore of any stored session (fail-closed to unavailable, never throws);
-///     all later keyring access happens only on explicit save/clear calls, never on hot paths.
+///     Persists the manual YouTube session in Secret Service. Construction starts restoration
+///     asynchronously and never waits for the keyring; session state is published when the
+///     operation completes. All later keyring access is asynchronous as well.
 /// </summary>
 public sealed class SecretServiceSessionService : ISessionService, ISecretServiceAvailability, IDisposable
 {
@@ -24,6 +24,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
     private readonly ICookieSecretStore _store;
     private readonly string? _tempRoot;
+    private readonly Task _restoreTask;
+    private readonly SemaphoreSlim _persistenceGate = new(1, 1);
     private bool _isAvailable = true;
     private bool _isValidating;
     private ManualSessionCookies? _manualCookies;
@@ -51,20 +53,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         _profileServiceFactory = profileServiceFactory;
         _feedServiceFactory = feedServiceFactory;
         _tempRoot = tempRoot;
-        try
-        {
-            _manualCookies = LoadStoredCookies();
-            Logger.Information("YouTube session state in Secret Service: {SessionState}",
-                _manualCookies is not null ? "Restored" : "Not found");
-        }
-        catch (SessionPersistenceException exception)
-        {
-            Logger.Warning("Secret Service was unavailable while restoring the YouTube session: {Message}",
-                exception.InnerException?.Message ?? exception.Message);
-            Logger.Debug(exception, "Secret Service startup restoration error details");
-            _isAvailable = false;
-            _manualCookies = null;
-        }
+        _restoreTask = Task.Run(RestoreStoredCookiesAsync);
     }
 
     public void Dispose()
@@ -230,86 +219,140 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
     public void SetManualSession(string cookieContent, SessionCookieFormat format)
     {
+        SetManualSessionAsync(cookieContent, format).GetAwaiter().GetResult();
+    }
+    public async Task SetManualSessionAsync(string cookieContent, SessionCookieFormat format)
+    {
         if (string.IsNullOrWhiteSpace(cookieContent))
             throw new ArgumentException("Manual session cookie content cannot be empty.", nameof(cookieContent));
 
-        var encodedCookies = Encode(cookieContent);
+        await _restoreTask.ConfigureAwait(false);
+        await _persistenceGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            lock (_gate)
+            var encodedCookies = Encode(cookieContent);
+            try
             {
-                _store.Save(encodedCookies);
-                _isAvailable = true;
-                _manualCookies = new ManualSessionCookies(format, cookieContent);
-                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format})",
-                    format);
-            }
-        }
-        catch (SessionPersistenceException ex)
-        {
-            Logger.Error(ex, "Failed to persist YouTube session to Secret Service");
-            lock (_gate)
-            {
-                _isAvailable = false;
-            }
+                await _store.SaveAsync(encodedCookies).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    _isAvailable = true;
+                    _manualCookies = new ManualSessionCookies(format, cookieContent);
+                }
 
-            throw;
+                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format}", format);
+                SessionChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (SessionPersistenceException ex)
+            {
+                Logger.Error(ex, "Failed to persist YouTube session to Secret Service");
+                lock (_gate)
+                {
+                    _isAvailable = false;
+                }
+
+                throw;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(encodedCookies);
+            }
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(encodedCookies);
+            _persistenceGate.Release();
+        }
+    }
+
+    public void ClearSession()
+    {
+        ClearSessionAsync().GetAwaiter().GetResult();
+    }
+
+    public async Task ClearSessionAsync()
+    {
+        await _restoreTask.ConfigureAwait(false);
+        await _persistenceGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            CancelValidation();
+            bool changed;
+            try
+            {
+                await _store.DeleteAsync().ConfigureAwait(false);
+                lock (_gate)
+                {
+                    _isAvailable = true;
+                    changed = _manualCookies is not null;
+                    _manualCookies = null;
+                }
+
+                Logger.Information("Cleared YouTube session and secret store");
+            }
+            catch (Exception ex)
+            {
+                lock (_gate)
+                {
+                    if (_manualCookies is null)
+                    {
+                        Logger.Debug(ex,
+                            "YouTube session already cleared; treating empty Secret Service clear as success");
+                        changed = false;
+                    }
+                    else
+                    {
+                        Logger.Warning(ex,
+                            "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
+                        _isAvailable = false;
+                        changed = true;
+                        _manualCookies = null;
+                    }
+                }
+            }
+
+            if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _persistenceGate.Release();
+        }
+    }
+
+    private async Task RestoreStoredCookiesAsync()
+    {
+        try
+        {
+            var restoredCookies = await LoadStoredCookiesAsync().ConfigureAwait(false);
+            lock (_gate)
+            {
+                _manualCookies = restoredCookies;
+                _isAvailable = true;
+            }
+
+            Logger.Information("YouTube session state in Secret Service: {SessionState}",
+                restoredCookies is not null ? "Restored" : "Not found");
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning("Secret Service was unavailable while restoring the YouTube session: {Message}",
+                exception.InnerException?.Message ?? exception.Message);
+            Logger.Debug(exception, "Secret Service startup restoration error details");
+            lock (_gate)
+            {
+                _isAvailable = false;
+                _manualCookies = null;
+            }
         }
 
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void ClearSession()
-    {
-        CancelValidation();
-        bool changed;
-        try
-        {
-            lock (_gate)
-            {
-                _store.Delete();
-                _isAvailable = true;
-                changed = _manualCookies is not null;
-                _manualCookies = null;
-                Logger.Information("Cleared YouTube session and secret store");
-            }
-        }
-        catch (Exception ex)
-        {
-            lock (_gate)
-            {
-                if (_manualCookies is null)
-                {
-                    // Nothing is cached locally, so the store was already empty (libsecret
-                    // reports clearing a missing item as a failure). Clearing an empty
-                    // store succeeds without poisoning availability.
-                    Logger.Debug(ex, "YouTube session already cleared; treating empty Secret Service clear as success");
-                    changed = false;
-                }
-                else
-                {
-                    Logger.Warning(ex,
-                        "Failed to clear YouTube session in Secret Service; recovering local sign-out state");
-                    _isAvailable = false;
-                    changed = true;
-                    _manualCookies = null;
-                }
-            }
-        }
-
-        if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private ManualSessionCookies? LoadStoredCookies()
+    private async Task<ManualSessionCookies?> LoadStoredCookiesAsync()
     {
         byte[]? encodedCookies = null;
         try
         {
-            encodedCookies = _store.Load();
+            encodedCookies = await _store.LoadAsync().ConfigureAwait(false);
             if (encodedCookies is null) return null;
 
             string content;

@@ -255,14 +255,11 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         return cookieText;
     }
 
-    private bool TryPersistSession(string cookieText)
+    private Task<bool> TryPersistSession(string cookieText)
     {
-        return Volatile.Read(ref _disposeState) == 0 &&
-               // Failed saves return false without touching the stored session, so a
-               // refresh never clears the previous session unless a new capture
-               // succeeds; failures stay retryable while terminal completion below
-               // fires exactly once.
-               _account.SaveWebSession(cookieText);
+        return Volatile.Read(ref _disposeState) == 0
+            ? _account.SaveWebSessionAsync(cookieText)
+            : Task.FromResult(false);
     }
 
     private void OnCookieChanged(CookieManager sender, EventArgs args)

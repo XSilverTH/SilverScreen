@@ -111,9 +111,72 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         return true;
     }
 
+    public async Task<bool> SaveManualSessionAsync(string cookieContent)
+    {
+        Logger.Information("SaveManualSessionAsync called");
+        if (string.IsNullOrWhiteSpace(cookieContent))
+        {
+            SetManualSessionError("Nothing to save — paste the contents of your cookies.txt file first.");
+            return false;
+        }
+
+        var trimmed = cookieContent.Trim();
+        try
+        {
+            var auth = YouTubeCookieAuthentication.FromNetscape(trimmed);
+            if (!auth.HasAuthenticationCookies)
+            {
+                SetManualSessionError(
+                    "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            Logger.Warning(exception, "Manual session content was rejected");
+            SetManualSessionError(
+                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
+            return false;
+        }
+
+        var (succeeded, error) = await PersistSessionAsync(trimmed).ConfigureAwait(false);
+        SetManualSessionError(error);
+        return succeeded;
+    }
+
     public bool SaveWebSession(string cookieContent)
     {
         return !string.IsNullOrWhiteSpace(cookieContent) && PersistSession(cookieContent.Trim());
+    }
+
+    public async Task<bool> SaveWebSessionAsync(string cookieContent)
+    {
+        if (string.IsNullOrWhiteSpace(cookieContent))
+            return false;
+
+        var (succeeded, _) = await PersistSessionAsync(cookieContent.Trim()).ConfigureAwait(false);
+        return succeeded;
+    }
+
+    private async Task<(bool Succeeded, string? Error)> PersistSessionAsync(string cookieContent)
+    {
+        try
+        {
+            await _sessionService.SetManualSessionAsync(cookieContent, SessionCookieFormat.NetscapeCookiesText)
+                .ConfigureAwait(false);
+            return (true, null);
+        }
+        catch (SessionPersistenceException exception)
+        {
+            Logger.Warning(exception, "Failed to persist YouTube session");
+            return (false, "Could not save the session — the system keyring (Secret Service) is unavailable.");
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            Logger.Warning(exception, "Manual session content was rejected");
+            return (false,
+                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
+        }
     }
 
     private bool PersistSession(string cookieContent)
@@ -162,6 +225,19 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             _sessionService.ClearSession();
         }
         catch (SessionPersistenceException exception)
+        {
+            Logger.Error(exception, "Failed to clear YouTube session");
+        }
+    }
+
+    public async Task ClearSessionAsync()
+    {
+        Logger.Information("Clearing active YouTube session asynchronously");
+        try
+        {
+            await _sessionService.ClearSessionAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
         {
             Logger.Error(exception, "Failed to clear YouTube session");
         }
