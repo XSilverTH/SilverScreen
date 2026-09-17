@@ -47,6 +47,73 @@ public sealed class YouTubePlaybackTelemetryTests
     }
 
     [Fact]
+    public async Task ForwardSeekExcludesSkippedWatchtime()
+    {
+        var handler = new TrackingHandler();
+        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true),
+            new ManualSessionService(), _ => handler);
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        telemetry.UpdateState(State(5, false));
+        telemetry.UpdateState(State(50, false));
+        telemetry.UpdateState(State(55, true));
+
+        var beacons = await handler.WaitForBeaconsAsync(3);
+        var watchtime = beacons.Where(uri => uri.AbsolutePath == "/api/stats/watchtime").ToArray();
+        Assert.Equal(2, watchtime.Length);
+        Assert.Contains(watchtime, uri => QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "5");
+        Assert.Contains(watchtime, uri => QueryValue(uri, "st") == "50" && QueryValue(uri, "et") == "55");
+        Assert.DoesNotContain(watchtime, uri => QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "50");
+    }
+
+    [Fact]
+    public async Task TrackSwitchFlushesPreviousVideoWatchtime()
+    {
+        var handler = new TrackingHandler();
+        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true),
+            new ManualSessionService(), _ => handler);
+        var first = new VideoSummary("abc123_X-yZ", "First", "Channel", TimeSpan.FromMinutes(1),
+            "https://i.ytimg.com/vi/abc123_X-yZ/default.jpg", false);
+        var second = new VideoSummary("dQw4w9WgXcQ", "Second", "Channel", TimeSpan.FromMinutes(1),
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", false);
+        using var telemetry = service.Start(new PlaybackRequest([first, second]));
+
+        telemetry.UpdateState(State(0, false));
+        await handler.WaitUntilCountAsync(1);
+        telemetry.UpdateState(State(5, false));
+        telemetry.UpdateState(State(0, false) with { PlaylistIndex = 1 });
+
+        var beacons = await handler.WaitForBeaconsAsync(3);
+        var previousVideoWatchtime = Assert.Single(beacons, uri =>
+            uri.AbsolutePath == "/api/stats/watchtime" &&
+            QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "5");
+        Assert.Contains(handler.Referrers, referrer =>
+            referrer.Contains("/watch?v=", StringComparison.Ordinal) &&
+            referrer.EndsWith(first.Id, StringComparison.Ordinal));
+        Assert.Equal("5", QueryValue(previousVideoWatchtime, "et"));
+    }
+
+    [Fact]
+    public async Task DisposingTelemetryFlushesFinalWatchtime()
+    {
+        var handler = new TrackingHandler();
+        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true),
+            new ManualSessionService(), _ => handler);
+        var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        await handler.WaitUntilCountAsync(1);
+        telemetry.UpdateState(State(5, false));
+        telemetry.Dispose();
+
+        var beacons = await handler.WaitForBeaconsAsync(2);
+        var watchtime = Assert.Single(beacons, uri => uri.AbsolutePath == "/api/stats/watchtime");
+        Assert.Equal("0", QueryValue(watchtime, "st"));
+        Assert.Equal("5", QueryValue(watchtime, "et"));
+    }
+
+    [Fact]
     public async Task SignOutRetiresInProgressTelemetryAndRefusesFutureBeacons()
     {
         var handler = new TrackingHandler();

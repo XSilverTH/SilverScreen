@@ -278,6 +278,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     private sealed class VideoTelemetrySession(YouTubePlaybackTelemetryService owner, string videoId)
     {
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan MinimumObservedInterval = TimeSpan.FromMilliseconds(500);
         private readonly string _cpn = CreateCpn();
         private readonly Lock _consentLock = new();
         private readonly CancellationTokenSource _consentCancellation = new();
@@ -285,19 +286,26 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         private bool _disposed;
         private Task<TrackingEndpoints?>? _endpointsTask;
         private TimeSpan _lastPosition;
+        private DateTimeOffset _lastObservedAt;
+        private double _lastSpeed;
         private bool _playing;
-        private TimeSpan _segmentStart;
         private Task _sendTail = Task.CompletedTask;
-
+        private TimeSpan _segmentStart;
         public void UpdateState(PlaybackPresenceState state)
         {
             if (_disposed) return;
             var position = state.Position < TimeSpan.Zero ? TimeSpan.Zero : state.Position;
+            var speed = double.IsFinite(state.Speed) && state.Speed > 0 ? state.Speed : 1;
             if (state.IsPaused)
             {
-                FlushSegment(position);
+                var discontinuity = IsDiscontinuity(position, state.ObservedAt);
+                FlushSegment(discontinuity ? _lastPosition : position);
+                if (discontinuity)
+                    _segmentStart = position;
                 _playing = false;
                 _lastPosition = position;
+                _lastObservedAt = state.ObservedAt;
+                _lastSpeed = speed;
                 return;
             }
 
@@ -306,11 +314,13 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 _playing = true;
                 _segmentStart = position;
                 _lastPosition = position;
+                _lastObservedAt = state.ObservedAt;
+                _lastSpeed = speed;
                 Enqueue(TelemetryEvent.Playback(position));
                 return;
             }
 
-            if (position < _lastPosition)
+            if (IsDiscontinuity(position, state.ObservedAt))
             {
                 FlushSegment(_lastPosition);
                 _segmentStart = position;
@@ -322,6 +332,29 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
 
             _lastPosition = position;
+            _lastObservedAt = state.ObservedAt;
+            _lastSpeed = speed;
+        }
+
+        private bool IsDiscontinuity(TimeSpan position, DateTimeOffset observedAt)
+        {
+            if (!_playing || position < _lastPosition) return true;
+
+            var elapsed = observedAt - _lastObservedAt;
+            if (elapsed >= MinimumObservedInterval)
+            {
+                var expectedDeltaTicks = elapsed.Ticks * _lastSpeed;
+                if (expectedDeltaTicks < long.MaxValue)
+                {
+                    var expectedDelta = TimeSpan.FromTicks((long)expectedDeltaTicks);
+                    if (position - _lastPosition - expectedDelta >= TimeSpan.FromSeconds(2))
+                        return true;
+                }
+            }
+
+            // If observations do not carry a meaningful time delta, retain
+            // heartbeat-sized updates while treating larger jumps as seeks.
+            return position - _lastPosition > HeartbeatInterval + TimeSpan.FromSeconds(2);
         }
 
         public void Dispose()
@@ -332,11 +365,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 FlushSegment(_lastPosition);
                 _playing = false;
             }
-
             _disposed = true;
-            var client = _client;
-            _client = null;
-            DisposeClientAfterSendsAsync(_sendTail, client).FireAndForget(Logger);
+            DisposeClientAfterSendsAsync(_sendTail).FireAndForget(Logger);
         }
         public void InvalidateConsent()
         {
@@ -404,7 +434,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
         private bool CanSend(CancellationToken cancellationToken)
         {
-            return !cancellationToken.IsCancellationRequested && !_disposed && owner.IsEnabled();
+            // Normal disposal flushes the final segment and lets the queued send tail
+            // drain. Consent invalidation and session retirement cancel the token.
+            return !cancellationToken.IsCancellationRequested && owner.IsEnabled();
         }
 
         private async Task<TrackingEndpoints?> GetEndpointsAsync(CancellationToken cancellationToken)
@@ -447,7 +479,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
         }
 
-        private static async Task DisposeClientAfterSendsAsync(Task sendTail, HttpClient? client)
+        private async Task DisposeClientAfterSendsAsync(Task sendTail)
         {
             try
             {
@@ -459,10 +491,16 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
             finally
             {
+                HttpClient? client;
+                lock (_consentLock)
+                {
+                    client = _client;
+                    _client = null;
+                }
+
                 client?.Dispose();
             }
         }
-
         private static string CreateCpn()
         {
             const string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
