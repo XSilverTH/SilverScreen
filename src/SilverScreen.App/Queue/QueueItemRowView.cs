@@ -15,6 +15,53 @@ using Type = GObject.Type;
 
 namespace SilverScreen.Queue;
 
+internal sealed class QueueRowBinding
+{
+    public QueueItem? Item { get; private set; }
+    public int Index { get; private set; } = -1;
+
+    public void Bind(QueueItem item, int index)
+    {
+        Item = item;
+        Index = index;
+    }
+
+    public void Unbind()
+    {
+        Item = null;
+        Index = -1;
+    }
+    
+    public bool TryGetPlayTarget(out Guid itemId, out int index)
+    {
+        if (Item is { } item && Index >= 0)
+        {
+            itemId = item.Id;
+            index = Index;
+            return true;
+        }
+
+        itemId = default;
+        index = -1;
+        return false;
+    }
+
+    public bool TryGetMoveTarget(int delta, out Guid itemId, out int destinationIndex)
+    {
+        if (Item is { } item && Index >= 0)
+        {
+            itemId = item.Id;
+            destinationIndex = Index + delta;
+            return true;
+        }
+
+        itemId = default;
+        destinationIndex = -1;
+        return false;
+    }
+
+    public int ResolveDropIndex(bool dropBefore) => Index < 0 ? 0 : dropBefore ? Index : Index + 1;
+}
 public partial class QueueItemRowView : ViewBase<Box>
 {
     private const int ThumbnailWidth = 96;
@@ -33,9 +80,9 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Action<Guid> _removeRequested;
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
+    private readonly QueueRowBinding _binding = new();
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private int _index;
     private CancellationTokenSource? _thumbnailCancellation;
 
     public QueueItemRowView(
@@ -55,8 +102,8 @@ public partial class QueueItemRowView : ViewBase<Box>
         _actions = Lifetime.Own(SimpleActionGroup.New());
         _playNowAction = CreateAction("play-now", () =>
         {
-            if (Item is { } item)
-                _playRequested?.Invoke(item.Id, _index);
+            if (_binding.TryGetPlayTarget(out var itemId, out var index))
+                _playRequested?.Invoke(itemId, index);
         });
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
         _moveDownAction = CreateAction("move-down", () => MoveBy(1));
@@ -101,7 +148,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private ContentProvider? OnDragPrepare(DragSource sender, DragSource.PrepareSignalArgs args)
     {
-        if (Item is not { } item)
+        if (_binding.Item is not { } item)
             return null;
 
         using var value = new Value(item.Id.ToString());
@@ -115,8 +162,8 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void OnDetailsOrThumbnailClicked(GestureClick sender, GestureClick.ReleasedSignalArgs args)
     {
-        if (Item is { } item)
-            _playRequested?.Invoke(item.Id, _index);
+        if (_binding.TryGetPlayTarget(out var itemId, out var index))
+            _playRequested?.Invoke(itemId, index);
     }
 
     private void OnRemoveButtonClicked(object? sender, EventArgs args)
@@ -125,14 +172,14 @@ public partial class QueueItemRowView : ViewBase<Box>
             _removeRequested(item.Id);
     }
 
-    public QueueItem? Item { get; private set; }
+    public QueueItem? Item => _binding.Item;
 
 
     public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         Unbind();
-        Item = item;
+        _binding.Bind(item, index);
         position.SetText((index + 1).ToString());
         title.SetText(item.Video.Title);
         channel.SetText(item.Video.ChannelName);
@@ -168,8 +215,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     public void Unbind()
     {
-        Item = null;
-        _index = 0;
+        _binding.Unbind();
         _bindingGeneration++;
         position.SetText(string.Empty);
         title.SetText(string.Empty);
@@ -204,16 +250,16 @@ public partial class QueueItemRowView : ViewBase<Box>
         Widget.RemoveCssClass("queue-drop-before");
         Widget.RemoveCssClass("queue-drop-after");
 
-        if (Item is null || !Guid.TryParse(value, out var itemId))
+        if (!Guid.TryParse(value, out var itemId) || _binding.Item is null)
             return false;
 
-        _dropRequested(itemId, y < Widget.GetAllocatedHeight() / 2.0 ? _index : _index + 1);
+        _dropRequested(itemId, _binding.ResolveDropIndex(y >= Widget.GetAllocatedHeight() / 2.0));
         return true;
     }
 
     private DragAction OnDropMotion(DropTarget sender, DropTarget.MotionSignalArgs args)
     {
-        if (Item is null)
+        if (_binding.Item is null)
             return 0;
 
         if (args.Y < Widget.GetAllocatedHeight() / 2.0)
@@ -238,8 +284,8 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void MoveBy(int delta)
     {
-        if (Item is { } item)
-            _moveRequested(item.Id, _index + delta);
+        if (_binding.TryGetMoveTarget(delta, out var itemId, out var destinationIndex))
+            _moveRequested(itemId, destinationIndex);
     }
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)

@@ -116,8 +116,16 @@ public partial class QueueView : ViewBase<Box>
     private void RefreshVisibleRows()
     {
         foreach (var row in _rowsByCell.Values)
-            if (row.Item is { } item)
-                row.Bind(item, GetItemIndex(item.Id), _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
+        {
+            if (row.Item is not { } item)
+                continue;
+
+            var index = GetItemIndex(item.Id);
+            if (index < 0)
+                row.Unbind();
+            else
+                row.Bind(item, index, _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
+        }
     }
 
     private void ApplyItems(IReadOnlyList<QueueItem> items)
