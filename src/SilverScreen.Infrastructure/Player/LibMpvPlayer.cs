@@ -256,7 +256,9 @@ public sealed class LibMpvPlayer : IDisposable
     {
         Enqueue(() =>
             Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
+
     }
+
 
     public void RemovePlaylistItem(int index)
     {
@@ -287,23 +289,7 @@ public sealed class LibMpvPlayer : IDisposable
         {
             if (IsDisposing) return;
 
-            var currentIndex = _state.PlaylistIndex >= 0
-                ? _state.PlaylistIndex
-                : _reload?.PlaylistIndex ?? -1;
-            var currentId = _request is not null && currentIndex < _request.Videos.Length
-                && currentIndex >= 0
-                ? _request.Videos[currentIndex].Id
-                : null;
-            var newIndex = -1;
-            for (var i = 0; i < request.Videos.Length; i++)
-                if (request.Videos[i].Id == currentId)
-                {
-                    newIndex = i;
-                    break;
-                }
             _request = request;
-            if (_reload is not null && newIndex >= 0)
-                _reload = _reload with { PlaylistIndex = newIndex };
         }
     }
 
@@ -372,7 +358,7 @@ public sealed class LibMpvPlayer : IDisposable
             if (IsDisposing || !IsAvailable) return;
             _quality = quality;
             if (!_state.HasMedia || _request is null) return;
-            _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
+            _reload ??= new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
                 _state.Speed);
         }
 
@@ -410,7 +396,7 @@ public sealed class LibMpvPlayer : IDisposable
             _renderContext = 0;
             _resumeAfterRenderer = _state.HasMedia;
             if (_state.HasMedia && _request is not null)
-                _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
+                _reload ??= new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
                     _state.Speed);
         }
 
@@ -587,9 +573,9 @@ public sealed class LibMpvPlayer : IDisposable
                 },
                 _ => _state
             };
-            if (_reload is not null)
-                _reload = new ReloadSnapshot(_state.PlaylistIndex, _state.Position, _state.IsPaused, _state.Volume,
-                    _state.Speed);
+            // A reload snapshot is immutable until HandleFileLoaded consumes it.
+            // Property notifications from shutdown/reload commands must not replace
+            // the state captured before the reload began.
         }
 
         PublishState();
@@ -609,13 +595,22 @@ public sealed class LibMpvPlayer : IDisposable
                 SubtitleTracks = subtitleTracks,
                 Chapters = chapters
             };
-            reload = _reload;
+
+            if (_reload is not null &&
+                (_reload.PlaylistIndex < 0 || _reload.PlaylistIndex == _state.PlaylistIndex ||
+                 _state.PlaylistIndex < 0))
+            {
+                reload = _reload;
+                _reload = null;
+            }
+            else
+            {
+                reload = null;
+            }
         }
 
-        if (reload is not null && (reload.PlaylistIndex < 0 || reload.PlaylistIndex == _state.PlaylistIndex ||
-                                   _state.PlaylistIndex < 0))
+        if (reload is not null)
         {
-            _reload = null;
             Enqueue(() =>
             {
                 Check(_native.SetPropertyDouble(_handle, "volume", reload.Volume));

@@ -258,6 +258,61 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void ShutdownRenderer_IgnoresPropertyNotificationsUntilReloadIsConsumed()
+    {
+        var native = new RecordingNative { KeepEventLoopAlive = true };
+        var allocations = new List<nint>();
+
+        nint Property(string name, LibMpvFormat format, Action<nint> write)
+        {
+            var namePointer = Marshal.StringToCoTaskMemUTF8(name);
+            var dataPointer = Marshal.AllocCoTaskMem(format == LibMpvFormat.Double ? sizeof(double) : sizeof(int));
+            write(dataPointer);
+            var property = new LibMpvEventProperty(namePointer, format, dataPointer);
+            var propertyPointer = Marshal.AllocCoTaskMem(Marshal.SizeOf<LibMpvEventProperty>());
+            Marshal.StructureToPtr(property, propertyPointer, false);
+            allocations.AddRange([propertyPointer, dataPointer, namePointer]);
+            return propertyPointer;
+        }
+
+        var initialPosition = Property("time-pos", LibMpvFormat.Double,
+            pointer => Marshal.StructureToPtr(42.5d, pointer, false));
+        var initialPause = Property("pause", LibMpvFormat.Flag, pointer => Marshal.WriteInt32(pointer, 1));
+        native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, initialPosition));
+        native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, initialPause));
+
+        try
+        {
+            using var player = new LibMpvPlayer(native, action => action());
+            player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), new AppPreferences(), null);
+            player.InitializeRenderer();
+            player.HandleFileLoaded();
+            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+
+            player.ShutdownRenderer();
+
+            var changedPosition = Property("time-pos", LibMpvFormat.Double,
+                pointer => Marshal.StructureToPtr(99d, pointer, false));
+            var changedPause = Property("pause", LibMpvFormat.Flag, pointer => Marshal.WriteInt32(pointer, 0));
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, changedPosition));
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, changedPause));
+            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+
+            player.InitializeRenderer();
+            player.HandleFileLoaded();
+
+            Assert.True(SpinWait.SpinUntil(
+                () => native.Commands.Any(c => c == "seek|42.5|absolute+exact"), TimeSpan.FromSeconds(2)));
+            Assert.Contains(native.FlagProperties, p => p.Name == "pause" && p.Value);
+        }
+        finally
+        {
+            foreach (var allocation in allocations)
+                Marshal.FreeCoTaskMem(allocation);
+        }
+    }
+
+    [Fact]
     public void ShutdownRenderer_PreservesPauseStateAcrossRendererReinitialization()
     {
         var native = new RecordingNative();
@@ -377,8 +432,8 @@ public sealed class LibMpvPlayerTests
         Assert.Single(stats.Tracks);
         Assert.Equal("av1", stats.Tracks[0].Codec);
         Assert.True(stats.Tracks[0].IsSelected);
-    }
 
+    }
     [Fact]
     public void UpdatePlaylistRequest_SyncsReloadSourceSoRemovedEntryDoesNotReappearOnReload()
     {
@@ -436,13 +491,8 @@ public sealed class LibMpvPlayerTests
         public bool IsAvailable => true;
         public string? AvailabilityError => null;
         public string? RequestedLogLevel { get; private set; }
+        public bool KeepEventLoopAlive { get; set; }
         public ConcurrentQueue<LibMpvEvent> EventsToYield { get; } = [];
-
-        public int RequestLogMessages(nint handle, string minLevel)
-        {
-            RequestedLogLevel = minLevel;
-            return 0;
-        }
 
         public nint Create()
         {
@@ -463,6 +513,19 @@ public sealed class LibMpvPlayerTests
         {
             return 0;
         }
+        public int RequestLogMessages(nint handle, string minLevel)
+        {
+            RequestedLogLevel = minLevel;
+            return 0;
+        }
+
+        public LibMpvEvent WaitEvent(nint handle, double timeout)
+        {
+            if (EventsToYield.TryDequeue(out var ev)) return ev;
+            if (KeepEventLoopAlive) return new LibMpvEvent((int)LibMpvEventId.None, 0, 0, 0);
+            return new LibMpvEvent((int)LibMpvEventId.Shutdown, 0, 0, 0);
+        }
+
 
         public int SetPropertyString(nint handle, string name, string value)
         {
@@ -499,11 +562,6 @@ public sealed class LibMpvPlayerTests
             return 0;
         }
 
-        public LibMpvEvent WaitEvent(nint handle, double timeout)
-        {
-            if (EventsToYield.TryDequeue(out var ev)) return ev;
-            return new LibMpvEvent((int)LibMpvEventId.Shutdown, 0, 0, 0);
-        }
 
         public void Wakeup(nint handle)
         {
