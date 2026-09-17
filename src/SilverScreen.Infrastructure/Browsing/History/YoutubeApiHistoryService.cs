@@ -2,6 +2,7 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
@@ -180,7 +181,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
         catch (Exception exception)
         {
@@ -188,7 +189,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
     }
 

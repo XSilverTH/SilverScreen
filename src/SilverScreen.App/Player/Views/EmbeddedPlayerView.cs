@@ -305,7 +305,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to resolve playback URLs for request");
-            return Task.FromResult(exception.Message);
+            return Task.FromResult(DiagnosticSanitizer.Sanitize(exception.Message));
         }
 
         if (!_player.IsAvailable)

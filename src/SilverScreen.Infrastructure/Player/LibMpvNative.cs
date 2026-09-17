@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-
+using SilverScreen.Core.Common;
 namespace SilverScreen.Infrastructure.Player;
 
 internal enum LibMpvFormat
@@ -219,7 +219,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
         }
         catch (Exception exception)
         {
-            AvailabilityError = exception.Message;
+            AvailabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
             Dispose();
         }
     }

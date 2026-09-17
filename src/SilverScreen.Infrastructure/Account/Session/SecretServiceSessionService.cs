@@ -4,8 +4,9 @@ using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
-using YoutubeAPI;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Browsing.Home;
+using YoutubeAPI;
 
 namespace SilverScreen.Infrastructure.Account.Session;
 
@@ -347,8 +348,9 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         catch (Exception exception)
         {
             Logger.Warning("Secret Service was unavailable while restoring the YouTube session: {Message}",
-                exception.InnerException?.Message ?? exception.Message);
-            Logger.Debug(exception, "Secret Service startup restoration error details");
+                DiagnosticSanitizer.Sanitize(exception.InnerException?.Message ?? exception.Message));
+            Logger.Debug("Secret Service startup restoration error details: {Details}",
+                DiagnosticSanitizer.Sanitize(exception.ToString()));
             lock (_gate)
             {
                 _isAvailable = false;

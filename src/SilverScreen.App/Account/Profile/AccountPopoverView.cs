@@ -120,9 +120,9 @@ public partial class AccountPopoverView : ViewBase<Bin>
         {
             return;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            Logger.Warning(exception, "Failed to load account avatar from {AvatarUrl}", avatarUrl);
+            Logger.Debug("Failed to load account avatar");
             return;
         }
 

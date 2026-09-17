@@ -101,7 +101,10 @@ public sealed class MpvCommandBuilder
         var startInfo = new ProcessStartInfo
         {
             FileName = command.ExecutablePath,
-            UseShellExecute = false
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
 
         foreach (var argument in command.Arguments) startInfo.ArgumentList.Add(argument);

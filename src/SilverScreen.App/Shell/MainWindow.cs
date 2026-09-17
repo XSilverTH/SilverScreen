@@ -661,7 +661,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (string.IsNullOrWhiteSpace(message))
             return;
 
-        var text = message.Trim();
+        var text = DiagnosticSanitizer.Sanitize(message.Trim());
         Functions.IdleAdd(0, () =>
         {
             if (!_closed)

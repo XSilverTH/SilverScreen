@@ -62,7 +62,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                 _cachedProfile = accountProfile;
             }
 
-            Logger.Information("Account profile fetched successfully for {DisplayName}", accountProfile.DisplayName);
+            Logger.Debug("Account profile fetched successfully");
             return accountProfile;
         }
         catch (OperationCanceledException)

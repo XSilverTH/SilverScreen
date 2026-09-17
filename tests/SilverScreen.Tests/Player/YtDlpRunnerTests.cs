@@ -38,6 +38,23 @@ public sealed class YtDlpRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_RedactsCredentialMaterialFromCapturedStderr()
+    {
+        const string secret = "runner-secret";
+        var runner = new YtDlpRunner();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "sh",
+            ArgumentList = { "-c", $"printf 'Cookie: SAPISID={secret}\\n' >&2; exit 1" }
+        };
+
+        var result = await runner.RunAsync(startInfo, TimeSpan.FromSeconds(5), CancellationToken.None);
+
+        Assert.DoesNotContain(secret, result.StandardError, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", result.StandardError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunAsync_ExitCodeZero_CapturesOutputAndDiagnostics()
     {
         var runner = new YtDlpRunner();
@@ -105,7 +122,24 @@ public sealed class YtDlpMediaResolverTests
     }
 
     [Fact]
-    public async Task ResolveMediaAsync_NonZeroExitWithStderr_IncludesStderrDiagnosticsInErrorMessage()
+    public async Task ResolveMediaAsync_NonZeroExitWithStderr_SanitizesSecretMaterialInErrorMessage()
+    {
+        const string secret = "secret-cookie";
+        var runner = new FakeYtDlpRunner
+        {
+            Result = new ProcessResult(1, "", $"ERROR: Cookie: SAPISID={secret}")
+        };
+        using var resolver = CreateResolver(runner);
+
+        var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
+
+        Assert.False(result.IsSuccess);
+        Assert.DoesNotContain(secret, result.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", result.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResolveMediaAsync_NonZeroExitWithRegularStderr_IncludesSafeDiagnostics()
     {
         var runner = new FakeYtDlpRunner
         {

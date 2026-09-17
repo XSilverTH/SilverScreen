@@ -2,6 +2,7 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Channels;
@@ -142,7 +143,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 [],
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
         catch (Exception exception)
         {
@@ -150,7 +151,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 [],
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
     }
 
@@ -238,7 +239,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
         catch (Exception exception)
         {
@@ -246,7 +247,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                exception.Message);
+                DiagnosticSanitizer.Sanitize(exception.Message));
         }
     }
 

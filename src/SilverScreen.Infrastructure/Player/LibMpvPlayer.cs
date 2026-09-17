@@ -3,9 +3,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Serilog;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-
 namespace SilverScreen.Infrastructure.Player;
 
 public sealed record LibMpvSubtitleTrack(long Id, string Language, string Label, bool IsSelected);
@@ -101,7 +101,7 @@ public sealed class LibMpvPlayer : IDisposable
         catch (Exception exception)
         {
             Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
-            AvailabilityError = exception.Message;
+            AvailabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
             IsAvailable = false;
             if (_handle != 0) native.Destroy(_handle);
             _handle = 0;
@@ -497,13 +497,12 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
         }
     }
-
     private static void HandleLogMessage(nint data)
     {
         if (data == 0) return;
         var message = Marshal.PtrToStructure<LibMpvEventLogMessage>(data);
         var prefix = Marshal.PtrToStringUTF8(message.Prefix) ?? "unknown";
-        var text = Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n');
+        var text = DiagnosticSanitizer.Sanitize(Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n'));
         if (string.IsNullOrWhiteSpace(text)) return;
 
         switch (message.LogLevel)
@@ -1054,8 +1053,9 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void PublishFailure(string detail)
     {
-        Logger.Error("LibMpv playback failure: {Detail}", detail);
-        Dispatch(() => PlaybackFailed?.Invoke(this, detail));
+        var sanitized = DiagnosticSanitizer.Sanitize(detail);
+        Logger.Error("LibMpv playback failure: {Detail}", sanitized);
+        Dispatch(() => PlaybackFailed?.Invoke(this, sanitized));
     }
 
     private void Dispatch(Action action)

@@ -1,5 +1,6 @@
 using Serilog;
 using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Common;
@@ -96,13 +97,13 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         {
             Logger.Warning(exception, "Invalid YouTube channel or continuation reference");
             return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: invalid channel or continuation ({exception.Message}).");
+                $"Could not load channel: invalid channel or continuation ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
         }
         catch (ArgumentException exception)
         {
             Logger.Warning(exception, "Invalid YouTube channel reference");
             return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: invalid channel reference ({exception.Message}).");
+                $"Could not load channel: invalid channel reference ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
         }
         catch (AuthenticationRequiredException exception)
         {
@@ -138,7 +139,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         {
             Logger.Warning(exception, "YouTube channel request failed");
             return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: {exception.Message}");
+                $"Could not load channel: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }
     }
 

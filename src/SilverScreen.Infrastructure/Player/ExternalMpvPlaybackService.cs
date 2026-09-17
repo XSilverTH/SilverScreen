@@ -122,6 +122,7 @@ public sealed class ExternalMpvPlaybackService(
                 return RuntimeDependencyGuidance.MpvUnavailable(activeOptions.MpvExecutablePath);
             }
 
+            _ = DrainProcessOutputAsync(started);
             Logger.Information("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
             var playbackId = RegisterActivePlayback(request);
             var observer = new MpvIpcPlaybackObserver(started, ipcEndpoint, ipcDirectory,
@@ -148,7 +149,7 @@ public sealed class ExternalMpvPlaybackService(
             Logger.Warning(ex, "MPV playback request rejected");
             CleanupCookieLease(cookieFile, "MPV playback request rejected");
             CleanupIpcDirectory(ipcDirectory);
-            return ex.Message;
+            return DiagnosticSanitizer.Sanitize(ex.Message);
         }
         catch (IOException ex)
         {
@@ -214,6 +215,22 @@ public sealed class ExternalMpvPlaybackService(
 
         _coordinator.CompleteActivePlayback(playbackId);
     }
+    private static async Task DrainProcessOutputAsync(Process process)
+    {
+        try
+        {
+            await Task.WhenAll(
+                    process.StandardOutput.ReadToEndAsync(),
+                    process.StandardError.ReadToEndAsync())
+                .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Diagnostics from mpv are intentionally discarded; they can contain
+            // credential-bearing URLs emitted by ytdl_hook.
+        }
+    }
+
 
     private static void HandleProcessExited(Process? process, IDisposable? cookieFileLease)
     {

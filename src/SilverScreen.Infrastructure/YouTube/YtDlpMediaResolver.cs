@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
@@ -6,6 +7,7 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
+using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.ValueTypes;
 
 namespace SilverScreen.Infrastructure.YouTube;
@@ -120,7 +122,7 @@ public sealed class YtDlpMediaResolver(
             var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
             if (!details.IsSuccess)
                 Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
-                    videoId, details.ErrorMessage);
+                    videoId, DiagnosticSanitizer.Sanitize(details.ErrorMessage));
 
             var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details.Details, videoId);
             if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
@@ -310,12 +312,13 @@ public sealed class YtDlpMediaResolver(
 
         if (processResult.ExitCode != 0)
         {
-            if (!string.IsNullOrWhiteSpace(processResult.StandardError))
+            var stderr = DiagnosticSanitizer.Sanitize(processResult.StandardError.Trim());
+            if (!string.IsNullOrWhiteSpace(stderr))
                 Logger.Warning("yt-dlp extraction failed for {VideoId} with exit code {ExitCode}. Stderr: {StdErr}",
-                    videoId, processResult.ExitCode, processResult.StandardError.Trim());
+                    videoId, processResult.ExitCode, stderr);
 
-            var errorDetail = !string.IsNullOrWhiteSpace(processResult.StandardError)
-                ? $"the process exited with error code {processResult.ExitCode}: {processResult.StandardError.Trim()}"
+            var errorDetail = !string.IsNullOrWhiteSpace(stderr)
+                ? $"the process exited with error code {processResult.ExitCode}: {stderr}"
                 : $"the process exited with error code {processResult.ExitCode}.";
 
             return (false, null, RuntimeDependencyGuidance.YtDlpFailed(errorDetail));
@@ -324,7 +327,7 @@ public sealed class YtDlpMediaResolver(
         if (!string.IsNullOrWhiteSpace(processResult.StandardOutput)) return (true, processResult.StandardOutput, null);
         if (!string.IsNullOrWhiteSpace(processResult.StandardError))
             Logger.Warning("yt-dlp extraction returned empty output for {VideoId}. Stderr: {StdErr}",
-                videoId, processResult.StandardError.Trim());
+                videoId, DiagnosticSanitizer.Sanitize(processResult.StandardError.Trim()));
 
         return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
     }
@@ -348,7 +351,8 @@ public sealed class YtDlpMediaResolver(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Logger.Warning(exception, "YoutubeAPI failed to load details for {VideoId}", videoId);
-            return (false, null, $"YoutubeAPI could not load video details: {exception.Message}");
+            return (false, null,
+                $"YoutubeAPI could not load video details: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }
     }
 

@@ -1,5 +1,6 @@
 using Serilog;
 using SilverScreen.Core.Browsing.Search;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
@@ -55,7 +56,7 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         catch (FormatException exception)
         {
             Logger.Warning(exception, "Invalid YouTube search continuation");
-            return SearchResultPage.Failed($"Search failed: invalid continuation ({exception.Message}).");
+            return SearchResultPage.Failed($"Search failed: invalid continuation ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
         }
         catch (AuthenticationRequiredException exception)
         {
@@ -85,7 +86,7 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         catch (YouTubeException exception)
         {
             Logger.Warning(exception, "YouTube search request failed");
-            return SearchResultPage.Failed($"Search failed: {exception.Message}");
+            return SearchResultPage.Failed($"Search failed: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Serilog;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Common;
 using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
@@ -40,7 +41,9 @@ public sealed class YtDlpRunner : IYtDlpRunner
             "--access-token",
             "--refresh-token",
             "--token",
-            "--api-key"
+            "--api-key",
+            "--cookies",
+            "--cookies-from-browser"
         };
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
@@ -121,11 +124,10 @@ public sealed class YtDlpRunner : IYtDlpRunner
             }
             else
             {
-                Logger.Debug("yt-dlp process exited successfully (ExitCode 0)");
             }
         }
 
-        return new ProcessResult(process.ExitCode, standardOutput, standardError);
+        return new ProcessResult(process.ExitCode, standardOutput, DiagnosticSanitizer.Sanitize(standardError));
     }
 
     private static async Task KillAndDrainAsync(Process process, Task<string> outputTask, Task<string> errorTask)
@@ -182,22 +184,23 @@ public sealed class YtDlpRunner : IYtDlpRunner
             Logger.Warning(ex, "Could not query yt-dlp process exit state");
             return false;
         }
-    }
 
+    }
     private static string RedactArgumentList(ProcessStartInfo startInfo)
     {
-        if (startInfo.ArgumentList.Count <= 0) return RedactFreeform(startInfo.Arguments);
+        if (startInfo.ArgumentList.Count <= 0)
+            return RedactFreeform(startInfo.Arguments);
+
         var redacted = new string[startInfo.ArgumentList.Count];
         for (var i = 0; i < startInfo.ArgumentList.Count; i++)
         {
             var argument = startInfo.ArgumentList[i];
             redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument)
-                ? "***"
+                ? "[REDACTED]"
                 : argument;
         }
 
-        return string.Join(" ", redacted);
-
+        return RedactFreeform(string.Join(" ", redacted));
     }
 
     private static bool IsSecretValue(int index, Collection<string> arguments)
@@ -213,33 +216,6 @@ public sealed class YtDlpRunner : IYtDlpRunner
 
     private static string RedactFreeform(string arguments)
     {
-        if (string.IsNullOrEmpty(arguments))
-            return arguments;
-
-        foreach (var secret in SecretOptions)
-        {
-            var index = arguments.IndexOf(secret, StringComparison.OrdinalIgnoreCase);
-            while (index >= 0)
-            {
-                var valueStart = index + secret.Length;
-                if (valueStart < arguments.Length &&
-                    (arguments[valueStart] == '=' || char.IsWhiteSpace(arguments[valueStart])))
-                {
-                    var end = valueStart + 1;
-                    var quoted = end < arguments.Length && arguments[end] == '"';
-                    if (quoted) end++;
-                    while (end < arguments.Length &&
-                           (quoted ? arguments[end] != '"' : !char.IsWhiteSpace(arguments[end])))
-                        end++;
-                    if (quoted && end < arguments.Length) end++;
-                    arguments = string.Concat(arguments.AsSpan(0, valueStart + 1), "***",
-                        arguments.AsSpan(end));
-                }
-
-                index = arguments.IndexOf(secret, index + secret.Length, StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        return arguments;
+        return DiagnosticSanitizer.Sanitize(arguments);
     }
 }
