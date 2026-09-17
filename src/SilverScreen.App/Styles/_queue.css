@@ -30,6 +30,21 @@ listview child:active {
     box-shadow: none;
 }
 
+.queue-row:focus-visible,
+listview > row:focus-visible .queue-row,
+listview row:focus-visible .queue-row {
+    background-color: mix(@card_bg_color, @accent_bg_color, 0.16);
+    border-color: @accent_bg_color;
+    box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.45);
+}
+
+.queue-row:focus-visible .queue-thumbnail,
+listview > row:focus-visible .queue-thumbnail,
+listview row:focus-visible .queue-thumbnail {
+    border: 1px solid @accent_bg_color;
+}
+
+
 .queue-panel {
     background-color: @window_bg_color;
     border-left: 1px solid @borders;

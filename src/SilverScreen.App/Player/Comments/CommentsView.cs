@@ -167,6 +167,7 @@ public partial class CommentsView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
+        listItem.Focusable = true;
         var row = new CommentRowView(_viewModel.ToggleReplies, _linkActivated);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;

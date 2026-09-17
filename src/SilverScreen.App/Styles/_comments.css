@@ -8,6 +8,15 @@
     margin-bottom: 3px;
 }
 
+.comment-row:focus-visible,
+listview > row:focus-visible .comment-row,
+listview row:focus-visible .comment-row {
+    background-color: mix(@card_bg_color, @accent_bg_color, 0.12);
+    border-color: @accent_bg_color;
+    box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.45);
+}
+
+
 .comment-row link {
     color: @accent_color;
 }

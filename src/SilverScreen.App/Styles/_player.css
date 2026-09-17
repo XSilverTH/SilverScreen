@@ -17,10 +17,11 @@
 .player-headerbar,
 .player-headerbar windowhandle,
 .player-headerbar > windowhandle {
-    background-color: transparent;
+    background-color: alpha(#000000, 0.58);
     background-image: none;
-    box-shadow: none;
+    box-shadow: 0 2px 14px alpha(#000000, 0.42);
 }
+
 
 .player-headerbar,
 .player-center-controls,
@@ -170,14 +171,14 @@ button.player-reaction-button:disabled label {
 
 .player-center-controls {
     margin-bottom: 28px;
+    padding: 10px 18px;
+    background-color: alpha(#000000, 0.46);
+    border-radius: 18px;
+    box-shadow: 0 4px 18px alpha(#000000, 0.4);
 }
 
 .player-seek-button {
     min-height: 40px;
-    min-width: 40px;
-    border-radius: 10px;
-    padding: 6px;
-}
 
 .player-primary-control {
     min-height: 72px;
@@ -187,7 +188,7 @@ button.player-reaction-button:disabled label {
     padding: 8px;
 }
 
-.player-controls scale trough {
+.player-controls scale.player-timeline trough {
     background-color: alpha(#ffffff, 0.24);
     min-height: 4px;
     border-radius: 9999px;
@@ -195,26 +196,28 @@ button.player-reaction-button:disabled label {
     background-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.player-controls scale:hover trough {
+.player-controls scale.player-timeline:hover trough,
+.player-controls scale.player-timeline:focus-visible trough,
+.player-controls scale.player-timeline:focus trough {
     background-color: alpha(#ffffff, 0.36);
     min-height: 8px;
 }
 
-.player-controls scale:active trough,
-.player-controls scale.dragging trough {
+.player-controls scale.player-timeline:active trough,
+.player-controls scale.player-timeline.dragging trough {
     background-color: alpha(#ffffff, 0.48);
     min-height: 10px;
 }
 
-.player-controls scale > trough > highlight,
-.player-controls scale highlight {
+.player-controls scale.player-timeline > trough > highlight,
+.player-controls scale.player-timeline highlight {
     background-color: #ffffff;
     background-image: none;
     border-radius: 9999px 0 0 9999px;
 }
 
-.player-controls scale > trough > slider,
-.player-controls scale slider {
+.player-controls scale.player-timeline > trough > slider,
+.player-controls scale.player-timeline slider {
     background-color: #ffffff;
     min-height: 8px;
     min-width: 8px;
@@ -229,8 +232,12 @@ button.player-reaction-button:disabled label {
     box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.player-controls scale:hover slider,
-.player-controls scale:hover > trough > slider {
+.player-controls scale.player-timeline:hover slider,
+.player-controls scale.player-timeline:hover > trough > slider,
+.player-controls scale.player-timeline:focus-visible slider,
+.player-controls scale.player-timeline:focus-visible > trough > slider,
+.player-controls scale.player-timeline:focus slider,
+.player-controls scale.player-timeline:focus > trough > slider {
     opacity: 1;
     min-height: 16px;
     min-width: 16px;
@@ -238,10 +245,10 @@ button.player-reaction-button:disabled label {
     box-shadow: 0 2px 6px alpha(#000000, 0.45);
 }
 
-.player-controls scale:active slider,
-.player-controls scale.dragging slider,
-.player-controls scale:active > trough > slider,
-.player-controls scale.dragging > trough > slider {
+.player-controls scale.player-timeline:active slider,
+.player-controls scale.player-timeline.dragging slider,
+.player-controls scale.player-timeline:active > trough > slider,
+.player-controls scale.player-timeline.dragging > trough > slider {
     opacity: 1;
     min-height: 20px;
     min-width: 20px;

@@ -496,7 +496,11 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             draw-value: false;
             hexpand: true;
             sensitive: false;
+            focusable: true;
 
+            styles [
+              "player-timeline",
+            ]
             adjustment: Gtk.Adjustment {
               lower: 0;
               upper: 100;

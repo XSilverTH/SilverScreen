@@ -162,6 +162,7 @@ public partial class QueueView : ViewBase<Box>
         if (args.Object is not ListItem listItem)
             return;
 
+        listItem.Focusable = true;
         var row = new QueueItemRowView(_thumbnails, _viewModel.Move, RequestDrop, _viewModel.Remove,
             OnRowPlayRequested);
         listItem.Child = row.Widget;
