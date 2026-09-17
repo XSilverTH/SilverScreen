@@ -26,6 +26,7 @@ Adw.Bin CommentRowView {
       icon-name: "avatar-default-symbolic";
       pixel-size: 32;
       valign: start;
+      accessible-role: presentation;
     }
 
     Gtk.Box {
@@ -67,6 +68,7 @@ Adw.Bin CommentRowView {
         Gtk.Image {
           resource: "/SilverScreen/Assets/like-symbolic.svg";
           pixel-size: 16;
+          accessible-role: presentation;
         }
 
         Gtk.Label comment_likes_label {
@@ -80,10 +82,10 @@ Adw.Bin CommentRowView {
       }
 
       Gtk.Button comment_replies_button {
+        label: "";
         halign: start;
         visible: false;
         clicked => $OnRepliesButtonClicked();
-
         styles [
           "flat",
         ]

@@ -23,6 +23,15 @@ Adw.ApplicationWindow MainWindow {
   default-height: 760;
   title: "SilverScreen";
 
+  Adw.Breakpoint {
+    condition ("max-width: 550sp")
+
+    setters {
+      header_bar.title-widget: null;
+      view_switcher_bar.reveal: true;
+    }
+  }
+
   content: Adw.ToastOverlay toast_overlay {
     child: Gtk.Stack main_stack {
       Gtk.StackPage {
@@ -34,7 +43,7 @@ Adw.ApplicationWindow MainWindow {
 
           content: Adw.ToolbarView {
             [top]
-            Adw.HeaderBar {
+            Adw.HeaderBar header_bar {
               [start]
               Button navigation_back_button {
                 icon-name: "go-previous-symbolic";
@@ -77,8 +86,9 @@ Adw.ApplicationWindow MainWindow {
                 popover: Popover search_popover {};
               }
 
-              title-widget: Adw.ViewSwitcherTitle view_switcher_title {
-                title: "SilverScreen";
+              title-widget: Adw.ViewSwitcher view_switcher {
+                policy: wide;
+                stack: view_stack;
               };
 
               [end]
@@ -150,6 +160,7 @@ Adw.ApplicationWindow MainWindow {
 
                     child: Image {
                       icon-name: "view-refresh-symbolic";
+                      accessible-role: presentation;
                     };
                   }
 
@@ -238,8 +249,11 @@ Adw.ApplicationWindow MainWindow {
                 };
               }
             };
+
             [bottom]
-            Adw.ViewSwitcherBar view_switcher_bar {}
+            Adw.ViewSwitcherBar view_switcher_bar {
+              stack: view_stack;
+            }
           };
 
           sidebar: Gtk.Box queue_sidebar_host {

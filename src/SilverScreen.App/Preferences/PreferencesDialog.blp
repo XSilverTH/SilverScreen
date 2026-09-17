@@ -15,6 +15,7 @@ Adw.PreferencesDialog PreferencesDialog {
       Adw.ComboRow theme_row {
         notify => $OnRowNotify();
         title: "Theme";
+
         model: Gtk.StringList theme_model {
           strings: [
             "System",
@@ -96,6 +97,7 @@ Adw.PreferencesDialog PreferencesDialog {
       Adw.ComboRow playback_backend_row {
         notify => $OnRowNotify();
         title: "Playback Mode";
+
         model: Gtk.StringList playback_backend_model {
           strings: [
             "External MPV (separate window)",
@@ -118,12 +120,11 @@ Adw.PreferencesDialog PreferencesDialog {
         title: "Offer to resume playback";
         subtitle: "Show an on-screen prompt to jump to the last saved position";
       }
-       
+
       Adw.SwitchRow resume_playback_automatically_row {
         notify => $OnRowNotify();
         title: "Resume playback automatically";
       }
-
     }
   }
 
@@ -228,6 +229,7 @@ Adw.PreferencesDialog PreferencesDialog {
   Adw.PreferencesPage {
     title: "Keybinds";
     icon-name: "input-keyboard-symbolic";
+
     Adw.PreferencesGroup {
       title: "Playback and Navigation";
 
@@ -240,7 +242,7 @@ Adw.PreferencesDialog PreferencesDialog {
       }
 
       Adw.ActionRow shortcut_seek_backward_row {
-        title: "Seek backward 10s";
+        title: "Seek backward 10 s";
 
         Gtk.Button shortcut_seek_backward_button {
           label: "Unassigned";
@@ -248,7 +250,7 @@ Adw.PreferencesDialog PreferencesDialog {
       }
 
       Adw.ActionRow shortcut_seek_forward_row {
-        title: "Seek forward 10s";
+        title: "Seek forward 10 s";
 
         Gtk.Button shortcut_seek_forward_button {
           label: "Unassigned";
@@ -403,14 +405,15 @@ Adw.PreferencesDialog PreferencesDialog {
         }
       }
     }
+
     Adw.PreferencesGroup {
-          title: "Feedback";
-    
-          Adw.SwitchRow shortcut_osd_enabled_row {
-            notify => $OnRowNotify();
-            title: "Shortcut On-Screen Display";
-          }
-        } 
+      title: "Feedback";
+
+      Adw.SwitchRow shortcut_osd_enabled_row {
+        notify => $OnRowNotify();
+        title: "Shortcut On-Screen Display";
+      }
+    }
   }
 
   Adw.PreferencesPage {
@@ -434,6 +437,7 @@ Adw.PreferencesDialog PreferencesDialog {
 
     Adw.PreferencesGroup {
       title: "Discord";
+
       Adw.SwitchRow discord_rich_presence_row {
         notify => $OnRowNotify();
         title: "Share playback activity on Discord";

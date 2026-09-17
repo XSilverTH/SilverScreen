@@ -259,6 +259,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
                 Gtk.Image player_like_image {
                   resource: "/SilverScreen/Assets/like-symbolic.svg";
                   pixel-size: 18;
+                  accessible-role: presentation;
                 }
 
                 Gtk.Label player_likes_label {
@@ -286,6 +287,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
                 Gtk.Image player_dislike_image {
                   resource: "/SilverScreen/Assets/dislike-symbolic.svg";
                   pixel-size: 18;
+                  accessible-role: presentation;
                 }
 
                 Gtk.Label player_dislikes_label {
@@ -529,7 +531,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
               halign: center;
 
               Gtk.Label player_scrub_time_label {
-                label: "0:00";
+                label: "";
 
                 styles [
                   "player-scrub-time-label",
@@ -537,7 +539,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
               }
 
               Gtk.Label player_scrub_delta_label {
-                label: "+0:00";
+                label: "";
                 visible: false;
 
                 styles [
@@ -561,7 +563,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
 
         Gtk.Box player_time_row {
           Gtk.Label player_position_label {
-            label: "0:00";
+            label: "";
             xalign: 0;
             hexpand: true;
 
@@ -572,7 +574,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           }
 
           Gtk.Label player_duration_label {
-            label: "0:00";
+            label: "";
             xalign: 1;
 
             styles [
@@ -609,11 +611,11 @@ Adw.OverlaySplitView EmbeddedPlayerView {
       }
       [overlay]
       Gtk.Button player_info_backdrop {
+        tooltip-text: "Close video details";
         visible: false;
         halign: fill;
         valign: fill;
         clicked => $OnInfoBackdropClicked();
-
         styles [
           "player-info-backdrop",
         ]
@@ -770,7 +772,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             Gtk.Image {
               icon-name: "info-symbolic";
               pixel-size: 16;
-
+              accessible-role: presentation;
               styles [
                 "player-info-cue-icon",
               ]
@@ -809,7 +811,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
             Gtk.Image {
               icon-name: "comments-symbolic";
               pixel-size: 16;
-
+              accessible-role: presentation;
               styles [
                 "player-comments-cue-icon",
               ]
@@ -838,10 +840,10 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           halign: end;
 
           child: Gtk.Button player_sponsorblock_skip_button {
+            tooltip-text: "Skip Sponsor";
             halign: end;
             margin-end: 0;
             clicked => $OnSponsorBlockSkipButtonClicked();
-
             styles [
               "player-edge-prompt-button",
               "player-sponsorblock-skip-button",
@@ -856,7 +858,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
               Gtk.Image player_sponsorblock_icon {
                 icon-name: "media-seek-forward-symbolic";
                 pixel-size: 16;
-
+                accessible-role: presentation;
                 styles [
                   "player-prompt-icon",
                 ]
@@ -880,10 +882,10 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           halign: end;
 
           child: Gtk.Button player_resume_button {
+            tooltip-text: "Resume";
             halign: end;
             margin-end: 0;
             clicked => $OnResumeButtonClicked();
-
             styles [
               "player-edge-prompt-button",
               "player-resume-prompt-button",
@@ -898,7 +900,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
               Gtk.Image {
                 icon-name: "media-playback-start-symbolic";
                 pixel-size: 16;
-
+                accessible-role: presentation;
                 styles [
                   "player-prompt-icon",
                 ]
@@ -922,10 +924,10 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           halign: end;
 
           child: Gtk.Button player_restart_button {
+            tooltip-text: "Restart from beginning";
             halign: end;
             margin-end: 0;
             clicked => $OnRestartButtonClicked();
-
             styles [
               "player-edge-prompt-button",
               "player-resume-restart-button",
@@ -940,7 +942,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
               Gtk.Image {
                 icon-name: "media-skip-backward-symbolic";
                 pixel-size: 16;
-
+                accessible-role: presentation;
                 styles [
                   "player-prompt-icon",
                 ]
@@ -985,7 +987,7 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           Gtk.Image player_osd_icon {
             icon-name: "media-playback-pause-symbolic";
             pixel-size: 20;
-
+            accessible-role: presentation;
             styles [
               "player-osd-icon",
             ]

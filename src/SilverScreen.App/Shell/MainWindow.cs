@@ -144,9 +144,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             OpenWebLogin,
             UpdateAccountAppearance);
 
-        view_switcher_title.Stack = view_stack;
-        view_switcher_bar.Stack = view_stack;
-        view_switcher_title.BindProperty("title-visible", view_switcher_bar, "reveal", BindingFlags.SyncCreate);
 
         var startupPrefs = account.Preferences.GetPreferences();
         if (startupPrefs.WindowWidth > 0 && startupPrefs.WindowHeight > 0)

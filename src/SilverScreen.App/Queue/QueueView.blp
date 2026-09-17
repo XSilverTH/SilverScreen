@@ -33,7 +33,7 @@ Gtk.Box QueueView {
       }
 
       Gtk.Label queue_summary_label {
-        label: "0 videos · 0s";
+        label: "0 videos · 0 s";
         xalign: 0;
 
         styles [
@@ -84,6 +84,7 @@ Gtk.Box QueueView {
     margin-bottom: 16;
 
     Gtk.Button queue_play_button {
+      tooltip-text: "Play all";
       clicked => $OnPlayButtonClicked();
 
       styles [
@@ -102,6 +103,7 @@ Gtk.Box QueueView {
 
             Gtk.Image {
               icon-name: "media-playlist-start-symbolic";
+              accessible-role: presentation;
             }
 
             Gtk.Label {
