@@ -120,6 +120,44 @@ public sealed class YtDlpFormatSelectorTests
             ]
         }
         """;
+    
+    private const string OverCapAdaptiveWithCompliantMuxedJson = """
+        {
+            "id": "quality-cap-regression",
+            "formats": [
+                {
+                    "format_id": "1080",
+                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=1080",
+                    "ext": "mp4",
+                    "height": 1080,
+                    "width": 1920,
+                    "fps": 30,
+                    "vcodec": "avc1.64002a",
+                    "acodec": "none",
+                    "tbr": 4000
+                },
+                {
+                    "format_id": "251",
+                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757190000&itag=251",
+                    "ext": "webm",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "tbr": 160
+                },
+                {
+                    "format_id": "18",
+                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=18",
+                    "ext": "mp4",
+                    "height": 360,
+                    "width": 640,
+                    "fps": 30,
+                    "vcodec": "avc1.42001E",
+                    "acodec": "mp4a.40.2",
+                    "tbr": 500
+                }
+            ]
+        }
+        """;
 
     private const string SampleLiveDirectUrlJson = """
         {
@@ -258,6 +296,16 @@ public sealed class YtDlpFormatSelectorTests
         Assert.NotNull(media.AudioUrl);
         Assert.Contains("itag=251", media.AudioUrl);
         Assert.Equal("360p", media.Quality);
+    }
+    
+    [Fact]
+    public void SelectMedia_QualityCap_PrefersCompliantMuxedOverOverCapAdaptive()
+    {
+        var media = YtDlpFormatSelector.SelectMedia(OverCapAdaptiveWithCompliantMuxedJson, "360p");
+
+        Assert.NotNull(media);
+        Assert.Contains("itag=18", media.VideoUrl);
+        Assert.Null(media.AudioUrl);
     }
 
     [Fact]

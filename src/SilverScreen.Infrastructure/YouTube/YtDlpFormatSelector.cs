@@ -96,9 +96,10 @@ internal static class YtDlpFormatSelector
             var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false }).ToList();
             var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true }).ToList();
 
-            // 1. Try best video-only + best audio-only
+            // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
+            // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
             ResolvedMediaStream? selectedVideo = null;
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, allowRelaxation: false);
 
             ResolvedMediaStream? selectedAudio = null;
             if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
@@ -117,15 +118,46 @@ internal static class YtDlpFormatSelector
                     details);
             }
 
-            // 2. If separate video/audio not fully available, try muxed stream
+            // A compliant muxed stream is preferable to relaxing the adaptive video selection.
+            var selectedMuxed = muxed.Count > 0
+                ? SelectBestVideoStream(muxed, maxTargetHeight, allowRelaxation: false)
+                : null;
+            if (selectedMuxed is not null)
+            {
+                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(selectedMuxed.Url);
+                return new ResolvedMedia(
+                    selectedMuxed.Url,
+                    null,
+                    preferredQuality,
+                    expiry,
+                    details);
+            }
+
+            // No compliant stream is available, so relax the cap for the existing fallback behavior.
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
+
+            if (selectedVideo is not null && selectedAudio is not null)
+            {
+                var expiry = MinExpiry(
+                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedVideo.Url),
+                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedAudio.Url));
+
+                return new ResolvedMedia(
+                    selectedVideo.Url,
+                    selectedAudio.Url,
+                    preferredQuality,
+                    expiry,
+                    details);
+            }
+
             if (muxed.Count > 0)
             {
-                var bestMuxed = SelectBestVideoStream(muxed, maxTargetHeight);
-                if (bestMuxed is not null)
+                selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight);
+                if (selectedMuxed is not null)
                 {
-                    var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(bestMuxed.Url);
+                    var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(selectedMuxed.Url);
                     return new ResolvedMedia(
-                        bestMuxed.Url,
+                        selectedMuxed.Url,
                         null,
                         preferredQuality,
                         expiry,
@@ -160,14 +192,21 @@ internal static class YtDlpFormatSelector
         };
     }
 
-    private static ResolvedMediaStream? SelectBestVideoStream(List<ResolvedMediaStream> videoStreams, int? maxHeight)
+    private static ResolvedMediaStream? SelectBestVideoStream(
+        List<ResolvedMediaStream> videoStreams,
+        int? maxHeight,
+        bool allowRelaxation = true)
     {
         var eligible = maxHeight.HasValue
             ? [.. videoStreams.Where(v => v.Height.HasValue && v.Height.Value <= maxHeight.Value)]
             : videoStreams;
 
         // If nothing matches the <= maxHeight constraint (e.g. video only has higher or unstated height), fallback to all videoStreams
-        if (eligible.Count == 0) eligible = videoStreams;
+        if (eligible.Count == 0)
+        {
+            if (!allowRelaxation) return null;
+            eligible = videoStreams;
+        }
 
         return eligible
             .OrderByDescending(v => v.Height ?? 0)
