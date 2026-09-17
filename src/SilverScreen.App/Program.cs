@@ -36,9 +36,11 @@ catch (Exception setupException)
         .CreateLogger();
 }
 
+IServiceProvider? serviceProvider = null;
+var servicesHandedToApplication = false;
 try
 {
-    using var serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
+    serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
     Log.Information(
         "Starting SilverScreen {Version} on {RuntimeIdentifier} ({OSArchitecture}, {Framework})",
         ApplicationMetadata.Version,
@@ -53,6 +55,7 @@ try
 
     var app = App.NewWithProperties([]);
     app.UseServices(serviceProvider);
+    servicesHandedToApplication = true;
     return app.RunWithSynchronizationContext(args);
 }
 catch (Exception exception)
@@ -62,6 +65,8 @@ catch (Exception exception)
 }
 finally
 {
+    if (!servicesHandedToApplication)
+        (serviceProvider as IDisposable)?.Dispose();
     Log.Information("Stopping SilverScreen");
     Log.CloseAndFlush();
 }

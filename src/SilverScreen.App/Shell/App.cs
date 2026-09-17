@@ -19,8 +19,8 @@ public partial class App
 {
     private static CssProvider? _styles;
     private IServiceProvider? _serviceProvider;
-    private bool _servicesDisposed;
-
+    private readonly ActivationWindowGuard<Window> _windowGuard = new();
+    private ApplicationServiceLifetime? _serviceLifetime;
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -30,7 +30,7 @@ public partial class App
         {
             _styles?.Dispose();
             _styles = null;
-            DisposeServices();
+            _serviceLifetime?.ApplicationStopped();
         };
     }
 
@@ -40,6 +40,9 @@ public partial class App
 
         if (Interlocked.CompareExchange(ref _serviceProvider, serviceProvider, null) is not null)
             throw new InvalidOperationException("Application services have already been configured.");
+
+        _serviceLifetime = new ApplicationServiceLifetime(
+            () => (_serviceProvider as IDisposable)?.Dispose());
     }
 
     private void Activate(Gio.Application sender, EventArgs args)
@@ -47,19 +50,30 @@ public partial class App
         if (_serviceProvider is null)
             throw new InvalidOperationException("Application services have not been configured.");
 
+        if (_windowGuard.TryPresentExisting(window => window.Present()))
+            return;
+
         InstallStyles();
         var account = _serviceProvider.GetRequiredService<AccountServices>();
         ApplyTheme(account.Preferences.GetPreferences().ThemeMode);
         account.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.ThemeMode);
 
+        Window? createdWindow = null;
         var mainWindowWrapper = new MainWindow(
             _serviceProvider.GetRequiredService<BrowsingServices>(),
             account,
             _serviceProvider.GetRequiredService<IPlaybackService>(),
             _serviceProvider.GetRequiredService<PlayerDependencies>(),
             _serviceProvider.GetRequiredService<RuntimeDependencyDiagnostics>(),
-            DisposeServices);
-        var mainWindow = mainWindowWrapper.Widget;
+            () =>
+            {
+                if (createdWindow is not null)
+                    _windowGuard.Clear(createdWindow);
+                _serviceLifetime!.WindowClosed();
+            });
+        var mainWindow = createdWindow = mainWindowWrapper.Widget;
+        _windowGuard.Set(mainWindow);
+        _serviceLifetime!.WindowOpened();
         mainWindow.Application = this;
         AddWindow(mainWindow);
         mainWindow.Present();
@@ -107,11 +121,4 @@ public partial class App
         StyleContext.AddProviderForDisplay(display, _styles, 600);
     }
 
-    private void DisposeServices()
-    {
-        if (_servicesDisposed) return;
-
-        _servicesDisposed = true;
-        (_serviceProvider as IDisposable)?.Dispose();
-    }
 }
