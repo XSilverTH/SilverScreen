@@ -932,17 +932,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             }
             else if (newVideos.Length == currentVideos.Length)
             {
-                var fromIndex = -1;
-                var toIndex = -1;
-                for (var i = 0; i < currentVideos.Length; i++)
-                    if (currentVideos[i].Id != newVideos[i].Id)
-                    {
-                        fromIndex = i;
-                        toIndex = newVideos.IndexOf(currentVideos[i]);
-                        break;
-                    }
-
-                if (fromIndex >= 0 && toIndex >= 0) _player.MovePlaylistItem(fromIndex, toIndex);
+                if (QueuePlaylistMove.TryTranslate(currentVideos, newVideos, out var fromIndex, out var toIndex))
+                    _player.MovePlaylistItem(fromIndex, toIndex);
             }
 
             _session.UpdateQueue(newVideos);
