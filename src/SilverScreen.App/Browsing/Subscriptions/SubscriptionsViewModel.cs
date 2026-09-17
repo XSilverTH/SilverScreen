@@ -508,9 +508,11 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private async Task<FeedPageResult> FetchCurrentFeedPageAsync(string? token, int count, CancellationToken ct)
     {
         SubscribedChannel? selected;
+        uint feedGeneration;
         lock (_lock)
         {
             selected = _selectedChannel;
+            feedGeneration = _refreshGeneration;
         }
 
         if (selected is not null)
@@ -534,8 +536,18 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             ? await _subscriptionsService.LoadFirstFeedPageAsync(count, ct).ConfigureAwait(false)
             : await _subscriptionsService.LoadNextFeedPageAsync(count, ct).ConfigureAwait(false);
 
+        bool feedSuccess;
         lock (_lock)
         {
+            if (feedGeneration != _refreshGeneration || _disposed || ct.IsCancellationRequested ||
+                !IsSessionActive())
+                return new FeedPageResult(
+                    res.FeedPage.Videos,
+                    res.Status == AuthenticatedSubscriptionsStatus.Success ? res.FeedPage.ContinuationToken : null,
+                    res.Status is AuthenticatedSubscriptionsStatus.Success
+                        or AuthenticatedSubscriptionsStatus.Empty,
+                    res.StatusMessage);
+
             if (res.Status == AuthenticatedSubscriptionsStatus.Success)
             {
                 foreach (var video in res.FeedPage.Videos
@@ -548,6 +560,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             _feedSummary = res.StatusMessage;
             _feedSuccess =
                 res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty;
+            feedSuccess = _feedSuccess;
             _feedContinuationToken = res.FeedPage.ContinuationToken;
             _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
         }
@@ -555,7 +568,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         return new FeedPageResult(
             res.FeedPage.Videos,
             res.Status == AuthenticatedSubscriptionsStatus.Success ? res.FeedPage.ContinuationToken : null,
-            _feedSuccess,
+            feedSuccess,
             res.StatusMessage);
     }
 

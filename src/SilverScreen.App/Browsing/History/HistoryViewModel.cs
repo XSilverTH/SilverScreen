@@ -48,7 +48,9 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             (_, count, ct) => historyService.LoadNextPageAsync(count, ct),
             res =>
             {
-                _historyStatus = res.Status;
+                var statusMessage = SessionGate.IsAuthInvalid(res.Status)
+                    ? SessionGate.SessionNoLongerValidMessage
+                    : res.StatusMessage;
                 var isSuccess = res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
                 var hasContinuation = res.Status == AuthenticatedHistoryStatus.Success &&
                                       !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
@@ -57,9 +59,9 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
                     res.FeedPage.Videos,
                     hasContinuation ? res.FeedPage.ContinuationToken : null,
                     isSuccess,
-                    res.StatusMessage);
+                    statusMessage);
             },
-            (_, _, state) => WithSignInAction(HistoryVideoListSource.MapStatus(_historyStatus, state)),
+            (_, _, state) => WithSignInAction(HistoryVideoListSource.MapStatus(GetHistoryStatus(state), state)),
             "Loading watch history…",
             "Loading more history…",
             defaultTitle: "History",
@@ -141,9 +143,8 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
                     ? state.IsLoadingMore ? "Could not load more watch history." : "Could not load watch history."
                     : state.StatusMessage ?? string.Empty;
 
-        var status = state.LastError != null
-            ? AuthenticatedHistoryStatus.TemporaryBackendFailure
-            : _historyStatus;
+        var status = GetHistoryStatus(state);
+        _historyStatus = status;
 
         State = new HistoryViewState(
             state.Videos,
@@ -153,6 +154,21 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             status,
             state.IsLoadingMore,
             state.HasMore);
+    }
+    private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state)
+    {
+        if (state.StatusMessage == SessionGate.SessionNoLongerValidMessage)
+            return AuthenticatedHistoryStatus.AuthenticationRejected;
+
+        if (state.LastError != null || !state.IsSuccess)
+            return AuthenticatedHistoryStatus.TemporaryBackendFailure;
+
+        if (!state.IsLoading && !state.IsLoadingMore)
+            return state.Videos.Count == 0
+                ? AuthenticatedHistoryStatus.Empty
+                : AuthenticatedHistoryStatus.Success;
+
+        return _historyStatus;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

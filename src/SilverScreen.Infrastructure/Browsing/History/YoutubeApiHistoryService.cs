@@ -25,6 +25,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
     private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
     private string? _continuationToken;
+    private long _requestGeneration;
 
     public YoutubeApiHistoryService(ISessionService sessionService, IYouTubeClientProvider clientProvider)
     {
@@ -39,8 +40,11 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
     {
         var pageSize = Math.Max(count, 1);
         if (IsSessionActive())
-            return await FetchPageAsync(null, true, cancellationToken).ConfigureAwait(false);
-        ClearCachedResults();
+        {
+            var generation = BeginRequest();
+            return await FetchPageAsync(null, true, generation, cancellationToken).ConfigureAwait(false);
+        }
+        InvalidateAndClearCachedResults();
         return new AuthenticatedHistoryResult(
             AuthenticatedHistoryStatus.AuthenticationRequired,
             FeedPage.Empty,
@@ -54,13 +58,14 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         var pageSize = Math.Max(count, 1);
         if (!IsSessionActive())
         {
-            ClearCachedResults();
+            InvalidateAndClearCachedResults();
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.AuthenticationRequired,
                 FeedPage.Empty,
                 SessionGate.HistoryServiceAuthenticationRequiredMessage);
         }
 
+        var generation = BeginRequest();
         string? token;
         lock (_lock)
         {
@@ -87,7 +92,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
                 InvalidContinuationMessage);
         }
 
-        return await FetchPageAsync(continuation, false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(continuation, false, generation, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -98,6 +103,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
     private async Task<AuthenticatedHistoryResult> FetchPageAsync(
         HistoryContinuation? continuation,
         bool isFirstPage,
+        long generation,
         CancellationToken cancellationToken)
     {
         try
@@ -116,7 +122,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
             if (videos.Length == 0 && isFirstPage)
             {
-                ClearCachedResults();
+                TryClearCachedResults(generation);
                 return new AuthenticatedHistoryResult(
                     AuthenticatedHistoryStatus.Empty,
                     FeedPage.Empty,
@@ -125,6 +131,12 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
 
             lock (_lock)
             {
+                if (generation != _requestGeneration || !IsSessionActive())
+                    return new AuthenticatedHistoryResult(
+                        AuthenticatedHistoryStatus.Success,
+                        new FeedPage(videos, nextToken),
+                        SuccessMessage);
+
                 if (isFirstPage)
                     _loadedVideos.Clear();
 
@@ -147,7 +159,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         catch (YouTubeException exception) when (IsAuthenticationFailure(exception))
         {
             Logger.Warning(exception, "YoutubeAPI rejected authentication while loading watch history");
-            ClearCachedResults();
+            TryClearCachedResults(generation);
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.AuthenticationRejected,
                 FeedPage.Empty,
@@ -184,18 +196,39 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         return SessionGate.RequireSignedIn(_sessionService);
     }
 
-    private void ClearCachedResults()
+    private void InvalidateAndClearCachedResults()
     {
         lock (_lock)
         {
+            ++_requestGeneration;
             _loadedVideos.Clear();
             _continuationToken = null;
         }
     }
 
+    private void TryClearCachedResults(long generation)
+    {
+        lock (_lock)
+        {
+            if (generation != _requestGeneration)
+                return;
+
+            _loadedVideos.Clear();
+            _continuationToken = null;
+        }
+    }
+
+    private long BeginRequest()
+    {
+        lock (_lock)
+        {
+            return ++_requestGeneration;
+        }
+    }
+
     private void OnSessionChanged(object? sender, EventArgs e)
     {
-        ClearCachedResults();
+        InvalidateAndClearCachedResults();
     }
 
     private static bool IsAuthenticationFailure(YouTubeException exception)

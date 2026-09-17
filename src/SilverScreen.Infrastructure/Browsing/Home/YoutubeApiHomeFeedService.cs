@@ -26,6 +26,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     private readonly ISessionService _sessionService;
     private FeedPage _cachedFeedPage = FeedPage.Empty;
     private string? _continuationToken;
+    private long _requestGeneration;
 
     public YoutubeApiHomeFeedService(ISessionService sessionService, IYouTubeClientProvider clientProvider)
     {
@@ -40,8 +41,11 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     {
         var pageSize = Math.Max(count, 1);
         if (IsSessionActive())
-            return await FetchPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
-        ClearCachedResults();
+        {
+            var generation = BeginRequest();
+            return await FetchPageAsync(null, pageSize, true, generation, cancellationToken).ConfigureAwait(false);
+        }
+        InvalidateAndClearCachedResults();
         return new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.AuthenticationRequired,
             FeedPage.Empty,
@@ -55,12 +59,14 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         var pageSize = Math.Max(count, 1);
         if (!IsSessionActive())
         {
-            ClearCachedResults();
+            InvalidateAndClearCachedResults();
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.AuthenticationRequired,
                 FeedPage.Empty,
                 SessionGate.HomeServiceAuthenticationRequiredMessage);
         }
+
+        var generation = BeginRequest();
 
         string? token;
         lock (_lock)
@@ -87,8 +93,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 GetHomeFeed(),
                 InvalidContinuationMessage);
         }
-
-        return await FetchPageAsync(continuation, pageSize, false, cancellationToken).ConfigureAwait(false);
+        return await FetchPageAsync(continuation, pageSize, false, generation, cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -100,6 +105,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         HomeContinuation? continuation,
         int pageSize,
         bool isFirstPage,
+        long generation,
         CancellationToken cancellationToken)
     {
         try
@@ -148,8 +154,8 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 currentContinuation = page.Next;
             } while (true);
 
-            if (videos.Count != 0 || !isFirstPage) return CommitVideos(videos, nextToken, isFirstPage);
-            ClearCachedResults();
+            if (videos.Count != 0 || !isFirstPage) return CommitVideos(videos, nextToken, isFirstPage, generation);
+            TryClearCachedResults(generation);
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.Empty,
                 FeedPage.Empty,
@@ -162,7 +168,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         catch (YouTubeException exception) when (IsAuthenticationFailure(exception))
         {
             Logger.Warning(exception, "YoutubeAPI rejected authentication while loading home recommendations");
-            ClearCachedResults();
+            TryClearCachedResults(generation);
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.AuthenticationRejected,
                 FeedPage.Empty,
@@ -189,10 +195,17 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
     private AuthenticatedHomeFeedResult CommitVideos(
         IReadOnlyList<VideoSummary> videos,
         string? nextToken,
-        bool isFirstPage)
+        bool isFirstPage,
+        long generation)
     {
         lock (_lock)
         {
+            if (generation != _requestGeneration || !IsSessionActive())
+                return new AuthenticatedHomeFeedResult(
+                    AuthenticatedHomeFeedStatus.Success,
+                    new FeedPage(videos, nextToken),
+                    SuccessMessage);
+
             if (isFirstPage)
                 _loadedVideos.Clear();
 
@@ -223,20 +236,43 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         return SessionGate.RequireSignedIn(_sessionService);
     }
 
-    private void ClearCachedResults()
+    private void InvalidateAndClearCachedResults()
     {
         lock (_lock)
         {
+            ++_requestGeneration;
             _loadedVideos.Clear();
             _continuationToken = null;
             _cachedFeedPage = FeedPage.Empty;
         }
     }
 
+    private void TryClearCachedResults(long generation)
+    {
+        lock (_lock)
+        {
+            if (generation != _requestGeneration)
+                return;
+
+            _loadedVideos.Clear();
+            _continuationToken = null;
+            _cachedFeedPage = FeedPage.Empty;
+        }
+    }
+
+    private long BeginRequest()
+    {
+        lock (_lock)
+        {
+            return ++_requestGeneration;
+        }
+    }
+
     private void OnSessionChanged(object? sender, EventArgs e)
     {
-        ClearCachedResults();
+        InvalidateAndClearCachedResults();
     }
+
 
     private static bool IsAuthenticationFailure(YouTubeException exception)
     {

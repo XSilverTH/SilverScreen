@@ -14,7 +14,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private readonly Lock _lock = new();
     private readonly SilverScreen.Core.Account.Session.ISessionService _sessionService;
     private bool _disposed;
-    private AuthenticatedHomeFeedStatus _lastStatus = AuthenticatedHomeFeedStatus.Success;
     private Action? _openWebLogin;
 
     public HomeFeedCoordinator(SilverScreen.Core.Account.Session.ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
@@ -29,11 +28,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             (_, count, ct) => feedService.LoadNextPageAsync(count, ct),
             res =>
             {
-                lock (_lock)
-                {
-                    _lastStatus = res.Status;
-                }
-
                 if (SessionGate.IsAuthInvalid(res.Status))
                     return FeedPageResult.Failed(SessionGate.SessionNoLongerValidMessage, true);
 
@@ -129,11 +123,9 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             return;
         }
 
-        AuthenticatedHomeFeedStatus lastStatus;
-        lock (_lock)
-        {
-            lastStatus = _lastStatus;
-        }
+        var lastStatus = engineState.StatusMessage == SessionGate.SessionNoLongerValidMessage
+            ? AuthenticatedHomeFeedStatus.AuthenticationRejected
+            : AuthenticatedHomeFeedStatus.Success;
 
         var (kind, message) = SessionGate.MapHomeFeedOutcome(lastStatus, engineState);
         var newState = new HomeFeedState(
@@ -182,11 +174,9 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     private VideoListStatus MapHomeStatus(FeedEngineState state)
     {
-        AuthenticatedHomeFeedStatus lastStatus;
-        lock (_lock)
-        {
-            lastStatus = _lastStatus;
-        }
+        var lastStatus = state.StatusMessage == SessionGate.SessionNoLongerValidMessage
+            ? AuthenticatedHomeFeedStatus.AuthenticationRejected
+            : AuthenticatedHomeFeedStatus.Success;
 
         if (SessionGate.IsAuthInvalid(lastStatus))
             return SessionGate.HomeAuthInvalidStatus(_openWebLogin);

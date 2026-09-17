@@ -28,6 +28,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
     private readonly Lock _lock = new();
     private readonly ISessionService _sessionService;
     private string? _continuationToken;
+    private long _requestGeneration;
 
     public YoutubeApiSubscriptionsService(ISessionService sessionService, IYouTubeClientProvider clientProvider)
     {
@@ -42,8 +43,11 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
     {
         var pageSize = Math.Max(count, 1);
         if (IsSessionActive())
-            return await FetchFeedPageAsync(null, pageSize, true, cancellationToken).ConfigureAwait(false);
-        ClearCachedResults();
+        {
+            var generation = BeginRequest();
+            return await FetchFeedPageAsync(null, pageSize, true, generation, cancellationToken).ConfigureAwait(false);
+        }
+        InvalidateAndClearCachedResults();
         return new AuthenticatedSubscriptionsFeedResult(
             AuthenticatedSubscriptionsStatus.AuthenticationRequired,
             FeedPage.Empty,
@@ -57,12 +61,13 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         var pageSize = Math.Max(count, 1);
         if (!IsSessionActive())
         {
-            ClearCachedResults();
+            InvalidateAndClearCachedResults();
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 FeedPage.Empty,
                 SessionGate.SubscriptionsSignedOutMessage);
         }
+        var generation = BeginRequest();
 
         string? token;
         lock (_lock)
@@ -90,7 +95,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                 InvalidContinuationMessage);
         }
 
-        return await FetchFeedPageAsync(continuation, pageSize, false, cancellationToken).ConfigureAwait(false);
+        return await FetchFeedPageAsync(continuation, pageSize, false, generation, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<SubscribedChannelsResult> LoadSubscribedChannelsAsync(
@@ -98,12 +103,13 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
     {
         if (!IsSessionActive())
         {
-            ClearCachedResults();
+            InvalidateAndClearCachedResults();
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRequired,
                 [],
                 SessionGate.SubscriptionsSignedOutMessage);
         }
+        var generation = GetCurrentGeneration();
 
         try
         {
@@ -124,7 +130,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         catch (YouTubeException exception) when (IsAuthenticationFailure(exception))
         {
             Logger.Warning(exception, "YoutubeAPI rejected authentication while loading subscribed channels");
-            ClearCachedResults();
+            TryClearCachedFeed(generation);
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRejected,
                 [],
@@ -157,6 +163,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         SubscriptionsContinuation? continuation,
         int pageSize,
         bool isFirstPage,
+        long generation,
         CancellationToken cancellationToken)
     {
         try
@@ -175,15 +182,20 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
             if (videos.Length == 0 && isFirstPage)
             {
-                ClearCachedFeed();
+                TryClearCachedFeed(generation);
                 return new AuthenticatedSubscriptionsFeedResult(
                     AuthenticatedSubscriptionsStatus.Empty,
                     FeedPage.Empty,
                     EmptySubscriptionsMessage);
             }
-
             lock (_lock)
             {
+                if (generation != _requestGeneration || !IsSessionActive())
+                    return new AuthenticatedSubscriptionsFeedResult(
+                        AuthenticatedSubscriptionsStatus.Success,
+                        new FeedPage(videos, nextToken),
+                        SuccessMessage);
+
                 if (isFirstPage)
                     _loadedVideos.Clear();
 
@@ -206,7 +218,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         catch (YouTubeException exception) when (IsAuthenticationFailure(exception))
         {
             Logger.Warning(exception, "YoutubeAPI rejected authentication while loading subscriptions");
-            ClearCachedResults();
+            TryClearCachedFeed(generation);
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.AuthenticationRejected,
                 FeedPage.Empty,
@@ -243,23 +255,46 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         return SessionGate.RequireSignedIn(_sessionService);
     }
 
-    private void ClearCachedFeed()
+    private void InvalidateAndClearCachedResults()
     {
         lock (_lock)
         {
+            ++_requestGeneration;
             _loadedVideos.Clear();
             _continuationToken = null;
         }
     }
 
-    private void ClearCachedResults()
+    private void TryClearCachedFeed(long generation)
     {
-        ClearCachedFeed();
+        lock (_lock)
+        {
+            if (generation != _requestGeneration)
+                return;
+
+            _loadedVideos.Clear();
+            _continuationToken = null;
+        }
+    }
+
+    private long BeginRequest()
+    {
+        lock (_lock)
+        {
+            return ++_requestGeneration;
+        }
+    }
+    private long GetCurrentGeneration()
+    {
+        lock (_lock)
+        {
+            return _requestGeneration;
+        }
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
     {
-        ClearCachedResults();
+        InvalidateAndClearCachedResults();
     }
 
     private static bool IsAuthenticationFailure(YouTubeException exception)
