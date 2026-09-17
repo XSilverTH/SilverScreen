@@ -38,6 +38,22 @@ public sealed class RuntimeDependencyDiagnosticsTests
             warning => warning.Contains("MPV could not be started", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void UnconfiguredExecutablePathsFallBackToPathNames()
+    {
+        var preferences = new TestPreferences(PlaybackBackendKind.ExternalMpv)
+        {
+            YtDlpExecutablePath = string.Empty,
+            MpvExecutablePath = "   "
+        };
+        var diagnostics = new RuntimeDependencyDiagnostics(preferences, new TestSecretService(true),
+            path => path is "yt-dlp" or "mpv",
+            () => true);
+
+        Assert.Empty(diagnostics.GetStartupWarnings());
+    }
+
+
     private sealed class TestPreferences(PlaybackBackendKind playbackBackend) : IPreferencesService
     {
         private readonly AppPreferences _preferences = new()
@@ -46,6 +62,18 @@ public sealed class RuntimeDependencyDiagnosticsTests
             MpvExecutablePath = "mpv",
             YtDlpExecutablePath = "yt-dlp"
         };
+
+        public string MpvExecutablePath
+        {
+            get => _preferences.MpvExecutablePath;
+            set => _preferences.MpvExecutablePath = value;
+        }
+
+        public string YtDlpExecutablePath
+        {
+            get => _preferences.YtDlpExecutablePath;
+            set => _preferences.YtDlpExecutablePath = value;
+        }
 
         public event EventHandler<AppPreferences>? PreferencesChanged;
 

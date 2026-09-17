@@ -5,6 +5,9 @@ using Serilog;
 using Serilog.Events;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
+using Microsoft.Extensions.DependencyInjection;
+using SilverScreen.Core.Preferences;
+
 
 var applicationStateDirectory = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -47,7 +50,8 @@ try
         RuntimeInformation.RuntimeIdentifier,
         RuntimeInformation.OSArchitecture,
         RuntimeInformation.FrameworkDescription);
-    LogExternalDependencyVersions();
+    LogExternalDependencyVersions(serviceProvider.GetRequiredService<IPreferencesService>().GetPreferences());
+
 
     Module.Initialize();
     WebKit.Module.Initialize();
@@ -88,7 +92,7 @@ static LogEventLevel ResolveLogLevel()
     };
 }
 
-static void LogExternalDependencyVersions()
+static void LogExternalDependencyVersions(AppPreferences preferences)
 {
     // Floors mirror what Arch Linux x86-64 ships at release time (yt-dlp 2026.08.19-1,
     // mpv 0.41.0 as of 2026-09-06). Bump the yt-dlp floor — and the calendar User-Agent
@@ -96,26 +100,30 @@ static void LogExternalDependencyVersions()
     const string ytDlpFloorVersion = "2026.08.19";
     const string mpvFloorVersion = "0.41.0";
 
-    LogToolVersion("yt-dlp", "yt-dlp", "--version", ytDlpFloorVersion, static output => output.Trim());
-    LogToolVersion("mpv", "mpv", "--version", mpvFloorVersion, static output =>
-    {
-        // First line looks like "mpv v0.41.0 Copyright ...".
-        var firstLine = output.Split('\n', 2)[0].Trim();
-        const string prefix = "mpv v";
-        return firstLine.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            ? firstLine[prefix.Length..].Split(' ', 2)[0]
-            : firstLine;
-    });
+    LogToolVersion("yt-dlp", preferences.YtDlpExecutablePath, "yt-dlp", "--version", ytDlpFloorVersion,
+        static output => output.Trim());
+    LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version", mpvFloorVersion,
+        static output =>
+        {
+            // First line looks like "mpv v0.41.0 Copyright ...".
+            var firstLine = output.Split('\n', 2)[0].Trim();
+            const string prefix = "mpv v";
+            return firstLine.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? firstLine[prefix.Length..].Split(' ', 2)[0]
+                : firstLine;
+        });
 }
 
 static void LogToolVersion(
     string displayName,
-    string fileName,
+    string configuredPath,
+    string fallbackFileName,
     string arguments,
     string floorVersion,
     Func<string, string> extractVersion)
 {
-    var version = ProbeToolVersion(fileName, arguments, TimeSpan.FromSeconds(5), extractVersion);
+    var executablePath = string.IsNullOrWhiteSpace(configuredPath) ? fallbackFileName : configuredPath.Trim();
+    var version = ProbeToolVersion(executablePath, arguments, TimeSpan.FromSeconds(5), extractVersion);
     if (version is null)
     {
         Log.Warning(

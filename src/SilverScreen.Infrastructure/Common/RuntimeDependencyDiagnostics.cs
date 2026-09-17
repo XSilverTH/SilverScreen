@@ -61,11 +61,12 @@ public sealed class RuntimeDependencyDiagnostics
     public IReadOnlyList<string> GetStartupWarnings()
     {
         var preferences = _preferencesService.GetPreferences();
+        var ytDlpPath = ResolveExecutablePath(preferences.YtDlpExecutablePath, "yt-dlp");
         var warnings = new List<string>(3);
 
-        if (!_isExecutableAvailable(preferences.YtDlpExecutablePath))
+        if (!_isExecutableAvailable(ytDlpPath))
         {
-            var msg = RuntimeDependencyGuidance.YtDlpUnavailable(preferences.YtDlpExecutablePath);
+            var msg = RuntimeDependencyGuidance.YtDlpUnavailable(ytDlpPath);
             Logger.Warning("Startup dependency warning: {Warning}", msg);
             warnings.Add(msg);
         }
@@ -79,11 +80,15 @@ public sealed class RuntimeDependencyDiagnostics
                 warnings.Add(libMpvMsg);
             }
         }
-        else if (!_isExecutableAvailable(preferences.MpvExecutablePath))
+        else
         {
-            var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(preferences.MpvExecutablePath);
-            Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
-            warnings.Add(mpvMsg);
+            var mpvPath = ResolveExecutablePath(preferences.MpvExecutablePath, "mpv");
+            if (!_isExecutableAvailable(mpvPath))
+            {
+                var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(mpvPath);
+                Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
+                warnings.Add(mpvMsg);
+            }
         }
 
         if (!_secretServiceAvailability.IsAvailable)
@@ -131,5 +136,10 @@ public sealed class RuntimeDependencyDiagnostics
         {
             return false;
         }
+    }
+
+    private static string ResolveExecutablePath(string? configuredPath, string fallbackFileName)
+    {
+        return string.IsNullOrWhiteSpace(configuredPath) ? fallbackFileName : configuredPath.Trim();
     }
 }
