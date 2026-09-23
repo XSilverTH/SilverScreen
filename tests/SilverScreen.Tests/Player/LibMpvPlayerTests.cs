@@ -24,6 +24,39 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void LoadResetsMpvPauseStateBeforeReplacingVideo()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), new AppPreferences(), null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.Commands.Any(command => command.StartsWith("loadfile|", StringComparison.Ordinal)),
+            TimeSpan.FromSeconds(2)));
+        Assert.Contains(("pause", false), native.FlagProperties);
+    }
+
+    [Fact]
+    public void LoadResetsPauseForEachReplacement()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences();
+
+        var first = Video("first_123456") with { WatchUrl = "https://example.com/first" };
+        player.Load(new PlaybackRequest([first]), preferences, null);
+        Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 1, TimeSpan.FromSeconds(2)));
+        var second = Video("second_123456") with { WatchUrl = "https://example.com/second" };
+        player.Load(new PlaybackRequest([second]), preferences, null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.Commands.Count(command => command.StartsWith("loadfile|", StringComparison.Ordinal)) >= 2,
+            TimeSpan.FromSeconds(2)));
+        Assert.True(native.FlagProperties.Count(property => property == ("pause", false)) >= 2);
+    }
+
+    [Fact]
     public void LoadSetsScriptOptsWithCustomYtDlpPath()
     {
         var native = new RecordingNative();
