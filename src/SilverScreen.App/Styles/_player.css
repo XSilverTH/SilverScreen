@@ -17,9 +17,8 @@
 .player-headerbar,
 .player-headerbar windowhandle,
 .player-headerbar > windowhandle {
-    background-color: alpha(#000000, 0.58);
-    background-image: none;
-    box-shadow: 0 2px 14px alpha(#000000, 0.42);
+    background-color: transparent;
+    background-image: linear-gradient(to bottom, alpha(#000000, 0.55) 0%, alpha(#000000, 0.26) 55%, alpha(#000000, 0) 100%);
 }
 
 
@@ -172,9 +171,12 @@ button.player-reaction-button:disabled label {
 .player-center-controls {
     margin-bottom: 28px;
     padding: 10px 18px;
-    background-color: alpha(#000000, 0.46);
-    border-radius: 18px;
-    box-shadow: 0 4px 18px alpha(#000000, 0.4);
+    background-color: transparent;
+    background-image: none;
+}
+
+.player-center-controls button {
+    filter: drop-shadow(0 2px 4px alpha(#000000, 0.55));
 }
 
 .player-seek-button {
