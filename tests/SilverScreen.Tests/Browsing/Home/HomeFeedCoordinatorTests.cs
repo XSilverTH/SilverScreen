@@ -1,3 +1,4 @@
+using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
@@ -167,6 +168,33 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Empty(coordinator.State.Videos);
         Assert.False(string.IsNullOrWhiteSpace(coordinator.State.Message));
     }
+    [Fact]
+    public async Task RejectedSessionKeepsHomeOutOfEmptyStateAndOffersSignInAgain()
+    {
+        var sessionService = new InMemorySessionService();
+        sessionService.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
+        var fakeFeed = new FakeAuthenticatedHomeFeedService();
+        var firstPage = fakeFeed.ExpectLoadFirstPage();
+        firstPage.SetResult(new AuthenticatedHomeFeedResult(
+            AuthenticatedHomeFeedStatus.AuthenticationRejected,
+            FeedPage.Empty,
+            "private-token " + "x".PadRight(4000, 'x')));
+        var signInCalled = false;
+
+        using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed, () => signInCalled = true);
+        await fakeFeed.FirstPageCalledTask;
+        await WaitForStateAsync(coordinator,
+            state => state.Kind == HomeFeedStateKind.AuthenticationRequired,
+            TimeSpan.FromSeconds(5));
+
+        var status = ((IVideoListSource)coordinator).State.Status;
+        Assert.Equal(HomeFeedStateKind.AuthenticationRequired, coordinator.State.Kind);
+        Assert.DoesNotContain("private-token", status.Description);
+        Assert.Equal("Sign in again", status.ActionLabel);
+        Assert.NotNull(status.Action);
+        status.Action?.Invoke();
+        Assert.True(signInCalled);
+    }
 
     [Fact]
     public async Task ClearSession_ClearsStateAndVideosAndCancelsPendingRequest()
@@ -277,7 +305,7 @@ public sealed class HomeFeedCoordinatorTests
         refreshPageTcs.SetResult(new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
             FeedPage.Empty,
-            "Internal network timeout message"
+            "private-token " + "x".PadRight(4000, 'x')
         ));
 
         // Act
@@ -287,7 +315,10 @@ public sealed class HomeFeedCoordinatorTests
 
         // Assert
         Assert.Equal(HomeFeedStateKind.SafeError, coordinator.State.Kind);
-        Assert.Equal("Could not load YouTube recommendations.", coordinator.State.Message);
+        Assert.DoesNotContain("private-token", coordinator.State.Message);
+        var status = ((IVideoListSource)coordinator).State.Status;
+        Assert.True(status.ShowRetry);
+        Assert.DoesNotContain("private-token", status.Description);
         // Existing video cards must be preserved!
         Assert.Equal(2, coordinator.State.Videos.Length);
         Assert.Equal(["1", "2"], coordinator.State.Videos.Select(v => v.Id));

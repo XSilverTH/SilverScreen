@@ -20,13 +20,14 @@ namespace SilverScreen.Core.Account.Session;
 public static class SessionGate
 {
     public const string SignInActionLabel = "Sign In";
+    public const string SignInAgainActionLabel = "Sign in again";
 
     public const string HomeSignedOutMessage = "Sign in with Google or use cookies.txt to see your Home feed.";
     public const string HistorySignedOutMessage = "Sign in with Google or use cookies.txt to see your watch history.";
     public const string SubscriptionsSignedOutMessage = "Sign in to YouTube to load your subscriptions.";
 
-    public const string SessionNoLongerValidMessage = "Your YouTube sign-in is no longer valid.";
-    public const string HomeLoadErrorMessage = "Could not load YouTube recommendations.";
+    public const string SessionNoLongerValidMessage = "Your YouTube sign-in is no longer valid. Sign in again to continue.";
+    public const string HomeLoadErrorMessage = "YouTube couldn’t load your Home feed. Try again in a moment.";
     public const string HomeEmptyMessage = "No recommendations are available right now.";
 
     public const string HomeServiceAuthenticationRequiredMessage = "Sign in to YouTube to load recommendations.";
@@ -35,13 +36,13 @@ public static class SessionGate
 
     public const string HistorySignedOutTitle = "Sign in to see history";
     public const string HistoryErrorTitle = "Could not load history";
-    public const string HistoryErrorMessage = "Failed to load your watch history. Check your network connection and try again.";
+    public const string HistoryErrorMessage = "YouTube couldn’t load your watch history. Try again in a moment.";
     public const string HistoryEmptyTitle = "No watch history";
     public const string HistoryEmptyMessage = "Videos you watch on YouTube will appear here.";
 
     public const string SubscriptionsSignedOutTitle = "Sign in to see subscriptions";
     public const string SubscriptionsErrorTitle = "Could not load subscriptions";
-    public const string SubscriptionsErrorMessage = "Failed to load your subscriptions. Check your network connection and try again.";
+    public const string SubscriptionsErrorMessage = "YouTube couldn’t load your subscriptions. Try again in a moment.";
     public const string SubscriptionsEmptyTitle = "No subscriptions";
     public const string SubscriptionsEmptyMessage = "Channels you subscribe to on YouTube will appear here.";
 

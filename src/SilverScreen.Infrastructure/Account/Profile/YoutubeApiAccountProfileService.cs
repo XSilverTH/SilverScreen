@@ -37,12 +37,14 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         }
     }
 
-    public async Task<AccountProfile?> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
+    public async Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
     {
-        if (!HasAuthenticatedSession())
+        var session = _sessionService.GetCurrentSession();
+        var cookies = _sessionService.GetManualSessionCookies();
+        if (!HasAuthenticatedSession(session, cookies))
         {
             Logger.Debug("Cannot fetch account profile without an authenticated YouTube session");
-            return null;
+            return new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRequired);
         }
 
         try
@@ -51,10 +53,11 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             var profile = await _clientProvider.GetAuthenticatedClient().Account
                 .GetProfileAsync(cancellationToken)
                 .ConfigureAwait(false);
-            if (!HasAuthenticatedSession() || string.IsNullOrWhiteSpace(profile.DisplayName))
+            if (!HasMatchingAuthenticatedSession(session, cookies) ||
+                string.IsNullOrWhiteSpace(profile.DisplayName))
             {
                 Logger.Warning("YoutubeAPI returned no usable account profile or the session changed");
-                return null;
+                return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
             }
 
             var accountProfile = new AccountProfile(profile.DisplayName, profile.Avatar?.Url.ToString());
@@ -64,22 +67,46 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             }
 
             Logger.Information("YouTube account profile fetched successfully");
-            return accountProfile;
+            return new AccountProfileResult(AccountProfileLoadStatus.Success, accountProfile);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException exception)
+        {
+            LogProfileFailure(exception, "request timeout");
+            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+        }
+        catch (Exception exception) when (exception is AuthenticationRequiredException or AuthenticationExpiredException)
+        {
+            LogProfileFailure(exception, "authentication rejection");
+            return new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRejected);
         }
         catch (YouTubeException exception)
         {
             LogProfileFailure(exception, ClassifyFailure(exception));
-            return null;
+            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
         }
         catch (Exception exception)
         {
             LogProfileFailure(exception, exception is HttpRequestException ? "request" : "unexpected");
-            return null;
+            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
         }
+    }
+
+    private bool HasMatchingAuthenticatedSession(AccountSession session, ManualSessionCookies? cookies)
+    {
+        return _sessionService.GetCurrentSession() == session &&
+               _sessionService.GetManualSessionCookies() == cookies &&
+               HasAuthenticatedSession(session, cookies);
+    }
+
+    private static bool HasAuthenticatedSession(AccountSession session, ManualSessionCookies? cookies)
+    {
+        return session is { IsSignedIn: true, HasManualSession: true } &&
+               cookies is { Format: SessionCookieFormat.NetscapeCookiesText } &&
+               !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
     public void Dispose()

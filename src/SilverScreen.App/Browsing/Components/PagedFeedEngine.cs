@@ -3,18 +3,29 @@ using SilverScreen.Core.Browsing.Common;
 
 namespace SilverScreen.Browsing.Components;
 
+public enum FeedAuthenticationStatus
+{
+    None,
+    Required,
+    Rejected
+}
+
 public sealed record FeedPageResult(
     IReadOnlyList<VideoSummary> Videos,
     string? ContinuationToken = null,
     bool IsSuccess = true,
     string? StatusMessage = null,
-    bool ClearExistingOnFailure = false)
+    bool ClearExistingOnFailure = false,
+    FeedAuthenticationStatus AuthenticationStatus = FeedAuthenticationStatus.None)
 {
     public static FeedPageResult Empty { get; } = new([]);
 
-    public static FeedPageResult Failed(string message, bool clearExisting = false)
+    public static FeedPageResult Failed(
+        string message,
+        bool clearExisting = false,
+        FeedAuthenticationStatus authenticationStatus = FeedAuthenticationStatus.None)
     {
-        return new FeedPageResult([], null, false, message, clearExisting);
+        return new FeedPageResult([], null, false, message, clearExisting, authenticationStatus);
     }
 }
 
@@ -37,7 +48,8 @@ public sealed record FeedEngineState(
     string? StatusMessage,
     bool IsSuccess,
     Exception? LastError,
-    string? PaginationError = null);
+    string? PaginationError = null,
+    FeedAuthenticationStatus AuthenticationStatus = FeedAuthenticationStatus.None);
 public sealed record FeedEngineSnapshot(
     IReadOnlyList<VideoSummary> Videos,
     string? ContinuationToken,
@@ -46,7 +58,8 @@ public sealed record FeedEngineSnapshot(
     bool IsSuccess,
     Exception? LastError,
     string? PaginationError,
-    VideoListStatus? ExplicitStatus = null);
+    VideoListStatus? ExplicitStatus = null,
+    FeedAuthenticationStatus AuthenticationStatus = FeedAuthenticationStatus.None);
 
 
 
@@ -69,6 +82,7 @@ public class PagedFeedEngine : IVideoListSource
     private long _currentGeneration;
     private bool _disposed;
     private VideoListStatus? _explicitStatus;
+    private FeedAuthenticationStatus _authenticationStatus;
     private FeedPageFetcher? _fetcher;
     private bool _hasMore;
     private bool _isLoading;
@@ -324,6 +338,7 @@ public class PagedFeedEngine : IVideoListSource
             _isSuccess = isSuccess;
             _statusMessage = statusMessage;
             _lastError = null;
+            _authenticationStatus = FeedAuthenticationStatus.None;
             _paginationError = null;
             if (status != null) _explicitStatus = status;
             UpdateStateUnsafe();
@@ -346,6 +361,7 @@ public class PagedFeedEngine : IVideoListSource
             _lastResult = null;
             _lastError = null;
             _paginationError = null;
+            _authenticationStatus = FeedAuthenticationStatus.None;
             _explicitStatus = status;
             UpdateStateUnsafe();
         }
@@ -365,7 +381,8 @@ public class PagedFeedEngine : IVideoListSource
                 _isSuccess,
                 _lastError,
                 _paginationError,
-                _explicitStatus);
+                _explicitStatus,
+                _authenticationStatus);
         }
     }
 
@@ -387,6 +404,7 @@ public class PagedFeedEngine : IVideoListSource
             _paginationError = snapshot.PaginationError;
             _isSuccess = snapshot.IsSuccess;
             _explicitStatus = snapshot.ExplicitStatus;
+            _authenticationStatus = snapshot.AuthenticationStatus;
             UpdateStateUnsafe();
         }
 
@@ -424,6 +442,7 @@ public class PagedFeedEngine : IVideoListSource
             _isLoading = isRefresh;
             _isLoadingMore = !isRefresh;
             _paginationError = null;
+            _authenticationStatus = FeedAuthenticationStatus.None;
 
             priorToken = _continuationToken;
             priorHasMore = _hasMore;
@@ -469,6 +488,7 @@ public class PagedFeedEngine : IVideoListSource
                 _lastError = null;
                 _isSuccess = result.IsSuccess;
                 _statusMessage = result.StatusMessage;
+                _authenticationStatus = result.AuthenticationStatus;
 
                 if (result.IsSuccess)
                 {
@@ -586,7 +606,8 @@ public class PagedFeedEngine : IVideoListSource
             _statusMessage,
             _isSuccess,
             _lastError,
-            _paginationError);
+            _paginationError,
+            _authenticationStatus);
 
         var status = _explicitStatus
                      ?? _statusMapper?.Invoke(_lastResult, _lastError, engineState)

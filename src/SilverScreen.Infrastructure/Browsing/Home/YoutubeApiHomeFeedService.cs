@@ -181,7 +181,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.HomeLoadErrorMessage);
         }
         catch (Exception exception)
         {
@@ -189,7 +189,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.HomeLoadErrorMessage);
         }
     }
 

@@ -181,7 +181,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.HistoryErrorMessage);
         }
         catch (Exception exception)
         {
@@ -189,7 +189,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.HistoryErrorMessage);
         }
     }
 

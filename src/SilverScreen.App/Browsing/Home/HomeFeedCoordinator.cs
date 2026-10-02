@@ -15,7 +15,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private readonly SilverScreen.Core.Account.Session.ISessionService _sessionService;
     private bool _disposed;
     private Action? _openWebLogin;
-
     public HomeFeedCoordinator(SilverScreen.Core.Account.Session.ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
         Action? openWebLogin = null)
     {
@@ -29,8 +28,12 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             res =>
             {
                 if (SessionGate.IsAuthInvalid(res.Status))
-                    return FeedPageResult.Failed(SessionGate.SessionNoLongerValidMessage, true);
-
+                    return FeedPageResult.Failed(
+                        SessionGate.SessionNoLongerValidMessage,
+                        clearExisting: true,
+                        authenticationStatus: res.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected
+                            ? FeedAuthenticationStatus.Rejected
+                            : FeedAuthenticationStatus.Required);
                 var isSuccess = res.Status is AuthenticatedHomeFeedStatus.Success or AuthenticatedHomeFeedStatus.Empty;
                 var hasContinuation = res.Status == AuthenticatedHomeFeedStatus.Success &&
                                       !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
@@ -122,12 +125,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             UpdateHomeFeedState(HomeFeedState.SignedOut);
             return;
         }
-
-        var lastStatus = engineState.StatusMessage == SessionGate.SessionNoLongerValidMessage
-            ? AuthenticatedHomeFeedStatus.AuthenticationRejected
-            : AuthenticatedHomeFeedStatus.Success;
-
-        var (kind, message) = SessionGate.MapHomeFeedOutcome(lastStatus, engineState);
+        var (kind, message) = SessionGate.MapHomeFeedOutcome(engineState.AuthenticationStatus, engineState);
         var newState = new HomeFeedState(
             kind,
             [.. engineState.Videos],
@@ -174,12 +172,10 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     private VideoListStatus MapHomeStatus(FeedEngineState state)
     {
-        var lastStatus = state.StatusMessage == SessionGate.SessionNoLongerValidMessage
-            ? AuthenticatedHomeFeedStatus.AuthenticationRejected
-            : AuthenticatedHomeFeedStatus.Success;
-
-        if (SessionGate.IsAuthInvalid(lastStatus))
-            return SessionGate.HomeAuthInvalidStatus(_openWebLogin);
+        if (state.AuthenticationStatus is FeedAuthenticationStatus.Required or FeedAuthenticationStatus.Rejected)
+            return SessionGate.HomeAuthInvalidStatus(
+                _openWebLogin,
+                state.AuthenticationStatus == FeedAuthenticationStatus.Rejected);
 
         if (state.LastError != null || !state.IsSuccess)
             return SessionGate.HomeErrorStatus();

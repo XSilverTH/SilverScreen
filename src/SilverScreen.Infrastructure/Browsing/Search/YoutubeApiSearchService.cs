@@ -56,39 +56,40 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         catch (FormatException exception)
         {
             Logger.Warning(exception, "Invalid YouTube search continuation");
-            return SearchResultPage.Failed($"Search failed: invalid continuation ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (AuthenticationRequiredException exception)
         {
             Logger.Warning(exception, "YouTube search requires authentication");
-            return SearchResultPage.Failed("Search failed: YouTube authentication is required.");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (AuthenticationExpiredException exception)
         {
             Logger.Warning(exception, "YouTube search authentication expired");
-            return SearchResultPage.Failed("Search failed: the YouTube session has expired.");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (PermissionDeniedException exception)
         {
             Logger.Warning(exception, "YouTube denied search request");
-            return SearchResultPage.Failed("Search failed: YouTube denied the request.");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (ResourceNotFoundException exception)
         {
             Logger.Warning(exception, "YouTube search resource was not found");
-            return SearchResultPage.Failed("Search failed: the requested resource was not found.");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (RateLimitedException exception)
         {
             Logger.Warning(exception, "YouTube search was rate limited");
-            return SearchResultPage.Failed("Search failed: YouTube rate limit reached.");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
         catch (YouTubeException exception)
         {
             Logger.Warning(exception, "YouTube search request failed");
-            return SearchResultPage.Failed($"Search failed: {DiagnosticSanitizer.Sanitize(exception.Message)}");
+            return SearchResultPage.Failed("Search could not be completed.");
         }
     }
+
 
     private static VideoSummary MapVideo(
         ApiVideoSummary video,

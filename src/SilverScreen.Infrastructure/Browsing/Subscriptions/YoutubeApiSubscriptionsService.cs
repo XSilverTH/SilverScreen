@@ -143,7 +143,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 [],
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.SubscriptionsErrorMessage);
         }
         catch (Exception exception)
         {
@@ -151,7 +151,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new SubscribedChannelsResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 [],
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.SubscriptionsErrorMessage);
         }
     }
 
@@ -239,7 +239,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.SubscriptionsErrorMessage);
         }
         catch (Exception exception)
         {
@@ -247,7 +247,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
                 FeedPage.Empty,
-                DiagnosticSanitizer.Sanitize(exception.Message));
+                SessionGate.SubscriptionsErrorMessage);
         }
     }
 

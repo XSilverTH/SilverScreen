@@ -46,6 +46,144 @@ Adw.Bin AccountPopoverView {
     }
 
     Gtk.StackPage {
+      name: "checking";
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 8;
+        width-request: 320;
+
+        Gtk.Label {
+          label: "Checking your YouTube account";
+          xalign: 0;
+          styles [
+            "heading",
+          ]
+        }
+
+        Gtk.Label {
+          label: "Your saved session is being verified.";
+          xalign: 0;
+          wrap: true;
+          max-width-chars: 40;
+          styles [
+            "dim-label",
+          ]
+        }
+
+        Gtk.Button checking_sign_out_button {
+          clicked => $OnClearButtonClicked();
+          label: "Sign out";
+          halign: end;
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "rejected";
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 8;
+        width-request: 320;
+
+        Gtk.Label {
+          label: "Sign in again";
+          xalign: 0;
+          styles [
+            "heading",
+          ]
+        }
+
+        Gtk.Label {
+          label: "Your YouTube session has expired. Your saved credentials are kept until you choose to sign out.";
+          xalign: 0;
+          wrap: true;
+          max-width-chars: 40;
+          styles [
+            "dim-label",
+          ]
+        }
+
+        Gtk.Button rejected_google_button {
+          clicked => $OnWebLoginClicked();
+          label: "Sign in with Google";
+          halign: fill;
+          styles [
+            "suggested-action",
+          ]
+        }
+
+        Gtk.Button rejected_manual_button {
+          clicked => $OnOpenManualEditorClicked();
+          label: "Use cookies.txt";
+          halign: fill;
+        }
+
+        Gtk.Button rejected_sign_out_button {
+          clicked => $OnClearButtonClicked();
+          label: "Sign out";
+          halign: end;
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "unavailable";
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 8;
+        width-request: 320;
+
+        Gtk.Label {
+          label: "Couldn’t verify your account";
+          xalign: 0;
+          styles [
+            "heading",
+          ]
+        }
+
+        Gtk.Label {
+          label: "YouTube couldn’t verify your account. Your saved session is kept. Try again.";
+          xalign: 0;
+          wrap: true;
+          max-width-chars: 40;
+          styles [
+            "dim-label",
+          ]
+        }
+
+        Gtk.Button unavailable_retry_button {
+          clicked => $OnRetryProfileClicked();
+          label: "Retry";
+          halign: fill;
+          styles [
+            "suggested-action",
+          ]
+        }
+
+        Gtk.Button unavailable_google_button {
+          clicked => $OnWebLoginClicked();
+          label: "Sign in with Google";
+          halign: fill;
+        }
+
+        Gtk.Button unavailable_manual_button {
+          clicked => $OnOpenManualEditorClicked();
+          label: "Use cookies.txt";
+          halign: fill;
+        }
+
+        Gtk.Button unavailable_sign_out_button {
+          clicked => $OnClearButtonClicked();
+          label: "Sign out";
+          halign: end;
+        }
+      };
+    }
+
+    Gtk.StackPage {
       name: "signed_in";
 
       child: Gtk.Box {

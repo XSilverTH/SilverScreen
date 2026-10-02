@@ -212,6 +212,54 @@ public sealed class PagedFeedEngineTests
         // Verify stale request did not overwrite state
         Assert.Equal(["req2"], engine.Videos.Select(v => v.Id));
     }
+[Fact]
+    public async Task StaleAuthenticationResultCannotReplaceAcceptedEmptyPage()
+    {
+        var stale = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var current = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var call = 0;
+        using var engine = new PagedFeedEngine(
+            fetcher: (_, _, _) => Interlocked.Increment(ref call) == 1 ? stale.Task : current.Task);
+
+        var staleRefresh = engine.RefreshAsync();
+        var currentRefresh = engine.RefreshAsync();
+        current.SetResult(new FeedPageResult([], IsSuccess: true));
+        await currentRefresh;
+
+        stale.SetResult(FeedPageResult.Failed(
+            "Rejected",
+            clearExisting: true,
+            authenticationStatus: FeedAuthenticationStatus.Rejected));
+        await staleRefresh;
+
+        Assert.Empty(engine.EngineState.Videos);
+        Assert.True(engine.EngineState.IsSuccess);
+        Assert.Equal(FeedAuthenticationStatus.None, engine.EngineState.AuthenticationStatus);
+    }
+
+    [Fact]
+    public async Task AuthenticationMetadataSurvivesSnapshotAndClearsOnResetAndSetVideos()
+    {
+        using var engine = new PagedFeedEngine(
+            fetcher: (_, _, _) => Task.FromResult(new FeedPageResult(
+                [],
+                IsSuccess: false,
+                StatusMessage: "Sign in",
+                AuthenticationStatus: FeedAuthenticationStatus.Required)));
+
+        await engine.RefreshAsync();
+        Assert.Equal(FeedAuthenticationStatus.Required, engine.EngineState.AuthenticationStatus);
+        var snapshot = engine.CaptureSnapshot();
+
+        engine.Reset();
+        Assert.Equal(FeedAuthenticationStatus.None, engine.EngineState.AuthenticationStatus);
+
+        engine.RestoreSnapshot(snapshot);
+        Assert.Equal(FeedAuthenticationStatus.Required, engine.EngineState.AuthenticationStatus);
+
+        engine.SetVideos([]);
+        Assert.Equal(FeedAuthenticationStatus.None, engine.EngineState.AuthenticationStatus);
+    }
 
     [Fact]
     public async Task ServiceException_SetsErrorState_WithoutCrashing()

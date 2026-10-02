@@ -96,52 +96,45 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         catch (FormatException exception)
         {
             Logger.Warning(exception, "Invalid YouTube channel or continuation reference");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: invalid channel or continuation ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (ArgumentException exception)
         {
             Logger.Warning(exception, "Invalid YouTube channel reference");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: invalid channel reference ({DiagnosticSanitizer.Sanitize(exception.Message)}).");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (AuthenticationRequiredException exception)
         {
             Logger.Warning(exception, "YouTube channel request requires authentication");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                "Could not load channel: YouTube authentication is required.");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (AuthenticationExpiredException exception)
         {
             Logger.Warning(exception, "YouTube channel authentication expired");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                "Could not load channel: the YouTube session has expired.");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (PermissionDeniedException exception)
         {
             Logger.Warning(exception, "YouTube denied channel request");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                "Could not load channel: YouTube denied the request.");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (ResourceNotFoundException exception)
         {
             Logger.Warning(exception, "YouTube channel was not found");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                "Could not load channel: the channel was not found.");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (RateLimitedException exception)
         {
             Logger.Warning(exception, "YouTube channel request was rate limited");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                "Could not load channel: YouTube rate limit reached.");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
         catch (YouTubeException exception)
         {
             Logger.Warning(exception, "YouTube channel request failed");
-            return ChannelPage.Failed(channelUrl, fallbackName, sort,
-                $"Could not load channel: {DiagnosticSanitizer.Sanitize(exception.Message)}");
+            return ChannelPage.Failed(channelUrl, fallbackName, sort, "Could not load channel.");
         }
     }
+
 
     private static ApiChannelVideoSort ToApiSort(ChannelVideoSort sort)
     {

@@ -159,20 +159,31 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         {
             if (profileService is not null)
             {
-                var profile = await profileService.GetCurrentProfileAsync(linkedCts.Token)
+                var profileResult = await profileService.GetCurrentProfileAsync(linkedCts.Token)
                     .ConfigureAwait(false);
-                var result = new HomeSessionValidationResult(
-                    profile is not null,
+                var profileStatus = profileResult.Status switch
+                {
+                    AccountProfileLoadStatus.Success when profileResult.Profile is not null =>
+                        AuthenticatedHomeFeedStatus.Success,
+                    AccountProfileLoadStatus.AuthenticationRequired =>
+                        AuthenticatedHomeFeedStatus.AuthenticationRequired,
+                    AccountProfileLoadStatus.AuthenticationRejected =>
+                        AuthenticatedHomeFeedStatus.AuthenticationRejected,
+                    _ => AuthenticatedHomeFeedStatus.TemporaryBackendFailure
+                };
+                var succeeded = profileStatus == AuthenticatedHomeFeedStatus.Success;
+                var profileRequiresAuth = profileStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired
+                    or AuthenticatedHomeFeedStatus.AuthenticationRejected;
+                var profileValidationResult = new HomeSessionValidationResult(
+                    succeeded,
                     0,
                     false,
-                    profile is null,
-                    profile is null
-                        ? AuthenticatedHomeFeedStatus.AuthenticationRejected
-                        : AuthenticatedHomeFeedStatus.Success,
-                    profile is null
+                    profileRequiresAuth,
+                    profileStatus,
+                    succeeded ? "Account profile loaded." : profileRequiresAuth
                         ? "The YouTube session was rejected or has expired."
-                        : "Account profile loaded.");
-                return SessionValidationFormatter.FormatResult(result);
+                        : "The account profile could not be verified right now.");
+                return SessionValidationFormatter.FormatResult(profileValidationResult);
             }
 
             if (feedService is null)

@@ -156,7 +156,8 @@ public sealed class SessionTests
         var profile = new FakeProfileService(() =>
         {
             profileCalls++;
-            return Task.FromResult<AccountProfile?>(new AccountProfile("Test account"));
+            return Task.FromResult(new AccountProfileResult(
+                AccountProfileLoadStatus.Success, new AccountProfile("Test account")));
         });
         using var service = new SecretServiceSessionService(
             store, tempRoot.Path, profileServiceFactory: () => profile);
@@ -517,11 +518,11 @@ public sealed class SessionTests
 
 
     private sealed class FakeProfileService(
-        Func<Task<AccountProfile?>> getProfile) : IAccountProfileService
+        Func<Task<AccountProfileResult>> getProfile) : IAccountProfileService
     {
         public AccountProfile? GetCachedProfile() => null;
 
-        public Task<AccountProfile?> GetCurrentProfileAsync(
+        public Task<AccountProfileResult> GetCurrentProfileAsync(
             CancellationToken cancellationToken = default) => getProfile();
     }
 

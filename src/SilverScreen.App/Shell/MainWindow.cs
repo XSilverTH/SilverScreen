@@ -764,12 +764,30 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _webLogin.Present();
     }
 
-    private void UpdateAccountAppearance(bool hasManualSession, string displayName, Texture? avatar)
+    private void UpdateAccountAppearance(
+        AccountProfilePresentationStatus status,
+        bool hasManualSession,
+        string displayName,
+        Texture? avatar)
     {
-        account_button.TooltipText = hasManualSession ? "YouTube session active" : "Account";
-        account_avatar.Text = hasManualSession ? displayName : string.Empty;
-        account_avatar.ShowInitials = hasManualSession;
-        account_avatar.CustomImage = avatar!;
+        account_status_stack.VisibleChildName = status switch
+        {
+            AccountProfilePresentationStatus.Ready => "avatar",
+            AccountProfilePresentationStatus.Checking => "checking",
+            AccountProfilePresentationStatus.Rejected or AccountProfilePresentationStatus.Unavailable => "warning",
+            _ => "signed_out"
+        };
+        account_button.TooltipText = status switch
+        {
+            AccountProfilePresentationStatus.Ready => $"YouTube account: {displayName}",
+            AccountProfilePresentationStatus.Checking => "Checking YouTube account",
+            AccountProfilePresentationStatus.Rejected => "YouTube session expired — sign in again",
+            AccountProfilePresentationStatus.Unavailable => "Couldn’t verify YouTube account — retry",
+            _ => hasManualSession ? "YouTube account" : "Sign in to YouTube"
+        };
+        account_avatar.Text = status == AccountProfilePresentationStatus.Ready ? displayName : string.Empty;
+        account_avatar.ShowInitials = status == AccountProfilePresentationStatus.Ready;
+        account_avatar.CustomImage = status == AccountProfilePresentationStatus.Ready ? avatar! : null!;
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)

@@ -14,7 +14,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
     private readonly Action _openWebLogin;
-    private readonly Action<bool, string, Texture?> _sessionAppearanceChanged;
+    private readonly Action<AccountProfilePresentationStatus, bool, string, Texture?> _sessionAppearanceChanged;
     private readonly IThumbnailService _thumbnails;
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
@@ -26,7 +26,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
         AccountViewModel viewModel,
         IThumbnailService thumbnails,
         Action openWebLogin,
-        Action<bool, string, Texture?> sessionAppearanceChanged)
+        Action<AccountProfilePresentationStatus, bool, string, Texture?> sessionAppearanceChanged)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
@@ -58,6 +58,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private void Render()
     {
         var hasManualSession = _viewModel.HasManualSession;
+        var status = !hasManualSession
+            ? AccountProfilePresentationStatus.SignedOut
+            : _viewModel.ProfileStatus;
+        UpdateAvatar(status == AccountProfilePresentationStatus.Ready ? _viewModel.AvatarUrl : null);
+        _sessionAppearanceChanged(status, hasManualSession, _viewModel.DisplayName, _avatarTexture);
         if (_editing)
         {
             account_stack.VisibleChildName = "manual";
@@ -67,20 +72,24 @@ public partial class AccountPopoverView : ViewBase<Bin>
             return;
         }
 
-        if (hasManualSession)
+        if (status == AccountProfilePresentationStatus.Ready)
         {
             var displayName = _viewModel.DisplayName;
             signed_in_avatar.Text = displayName;
             signed_in_display_name.SetText(displayName);
-            UpdateAvatar(_viewModel.AvatarUrl);
+            account_stack.VisibleChildName = "signed_in";
         }
         else
         {
-            UpdateAvatar(null);
+            account_stack.VisibleChildName = status switch
+            {
+                AccountProfilePresentationStatus.Checking => "checking",
+                AccountProfilePresentationStatus.Rejected => "rejected",
+                AccountProfilePresentationStatus.Unavailable => "unavailable",
+                _ => "signed_out"
+            };
         }
 
-        account_stack.VisibleChildName = hasManualSession ? "signed_in" : "signed_out";
-        _sessionAppearanceChanged(hasManualSession, _viewModel.DisplayName, _avatarTexture);
     }
 
     private void UpdateAvatar(string? avatarUrl)
@@ -151,7 +160,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
                     signed_in_avatar.CustomImage = texture;
                     _avatarTexture?.Dispose();
                     _avatarTexture = texture;
-                    _sessionAppearanceChanged(true, _viewModel.DisplayName, texture);
+                    _sessionAppearanceChanged(
+                        _viewModel.ProfileStatus,
+                        _viewModel.HasManualSession,
+                        _viewModel.DisplayName,
+                        texture);
                 }
                 finally
                 {
@@ -185,6 +198,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
     {
         OpenManualEditor();
     }
+    private void OnRetryProfileClicked(object? sender, EventArgs args)
+    {
+        _viewModel.RefreshProfile();
+    }
+
 
 
     private async void OnClearButtonClicked(object? sender, EventArgs args)

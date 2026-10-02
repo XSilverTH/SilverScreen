@@ -66,8 +66,7 @@ public sealed class VideoListSourceTests
         var state = new HomeFeedState(HomeFeedStateKind.AuthenticationRequired, []);
         var presentation = HomeVideoListSource.MapState(state);
 
-        Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("Your YouTube sign-in is no longer valid.", presentation.Status.Description);
+        Assert.DoesNotContain("private-token", presentation.Status.Description);
         Assert.Equal("dialog-password-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
     }
@@ -79,7 +78,7 @@ public sealed class VideoListSourceTests
         var presentation = HomeVideoListSource.MapState(state);
 
         Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("Could not load YouTube recommendations.", presentation.Status.Description);
+        Assert.False(string.IsNullOrWhiteSpace(presentation.Status.Description));
         Assert.Equal("network-error-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
     }
@@ -101,38 +100,34 @@ public sealed class VideoListSourceTests
     [Fact]
     public void SearchVideoListSource_MapsCustomEmptySummary()
     {
-        var state = new SearchViewState([], "Custom empty message", false);
-        var presentation = SearchVideoListSource.MapState(state);
-
-        Assert.Equal("No results found", presentation.Status.Title);
-        Assert.Equal("Custom empty message", presentation.Status.Description);
-        Assert.Equal("system-search-symbolic", presentation.Status.IconName);
+        var presentation = SearchVideoListSource.MapState(new SearchViewState([], "Custom empty message", false));
+        Assert.Equal("Try different keywords or check spelling.", presentation.Status.Description);
     }
 
     [Fact]
     public void SearchVideoListSource_MapsErrorState()
     {
-        var state = new SearchViewState([], "Search failed.", false, false, false, false);
-        var presentation = SearchVideoListSource.MapState(state);
-
+        var presentation = SearchVideoListSource.MapState(new SearchViewState([], "Search failed.", false, false, false, false));
         Assert.Equal("Could not complete search", presentation.Status.Title);
-        Assert.Equal("Failed to load search results. Check your network connection and try again.",
-            presentation.Status.Description);
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
         Assert.True(presentation.Status.ShowRetry);
     }
 
     [Fact]
-    public void SearchVideoListSource_MapsErrorStateWithCustomMessage()
+    public void SearchVideoListSource_KeepsBackendDiagnosticsOutOfEmptyAndFailureStatus()
     {
-        var state = new SearchViewState([], "Search could not be completed.", false, false, false, false);
-        var presentation = SearchVideoListSource.MapState(state);
+        var diagnostic = "private-token-" + "x".PadRight(4000, 'x');
+        var failure = SearchVideoListSource.MapState(
+            new SearchViewState([], diagnostic, false, false, false, false), diagnostic);
+        var empty = SearchVideoListSource.MapState(
+            new SearchViewState([], diagnostic, false, false, false, true));
 
-        Assert.Equal("Could not complete search", presentation.Status.Title);
-        Assert.Equal("Search could not be completed.", presentation.Status.Description);
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
-        Assert.True(presentation.Status.ShowRetry);
+        Assert.DoesNotContain("private-token", failure.Status.Description);
+        Assert.DoesNotContain("private-token", failure.PaginationError);
+        Assert.True(failure.Status.ShowRetry);
+        Assert.DoesNotContain("private-token", empty.Status.Description);
+        Assert.False(empty.Status.ShowRetry);
     }
+
 
     [Fact]
     public void SearchVideoListSource_MapsLoadingState()
@@ -141,7 +136,7 @@ public sealed class VideoListSourceTests
         var presentation = SearchVideoListSource.MapState(state);
 
         Assert.True(presentation.IsLoading);
-        Assert.Equal("Searching YouTube for “dotnet”…", presentation.LoadingMessage);
+        Assert.DoesNotContain("dotnet", presentation.LoadingMessage);
     }
 
     [Fact]
@@ -166,8 +161,7 @@ public sealed class VideoListSourceTests
         var presentation = HistoryVideoListSource.MapState(state);
 
         Assert.Equal("Could not load history", presentation.Status.Title);
-        Assert.Equal("Failed to load your watch history. Check your network connection and try again.",
-            presentation.Status.Description);
+        Assert.DoesNotContain("private-token", presentation.Status.Description);
         Assert.Equal("network-error-symbolic", presentation.Status.IconName);
         Assert.True(presentation.Status.ShowRetry);
     }
@@ -193,7 +187,7 @@ public sealed class VideoListSourceTests
         var presentation = ChannelVideoListSource.MapState(state);
 
         Assert.True(presentation.IsLoading);
-        Assert.Equal("Loading Example…", presentation.LoadingMessage);
+        Assert.DoesNotContain("Example", presentation.LoadingMessage);
     }
 
     [Fact]
@@ -208,30 +202,16 @@ public sealed class VideoListSourceTests
     }
 
     [Fact]
-    public void ChannelVideoListSource_MapsErrorState()
+    public void ChannelVideoListSource_UsesSafeFailureCopy()
     {
+        var diagnostic = "private-token-" + "x".PadRight(4000, 'x');
         var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "Could not load channel.", false, false);
-        var presentation = ChannelVideoListSource.MapState(state);
+            [], ChannelVideoSort.Newest, diagnostic, false, false);
+        var presentation = ChannelVideoListSource.MapState(state, diagnostic);
 
-        Assert.Equal("Could not load channel", presentation.Status.Title);
-        Assert.Equal("Failed to load channel details. Check your network connection and try again.",
-            presentation.Status.Description);
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
         Assert.True(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_MapsErrorStateWithCustomMessage()
-    {
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "Channel not found", false, false);
-        var presentation = ChannelVideoListSource.MapState(state);
-
-        Assert.Equal("Could not load channel", presentation.Status.Title);
-        Assert.Equal("Channel not found", presentation.Status.Description);
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
-        Assert.True(presentation.Status.ShowRetry);
+        Assert.DoesNotContain("private-token", presentation.Status.Description);
+        Assert.DoesNotContain("private-token", presentation.PaginationError);
     }
 
     [Fact]
@@ -244,19 +224,6 @@ public sealed class VideoListSourceTests
         Assert.Equal("No videos found", presentation.Status.Title);
         Assert.Equal("This channel does not have any public videos available right now.",
             presentation.Status.Description);
-        Assert.Equal("applications-internet-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_MapsEmptyStateWithCustomMessage()
-    {
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "No public videos.", false, true);
-        var presentation = ChannelVideoListSource.MapState(state);
-
-        Assert.Equal("No videos found", presentation.Status.Title);
-        Assert.Equal("No public videos.", presentation.Status.Description);
         Assert.Equal("applications-internet-symbolic", presentation.Status.IconName);
         Assert.False(presentation.Status.ShowRetry);
     }

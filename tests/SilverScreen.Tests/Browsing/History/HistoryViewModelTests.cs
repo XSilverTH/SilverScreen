@@ -1,3 +1,4 @@
+using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Infrastructure.Account.Session;
 using SilverScreen.Browsing.History;
@@ -8,6 +9,28 @@ namespace SilverScreen.Tests.Browsing.History;
 
 public sealed class HistoryViewModelTests
 {
+    [Fact]
+    public async Task RejectedSessionOffersSignInAgainWithoutShowingBackendDetails()
+    {
+        var signInCalled = false;
+        var service = new FakeHistoryService
+        {
+            FirstPage = new AuthenticatedHistoryResult(
+                AuthenticatedHistoryStatus.AuthenticationRejected,
+                FeedPage.Empty,
+                "private-token " + "x".PadRight(4000, 'x'))
+        };
+        using var viewModel = new HistoryViewModel(service, CreateSession(), () => signInCalled = true);
+
+        await viewModel.LoadAsync();
+
+        var status = ((IVideoListSource)viewModel).State.Status;
+        Assert.False(status.ShowRetry);
+        Assert.Equal("Sign in again", status.ActionLabel);
+        Assert.DoesNotContain("private-token", status.Description);
+        status.Action?.Invoke();
+        Assert.True(signInCalled);
+    }
     [Fact]
     public async Task LoadMoreAsync_AppendsTheNextServerPageWithoutDuplicatingVideos()
     {

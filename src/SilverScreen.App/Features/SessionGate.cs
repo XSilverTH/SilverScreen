@@ -50,14 +50,18 @@ public static class SessionGate
             openWebLogin);
     }
 
-    public static VideoListStatus HomeAuthInvalidStatus(Action? openWebLogin)
+    public static VideoListStatus HomeAuthInvalidStatus(Action? openWebLogin, bool authenticationRejected = true)
     {
         return new VideoListStatus(
             "Home",
-            SessionNoLongerValidMessage,
-            "dialog-password-symbolic",
+            authenticationRejected ? SessionNoLongerValidMessage : HomeSignedOutMessage,
+            authenticationRejected ? "dialog-password-symbolic" : "avatar-default-symbolic",
             false,
-            openWebLogin is null ? null : SignInActionLabel,
+            openWebLogin is null
+                ? null
+                : authenticationRejected
+                    ? CoreGate.SignInAgainActionLabel
+                    : SignInActionLabel,
             openWebLogin);
     }
 
@@ -86,11 +90,14 @@ public static class SessionGate
     ///     keep the engine's own message.
     /// </summary>
     public static (HomeFeedStateKind Kind, string? Message) MapHomeFeedOutcome(
-        AuthenticatedHomeFeedStatus lastStatus,
+        FeedAuthenticationStatus authenticationStatus,
         FeedEngineState state)
     {
-        if (IsAuthInvalid(lastStatus))
+        if (authenticationStatus == FeedAuthenticationStatus.Rejected)
             return (HomeFeedStateKind.AuthenticationRequired, SessionNoLongerValidMessage);
+
+        if (authenticationStatus == FeedAuthenticationStatus.Required)
+            return (HomeFeedStateKind.AuthenticationRequired, HomeSignedOutMessage);
 
         if (state.LastError != null || !state.IsSuccess)
             return (HomeFeedStateKind.SafeError, HomeLoadErrorMessage);

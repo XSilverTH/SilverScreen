@@ -30,6 +30,29 @@ public sealed class SubscriptionsVideoListSourceTests
         mapped.Status.Action?.Invoke();
         Assert.True(signInCalled);
     }
+    [Fact]
+    public void MapState_AuthenticationRejected_OffersSignInAgainAndHidesDiagnostics()
+    {
+        var state = new SubscriptionsViewState(
+            [],
+            null,
+            [],
+            false,
+            false,
+            false,
+            AuthenticatedSubscriptionsStatus.AuthenticationRejected,
+            "private-token " + "x".PadRight(4000, 'x'),
+            false);
+        var signInCalled = false;
+
+        var mapped = SubscriptionsVideoListSource.MapState(state, () => signInCalled = true);
+
+        Assert.Equal("Sign in again", mapped.Status.ActionLabel);
+        Assert.DoesNotContain("private-token", mapped.Status.Description);
+        Assert.NotNull(mapped.Status.Action);
+        mapped.Status.Action?.Invoke();
+        Assert.True(signInCalled);
+    }
 
     [Fact]
     public void MapState_TemporaryBackendFailure_SetsRetryButton()
@@ -42,14 +65,16 @@ public sealed class SubscriptionsVideoListSourceTests
             false,
             false,
             AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-            "Network error occurred.",
-            false);
+            "private-token " + "x".PadRight(4000, 'x'),
+            false,
+            "private-token pagination " + "x".PadRight(4000, 'x'));
 
         var mapped = SubscriptionsVideoListSource.MapState(state);
 
         Assert.Equal("Could not load subscriptions", mapped.Status.Title);
-        Assert.Equal("Network error occurred.", mapped.Status.Description);
+        Assert.DoesNotContain("private-token", mapped.Status.Description);
         Assert.True(mapped.Status.ShowRetry);
+        Assert.DoesNotContain("private-token", mapped.PaginationError);
     }
 
     [Fact]

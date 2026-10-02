@@ -29,7 +29,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     private readonly Action? _openWebLogin;
     private readonly ISessionService? _sessionService;
     private bool _disposed;
-    private AuthenticatedHistoryStatus _historyStatus = AuthenticatedHistoryStatus.Success;
 
     public HistoryViewModel(
         IAuthenticatedHistoryService historyService,
@@ -40,8 +39,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
         _sessionService = sessionService;
         _openWebLogin = openWebLogin;
 
-        if (!IsSessionActive())
-            _historyStatus = AuthenticatedHistoryStatus.AuthenticationRequired;
 
         _engine = PagedFeedEngine.Create(
             historyService.LoadFirstPageAsync,
@@ -59,9 +56,21 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
                     res.FeedPage.Videos,
                     hasContinuation ? res.FeedPage.ContinuationToken : null,
                     isSuccess,
-                    statusMessage);
+                    statusMessage,
+                    AuthenticationStatus: res.Status switch
+                    {
+                        AuthenticatedHistoryStatus.AuthenticationRequired => FeedAuthenticationStatus.Required,
+                        AuthenticatedHistoryStatus.AuthenticationRejected => FeedAuthenticationStatus.Rejected,
+                        _ => FeedAuthenticationStatus.None
+                    });
             },
-            (_, _, state) => WithSignInAction(HistoryVideoListSource.MapStatus(GetHistoryStatus(state), state)),
+            (_, _, state) =>
+            {
+                var historyStatus = GetHistoryStatus(state);
+                return WithSignInAction(
+                    HistoryVideoListSource.MapStatus(historyStatus, state),
+                    historyStatus);
+            },
             "Loading watch history…",
             "Loading more history…",
             defaultTitle: "History",
@@ -140,35 +149,36 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             : state.IsLoadingMore
                 ? "Loading more watch history…"
                 : !state.IsSuccess || state.LastError != null
-                    ? state.IsLoadingMore ? "Could not load more watch history." : "Could not load watch history."
+                    ? "Could not load watch history."
                     : state.StatusMessage ?? string.Empty;
-
-        var status = GetHistoryStatus(state);
-        _historyStatus = status;
 
         State = new HistoryViewState(
             state.Videos,
             summary,
             state.IsLoading,
             state is { IsSuccess: true, LastError: null },
-            status,
+            GetHistoryStatus(state),
             state.IsLoadingMore,
             state.HasMore);
     }
+
     private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state)
     {
-        if (state.StatusMessage == SessionGate.SessionNoLongerValidMessage)
+        if (state.AuthenticationStatus == FeedAuthenticationStatus.Required)
+            return AuthenticatedHistoryStatus.AuthenticationRequired;
+        if (state.AuthenticationStatus == FeedAuthenticationStatus.Rejected)
             return AuthenticatedHistoryStatus.AuthenticationRejected;
-
+        if (!IsSessionActive())
+            return AuthenticatedHistoryStatus.AuthenticationRequired;
         if (state.LastError != null || !state.IsSuccess)
             return AuthenticatedHistoryStatus.TemporaryBackendFailure;
 
-        if (!state.IsLoading && !state.IsLoadingMore)
-            return state.Videos.Count == 0
-                ? AuthenticatedHistoryStatus.Empty
-                : AuthenticatedHistoryStatus.Success;
+        if (state.IsLoading || state.IsLoadingMore)
+            return State.Status;
 
-        return _historyStatus;
+        return state.Videos.Count == 0
+            ? AuthenticatedHistoryStatus.Empty
+            : AuthenticatedHistoryStatus.Success;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -186,7 +196,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
 
     private void GateSignedOut()
     {
-        _historyStatus = AuthenticatedHistoryStatus.AuthenticationRequired;
         _engine.Reset();
         State = GatedState();
     }
@@ -201,16 +210,24 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             AuthenticatedHistoryStatus.AuthenticationRequired);
     }
 
-    private VideoListStatus WithSignInAction(VideoListStatus status)
+    private VideoListStatus WithSignInAction(
+        VideoListStatus status,
+        AuthenticatedHistoryStatus historyStatus)
     {
-        if (!SessionGate.IsAuthInvalid(_historyStatus))
+        if (!SessionGate.IsAuthInvalid(historyStatus))
             return status;
 
         return status with
         {
-            Description = SessionGate.HistorySignedOutMessage,
+            Description = historyStatus == AuthenticatedHistoryStatus.AuthenticationRejected
+                ? SessionGate.SessionNoLongerValidMessage
+                : SessionGate.HistorySignedOutMessage,
             ShowRetry = false,
-            ActionLabel = _openWebLogin is null ? null : SessionGate.SignInActionLabel,
+            ActionLabel = _openWebLogin is null
+                ? null
+                : historyStatus == AuthenticatedHistoryStatus.AuthenticationRejected
+                    ? SessionGate.SignInAgainActionLabel
+                    : SessionGate.SignInActionLabel,
             Action = _openWebLogin
         };
     }

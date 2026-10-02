@@ -4,5 +4,5 @@ public interface IAccountProfileService
 {
     AccountProfile? GetCachedProfile();
 
-    Task<AccountProfile?> GetCurrentProfileAsync(CancellationToken cancellationToken = default);
+    Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default);
 }

@@ -17,15 +17,12 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private AccountProfile? _profile;
     private CancellationTokenSource? _profileCancellation;
     private AccountSession _session;
-
+    private AccountProfilePresentationStatus _profileStatus = AccountProfilePresentationStatus.SignedOut;
     public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService)
     {
         _accountProfileService = accountProfileService;
         _sessionService = sessionService;
         _session = _sessionService.GetCurrentSession();
-        if (_session.HasManualSession)
-            _profile = _accountProfileService.GetCachedProfile();
-
         _sessionService.SessionChanged += OnSessionChanged;
         RefreshProfile();
     }
@@ -45,6 +42,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             RefreshProfile();
         }
     }
+
+    public AccountProfilePresentationStatus ProfileStatus => _profileStatus;
+
+    public bool IsProfileChecking => _profileStatus == AccountProfilePresentationStatus.Checking;
+
+    public bool IsProfileRejected => _profileStatus == AccountProfilePresentationStatus.Rejected;
+
+    public bool IsProfileUnavailable => _profileStatus == AccountProfilePresentationStatus.Unavailable;
 
     public bool HasManualSession => SessionGate.RequireSignedIn(_sessionService);
 
@@ -264,42 +269,75 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             Session = _sessionService.GetCurrentSession();
     }
 
-    private void RefreshProfile()
+    public void RefreshProfile()
     {
         _profileCancellation?.Cancel();
         _profileCancellation?.Dispose();
         _profileCancellation = null;
+        _profile = null;
 
         if (_disposed || !SessionGate.RequireSignedIn(_sessionService))
+        {
+            SetProfileStatus(AccountProfilePresentationStatus.SignedOut);
+            OnPropertyChanged(nameof(DisplayName));
+            OnPropertyChanged(nameof(AvatarUrl));
             return;
+        }
 
-        _profileCancellation = new CancellationTokenSource();
-        LoadProfileAsync(_profileCancellation.Token).FireAndForget(Logger);
+        SetProfileStatus(AccountProfilePresentationStatus.Checking);
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(AvatarUrl));
+        var cancellation = new CancellationTokenSource();
+        _profileCancellation = cancellation;
+        LoadProfileAsync(cancellation, cancellation.Token).FireAndForget(Logger);
     }
 
-    private async Task LoadProfileAsync(CancellationToken cancellationToken)
+    private async Task LoadProfileAsync(CancellationTokenSource request, CancellationToken cancellationToken)
     {
-        AccountProfile? profile;
+        AccountProfileResult result;
         try
         {
-            profile = await _accountProfileService.GetCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
+            result = await _accountProfileService.GetCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return;
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load current YouTube account profile");
-            return;
+            Logger.Warning(
+                "Failed to load current YouTube account profile. Failure details: {FailureDetails}",
+                DiagnosticSanitizer.Sanitize(exception.ToString()));
+            result = new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
         }
 
-        if (_disposed || cancellationToken.IsCancellationRequested || profile is null)
+        if (_disposed || request.IsCancellationRequested || !ReferenceEquals(_profileCancellation, request))
             return;
 
-        _profile = profile;
+        _profile = result.Status == AccountProfileLoadStatus.Success ? result.Profile : null;
+        var status = result.Status switch
+        {
+            AccountProfileLoadStatus.Success when result.Profile is not null =>
+                AccountProfilePresentationStatus.Ready,
+            AccountProfileLoadStatus.AuthenticationRequired or AccountProfileLoadStatus.AuthenticationRejected =>
+                AccountProfilePresentationStatus.Rejected,
+            _ => AccountProfilePresentationStatus.Unavailable
+        };
+        SetProfileStatus(status);
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(AvatarUrl));
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SetProfileStatus(AccountProfilePresentationStatus status)
+    {
+        if (_profileStatus == status)
+            return;
+        _profileStatus = status;
+        OnPropertyChanged(nameof(ProfileStatus));
+        OnPropertyChanged(nameof(IsProfileChecking));
+        OnPropertyChanged(nameof(IsProfileRejected));
+        OnPropertyChanged(nameof(IsProfileUnavailable));
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 

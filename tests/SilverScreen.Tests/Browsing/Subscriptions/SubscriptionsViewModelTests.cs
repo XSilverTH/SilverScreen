@@ -296,7 +296,7 @@ public sealed class SubscriptionsViewModelTests
             firstPage,
             secondFeedPage: [],
             secondPageStatus: AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-            secondPageMessage: "Could not load the next page.");
+            secondPageMessage: "private-token " + "x".PadRight(4000, 'x'));
 
         using var viewModel = new SubscriptionsViewModel(subsService, new FakeChannelService(), CreateSession());
         var source = (IVideoListSource)viewModel;
@@ -306,7 +306,8 @@ public sealed class SubscriptionsViewModelTests
 
         Assert.Single(source.State.Videos);
         Assert.Equal("v1", source.State.Videos[0].Id);
-        Assert.Equal("Could not load the next page.", source.State.PaginationError);
+        Assert.True(viewModel.State.HasMore);
+        Assert.DoesNotContain("private-token", source.State.PaginationError);
     }
 
     [Fact]
