@@ -8,6 +8,7 @@ public sealed class WebLoginAllowedHostTests
     [Theory]
     [InlineData("accounts.google.com")]
     [InlineData("accounts.google.com.")]
+    [InlineData("accounts.youtube.com")]
     [InlineData("youtube.com")]
     [InlineData("www.youtube.com")]
     public void IsAllowedHost_AllowedHosts_ReturnsTrue(string host)
@@ -35,7 +36,6 @@ public sealed class WebLoginAllowedHostTests
     [InlineData("passkeys.google.com")]
     [InlineData("google.com")]
     [InlineData("www.google.com")]
-    [InlineData("accounts.youtube.com")]
     [InlineData("m.youtube.com")]
     public void IsAllowedHost_BlockedHosts_ReturnsFalse(string? host)
     {

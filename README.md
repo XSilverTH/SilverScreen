@@ -45,6 +45,18 @@ Home is opt-in because it needs a YouTube session.
 
 If embedded Google sign-in is unavailable, choose **Add manual session** instead and paste a browser-exported Netscape-format `cookies.txt` file. SilverScreen stores either session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. The embedded window uses a fresh ephemeral WebKit session for every attempt; its browser storage is discarded after closing, and refreshing never clears the previous saved session unless a new capture succeeds. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes the keyring entry. When the media extractor or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
 
+### Troubleshooting a restored session
+
+“Secret Service Restored” confirms that SilverScreen read a saved session from the local keyring; it does **not** confirm that YouTube still accepts those credentials. Home profile loading and authenticated Subscriptions use the stored session, so a failure affecting both can indicate YouTube authentication rejection, a request failure, or an unexpected protocol response. SilverScreen keeps the saved session after a failed profile request; it does not automatically log out.
+
+Account-menu parsing failures include the HTTP status, actual client version, signing time, authentication-header presence, allowlisted cookie names sent, and bounded popup/header structure. YouTube's `responseContext.mainAppWebResponseContext.loggedOut=true` means the server treated that request as signed out, even if it returned HTTP 200 and the local keyring still contains a session. Missing flags and truncated traversal are reported explicitly rather than treated as proof of an authenticated or signed-out response.
+
+Older test-suite versions contained a session-validation test that constructed the production Secret Service store instead of its fake store, allowing test cookies to overwrite the saved YouTube session. The test now uses an injected in-memory store and a temporary directory, and checks that persistence reaches that store. If an older suite has overwritten your session, sign out and sign in once to replace those stored credentials; the isolation fix prevents subsequent test runs from replacing them again.
+
+On creation of an authenticated API client, Information-level logs include counts and expiry/session/expired status for a fixed allowlist of authentication-cookie names, whether each imported row was retained, and aggregate counts for other cookie names. Cookie values, domains, paths, account identifiers, and response bodies are not included in this added metadata. Comparing raw and retained counts can show that import filtered rows; an expired companion cookie is one possibility to investigate, not a confirmed cause. Profile logs distinguish authentication rejection, protocol, and request failures by exception class, include sanitized exception details, and record whether a session remains locally present. A successful profile fetch is logged at Information level without an account name.
+
+To investigate, reproduce the issue, collect the normal application logs from startup through the failed profile/Subscriptions action, and include the exception class/category and cookie expiry/import metadata. Share only those logs through a trusted support channel; **never post or attach a browser cookie export (`cookies.txt`) or cookie values**. An Adwaita/GTK warning is a separate UI diagnostic and is unrelated to YoutubeAPI's HTTP response parsing path.
+
 ## Important details
 
 - Home requires a YouTube session.

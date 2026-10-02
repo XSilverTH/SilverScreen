@@ -40,8 +40,11 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
     }
 
-    internal SecretServiceSessionService(ICookieSecretStore store, string? tempRoot = null)
-        : this(store, null, null, tempRoot)
+    internal SecretServiceSessionService(
+        ICookieSecretStore store,
+        string? tempRoot = null,
+        Func<IAccountProfileService>? profileServiceFactory = null)
+        : this(store, profileServiceFactory, null, tempRoot)
     {
     }
 

@@ -1,6 +1,7 @@
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 
@@ -62,7 +63,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                 _cachedProfile = accountProfile;
             }
 
-            Logger.Debug("Account profile fetched successfully");
+            Logger.Information("YouTube account profile fetched successfully");
             return accountProfile;
         }
         catch (OperationCanceledException)
@@ -71,12 +72,12 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         }
         catch (YouTubeException exception)
         {
-            Logger.Warning(exception, "YoutubeAPI failed to fetch account profile");
+            LogProfileFailure(exception, ClassifyFailure(exception));
             return null;
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Unexpected failure fetching account profile");
+            LogProfileFailure(exception, exception is HttpRequestException ? "request" : "unexpected");
             return null;
         }
     }
@@ -88,6 +89,24 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
 
         _disposed = true;
         _sessionService.SessionChanged -= OnSessionChanged;
+    }
+    private void LogProfileFailure(Exception exception, string category)
+    {
+        Logger.Warning(
+            "YouTube account profile request failed ({FailureCategory}; {ExceptionClass}). Stored session locally present: {StoredSessionPresent}. Session is retained; no automatic logout was performed. Failure details: {FailureDetails}",
+            category, exception.GetType().Name, HasAuthenticatedSession(),
+            DiagnosticSanitizer.Sanitize(exception.ToString()));
+    }
+
+    private static string ClassifyFailure(YouTubeException exception)
+    {
+        return exception switch
+        {
+            AuthenticationRequiredException or AuthenticationExpiredException => "authentication rejection",
+            YouTubeProtocolException => "protocol",
+            YouTubeRequestException => "request",
+            _ => "YouTube API"
+        };
     }
 
     private bool HasAuthenticatedSession()

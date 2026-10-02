@@ -150,6 +150,7 @@ public sealed class SessionTests
     [Fact]
     public async Task SecretServiceSessionValidation_UsesLightweightProfileCheck()
     {
+        using var tempRoot = new TemporaryDirectory();
         var store = new FakeCookieSecretStore();
         var profileCalls = 0;
         var profile = new FakeProfileService(() =>
@@ -157,13 +158,14 @@ public sealed class SessionTests
             profileCalls++;
             return Task.FromResult<AccountProfile?>(new AccountProfile("Test account"));
         });
-        var service = new SecretServiceSessionService(() => profile, tempRoot: null);
+        using var service = new SecretServiceSessionService(
+            store, tempRoot.Path, profileServiceFactory: () => profile);
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
 
-        var result = await service.ValidateSessionAsync();
+        await service.ValidateSessionAsync();
 
-        Assert.Contains("Validation succeeded.", result);
-        Assert.Contains("Usable videos: 0", result);
+        Assert.Equal(FakeCookieContent, store.StoredContent);
+        Assert.True(service.GetCurrentSession().IsSignedIn);
         Assert.Equal(1, profileCalls);
     }
     [Fact]
