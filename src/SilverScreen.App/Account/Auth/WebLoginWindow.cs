@@ -302,7 +302,8 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         {
             "accounts.google.com",
             "youtube.com",
-            "www.youtube.com"
+            "www.youtube.com",
+            "accounts.youtube.com"
         };
 
     internal static bool IsAllowedHost(string host)
