@@ -180,7 +180,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             Logger.Warning(exception, "YoutubeAPI failed while loading home recommendations");
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetHomeFeed(),
                 SessionGate.HomeLoadErrorMessage);
         }
         catch (Exception exception)
@@ -188,7 +188,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             Logger.Warning(exception, "Unexpected failure while loading home recommendations");
             return new AuthenticatedHomeFeedResult(
                 AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetHomeFeed(),
                 SessionGate.HomeLoadErrorMessage);
         }
     }

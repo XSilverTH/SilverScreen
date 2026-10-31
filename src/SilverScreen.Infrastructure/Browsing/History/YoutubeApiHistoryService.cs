@@ -180,7 +180,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             Logger.Warning(exception, "YoutubeAPI failed while loading watch history");
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetHistory(),
                 SessionGate.HistoryErrorMessage);
         }
         catch (Exception exception)
@@ -188,7 +188,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             Logger.Warning(exception, "Unexpected failure while loading watch history");
             return new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetHistory(),
                 SessionGate.HistoryErrorMessage);
         }
     }

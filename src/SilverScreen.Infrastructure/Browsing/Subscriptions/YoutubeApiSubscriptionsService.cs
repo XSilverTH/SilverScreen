@@ -238,7 +238,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             Logger.Warning(exception, "YoutubeAPI failed while loading subscriptions");
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetFeed(),
                 SessionGate.SubscriptionsErrorMessage);
         }
         catch (Exception exception)
@@ -246,7 +246,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             Logger.Warning(exception, "Unexpected failure while loading subscriptions");
             return new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
-                FeedPage.Empty,
+                GetFeed(),
                 SessionGate.SubscriptionsErrorMessage);
         }
     }
