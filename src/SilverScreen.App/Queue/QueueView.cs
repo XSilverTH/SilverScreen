@@ -124,7 +124,7 @@ public partial class QueueView : ViewBase<Box>
             if (index < 0)
                 row.Unbind();
             else
-                row.Bind(item, index, _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
+                row.Bind(_displayedItems[index], index, _displayedItems.Length, _viewModel.State.CurrentPlayingIndex);
         }
     }
 

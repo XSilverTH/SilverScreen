@@ -178,13 +178,33 @@ public partial class QueueItemRowView : ViewBase<Box>
     public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
-        Unbind();
-        _binding.Bind(item, index);
+
+        var isSameItem = _binding.Item?.Id == item.Id &&
+                         string.Equals(_binding.Item.Video.ThumbnailUrl, item.Video.ThumbnailUrl, StringComparison.Ordinal);
+
+        if (!isSameItem)
+        {
+            Unbind();
+            _binding.Bind(item, index);
+            title.SetText(item.Video.Title);
+            channel.SetText(item.Video.ChannelName);
+            duration_pill.SetText(FormatDuration(item.Video.Duration));
+            SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
+
+            var generation = ++_bindingGeneration;
+            _thumbnailCancellation = new CancellationTokenSource();
+            LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
+        }
+        else
+        {
+            _binding.Bind(item, index);
+            title.SetText(item.Video.Title);
+            channel.SetText(item.Video.ChannelName);
+            duration_pill.SetText(FormatDuration(item.Video.Duration));
+            SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
+        }
+
         position.SetText((index + 1).ToString());
-        title.SetText(item.Video.Title);
-        channel.SetText(item.Video.ChannelName);
-        duration_pill.SetText(FormatDuration(item.Video.Duration));
-        SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
         _playNowAction.Enabled = _playRequested is not null && index != currentPlayingIndex;
         _moveUpAction.Enabled = index > 0;
         _moveDownAction.Enabled = index < itemCount - 1;
@@ -207,10 +227,6 @@ public partial class QueueItemRowView : ViewBase<Box>
             Widget.RemoveCssClass("now-playing");
             Widget.RemoveCssClass("played");
         }
-
-        var generation = ++_bindingGeneration;
-        _thumbnailCancellation = new CancellationTokenSource();
-        LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
     }
 
     public void Unbind()
