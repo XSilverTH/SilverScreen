@@ -51,7 +51,6 @@ internal sealed class PlaybackSession : IDisposable
     private readonly ISponsorBlockService _sponsorBlock;
     private readonly IVideoEngagementService _videoEngagement;
     private readonly IYouTubeRatingService _youtubeRating;
-    private SponsorBlockSegment? _activeManualSegment;
     private bool _hadSeek;
     private bool _handledResumeForCurrentVideo;
     private bool _playbackProgressLoaded;
@@ -332,7 +331,6 @@ internal sealed class PlaybackSession : IDisposable
     public void DismissSponsorBlockPrompt()
     {
         if (_disposed || ActiveManualSegment is null) return;
-        _activeManualSegment = null;
         ActiveManualSegment = null;
         SponsorBlockPromptChanged?.Invoke(null);
     }
@@ -399,7 +397,6 @@ internal sealed class PlaybackSession : IDisposable
         ResumePosition = TimeSpan.Zero;
         ResumePromptChanged?.Invoke(ResumePromptMode.None, TimeSpan.Zero);
 
-        _activeManualSegment = null;
         ActiveManualSegment = null;
         _hadSeek = false;
         _wasPaused = false;
@@ -557,8 +554,7 @@ internal sealed class PlaybackSession : IDisposable
             var candidate = PlayerSponsorBlockState.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
             if (candidate is null)
             {
-                if (_activeManualSegment is null) return;
-                _activeManualSegment = null;
+                if (ActiveManualSegment is null) return;
                 ActiveManualSegment = null;
                 _hadSeek = false;
                 _wasPaused = state.IsPaused;
@@ -567,13 +563,12 @@ internal sealed class PlaybackSession : IDisposable
             else
             {
                 var shouldShow = PlayerSponsorBlockState.ShouldShowManualPrompt(
-                    _activeManualSegment,
+                    ActiveManualSegment,
                     candidate,
                     state.IsPaused,
                     _wasPaused,
                     _hadSeek);
 
-                _activeManualSegment = candidate;
                 ActiveManualSegment = candidate;
                 _hadSeek = false;
                 _wasPaused = state.IsPaused;
@@ -582,9 +577,8 @@ internal sealed class PlaybackSession : IDisposable
                     SponsorBlockPromptChanged?.Invoke(candidate);
             }
         }
-        else if (_activeManualSegment is not null)
+        else if (ActiveManualSegment is not null)
         {
-            _activeManualSegment = null;
             ActiveManualSegment = null;
             _hadSeek = false;
             _wasPaused = state.IsPaused;
@@ -688,7 +682,6 @@ internal sealed class PlaybackSession : IDisposable
         if (preferences is { SponsorBlockAutoSkipEnabled: false, SponsorBlockSegmentDisplayEnabled: false })
         {
             SponsorBlockSegments = [];
-            _activeManualSegment = null;
             ActiveManualSegment = null;
             SponsorBlockSegmentsChanged?.Invoke([]);
             SponsorBlockPromptChanged?.Invoke(null);
@@ -730,7 +723,6 @@ internal sealed class PlaybackSession : IDisposable
         Engagement = null;
         RatingState = YouTubeRatingState.None;
         SponsorBlockSegments = [];
-        _activeManualSegment = null;
         ActiveManualSegment = null;
         _autoSkippedSegmentIds.Clear();
         ResumePrompt = ResumePromptMode.None;
