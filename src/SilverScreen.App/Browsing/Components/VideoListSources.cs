@@ -463,15 +463,13 @@ public sealed class SubscriptionsVideoListSource : IVideoListSource
                 break;
         }
 
-        const string loadingMessage = "Loading subscriptions…";
+        // const string loadingMessage = "Loading subscriptions…";
 
         return new VideoListPresentationState(
             state.Videos,
             state.IsLoading,
             state.IsLoadingMore,
             status,
-            loadingMessage,
-            "Loading more videos…",
             safePaginationError);
     }
     private void OnStateChanged(object? sender, SubscriptionsViewState state)

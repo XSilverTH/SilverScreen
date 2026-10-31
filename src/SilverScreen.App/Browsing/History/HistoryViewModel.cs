@@ -71,8 +71,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
                     HistoryVideoListSource.MapStatus(historyStatus, state),
                     historyStatus);
             },
-            "Loading watch history…",
-            "Loading more history…",
             defaultTitle: "History",
             clearOnRefresh: true);
 

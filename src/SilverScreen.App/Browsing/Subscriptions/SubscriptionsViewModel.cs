@@ -75,7 +75,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine = new PagedFeedEngine(
             FetchCurrentFeedPageAsync,
             (_, _, _) => SubscriptionsVideoListSource.MapState(State, _openWebLogin).Status,
-            "Loading subscriptions…",
             defaultTitle: "Subscriptions",
             clearOnRefresh: false);
 
@@ -193,7 +192,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         State = State with
         {
             IsLoading = true,
-            Summary = "Loading subscriptions…"
+            Summary = ""
         };
 
         try

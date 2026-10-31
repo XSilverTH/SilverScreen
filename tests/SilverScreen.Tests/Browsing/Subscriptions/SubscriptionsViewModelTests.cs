@@ -394,7 +394,6 @@ public sealed class SubscriptionsViewModelTests
 
         Assert.True(viewModel.State.IsLoading);
         Assert.True(source.State.IsLoading);
-        Assert.Equal("Loading subscriptions…", source.State.LoadingMessage);
         Assert.Empty(source.State.Videos);
         Assert.Contains(states, s => s.IsLoading && s.LoadingMessage == "Loading subscriptions…");
 
