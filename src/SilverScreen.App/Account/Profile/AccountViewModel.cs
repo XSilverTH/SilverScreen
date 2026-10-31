@@ -76,10 +76,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? StateChanged;
 
-    public bool SaveManualSession(string cookieContent)
-    {
-        return SaveManualSessionAsync(cookieContent).GetAwaiter().GetResult();
-    }
 
     public async Task<bool> SaveManualSessionAsync(string cookieContent)
     {
@@ -154,10 +150,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(ManualSessionError));
     }
 
-    public void ClearSession()
-    {
-        ClearSessionAsync().GetAwaiter().GetResult();
-    }
 
     public async Task ClearSessionAsync()
     {
@@ -250,7 +242,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         SetProfileStatus(status);
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(AvatarUrl));
-        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetProfileStatus(AccountProfilePresentationStatus status)
