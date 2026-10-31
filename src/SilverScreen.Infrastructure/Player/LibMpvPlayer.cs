@@ -157,7 +157,6 @@ public sealed class LibMpvPlayer : IDisposable
         if (renderContext != 0)
         {
             _native.SetRenderUpdateCallback(renderContext, 0, 0);
-            if (_updateCallbackHandle.IsAllocated) _updateCallbackHandle.Free();
             _native.FreeRenderContext(renderContext);
         }
 
