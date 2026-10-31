@@ -244,66 +244,6 @@ public class PlayerTimelineState(
     {
         return duration <= TimeSpan.Zero ? 0.0 : Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
     }
-
-    // --- SponsorBlock Evaluation (Forwarding) ---
-
-    public static SponsorBlockSegment? FindSponsorBlockSegmentAt(
-        IReadOnlyList<SponsorBlockSegment> segments,
-        TimeSpan position) =>
-        PlayerSponsorBlockState.FindSponsorBlockSegmentAt(segments, position);
-
-    public static bool ShouldAutoSkip(
-        TimeSpan currentPosition,
-        IReadOnlyList<SponsorBlockSegment> segments,
-        bool isPaused,
-        bool autoSkipEnabled,
-        ISet<string> autoSkippedSegmentIds,
-        [NotNullWhen(true)] out SponsorBlockSegment? segmentToSkip) =>
-        PlayerSponsorBlockState.ShouldAutoSkip(currentPosition, segments, isPaused, autoSkipEnabled, autoSkippedSegmentIds, out segmentToSkip);
-
-    public static bool ShouldShowManualPrompt(
-        SponsorBlockSegment? activeSegment,
-        SponsorBlockSegment? candidateSegment,
-        bool isPaused,
-        bool wasPaused,
-        bool hadSeek) =>
-        PlayerSponsorBlockState.ShouldShowManualPrompt(activeSegment, candidateSegment, isPaused, wasPaused, hadSeek);
-
-    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences) =>
-        PlayerSponsorBlockState.ManualSponsorBlockSkipEnabled(preferences);
-
-    public static string GetSponsorBlockCategoryLabel(string category) =>
-        PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(category);
-
-    public static string GetSponsorBlockButtonColorClass(string category) =>
-        PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(category);
-
-    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences) =>
-        PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(preferences);
-
-    public static string GetSponsorBlockConfigurationKey(
-        bool autoSkipEnabled,
-        bool segmentDisplayEnabled,
-        IEnumerable<string> categories) =>
-        PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(autoSkipEnabled, segmentDisplayEnabled, categories);
-
-    // --- Resume State Evaluation (Forwarding) ---
-
-    public static bool TryGetResumePosition(
-        YouTubePlaybackProgress? progress,
-        TimeSpan duration,
-        out TimeSpan position,
-        double minimumSeconds = PlayerResumeState.MinimumResumeSeconds) =>
-        PlayerResumeState.TryGetResumePosition(progress, duration, out position, minimumSeconds);
-
-    public static ResumePromptState GetResumePromptState(
-        YouTubePlaybackProgress? progress,
-        TimeSpan duration,
-        bool resumeAutomatically,
-        bool resumeOnDemand,
-        out TimeSpan resumePosition,
-        double minimumSeconds = PlayerResumeState.MinimumResumeSeconds) =>
-        PlayerResumeState.GetResumePromptState(progress, duration, resumeAutomatically, resumeOnDemand, out resumePosition, minimumSeconds);
 }
 
 internal sealed class PlayerTimelineController : IDisposable
