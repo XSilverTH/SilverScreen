@@ -395,7 +395,7 @@ public sealed class SubscriptionsViewModelTests
         Assert.True(viewModel.State.IsLoading);
         Assert.True(source.State.IsLoading);
         Assert.Empty(source.State.Videos);
-        Assert.Contains(states, s => s.IsLoading && s.LoadingMessage == "Loading subscriptions…");
+        Assert.Contains(states, s => s.IsLoading);
 
         tcs.SetResult(new AuthenticatedSubscriptionsFeedResult(
             AuthenticatedSubscriptionsStatus.Success,

@@ -800,7 +800,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         prefs.WindowMaximized = isMaximized;
         if (!isMaximized)
         {
-            Widget.GetDefaultSize(out var width, out var height);
+            var width = Widget.GetWidth();
+            var height = Widget.GetHeight();
             if (width > 0 && height > 0)
             {
                 prefs.WindowWidth = width;
@@ -834,6 +835,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             _webLogin = null;
             _accountPopover.Dispose();
             _embeddedPlayer.Dispose();
+            _queueViewModel.Dispose();
+            _accountViewModel.Dispose();
             _disposeApplicationServices();
         }
 

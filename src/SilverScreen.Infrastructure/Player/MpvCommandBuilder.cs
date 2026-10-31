@@ -7,7 +7,7 @@ namespace SilverScreen.Infrastructure.Player;
 
 public sealed record MpvPlaybackCommand(string ExecutablePath, IReadOnlyList<string> Arguments);
 
-public sealed class MpvCommandBuilder
+public static class MpvCommandBuilder
 {
     /// <summary>
     ///     Builds the external-mpv argv for the FULL queue snapshot: watch URLs plus cookie

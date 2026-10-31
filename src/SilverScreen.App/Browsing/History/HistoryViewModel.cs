@@ -68,7 +68,7 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             {
                 var historyStatus = GetHistoryStatus(state);
                 return WithSignInAction(
-                    HistoryVideoListSource.MapStatus(historyStatus, state),
+                    MapStatus(historyStatus, state),
                     historyStatus);
             },
             defaultTitle: "History",
@@ -238,5 +238,42 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    public static VideoListStatus MapStatus(AuthenticatedHistoryStatus historyStatus, FeedEngineState state)
+    {
+        var status = state.LastError != null ? AuthenticatedHistoryStatus.TemporaryBackendFailure : historyStatus;
+        var isSuccess = state is { IsSuccess: true, LastError: null };
+
+        return status switch
+        {
+            AuthenticatedHistoryStatus.AuthenticationRequired or AuthenticatedHistoryStatus.AuthenticationRejected =>
+                new VideoListStatus(
+                    SessionGate.HistorySignedOutTitle,
+                    status == AuthenticatedHistoryStatus.AuthenticationRejected
+                        ? SessionGate.SessionNoLongerValidMessage
+                        : SessionGate.HistorySignedOutMessage,
+                    "avatar-default-symbolic",
+                    false,
+                    status == AuthenticatedHistoryStatus.AuthenticationRejected
+                        ? SessionGate.SignInAgainActionLabel
+                        : null),
+            AuthenticatedHistoryStatus.TemporaryBackendFailure =>
+                new VideoListStatus(
+                    SessionGate.HistoryErrorTitle,
+                    SessionGate.HistoryErrorMessage,
+                    "network-error-symbolic",
+                    true),
+            _ when !isSuccess =>
+                new VideoListStatus(
+                    SessionGate.HistoryErrorTitle,
+                    SessionGate.HistoryErrorMessage,
+                    "network-error-symbolic",
+                    true),
+            _ => new VideoListStatus(
+                SessionGate.HistoryEmptyTitle,
+                SessionGate.HistoryEmptyMessage,
+                "document-open-recent-symbolic")
+        };
     }
 }

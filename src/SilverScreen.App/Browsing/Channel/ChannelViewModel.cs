@@ -56,7 +56,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 
         _engine = new PagedFeedEngine(
             FetchChannelPageAsync,
-            (_, _, state) => ChannelVideoListSource.MapStatus(state),
+            (_, _, state) => MapStatus(state),
             "Loading channel…",
             defaultTitle: "Channel",
             clearOnRefresh: true);
@@ -318,5 +318,25 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    public static VideoListStatus MapStatus(FeedEngineState state)
+    {
+        if (!state.IsSuccess || state.LastError != null)
+        {
+            const string description = "YouTube couldn’t load this channel. Try again in a moment.";
+
+            return new VideoListStatus(
+                "Could not load channel",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        const string emptyDescription = "This channel does not have any public videos available right now.";
+        return new VideoListStatus(
+            "No videos found",
+            emptyDescription,
+            "applications-internet-symbolic");
     }
 }

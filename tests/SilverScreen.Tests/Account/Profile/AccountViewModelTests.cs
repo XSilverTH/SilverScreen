@@ -11,7 +11,7 @@ public sealed class AccountViewModelTests
     private readonly InMemorySessionService _sessionService = new();
 
     [Fact]
-    public void TemporaryProfileFailureKeepsCredentialsAndRetryCanRestoreHealthyProfile()
+    public async Task TemporaryProfileFailureKeepsCredentialsAndRetryCanRestoreHealthyProfile()
     {
         _profileService.Results.Enqueue(Task.FromResult(
             new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure)));
@@ -21,7 +21,7 @@ public sealed class AccountViewModelTests
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
 
-        Assert.True(vm.SaveManualSession(validCookies));
+        Assert.True(await vm.SaveManualSessionAsync(validCookies));
         Assert.True(vm.HasManualSession);
         Assert.Equal(AccountProfilePresentationStatus.Unavailable, vm.ProfileStatus);
 
@@ -33,13 +33,13 @@ public sealed class AccountViewModelTests
     }
 
     [Fact]
-    public void AuthenticationRejectionShowsRejectedStateWithoutClearingCredentials()
+    public async Task AuthenticationRejectionShowsRejectedStateWithoutClearingCredentials()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
 
-        Assert.True(vm.SaveManualSession(validCookies));
+        Assert.True(await vm.SaveManualSessionAsync(validCookies));
 
         Assert.Equal(AccountProfilePresentationStatus.Rejected, vm.ProfileStatus);
         Assert.True(vm.HasManualSession);
@@ -55,7 +55,7 @@ public sealed class AccountViewModelTests
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
 
-        Assert.True(vm.SaveManualSession(validCookies));
+        Assert.True(await vm.SaveManualSessionAsync(validCookies));
         Assert.Equal(AccountProfilePresentationStatus.Checking, vm.ProfileStatus);
 
         var unavailable = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -72,22 +72,22 @@ public sealed class AccountViewModelTests
     }
 
     [Fact]
-    public void SaveManualSession_WithEmptyOrWhitespace_ReturnsFalseAndSetsError()
+    public async Task SaveManualSession_WithEmptyOrWhitespace_ReturnsFalseAndSetsError()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
 
-        var result = vm.SaveManualSession("   ");
+        var result = await vm.SaveManualSessionAsync("   ");
 
         Assert.False(result);
         Assert.Equal("Nothing to save — paste the contents of your cookies.txt file first.", vm.ManualSessionError);
     }
 
     [Fact]
-    public void SaveManualSession_WithMalformedCookies_ReturnsFalseAndSetsError()
+    public async Task SaveManualSession_WithMalformedCookies_ReturnsFalseAndSetsError()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
 
-        var result = vm.SaveManualSession("malformed cookie data without tabs or valid structure");
+        var result = await vm.SaveManualSessionAsync("malformed cookie data without tabs or valid structure");
 
         Assert.False(result);
         Assert.Equal(
@@ -96,13 +96,13 @@ public sealed class AccountViewModelTests
     }
 
     [Fact]
-    public void SaveManualSession_WithoutAuthenticationCookies_ReturnsFalseAndSetsError()
+    public async Task SaveManualSession_WithoutAuthenticationCookies_ReturnsFalseAndSetsError()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var nonAuthCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSID\tsome_sid_value\n";
 
-        var result = vm.SaveManualSession(nonAuthCookies);
+        var result = await vm.SaveManualSessionAsync(nonAuthCookies);
 
         Assert.False(result);
         Assert.Equal(
@@ -111,13 +111,13 @@ public sealed class AccountViewModelTests
     }
 
     [Fact]
-    public void SaveManualSession_WithSapisid_ReturnsTrueAndClearsError()
+    public async Task SaveManualSession_WithSapisid_ReturnsTrueAndClearsError()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
 
-        var result = vm.SaveManualSession(validCookies);
+        var result = await vm.SaveManualSessionAsync(validCookies);
 
         Assert.True(result);
         Assert.Null(vm.ManualSessionError);
@@ -125,17 +125,46 @@ public sealed class AccountViewModelTests
     }
 
     [Fact]
-    public void SaveManualSession_WithSecure3Papisid_ReturnsTrueAndClearsError()
+    public async Task SaveManualSession_WithSecure3Papisid_ReturnsTrueAndClearsError()
     {
         using var vm = new AccountViewModel(_profileService, _sessionService);
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\t__Secure-3PAPISID\tauth_3papisid_value\n";
 
-        var result = vm.SaveManualSession(validCookies);
+        var result = await vm.SaveManualSessionAsync(validCookies);
 
         Assert.True(result);
         Assert.Null(vm.ManualSessionError);
         Assert.True(vm.HasManualSession);
+    }
+
+    [Fact]
+    public async Task ClearSessionAsync_ClearsActiveSession()
+    {
+        using var vm = new AccountViewModel(_profileService, _sessionService);
+        var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+        var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
+
+        Assert.True(await vm.SaveManualSessionAsync(validCookies));
+        Assert.True(vm.HasManualSession);
+
+        await vm.ClearSessionAsync();
+
+        Assert.False(vm.HasManualSession);
+    }
+
+    [Fact]
+    public void SaveManualSession_AndClearSession_SynchronousDelegatesWork()
+    {
+        using var vm = new AccountViewModel(_profileService, _sessionService);
+        var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+        var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
+
+        Assert.True(vm.SaveManualSession(validCookies));
+        Assert.True(vm.HasManualSession);
+
+        vm.ClearSession();
+        Assert.False(vm.HasManualSession);
     }
 
     private sealed class FakeProfileService : IAccountProfileService

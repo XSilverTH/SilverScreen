@@ -21,7 +21,7 @@ namespace SilverScreen.Player;
 /// </summary>
 internal sealed class PlaybackSession : IDisposable
 {
-    /// <summary>Mirrors <c>PlayerTimelineState</c>'s default resume minimum: positions at or below this are "from the start".</summary>
+    /// <summary>Mirrors <c>PlayerResumeState</c>'s default resume minimum: positions at or below this are "from the start".</summary>
     private const double MinimumResumeSeconds = 5;
 
     /// <summary>Positions leaving at most this (or 10% of short media, whichever is smaller) are treated as finished.</summary>
@@ -315,11 +315,11 @@ internal sealed class PlaybackSession : IDisposable
     {
         if (_disposed) return false;
         var prefs = _preferences.GetPreferences();
-        if (!PlayerTimelineState.ManualSponsorBlockSkipEnabled(prefs)) return false;
+        if (!PlayerSponsorBlockState.ManualSponsorBlockSkipEnabled(prefs)) return false;
 
         var segment = ActiveManualSegment ??
                       (LastPlaybackState is { } st
-                          ? PlayerTimelineState.FindSponsorBlockSegmentAt(SponsorBlockSegments, st.Position)
+                          ? PlayerSponsorBlockState.FindSponsorBlockSegmentAt(SponsorBlockSegments, st.Position)
                           : null);
 
         if (segment is null) return false;
@@ -422,7 +422,7 @@ internal sealed class PlaybackSession : IDisposable
             FetchPlaybackProgressAsync(video.Id, version, cts.Token).FireAndForget(Logger);
 
         var prefs = _preferences.GetPreferences();
-        _sponsorBlockConfigurationKey = PlayerTimelineState.GetSponsorBlockConfigurationKey(prefs);
+        _sponsorBlockConfigurationKey = PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(prefs);
 
         if (prefs.SponsorBlockAutoSkipEnabled || prefs.SponsorBlockSegmentDisplayEnabled)
         {
@@ -477,7 +477,7 @@ internal sealed class PlaybackSession : IDisposable
         _handledResumeForCurrentVideo = true;
 
         var prefs = _preferences.GetPreferences();
-        var promptState = PlayerTimelineState.GetResumePromptState(
+        var promptState = PlayerResumeState.GetResumePromptState(
             _youtubePlaybackProgress,
             state.Duration,
             prefs.ResumePlaybackAutomatically,
@@ -536,7 +536,7 @@ internal sealed class PlaybackSession : IDisposable
 
         var prefs = _preferences.GetPreferences();
 
-        if (PlayerTimelineState.ShouldAutoSkip(
+        if (PlayerSponsorBlockState.ShouldAutoSkip(
                 state.Position,
                 SponsorBlockSegments,
                 state.IsPaused,
@@ -552,9 +552,9 @@ internal sealed class PlaybackSession : IDisposable
             SponsorBlockAutoSkipped?.Invoke(skipSegment);
         }
 
-        if (PlayerTimelineState.ManualSponsorBlockSkipEnabled(prefs))
+        if (PlayerSponsorBlockState.ManualSponsorBlockSkipEnabled(prefs))
         {
-            var candidate = PlayerTimelineState.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
+            var candidate = PlayerSponsorBlockState.FindSponsorBlockSegmentAt(SponsorBlockSegments, state.Position);
             if (candidate is null)
             {
                 if (_activeManualSegment is null) return;
@@ -566,7 +566,7 @@ internal sealed class PlaybackSession : IDisposable
             }
             else
             {
-                var shouldShow = PlayerTimelineState.ShouldShowManualPrompt(
+                var shouldShow = PlayerSponsorBlockState.ShouldShowManualPrompt(
                     _activeManualSegment,
                     candidate,
                     state.IsPaused,
@@ -681,7 +681,7 @@ internal sealed class PlaybackSession : IDisposable
 
         if (preferences is { ResumePlaybackAutomatically: false, ResumePlaybackOnDemand: false }) DismissResumePrompt();
 
-        var newKey = PlayerTimelineState.GetSponsorBlockConfigurationKey(preferences);
+        var newKey = PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(preferences);
         if (newKey == _sponsorBlockConfigurationKey) return;
         _sponsorBlockConfigurationKey = newKey;
 

@@ -13,7 +13,7 @@ namespace SilverScreen.Player.Controllers;
 /// </summary>
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
-    private const uint SkipPromptDurationMilliseconds = PlayerTimelineState.DefaultSkipPromptDurationMilliseconds;
+    private const uint SkipPromptDurationMilliseconds = PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
     private readonly IPreferencesService _preferences;
     private readonly PlaybackSession _session;
     private readonly Button _skipButton;
@@ -149,7 +149,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void ShowManualPrompt(SponsorBlockSegment segment)
     {
-        var category = PlayerTimelineState.GetSponsorBlockCategoryLabel(segment.Category);
+        var category = PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(segment.Category);
         _skipLabel.SetText($"Skip {category}");
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
@@ -185,7 +185,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private void SetSkipButtonColor(string category)
     {
         ClearSkipButtonColor();
-        var colorClass = PlayerTimelineState.GetSponsorBlockButtonColorClass(category);
+        var colorClass = PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(category);
         _skipButton.AddCssClass(colorClass);
         _skipButtonColorClass = colorClass;
     }

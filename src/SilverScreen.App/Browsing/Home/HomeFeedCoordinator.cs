@@ -3,7 +3,7 @@ using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Common;
-using SilverScreen.Features;
+using SilverScreen.Core.Account.Session;
 
 namespace SilverScreen.Browsing.Home;
 
@@ -12,10 +12,10 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private static readonly ILogger Logger = Log.ForContext<HomeFeedCoordinator>();
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
-    private readonly SilverScreen.Core.Account.Session.ISessionService _sessionService;
+    private readonly ISessionService _sessionService;
     private bool _disposed;
     private Action? _openWebLogin;
-    public HomeFeedCoordinator(SilverScreen.Core.Account.Session.ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
+    public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
         Action? openWebLogin = null)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -125,7 +125,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             UpdateHomeFeedState(HomeFeedState.SignedOut);
             return;
         }
-        var (kind, message) = SessionGate.MapHomeFeedOutcome(engineState.AuthenticationStatus, engineState);
+        var (kind, message) = MapHomeFeedOutcome(engineState.AuthenticationStatus, engineState);
         var newState = new HomeFeedState(
             kind,
             [.. engineState.Videos],
@@ -167,19 +167,91 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     private VideoListStatus MapSignedOutStatus()
     {
-        return SessionGate.HomeSignedOutStatus(_openWebLogin);
+        return HomeSignedOutStatus(_openWebLogin);
     }
 
     private VideoListStatus MapHomeStatus(FeedEngineState state)
     {
         if (state.AuthenticationStatus is FeedAuthenticationStatus.Required or FeedAuthenticationStatus.Rejected)
-            return SessionGate.HomeAuthInvalidStatus(
+            return HomeAuthInvalidStatus(
                 _openWebLogin,
                 state.AuthenticationStatus == FeedAuthenticationStatus.Rejected);
 
         if (state.LastError != null || !state.IsSuccess)
-            return SessionGate.HomeErrorStatus();
+            return HomeErrorStatus();
 
-        return SessionGate.HomeEmptyStatus();
+        return HomeEmptyStatus();
+    }
+
+    internal static VideoListStatus HomeSignedOutStatus(Action? openWebLogin)
+    {
+        return new VideoListStatus(
+            "Home",
+            SessionGate.HomeSignedOutMessage,
+            "avatar-default-symbolic",
+            false,
+            openWebLogin is null ? null : SessionGate.SignInActionLabel,
+            openWebLogin);
+    }
+
+    internal static VideoListStatus HomeAuthInvalidStatus(Action? openWebLogin, bool authenticationRejected = true)
+    {
+        return new VideoListStatus(
+            "Home",
+            authenticationRejected ? SessionGate.SessionNoLongerValidMessage : SessionGate.HomeSignedOutMessage,
+            authenticationRejected ? "dialog-password-symbolic" : "avatar-default-symbolic",
+            false,
+            openWebLogin is null
+                ? null
+                : authenticationRejected
+                    ? SessionGate.SignInAgainActionLabel
+                    : SessionGate.SignInActionLabel,
+            openWebLogin);
+    }
+
+    internal static VideoListStatus HomeErrorStatus()
+    {
+        return new VideoListStatus(
+            "Home",
+            SessionGate.HomeLoadErrorMessage,
+            "network-error-symbolic",
+            true);
+    }
+
+    internal static VideoListStatus HomeEmptyStatus()
+    {
+        return new VideoListStatus(
+            "Home",
+            SessionGate.HomeEmptyMessage,
+            "applications-internet-symbolic");
+    }
+
+    /// <summary>
+    ///     Maps a feed-level outcome to the Home state kind plus its user-facing
+    ///     message: signed-out is decided by callers via <see cref="SessionGate.RequireSignedIn" />
+    ///     before reaching here; auth-invalid and generic errors stay distinct so
+    ///     the UI can offer Sign In vs Retry respectively; loading/ready states
+    ///     keep the engine's own message.
+    /// </summary>
+    internal static (HomeFeedStateKind Kind, string? Message) MapHomeFeedOutcome(
+        FeedAuthenticationStatus authenticationStatus,
+        FeedEngineState state)
+    {
+        if (authenticationStatus == FeedAuthenticationStatus.Rejected)
+            return (HomeFeedStateKind.AuthenticationRequired, SessionGate.SessionNoLongerValidMessage);
+
+        if (authenticationStatus == FeedAuthenticationStatus.Required)
+            return (HomeFeedStateKind.AuthenticationRequired, SessionGate.HomeSignedOutMessage);
+
+        if (state.LastError != null || !state.IsSuccess)
+            return (HomeFeedStateKind.SafeError, SessionGate.HomeLoadErrorMessage);
+
+        if (state is { IsLoading: true, Videos.Count: 0 })
+            return (HomeFeedStateKind.InitialLoading, state.StatusMessage);
+
+        if (state.Videos.Count == 0 && !state.IsLoading)
+            return (HomeFeedStateKind.Empty, SessionGate.HomeEmptyMessage);
+
+        return (HomeFeedStateKind.Ready, state.StatusMessage);
     }
 }

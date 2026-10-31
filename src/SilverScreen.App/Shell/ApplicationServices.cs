@@ -74,7 +74,6 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeClientProvider>(static provider =>
             provider.GetRequiredService<YouTubeClientProvider>());
         services.AddSingleton<IAccountProfileService, YoutubeApiAccountProfileService>();
-        services.AddSingleton<MpvCommandBuilder>();
         services.AddSingleton<IPlaybackPresenceService>(provider =>
             new DiscordPresenceService(
                 provider.GetRequiredService<IPreferencesService>(),

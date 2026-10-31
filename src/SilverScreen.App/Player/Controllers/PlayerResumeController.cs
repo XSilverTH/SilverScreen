@@ -11,7 +11,7 @@ namespace SilverScreen.Player.Controllers;
 /// </summary>
 internal sealed class PlayerResumeController : IDisposable
 {
-    private const uint PromptDurationMilliseconds = PlayerTimelineState.DefaultResumePromptDurationMilliseconds;
+    private const uint PromptDurationMilliseconds = PlayerResumeState.DefaultResumePromptDurationMilliseconds;
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
     private readonly Revealer _restartRevealer;

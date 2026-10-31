@@ -5,7 +5,7 @@ using SilverScreen.Core.Browsing.Subscriptions;
 
 namespace SilverScreen.Tests.Browsing.Subscriptions;
 
-public sealed class SubscriptionsVideoListSourceTests
+public sealed class SubscriptionsStateMappingTests
 {
     [Fact]
     public void MapState_AuthenticationRequired_SetsSignInAction()
@@ -22,7 +22,7 @@ public sealed class SubscriptionsVideoListSourceTests
             "Sign in to see subscriptions.",
             false);
 
-        var mapped = SubscriptionsVideoListSource.MapState(state, () => signInCalled = true);
+        var mapped = SubscriptionsViewModel.MapState(state, () => signInCalled = true);
 
         Assert.Equal("Sign in to see subscriptions", mapped.Status.Title);
         Assert.Equal("Sign In", mapped.Status.ActionLabel);
@@ -45,7 +45,7 @@ public sealed class SubscriptionsVideoListSourceTests
             false);
         var signInCalled = false;
 
-        var mapped = SubscriptionsVideoListSource.MapState(state, () => signInCalled = true);
+        var mapped = SubscriptionsViewModel.MapState(state, () => signInCalled = true);
 
         Assert.Equal("Sign in again", mapped.Status.ActionLabel);
         Assert.DoesNotContain("private-token", mapped.Status.Description);
@@ -69,7 +69,7 @@ public sealed class SubscriptionsVideoListSourceTests
             false,
             "private-token pagination " + "x".PadRight(4000, 'x'));
 
-        var mapped = SubscriptionsVideoListSource.MapState(state);
+        var mapped = SubscriptionsViewModel.MapState(state);
 
         Assert.Equal("Could not load subscriptions", mapped.Status.Title);
         Assert.DoesNotContain("private-token", mapped.Status.Description);
@@ -91,7 +91,7 @@ public sealed class SubscriptionsVideoListSourceTests
             string.Empty,
             true);
 
-        var mapped = SubscriptionsVideoListSource.MapState(state);
+        var mapped = SubscriptionsViewModel.MapState(state);
 
         Assert.Equal("No subscriptions", mapped.Status.Title);
         Assert.Equal("Channels you subscribe to on YouTube will appear here.", mapped.Status.Description);
@@ -113,7 +113,7 @@ public sealed class SubscriptionsVideoListSourceTests
             string.Empty,
             true);
 
-        var mapped = SubscriptionsVideoListSource.MapState(state);
+        var mapped = SubscriptionsViewModel.MapState(state);
 
         Assert.Equal("No videos found", mapped.Status.Title);
         Assert.Equal("No videos found for My Favorite Channel.", mapped.Status.Description);
@@ -137,7 +137,7 @@ public sealed class SubscriptionsVideoListSourceTests
             string.Empty,
             true);
 
-        var mapped = SubscriptionsVideoListSource.MapState(state);
+        var mapped = SubscriptionsViewModel.MapState(state);
 
         Assert.Single(mapped.Videos);
         Assert.Equal("v1", mapped.Videos[0].Id);

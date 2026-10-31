@@ -21,6 +21,7 @@ public partial class App
     private IServiceProvider? _serviceProvider;
     private readonly ActivationWindowGuard<Window> _windowGuard = new();
     private ApplicationServiceLifetime? _serviceLifetime;
+    private EventHandler<AppPreferences>? _preferencesChangedHandler;
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -30,6 +31,13 @@ public partial class App
         {
             _styles?.Dispose();
             _styles = null;
+            if (_preferencesChangedHandler is not null && _serviceProvider is not null)
+            {
+                var account = _serviceProvider.GetService<AccountServices>();
+                if (account is not null)
+                    account.Preferences.PreferencesChanged -= _preferencesChangedHandler;
+                _preferencesChangedHandler = null;
+            }
             _serviceLifetime?.ApplicationStopped();
         };
     }
@@ -56,7 +64,11 @@ public partial class App
         InstallStyles();
         var account = _serviceProvider.GetRequiredService<AccountServices>();
         ApplyTheme(account.Preferences.GetPreferences().ThemeMode);
-        account.Preferences.PreferencesChanged += (_, prefs) => ApplyTheme(prefs.ThemeMode);
+        if (_preferencesChangedHandler is null)
+        {
+            _preferencesChangedHandler = (_, prefs) => ApplyTheme(prefs.ThemeMode);
+            account.Preferences.PreferencesChanged += _preferencesChangedHandler;
+        }
 
         Window? createdWindow = null;
         var mainWindowWrapper = new MainWindow(

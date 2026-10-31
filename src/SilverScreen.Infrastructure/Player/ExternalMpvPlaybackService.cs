@@ -29,6 +29,8 @@ public sealed class ExternalMpvPlaybackService(
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
 
     private bool _disposed;
+    private readonly bool _ownsCoordinator;
+
 
     internal ExternalMpvPlaybackService(
         IPreferencesService preferencesService,
@@ -41,6 +43,7 @@ public sealed class ExternalMpvPlaybackService(
             new PlaybackCoordinator(cookieFileProvider, playbackPresenceService, playbackTelemetryService),
             mediaResolver)
     {
+        _ownsCoordinator = true;
     }
 
     public void Dispose()
@@ -53,7 +56,8 @@ public sealed class ExternalMpvPlaybackService(
             _activeObservers.Clear();
         }
 
-        _coordinator.Dispose();
+        if (_ownsCoordinator)
+            _coordinator.Dispose();
     }
 
     /// <summary>

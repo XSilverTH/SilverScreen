@@ -78,42 +78,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public bool SaveManualSession(string cookieContent)
     {
-        Logger.Information("SaveManualSession called");
-        if (string.IsNullOrWhiteSpace(cookieContent))
-        {
-            Logger.Warning("Manual session save aborted: empty cookie content");
-            SetManualSessionError("Nothing to save — paste the contents of your cookies.txt file first.");
-            return false;
-        }
-
-        var trimmed = cookieContent.Trim();
-        try
-        {
-            var auth = YouTubeCookieAuthentication.FromNetscape(trimmed);
-            if (!auth.HasAuthenticationCookies)
-            {
-                Logger.Warning("Manual session save aborted: cookies missing authentication tokens");
-                SetManualSessionError(
-                    "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
-                return false;
-            }
-        }
-        catch (Exception exception) when (exception is ArgumentException or FormatException)
-        {
-            Logger.Warning(exception, "Manual session save aborted: content is not valid Netscape cookies.txt format");
-            SetManualSessionError(
-                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.");
-            return false;
-        }
-
-        if (!PersistSession(trimmed, out var persistError))
-        {
-            SetManualSessionError(persistError);
-            return false;
-        }
-
-        SetManualSessionError(null);
-        return true;
+        return SaveManualSessionAsync(cookieContent).GetAwaiter().GetResult();
     }
 
     public async Task<bool> SaveManualSessionAsync(string cookieContent)
@@ -149,10 +114,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         return succeeded;
     }
 
-    public bool SaveWebSession(string cookieContent)
-    {
-        return !string.IsNullOrWhiteSpace(cookieContent) && PersistSession(cookieContent.Trim());
-    }
 
     public async Task<bool> SaveWebSessionAsync(string cookieContent)
     {
@@ -184,35 +145,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private bool PersistSession(string cookieContent)
-    {
-        return PersistSession(cookieContent, out _);
-    }
-
-    private bool PersistSession(string cookieContent, out string? error)
-    {
-        try
-        {
-            _sessionService.SetManualSession(cookieContent, SessionCookieFormat.NetscapeCookiesText);
-            error = null;
-            return true;
-        }
-        catch (SessionPersistenceException exception)
-        {
-            Logger.Warning(exception, "Failed to persist YouTube session");
-            error = "Could not save the session — the system keyring (Secret Service) is unavailable.";
-            return false;
-        }
-        catch (Exception exception) when (exception is ArgumentException or FormatException)
-        {
-            Logger.Warning(exception, "Manual session content was rejected");
-            error =
-                "That doesn't look like a cookies.txt file with valid YouTube login credentials — export Netscape-format cookies while logged into YouTube and paste the whole file contents.";
-            return false;
-        }
-    }
-
-
     private void SetManualSessionError(string? error)
     {
         if (string.Equals(ManualSessionError, error, StringComparison.Ordinal))
@@ -224,15 +156,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public void ClearSession()
     {
-        Logger.Information("Clearing active YouTube session");
-        try
-        {
-            _sessionService.ClearSession();
-        }
-        catch (SessionPersistenceException exception)
-        {
-            Logger.Error(exception, "Failed to clear YouTube session");
-        }
+        ClearSessionAsync().GetAwaiter().GetResult();
     }
 
     public async Task ClearSessionAsync()

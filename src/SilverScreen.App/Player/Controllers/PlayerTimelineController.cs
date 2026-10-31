@@ -9,16 +9,10 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
 
-public enum ResumePromptState
-{
-    None,
-    AutoResume,
-    ManualResume
-}
 
 /// <summary>
 ///     Pure timeline/playback-position state: scrubbing lifecycle, seek reconciliation,
-///     chapter hit-testing, time formatting, SponsorBlock evaluation, and resume evaluation.
+///     chapter hit-testing, and time formatting.
 ///     Composed by <see cref="PlayerTimelineController" />.
 /// </summary>
 public class PlayerTimelineState(
@@ -30,9 +24,8 @@ public class PlayerTimelineState(
     internal const uint DefaultSeekThrottleIntervalMilliseconds = 120;
     internal const long DefaultReconciliationLatchMilliseconds = 400;
     internal const double DefaultSeekReconciliationToleranceSeconds = 1.5;
-    private const double MinimumResumeSeconds = 5;
-    public const uint DefaultSkipPromptDurationMilliseconds = 5_000;
-    public const uint DefaultResumePromptDurationMilliseconds = 15_000;
+    public const uint DefaultSkipPromptDurationMilliseconds = PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
+    public const uint DefaultResumePromptDurationMilliseconds = PlayerResumeState.DefaultResumePromptDurationMilliseconds;
 
     private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
 
@@ -251,14 +244,12 @@ public class PlayerTimelineState(
         return duration <= TimeSpan.Zero ? 0.0 : Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
     }
 
-    // --- SponsorBlock Evaluation ---
+    // --- SponsorBlock Evaluation (Forwarding) ---
 
     public static SponsorBlockSegment? FindSponsorBlockSegmentAt(
         IReadOnlyList<SponsorBlockSegment> segments,
-        TimeSpan position)
-    {
-        return segments.FirstOrDefault(segment => position >= segment.Start && position < segment.End);
-    }
+        TimeSpan position) =>
+        PlayerSponsorBlockState.FindSponsorBlockSegmentAt(segments, position);
 
     public static bool ShouldAutoSkip(
         TimeSpan currentPosition,
@@ -266,98 +257,43 @@ public class PlayerTimelineState(
         bool isPaused,
         bool autoSkipEnabled,
         ISet<string> autoSkippedSegmentIds,
-        [NotNullWhen(true)] out SponsorBlockSegment? segmentToSkip)
-    {
-        segmentToSkip = null;
-        if (isPaused || !autoSkipEnabled || segments.Count == 0) return false;
-        var segment = FindSponsorBlockSegmentAt(segments, currentPosition);
-        if (segment is null || !autoSkippedSegmentIds.Add(segment.Id)) return false;
-        segmentToSkip = segment;
-        return true;
-    }
+        [NotNullWhen(true)] out SponsorBlockSegment? segmentToSkip) =>
+        PlayerSponsorBlockState.ShouldAutoSkip(currentPosition, segments, isPaused, autoSkipEnabled, autoSkippedSegmentIds, out segmentToSkip);
 
     public static bool ShouldShowManualPrompt(
         SponsorBlockSegment? activeSegment,
         SponsorBlockSegment? candidateSegment,
         bool isPaused,
         bool wasPaused,
-        bool hadSeek)
-    {
-        if (candidateSegment is null) return false;
-        return hadSeek ||
-               !string.Equals(activeSegment?.Id, candidateSegment.Id, StringComparison.Ordinal) ||
-               (isPaused && !wasPaused);
-    }
+        bool hadSeek) =>
+        PlayerSponsorBlockState.ShouldShowManualPrompt(activeSegment, candidateSegment, isPaused, wasPaused, hadSeek);
 
-    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences)
-    {
-        return ManualSponsorBlockSkipEnabled(preferences.SponsorBlockSegmentDisplayEnabled,
-            preferences.SponsorBlockAutoSkipEnabled);
-    }
+    public static bool ManualSponsorBlockSkipEnabled(AppPreferences preferences) =>
+        PlayerSponsorBlockState.ManualSponsorBlockSkipEnabled(preferences);
 
-    private static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
-    {
-        return segmentDisplayEnabled && !autoSkipEnabled;
-    }
+    public static string GetSponsorBlockCategoryLabel(string category) =>
+        PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(category);
 
-    public static string GetSponsorBlockCategoryLabel(string category)
-    {
-        return category switch
-        {
-            SponsorBlockCategories.Sponsor => "Sponsor",
-            SponsorBlockCategories.SelfPromotion => "Self-promotion",
-            SponsorBlockCategories.InteractionReminder => "Interaction reminder",
-            SponsorBlockCategories.Intro => "Intro",
-            SponsorBlockCategories.Outro => "Outro",
-            SponsorBlockCategories.Preview => "Preview",
-            SponsorBlockCategories.Hook => "Hook",
-            SponsorBlockCategories.Filler => "Filler",
-            _ => category
-        };
-    }
+    public static string GetSponsorBlockButtonColorClass(string category) =>
+        PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(category);
 
-    public static string GetSponsorBlockButtonColorClass(string category)
-    {
-        var resolved = SponsorBlockCategories.All.Contains(category) ? category : SponsorBlockCategories.Sponsor;
-        return $"player-sponsorblock-skip-button-{resolved}";
-    }
-
-    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences)
-    {
-        return GetSponsorBlockConfigurationKey(
-            preferences.SponsorBlockAutoSkipEnabled,
-            preferences.SponsorBlockSegmentDisplayEnabled,
-            preferences.SponsorBlockCategories);
-    }
+    public static string GetSponsorBlockConfigurationKey(AppPreferences preferences) =>
+        PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(preferences);
 
     public static string GetSponsorBlockConfigurationKey(
         bool autoSkipEnabled,
         bool segmentDisplayEnabled,
-        IEnumerable<string> categories)
-    {
-        if (!autoSkipEnabled && !segmentDisplayEnabled) return "disabled";
-        var filtered = categories.Where(SponsorBlockCategories.All.Contains).Distinct(StringComparer.Ordinal);
-        return $"{autoSkipEnabled}:{segmentDisplayEnabled}:{string.Join(',', filtered)}";
-    }
+        IEnumerable<string> categories) =>
+        PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(autoSkipEnabled, segmentDisplayEnabled, categories);
 
-    // --- Resume State Evaluation ---
+    // --- Resume State Evaluation (Forwarding) ---
 
     public static bool TryGetResumePosition(
         YouTubePlaybackProgress? progress,
         TimeSpan duration,
         out TimeSpan position,
-        double minimumSeconds = MinimumResumeSeconds)
-    {
-        position = TimeSpan.Zero;
-        if (progress is null || progress.IsCompleted || !progress.HasResumePosition ||
-            progress.ResumePosition is not { } savedPosition ||
-            savedPosition < TimeSpan.FromSeconds(minimumSeconds) ||
-            savedPosition >= duration || duration <= TimeSpan.Zero)
-            return false;
-
-        position = savedPosition;
-        return true;
-    }
+        double minimumSeconds = PlayerResumeState.MinimumResumeSeconds) =>
+        PlayerResumeState.TryGetResumePosition(progress, duration, out position, minimumSeconds);
 
     public static ResumePromptState GetResumePromptState(
         YouTubePlaybackProgress? progress,
@@ -365,15 +301,8 @@ public class PlayerTimelineState(
         bool resumeAutomatically,
         bool resumeOnDemand,
         out TimeSpan resumePosition,
-        double minimumSeconds = MinimumResumeSeconds)
-    {
-        if (!TryGetResumePosition(progress, duration, out resumePosition, minimumSeconds))
-            return ResumePromptState.None;
-
-        if (resumeAutomatically) return ResumePromptState.AutoResume;
-
-        return resumeOnDemand ? ResumePromptState.ManualResume : ResumePromptState.None;
-    }
+        double minimumSeconds = PlayerResumeState.MinimumResumeSeconds) =>
+        PlayerResumeState.GetResumePromptState(progress, duration, resumeAutomatically, resumeOnDemand, out resumePosition, minimumSeconds);
 }
 
 internal sealed class PlayerTimelineController : IDisposable

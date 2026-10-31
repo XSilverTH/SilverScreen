@@ -256,34 +256,34 @@ public class PlayerTimelineStateTests
         var skippedIds = new HashSet<string>(StringComparer.Ordinal);
 
         // Normal playback outside segment -> false
-        Assert.False(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(5), segments, false, true, skippedIds,
+        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(5), segments, false, true, skippedIds,
             out var s1));
         Assert.Null(s1);
 
         // Normal playback inside seg1 -> true and returns seg1
-        Assert.True(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
+        Assert.True(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
             out var s2));
         Assert.NotNull(s2);
         Assert.Equal("seg1", s2!.Id);
         Assert.Contains("seg1", skippedIds);
 
         // Already skipped seg1 -> false
-        Assert.False(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
+        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(15), segments, false, true, skippedIds,
             out var s3));
         Assert.Null(s3);
 
         // Inside seg2 but paused -> false
-        Assert.False(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, true, true, skippedIds,
+        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, true, true, skippedIds,
             out var s4));
         Assert.Null(s4);
 
         // Inside seg2 but auto-skip disabled -> false
-        Assert.False(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, false, skippedIds,
+        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, false, skippedIds,
             out var s5));
         Assert.Null(s5);
 
         // Inside seg2, unpaused and enabled -> true
-        Assert.True(PlayerTimelineState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, true, skippedIds,
+        Assert.True(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, true, skippedIds,
             out var s6));
         Assert.NotNull(s6);
         Assert.Equal("seg2", s6!.Id);
@@ -296,41 +296,41 @@ public class PlayerTimelineStateTests
             SponsorBlockCategories.Sponsor);
 
         // Entering new segment -> show
-        Assert.True(PlayerTimelineState.ShouldShowManualPrompt(null, segment, false, false, false));
+        Assert.True(PlayerSponsorBlockState.ShouldShowManualPrompt(null, segment, false, false, false));
 
         // Staying in same segment playing -> do not re-show
-        Assert.False(PlayerTimelineState.ShouldShowManualPrompt(segment, segment, false, false, false));
+        Assert.False(PlayerSponsorBlockState.ShouldShowManualPrompt(segment, segment, false, false, false));
 
         // Seeking into same segment -> show
-        Assert.True(PlayerTimelineState.ShouldShowManualPrompt(segment, segment, false, false, true));
+        Assert.True(PlayerSponsorBlockState.ShouldShowManualPrompt(segment, segment, false, false, true));
 
         // Pausing inside segment -> show
-        Assert.True(PlayerTimelineState.ShouldShowManualPrompt(segment, segment, true, false, false));
+        Assert.True(PlayerSponsorBlockState.ShouldShowManualPrompt(segment, segment, true, false, false));
 
         // Candidate null -> false
-        Assert.False(PlayerTimelineState.ShouldShowManualPrompt(segment, null, false, false, false));
+        Assert.False(PlayerSponsorBlockState.ShouldShowManualPrompt(segment, null, false, false, false));
     }
 
     [Fact]
     public void SponsorBlock_LabelsAndConfigKeys()
     {
-        Assert.Equal("Sponsor", PlayerTimelineState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
+        Assert.Equal("Sponsor", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
         Assert.Equal("Self-promotion",
-            PlayerTimelineState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.SelfPromotion));
-        Assert.Equal("Intro", PlayerTimelineState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Intro));
-        Assert.Equal("Custom", PlayerTimelineState.GetSponsorBlockCategoryLabel("Custom"));
+            PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.SelfPromotion));
+        Assert.Equal("Intro", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Intro));
+        Assert.Equal("Custom", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel("Custom"));
 
         Assert.Equal("player-sponsorblock-skip-button-sponsor",
-            PlayerTimelineState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Sponsor));
+            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Sponsor));
         Assert.Equal("player-sponsorblock-skip-button-intro",
-            PlayerTimelineState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Intro));
+            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Intro));
         Assert.Equal("player-sponsorblock-skip-button-sponsor",
-            PlayerTimelineState.GetSponsorBlockButtonColorClass("unknown"));
+            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass("unknown"));
 
         Assert.Equal("disabled",
-            PlayerTimelineState.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
+            PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
         Assert.Equal("True:True:sponsor,intro",
-            PlayerTimelineState.GetSponsorBlockConfigurationKey(true, true,
+            PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(true, true,
                 [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Intro]));
     }
 
@@ -339,30 +339,43 @@ public class PlayerTimelineStateTests
     {
         var duration = TimeSpan.FromMinutes(10);
 
-        Assert.False(PlayerTimelineState.TryGetResumePosition(null, duration, out _));
-        Assert.False(PlayerTimelineState.TryGetResumePosition(
+        Assert.False(PlayerResumeState.TryGetResumePosition(null, duration, out _));
+        Assert.False(PlayerResumeState.TryGetResumePosition(
             new YouTubePlaybackProgress(0.5, null, false), duration, out _));
-        Assert.False(PlayerTimelineState.TryGetResumePosition(
+        Assert.False(PlayerResumeState.TryGetResumePosition(
             new YouTubePlaybackProgress(1, TimeSpan.FromSeconds(300), true), duration, out _));
-        Assert.False(PlayerTimelineState.TryGetResumePosition(
+        Assert.False(PlayerResumeState.TryGetResumePosition(
             new YouTubePlaybackProgress(null, TimeSpan.Zero, false), duration, out _));
 
         var progress = new YouTubePlaybackProgress(0.5, TimeSpan.FromSeconds(73), false);
-        Assert.True(PlayerTimelineState.TryGetResumePosition(progress, duration, out var position));
+        Assert.True(PlayerResumeState.TryGetResumePosition(progress, duration, out var position));
         Assert.Equal(TimeSpan.FromSeconds(73), position);
 
         Assert.Equal(ResumePromptState.None,
-            PlayerTimelineState.GetResumePromptState(null, duration, true, true, out _));
+            PlayerResumeState.GetResumePromptState(null, duration, true, true, out _));
         Assert.Equal(ResumePromptState.AutoResume,
-            PlayerTimelineState.GetResumePromptState(progress, duration, true, false, out var autoPosition));
+            PlayerResumeState.GetResumePromptState(progress, duration, true, false, out var autoPosition));
         Assert.Equal(TimeSpan.FromSeconds(73), autoPosition);
         Assert.Equal(ResumePromptState.ManualResume,
-            PlayerTimelineState.GetResumePromptState(progress, duration, false, true, out var manualPosition));
+            PlayerResumeState.GetResumePromptState(progress, duration, false, true, out var manualPosition));
         Assert.Equal(TimeSpan.FromSeconds(73), manualPosition);
         Assert.Equal(ResumePromptState.None,
-            PlayerTimelineState.GetResumePromptState(progress, duration, false, false, out _));
+            PlayerResumeState.GetResumePromptState(progress, duration, false, false, out _));
     }
 
+    [Fact]
+    public void PlayerTimelineState_ForwardsSponsorBlockAndResumeMethods()
+    {
+        var duration = TimeSpan.FromMinutes(10);
+        var progress = new YouTubePlaybackProgress(0.5, TimeSpan.FromSeconds(73), false);
+        Assert.True(PlayerTimelineState.TryGetResumePosition(progress, duration, out var position));
+        Assert.Equal(TimeSpan.FromSeconds(73), position);
+        Assert.Equal(ResumePromptState.AutoResume,
+            PlayerTimelineState.GetResumePromptState(progress, duration, true, false, out _));
+        Assert.Equal("Sponsor", PlayerTimelineState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
+        Assert.Equal("disabled",
+            PlayerTimelineState.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
+    }
     [Fact]
     public void Reset_ClearsAllState()
     {

@@ -54,7 +54,7 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
 
         _engine = new PagedFeedEngine(
             FetchSearchPageAsync,
-            (_, _, state) => SearchVideoListSource.MapStatus(state),
+            (_, _, state) => MapStatus(state),
             "Searching YouTube…",
             "Loading more results…",
             new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
@@ -367,5 +367,25 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    public static VideoListStatus MapStatus(FeedEngineState state)
+    {
+        if (!state.IsSuccess || state.LastError != null)
+        {
+            var description = "YouTube couldn’t complete the search. Try again in a moment.";
+            return new VideoListStatus(
+                "Could not complete search",
+                description,
+                "network-error-symbolic",
+                true);
+        }
+
+        const string emptyDescription = "Try different keywords or check spelling.";
+
+        return new VideoListStatus(
+            "No results found",
+            emptyDescription,
+            "system-search-symbolic");
     }
 }

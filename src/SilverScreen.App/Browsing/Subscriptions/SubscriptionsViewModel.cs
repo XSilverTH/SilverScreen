@@ -74,7 +74,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
         _engine = new PagedFeedEngine(
             FetchCurrentFeedPageAsync,
-            (_, _, _) => SubscriptionsVideoListSource.MapState(State, _openWebLogin).Status,
+            (_, _, _) => MapState(State, _openWebLogin).Status,
             defaultTitle: "Subscriptions",
             clearOnRefresh: false);
 
@@ -132,7 +132,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine.Dispose();
     }
 
-    VideoListPresentationState IVideoListSource.State => SubscriptionsVideoListSource.MapState(State, _openWebLogin);
+    VideoListPresentationState IVideoListSource.State => MapState(State, _openWebLogin);
 
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
@@ -750,5 +750,80 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         {
             return !_disposed && generation == _channelGeneration;
         }
+    }
+
+    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
+        string? paginationError = null)
+    {
+        var safePaginationError = string.IsNullOrWhiteSpace(paginationError ?? state.PaginationError)
+            ? null
+            : "YouTube couldn’t load more subscription videos. Try again in a moment.";
+        VideoListStatus status;
+        switch (state.Status)
+        {
+            case AuthenticatedSubscriptionsStatus.AuthenticationRequired:
+            case AuthenticatedSubscriptionsStatus.AuthenticationRejected:
+                status = new VideoListStatus(
+                    SessionGate.SubscriptionsSignedOutTitle,
+                    state.Status == AuthenticatedSubscriptionsStatus.AuthenticationRejected
+                        ? SessionGate.SessionNoLongerValidMessage
+                        : SessionGate.SubscriptionsSignedOutMessage,
+                    "avatar-default-symbolic",
+                    false,
+                    state.Status == AuthenticatedSubscriptionsStatus.AuthenticationRejected
+                        ? SessionGate.SignInAgainActionLabel
+                        : SessionGate.SignInActionLabel,
+                    openWebLogin);
+                break;
+
+            case AuthenticatedSubscriptionsStatus.TemporaryBackendFailure:
+                status = new VideoListStatus(
+                    SessionGate.SubscriptionsErrorTitle,
+                    SessionGate.SubscriptionsErrorMessage,
+                    "network-error-symbolic",
+                    true);
+                break;
+
+            case AuthenticatedSubscriptionsStatus.Empty:
+            case AuthenticatedSubscriptionsStatus.Success:
+            default:
+                if (!state.IsSuccess)
+                {
+                    status = new VideoListStatus(
+                        SessionGate.SubscriptionsErrorTitle,
+                        SessionGate.SubscriptionsErrorMessage,
+                        "network-error-symbolic",
+                        true);
+                }
+                else if (state.Videos.Count == 0)
+                {
+                    if (state.SelectedChannel is not null)
+                        status = new VideoListStatus(
+                            "No videos found",
+                            $"No videos found for {state.SelectedChannel.Title}.",
+                            "video-x-generic-symbolic");
+                    else
+                        status = new VideoListStatus(
+                            SessionGate.SubscriptionsEmptyTitle,
+                            SessionGate.SubscriptionsEmptyMessage,
+                            "emblem-favorite-symbolic");
+                }
+                else
+                {
+                    status = new VideoListStatus(
+                        "Subscriptions",
+                        string.Empty,
+                        "emblem-favorite-symbolic");
+                }
+
+                break;
+        }
+
+        return new VideoListPresentationState(
+            state.Videos,
+            state.IsLoading,
+            state.IsLoadingMore,
+            status,
+            safePaginationError);
     }
 }

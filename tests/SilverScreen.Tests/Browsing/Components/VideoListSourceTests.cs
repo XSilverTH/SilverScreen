@@ -1,245 +1,164 @@
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.History;
+using SilverScreen.Browsing.Home;
 using SilverScreen.Browsing.Search;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Browsing.Home;
 
 namespace SilverScreen.Tests.Browsing.Components;
 
 public sealed class VideoListSourceTests
 {
     [Fact]
-    public void HomeVideoListSource_MapsSignedOutState()
+    public void HomeFeedCoordinator_MapsSignedOutStatus()
     {
-        var state = new HomeFeedState(HomeFeedStateKind.SignedOut, []);
-        var presentation = HomeVideoListSource.MapState(state);
+        var status = HomeFeedCoordinator.HomeSignedOutStatus(null);
 
-        Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("Sign in with Google or use cookies.txt to see your Home feed.", presentation.Status.Description);
-        Assert.Equal("avatar-default-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-        Assert.False(presentation.IsLoading);
-        Assert.Equal("Loading more videos…", presentation.PaginationLoadingMessage);
+        Assert.Equal("Home", status.Title);
+        Assert.Equal("Sign in with Google or use cookies.txt to see your Home feed.", status.Description);
+        Assert.Equal("avatar-default-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 
     [Fact]
-    public void HomeVideoListSource_MapsInitialLoadingState()
+    public void HomeFeedCoordinator_MapsAuthenticationRequiredStatus()
     {
-        var state = new HomeFeedState(HomeFeedStateKind.InitialLoading, [], IsLoading: true);
-        var presentation = HomeVideoListSource.MapState(state);
+        var status = HomeFeedCoordinator.HomeAuthInvalidStatus(null, authenticationRejected: true);
 
-        Assert.True(presentation.IsLoading);
-        Assert.Null(presentation.LoadingMessage);
+        Assert.Equal("Home", status.Title);
+        Assert.Equal(SilverScreen.Core.Account.Session.SessionGate.SessionNoLongerValidMessage, status.Description);
+        Assert.Equal("dialog-password-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 
     [Fact]
-    public void HomeVideoListSource_MapsRefreshingState()
+    public void HomeFeedCoordinator_MapsSafeErrorStatus()
     {
-        var video = new VideoSummary("id1", "Title", "Channel", TimeSpan.FromMinutes(1),
-            "https://example.com/thumb.jpg", false);
-        var state = new HomeFeedState(HomeFeedStateKind.Ready, [video], IsLoading: true);
-        var presentation = HomeVideoListSource.MapState(state);
+        var status = HomeFeedCoordinator.HomeErrorStatus();
 
-        Assert.True(presentation.IsLoading);
-        Assert.Single(presentation.Videos);
+        Assert.Equal("Home", status.Title);
+        Assert.False(string.IsNullOrWhiteSpace(status.Description));
+        Assert.Equal("network-error-symbolic", status.IconName);
+        Assert.True(status.ShowRetry);
     }
 
     [Fact]
-    public void HomeVideoListSource_MapsReadyAndEmptyState()
+    public void HomeFeedCoordinator_MapsEmptyStatus()
     {
-        var state = new HomeFeedState(HomeFeedStateKind.Ready, []);
-        var presentation = HomeVideoListSource.MapState(state);
+        var status = HomeFeedCoordinator.HomeEmptyStatus();
 
-        Assert.Equal("Home", presentation.Status.Title);
-        Assert.Equal("No recommendations are available right now.", presentation.Status.Description);
-        Assert.Equal("applications-internet-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-        Assert.False(presentation.IsLoading);
+        Assert.Equal("Home", status.Title);
+        Assert.Equal("No recommendations are available right now.", status.Description);
+        Assert.Equal("applications-internet-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 
     [Fact]
-    public void HomeVideoListSource_MapsAuthenticationRequiredState()
+    public void SearchViewModel_MapsSuccessEmptyState()
     {
-        var state = new HomeFeedState(HomeFeedStateKind.AuthenticationRequired, []);
-        var presentation = HomeVideoListSource.MapState(state);
+        var state = new FeedEngineState([], false, false, false, null, "Search complete.", true, null);
+        var status = SearchViewModel.MapStatus(state);
 
-        Assert.DoesNotContain("private-token", presentation.Status.Description);
-        Assert.Equal("dialog-password-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
+        Assert.Equal("No results found", status.Title);
+        Assert.Equal("Try different keywords or check spelling.", status.Description);
+        Assert.Equal("system-search-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 
     [Fact]
-    public void HomeVideoListSource_MapsSafeErrorState()
+    public void SearchViewModel_MapsCustomEmptySummary()
     {
-        var state = new HomeFeedState(HomeFeedStateKind.SafeError, []);
-        var presentation = HomeVideoListSource.MapState(state);
+        var state = new FeedEngineState([], false, false, false, null, "Custom empty message", true, null);
+        var status = SearchViewModel.MapStatus(state);
 
-        Assert.Equal("Home", presentation.Status.Title);
-        Assert.False(string.IsNullOrWhiteSpace(presentation.Status.Description));
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
+        Assert.Equal("Try different keywords or check spelling.", status.Description);
     }
 
     [Fact]
-    public void SearchVideoListSource_MapsSuccessEmptyState()
+    public void SearchViewModel_MapsErrorState()
     {
-        var state = new SearchViewState([], "Search complete.", false);
-        var presentation = SearchVideoListSource.MapState(state);
+        var state = new FeedEngineState([], false, false, false, null, "Search failed.", false, new Exception("Search failed."));
+        var status = SearchViewModel.MapStatus(state);
 
-        Assert.Equal("No results found", presentation.Status.Title);
-        Assert.Equal("Try different keywords or check spelling.", presentation.Status.Description);
-        Assert.Equal("system-search-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-        Assert.False(presentation.IsLoading);
-        Assert.Equal("Loading more results…", presentation.PaginationLoadingMessage);
+        Assert.Equal("Could not complete search", status.Title);
+        Assert.True(status.ShowRetry);
     }
 
     [Fact]
-    public void SearchVideoListSource_MapsCustomEmptySummary()
-    {
-        var presentation = SearchVideoListSource.MapState(new SearchViewState([], "Custom empty message", false));
-        Assert.Equal("Try different keywords or check spelling.", presentation.Status.Description);
-    }
-
-    [Fact]
-    public void SearchVideoListSource_MapsErrorState()
-    {
-        var presentation = SearchVideoListSource.MapState(new SearchViewState([], "Search failed.", false, false, false, false));
-        Assert.Equal("Could not complete search", presentation.Status.Title);
-        Assert.True(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void SearchVideoListSource_KeepsBackendDiagnosticsOutOfEmptyAndFailureStatus()
+    public void SearchViewModel_KeepsBackendDiagnosticsOutOfEmptyAndFailureStatus()
     {
         var diagnostic = "private-token-" + "x".PadRight(4000, 'x');
-        var failure = SearchVideoListSource.MapState(
-            new SearchViewState([], diagnostic, false, false, false, false), diagnostic);
-        var empty = SearchVideoListSource.MapState(
-            new SearchViewState([], diagnostic, false, false, false, true));
+        var failure = SearchViewModel.MapStatus(
+            new FeedEngineState([], false, false, false, null, diagnostic, false, new Exception(diagnostic)));
+        var empty = SearchViewModel.MapStatus(
+            new FeedEngineState([], false, false, false, null, diagnostic, true, null));
 
-        Assert.DoesNotContain("private-token", failure.Status.Description);
-        Assert.DoesNotContain("private-token", failure.PaginationError);
-        Assert.True(failure.Status.ShowRetry);
-        Assert.DoesNotContain("private-token", empty.Status.Description);
-        Assert.False(empty.Status.ShowRetry);
+        Assert.DoesNotContain("private-token", failure.Description);
+        Assert.True(failure.ShowRetry);
+        Assert.DoesNotContain("private-token", empty.Description);
+        Assert.False(empty.ShowRetry);
     }
 
-
     [Fact]
-    public void SearchVideoListSource_MapsLoadingState()
+    public void HistoryViewModel_MapsSignedOutState()
     {
-        var state = new SearchViewState([], "Searching YouTube for “dotnet”…", true);
-        var presentation = SearchVideoListSource.MapState(state);
+        var state = new FeedEngineState([], false, false, false, null, "", false, null);
+        var status = HistoryViewModel.MapStatus(AuthenticatedHistoryStatus.AuthenticationRequired, state);
 
-        Assert.True(presentation.IsLoading);
-        Assert.DoesNotContain("dotnet", presentation.LoadingMessage);
+        Assert.Equal("Sign in to see history", status.Title);
+        Assert.Equal("Sign in with Google or use cookies.txt to see your watch history.", status.Description);
+        Assert.Equal("avatar-default-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 
     [Fact]
-    public void HistoryVideoListSource_MapsSignedOutState()
-    {
-        var state = new HistoryViewState([], "", false, false,
-            AuthenticatedHistoryStatus.AuthenticationRequired);
-        var presentation = HistoryVideoListSource.MapState(state);
-
-        Assert.Equal("Sign in to see history", presentation.Status.Title);
-        Assert.Equal("Sign in with Google or use cookies.txt to see your watch history.", presentation.Status.Description);
-        Assert.Equal("avatar-default-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-        Assert.Equal("Loading more history…", presentation.PaginationLoadingMessage);
-    }
-
-    [Fact]
-    public void HistoryVideoListSource_MapsErrorState()
-    {
-        var state = new HistoryViewState([], "", false, false,
-            AuthenticatedHistoryStatus.TemporaryBackendFailure);
-        var presentation = HistoryVideoListSource.MapState(state);
-
-        Assert.Equal("Could not load history", presentation.Status.Title);
-        Assert.DoesNotContain("private-token", presentation.Status.Description);
-        Assert.Equal("network-error-symbolic", presentation.Status.IconName);
-        Assert.True(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void HistoryVideoListSource_MapsEmptyState()
-    {
-        var state = new HistoryViewState([], "", false, true,
-            AuthenticatedHistoryStatus.Empty);
-        var presentation = HistoryVideoListSource.MapState(state);
-
-        Assert.Equal("No watch history", presentation.Status.Title);
-        Assert.Equal("Videos you watch on YouTube will appear here.", presentation.Status.Description);
-        Assert.Equal("document-open-recent-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_MapsLoadingState()
-    {
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "Loading Example…", true, true);
-        var presentation = ChannelVideoListSource.MapState(state);
-
-        Assert.True(presentation.IsLoading);
-        Assert.DoesNotContain("Example", presentation.LoadingMessage);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_MapsLoadingStateWithDefaultMessage()
-    {
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "", true, true);
-        var presentation = ChannelVideoListSource.MapState(state);
-
-        Assert.True(presentation.IsLoading);
-        Assert.Equal("Loading channel…", presentation.LoadingMessage);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_UsesSafeFailureCopy()
+    public void HistoryViewModel_MapsErrorState()
     {
         var diagnostic = "private-token-" + "x".PadRight(4000, 'x');
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, diagnostic, false, false);
-        var presentation = ChannelVideoListSource.MapState(state, diagnostic);
+        var state = new FeedEngineState([], false, false, false, null, diagnostic, false, new Exception(diagnostic));
+        var status = HistoryViewModel.MapStatus(AuthenticatedHistoryStatus.TemporaryBackendFailure, state);
 
-        Assert.True(presentation.Status.ShowRetry);
-        Assert.DoesNotContain("private-token", presentation.Status.Description);
-        Assert.DoesNotContain("private-token", presentation.PaginationError);
+        Assert.Equal("Could not load history", status.Title);
+        Assert.DoesNotContain("private-token", status.Description);
+        Assert.Equal("network-error-symbolic", status.IconName);
+        Assert.True(status.ShowRetry);
     }
 
     [Fact]
-    public void ChannelVideoListSource_MapsEmptyState()
+    public void HistoryViewModel_MapsEmptyState()
     {
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [], ChannelVideoSort.Newest, "", false, true);
-        var presentation = ChannelVideoListSource.MapState(state);
+        var state = new FeedEngineState([], false, false, false, null, "", true, null);
+        var status = HistoryViewModel.MapStatus(AuthenticatedHistoryStatus.Empty, state);
 
-        Assert.Equal("No videos found", presentation.Status.Title);
+        Assert.Equal("No watch history", status.Title);
+        Assert.Equal("Videos you watch on YouTube will appear here.", status.Description);
+        Assert.Equal("document-open-recent-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
+    }
+
+    [Fact]
+    public void ChannelViewModel_UsesSafeFailureCopy()
+    {
+        var diagnostic = "private-token-" + "x".PadRight(4000, 'x');
+        var state = new FeedEngineState([], false, false, false, null, diagnostic, false, new Exception(diagnostic));
+        var status = ChannelViewModel.MapStatus(state);
+
+        Assert.Equal("Could not load channel", status.Title);
+        Assert.True(status.ShowRetry);
+        Assert.DoesNotContain("private-token", status.Description);
+        Assert.Equal("network-error-symbolic", status.IconName);
+    }
+
+    [Fact]
+    public void ChannelViewModel_MapsEmptyState()
+    {
+        var state = new FeedEngineState([], false, false, false, null, "", true, null);
+        var status = ChannelViewModel.MapStatus(state);
+
+        Assert.Equal("No videos found", status.Title);
         Assert.Equal("This channel does not have any public videos available right now.",
-            presentation.Status.Description);
-        Assert.Equal("applications-internet-symbolic", presentation.Status.IconName);
-        Assert.False(presentation.Status.ShowRetry);
-    }
-
-    [Fact]
-    public void ChannelVideoListSource_MapsReadyWithVideos()
-    {
-        var video = new VideoSummary("vid1", "Title", "Channel", TimeSpan.FromMinutes(5), "thumb", false);
-        var state = new ChannelViewState("https://www.youtube.com/@example", "Example", null, null, null,
-            [video], ChannelVideoSort.Newest, "Showing 1 video from Example.", false, true,
-            true);
-        var presentation = ChannelVideoListSource.MapState(state);
-
-        Assert.Single(presentation.Videos);
-        Assert.False(presentation.IsLoading);
-        Assert.True(presentation.IsLoadingMore);
-        Assert.Equal("Loading more videos…", presentation.PaginationLoadingMessage);
+            status.Description);
+        Assert.Equal("applications-internet-symbolic", status.IconName);
+        Assert.False(status.ShowRetry);
     }
 }
