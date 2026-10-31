@@ -1,3 +1,4 @@
+using Point = Graphene.Point;
 using System.Diagnostics.CodeAnalysis;
 using Gtk;
 using SilverScreen.Core.Browsing.Common;
@@ -534,6 +535,14 @@ internal sealed class PlayerTimelineController : IDisposable
         _scrubCue.SetVisible(true);
     }
 
+    private double ConvertScaleXToOverlayX(double scaleX)
+    {
+        var point = new Point { X = (float)scaleX, Y = 0 };
+        return _timeline.ComputePoint(_timelineOverlay, point, out var transformed)
+            ? transformed.X
+            : scaleX;
+    }
+
     private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
     {
         if (_lifetime.IsDisposed || !State.HasMedia || !_timeline.GetSensitive() || State.Duration <= TimeSpan.Zero)
@@ -543,7 +552,7 @@ internal sealed class PlayerTimelineController : IDisposable
         _positionLabel.AddCssClass("player-time-scrubbing");
         _timeline.AddCssClass("dragging");
         _registerActivity();
-        UpdateScrubCue(args.StartX);
+        UpdateScrubCue(ConvertScaleXToOverlayX(args.StartX));
     }
 
     private void OnTimelineDragUpdate(GestureDrag sender, GestureDrag.DragUpdateSignalArgs args)
@@ -551,7 +560,7 @@ internal sealed class PlayerTimelineController : IDisposable
         if (!IsScrubbing) return;
         _registerActivity();
         sender.GetStartPoint(out var startX, out _);
-        UpdateScrubCue(startX + args.OffsetX);
+        UpdateScrubCue(ConvertScaleXToOverlayX(startX + args.OffsetX));
     }
 
     private void OnTimelineDragEnd(GestureDrag sender, GestureDrag.DragEndSignalArgs args)
