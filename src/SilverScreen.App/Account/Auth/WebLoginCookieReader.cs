@@ -26,7 +26,7 @@ internal static partial class WebLoginCookieReader
     [LibraryImport("libglib-2.0.so.0", EntryPoint = "g_list_free")]
     private static partial void FreeList(IntPtr list);
 
-    internal static Task<IReadOnlyList<WebCookieSnapshot>> GetCookiesAsync(CookieManager manager, string uri)
+    internal static async Task<IReadOnlyList<WebCookieSnapshot>> GetCookiesAsync(CookieManager manager, string uri)
     {
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentException.ThrowIfNullOrWhiteSpace(uri);
@@ -83,7 +83,7 @@ internal static partial class WebLoginCookieReader
                         var domain = cookie.GetDomain();
 
                         var path = cookie.GetPath();
-                        using var expires = cookie.GetExpires();
+                        var expires = cookie.GetExpires();
                         snapshots.Add(new WebCookieSnapshot(
                             name,
                             value,
@@ -128,7 +128,14 @@ internal static partial class WebLoginCookieReader
             callbackHandler.NativeCallback,
             IntPtr.Zero);
 
-        return completion.Task;
+        try
+        {
+            return await completion.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            GC.KeepAlive(callbackHandler);
+        }
     }
 
     internal static string SerializeNetscape(IEnumerable<WebCookieSnapshot> cookies)
