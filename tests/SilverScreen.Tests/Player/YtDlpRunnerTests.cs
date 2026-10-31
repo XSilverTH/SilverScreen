@@ -173,6 +173,37 @@ public sealed class YtDlpMediaResolverTests
         Assert.Null(result.Details);
     }
 
+    [Fact]
+    public async Task ResolveMediaAsync_WhenYtDlpOutputHasDetails_ParsesDetailsWithoutCallingApi()
+    {
+        var json = """
+            {
+                "url": "https://cdn.example/video.mp4",
+                "title": "Test Title",
+                "channel": "Test Channel",
+                "description": "Test Description",
+                "view_count": 12345,
+                "timestamp": 1600000000
+            }
+            """;
+        var runner = new FakeYtDlpRunner
+        {
+            Result = new ProcessResult(0, json, "")
+        };
+        using var resolver = CreateResolver(runner);
+
+        var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Media);
+        Assert.NotNull(result.Details);
+        Assert.Equal("Test Title", result.Details.Title);
+        Assert.Equal("Test Channel", result.Details.ChannelName);
+        Assert.Equal("Test Description", result.Details.Description);
+        Assert.Equal(12345, result.Details.ViewCount);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1600000000), result.Details.PublishedAt);
+    }
+
 
     [Fact]
     public async Task ResolveMediaAsync_Timeout_ReturnsTimedOutGuidance()

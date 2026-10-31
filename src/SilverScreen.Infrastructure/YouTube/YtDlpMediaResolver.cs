@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Serilog;
@@ -119,17 +120,27 @@ public sealed class YtDlpMediaResolver(
             if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
                 return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
                                                             "Failed to extract video formats.");
-            var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
-            if (!details.IsSuccess)
-                Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
-                    videoId, DiagnosticSanitizer.Sanitize(details.ErrorMessage));
+            var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
+            if (details is null)
+            {
+                var apiDetailsResult = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
+                if (apiDetailsResult.IsSuccess)
+                {
+                    details = apiDetailsResult.Details;
+                }
+                else
+                {
+                    Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
+                        videoId, DiagnosticSanitizer.Sanitize(apiDetailsResult.ErrorMessage));
+                }
+            }
 
-            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details.Details, videoId);
+            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
             if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
                 fetchResult.RawJsonOutput,
-                details.Details,
+                details,
                 _timeProvider.GetUtcNow(),
                 resolvedMedia.ExpiresAt,
                 new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase)
@@ -202,6 +213,16 @@ public sealed class YtDlpMediaResolver(
             cached = TryGetValidEntry(videoId, forceRefresh);
             if (cached?.Details is not null)
                 return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
+
+            if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
+            {
+                var parsedDetails = TryParseVideoDetailsFromRawJson(cached.RawJsonOutput);
+                if (parsedDetails is not null)
+                {
+                    _cache[videoId] = cached with { Details = parsedDetails };
+                    return new YouTubeVideoDetailsResult(parsedDetails, true, "Video details loaded.");
+                }
+            }
 
             var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
             if (!details.IsSuccess || details.Details is null)
@@ -355,6 +376,84 @@ public sealed class YtDlpMediaResolver(
                 $"YoutubeAPI could not load video details: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }
     }
+    internal static YouTubeVideoDetails? TryParseVideoDetailsFromRawJson(string rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+
+            string? title = null;
+            if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+                title = titleProp.GetString();
+            else if (root.TryGetProperty("fulltitle", out var fullTitleProp) && fullTitleProp.ValueKind == JsonValueKind.String)
+                title = fullTitleProp.GetString();
+
+            if (string.IsNullOrWhiteSpace(title))
+                return null;
+
+            string? channel = null;
+            if (root.TryGetProperty("channel", out var channelProp) && channelProp.ValueKind == JsonValueKind.String)
+                channel = channelProp.GetString();
+            else if (root.TryGetProperty("uploader", out var uploaderProp) && uploaderProp.ValueKind == JsonValueKind.String)
+                channel = uploaderProp.GetString();
+            else if (root.TryGetProperty("uploader_id", out var uploaderIdProp) && uploaderIdProp.ValueKind == JsonValueKind.String)
+                channel = uploaderIdProp.GetString();
+
+            if (string.IsNullOrWhiteSpace(channel))
+                return null;
+
+            string? description = null;
+            if (root.TryGetProperty("description", out var descProp) && descProp.ValueKind == JsonValueKind.String)
+                description = descProp.GetString();
+
+            long? viewCount = null;
+            if (root.TryGetProperty("view_count", out var viewProp))
+            {
+                if (viewProp.ValueKind == JsonValueKind.Number && viewProp.TryGetInt64(out var vc))
+                    viewCount = vc;
+                else if (viewProp.ValueKind == JsonValueKind.String && long.TryParse(viewProp.GetString(), out var parsedVc))
+                    viewCount = parsedVc;
+            }
+
+            DateTimeOffset? publishedAt = null;
+            if (root.TryGetProperty("timestamp", out var tsProp) &&
+                tsProp.ValueKind == JsonValueKind.Number &&
+                tsProp.TryGetInt64(out var ts))
+            {
+                publishedAt = DateTimeOffset.FromUnixTimeSeconds(ts);
+            }
+            else if (root.TryGetProperty("release_timestamp", out var rtsProp) &&
+                     rtsProp.ValueKind == JsonValueKind.Number &&
+                     rtsProp.TryGetInt64(out var rts))
+            {
+                publishedAt = DateTimeOffset.FromUnixTimeSeconds(rts);
+            }
+            else if (root.TryGetProperty("upload_date", out var udProp) &&
+                     udProp.ValueKind == JsonValueKind.String &&
+                     udProp.GetString() is { Length: 8 } ud &&
+                     DateTime.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
+                         DateTimeStyles.AssumeUniversal, out var dt))
+            {
+                publishedAt = new DateTimeOffset(dt, TimeSpan.Zero);
+            }
+
+            return new YouTubeVideoDetails(
+                description,
+                viewCount,
+                publishedAt,
+                title,
+                channel);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
 
     private sealed record CachedVideoEntry(
         string RawJsonOutput,
