@@ -53,10 +53,6 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
     private static IntPtr _sStringEqual;
     private static IntPtr _sFree;
 
-    public byte[]? Load()
-    {
-        return LoadAsync().GetAwaiter().GetResult();
-    }
 
     public async Task<byte[]?> LoadAsync()
     {
@@ -74,10 +70,6 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
         }
     }
 
-    public void Save(byte[] secret)
-    {
-        SaveAsync(secret).GetAwaiter().GetResult();
-    }
 
     public async Task SaveAsync(byte[] secret)
     {
@@ -101,10 +93,6 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
         }
     }
 
-    public void Delete()
-    {
-        DeleteAsync().GetAwaiter().GetResult();
-    }
 
     public async Task DeleteAsync()
     {
@@ -204,9 +192,8 @@ internal sealed partial class LibSecretCookieStore : ICookieSecretStore
         try
         {
             attributes = CreateAttributes();
-            var cleared = SecretPasswordClearvSync(IntPtr.Zero, attributes, IntPtr.Zero, out error);
+            _ = SecretPasswordClearvSync(IntPtr.Zero, attributes, IntPtr.Zero, out error);
             ThrowIfError(error);
-            if (cleared == 0) throw new InvalidOperationException("libsecret failed to clear the secret.");
         }
         finally
         {

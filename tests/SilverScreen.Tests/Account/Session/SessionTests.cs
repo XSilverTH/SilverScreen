@@ -82,12 +82,11 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public void SecretServiceSessionIgnoresStoredCookiesWithoutAuthentication()
+    public async Task SecretServiceSessionIgnoresStoredCookiesWithoutAuthentication()
     {
         var store = new FakeCookieSecretStore();
-        store.Save(Encoding.UTF8.GetBytes(
+        await store.SaveAsync(Encoding.UTF8.GetBytes(
             "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tsession-only\n"));
-
         var service = new SecretServiceSessionService(store);
 
         Assert.True(service.IsAvailable);
@@ -530,25 +529,27 @@ public sealed class SessionTests
         public string? StoredContent => _stored is null ? null : Encoding.UTF8.GetString(_stored);
 
 
-        public byte[]? Load()
+        public Task<byte[]?> LoadAsync()
         {
             return FailLoad
-                ? throw new SessionPersistenceException()
-                : _stored?.ToArray();
+                ? Task.FromException<byte[]?>(new SessionPersistenceException())
+                : Task.FromResult(_stored?.ToArray());
         }
 
-        public void Save(byte[] secret)
+        public Task SaveAsync(byte[] secret)
         {
-            if (FailSave) throw new SessionPersistenceException();
+            if (FailSave) return Task.FromException(new SessionPersistenceException());
 
             _stored = [.. secret];
+            return Task.CompletedTask;
         }
 
-        public void Delete()
+        public Task DeleteAsync()
         {
-            if (FailDelete) throw new SessionPersistenceException();
+            if (FailDelete) return Task.FromException(new SessionPersistenceException());
 
             _stored = null;
+            return Task.CompletedTask;
         }
     }
     private sealed class ControllableCookieSecretStore : ICookieSecretStore
@@ -558,7 +559,6 @@ public sealed class SessionTests
 
         public ManualResetEventSlim LoadStarted { get; } = new();
 
-        public byte[]? Load() => throw new InvalidOperationException("Synchronous load was invoked.");
 
         public Task<byte[]?> LoadAsync()
         {
@@ -566,13 +566,9 @@ public sealed class SessionTests
             return _load.Task;
         }
 
-        public void Save(byte[] secret)
-        {
-        }
+        public Task SaveAsync(byte[] secret) => Task.CompletedTask;
 
-        public void Delete()
-        {
-        }
+        public Task DeleteAsync() => Task.CompletedTask;
 
         public void ReleaseLoad(byte[]? secret) => _load.TrySetResult(secret);
     }

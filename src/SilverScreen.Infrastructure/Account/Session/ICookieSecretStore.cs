@@ -2,50 +2,26 @@ namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
 ///     OS-keyring persistence for the manual-session cookie secret. Secrets are stored via
-///     the OS keyring (libsecret), never as plaintext config. Buffer discipline: <c>Save</c>
-///     zeroes its input before returning (including on failure); <c>Load</c> hands ownership
+///     the OS keyring (libsecret), never as plaintext config. Buffer discipline: <c>SaveAsync</c>
+///     zeroes its input before returning (including on failure); <c>LoadAsync</c> hands ownership
 ///     of the returned buffer to the caller, which MUST zero it after use.
 /// </summary>
 internal interface ICookieSecretStore
 {
     /// <summary>
-    ///     Loads the persisted secret. The caller owns the returned buffer and MUST zero it
+    ///     Asynchronously loads the persisted secret. The caller owns the returned buffer and MUST zero it
     ///     after use. Returns <c>null</c> when no secret is stored.
     /// </summary>
-    byte[]? Load();
+    Task<byte[]?> LoadAsync();
 
     /// <summary>
-    ///     Persists a copy of <paramref name="secret" />. The input buffer is zeroed before
+    ///     Asynchronously persists a copy of <paramref name="secret" />. The input buffer is zeroed before
     ///     return, including on failure.
     /// </summary>
-    void Save(byte[] secret);
-
-    /// <summary>
-    ///     Removes the persisted secret from the keyring.
-    /// </summary>
-    void Delete();
-
-    /// <summary>
-    ///     Asynchronously loads the persisted secret.
-    /// </summary>
-    Task<byte[]?> LoadAsync()
-    {
-        return Task.Run(Load);
-    }
-
-    /// <summary>
-    ///     Asynchronously persists the secret.
-    /// </summary>
-    Task SaveAsync(byte[] secret)
-    {
-        return Task.Run(() => Save(secret));
-    }
+    Task SaveAsync(byte[] secret);
 
     /// <summary>
     ///     Asynchronously removes the persisted secret from the keyring.
     /// </summary>
-    Task DeleteAsync()
-    {
-        return Task.Run(Delete);
-    }
+    Task DeleteAsync();
 }
