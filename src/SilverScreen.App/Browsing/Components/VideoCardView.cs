@@ -505,19 +505,7 @@ public partial class VideoCardView : ViewBase<Bin>
         return count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
     }
 
-    private static string FormatViewCount(long views)
-    {
-        return views switch
-        {
-            >= 1_000_000_000 => $"{views / 1_000_000_000.0:0.#}B views",
-            >= 1_000_000 => $"{views / 1_000_000.0:0.#}M views",
-            >= 1_000 => $"{views / 1_000.0:0.#}K views",
-            1 => "1 view",
-            _ => $"{views:N0} views"
-        };
-    }
-
-    private static string FormatCardTooltip(VideoSummary video, long? viewCount = null)
+    private static string FormatCardTooltip(VideoSummary video)
     {
         var publishedText = video.PublishedAt is { } publishedAt
             ? publishedAt.ToLocalTime().ToString("MMM d, yyyy")
@@ -525,30 +513,15 @@ public partial class VideoCardView : ViewBase<Bin>
                 ? uploadDate.ToString("MMM d, yyyy")
                 : null;
 
-        return FormatCardTooltip(video.Title, video.ChannelName, publishedText, viewCount);
+        return string.IsNullOrWhiteSpace(publishedText)
+            ? $"{video.Title}\n{video.ChannelName}"
+            : $"{video.Title}\n{video.ChannelName}\nPublished: {publishedText}";
     }
-
-    private static string FormatCardTooltip(string title, string channelName, string? publishedText,
-        long? viewCount = null)
+    private static string FormatTooltipMeta(string? publishedText)
     {
-        var metaLine = FormatTooltipMeta(publishedText, viewCount);
-
-        return string.IsNullOrWhiteSpace(metaLine)
-            ? $"{title}\n{channelName}"
-            : $"{title}\n{channelName}\n{metaLine}";
+        return string.IsNullOrWhiteSpace(publishedText) ? string.Empty : $"Published: {publishedText}";
     }
 
-    private static string FormatTooltipMeta(string? publishedText, long? viewCount = null)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(publishedText))
-            parts.Add($"Published: {publishedText}");
-
-        if (viewCount is { } count and >= 0)
-            parts.Add(FormatViewCount(count));
-
-        return string.Join(" • ", parts);
-    }
 
     protected override void Dispose(bool disposing)
     {
