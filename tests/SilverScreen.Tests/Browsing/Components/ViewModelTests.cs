@@ -52,8 +52,8 @@ public sealed class ViewModelTests
 
         Assert.Empty(viewModel.State.Videos);
         Assert.False(viewModel.HasMore);
-        Assert.False(viewModel.State.IsSuccess);
-        Assert.Contains("New query failed", viewModel.State.Summary);
+        Assert.True(viewModel.State.Status.ShowRetry);
+        Assert.Contains("New query failed", viewModel.Summary);
         await viewModel.LoadMoreAsync();
         Assert.Equal(2, service.Requests.Count);
     }
@@ -254,6 +254,22 @@ public sealed class ViewModelTests
         Assert.Equal(TimeSpan.FromMinutes(30), queue.TotalDuration);
     }
 
+    [Fact]
+    public void QueueServiceConcurrentAddAndIterationDoesNotThrow()
+    {
+        var queue = new QueueService();
+        var video = new VideoSummary("vid", "Title", "Channel", TimeSpan.FromMinutes(1), "", false);
+
+        Parallel.For(0, 100, i =>
+        {
+            queue.Add(video);
+            _ = queue.TotalDuration;
+            _ = queue.Items.Count;
+        });
+
+        Assert.Equal(100, queue.Items.Count);
+    }
+
 
     [Fact]
     public async Task SearchProjectsOnlyUniqueNonShortVideos()
@@ -290,7 +306,7 @@ public sealed class ViewModelTests
         await loadMore;
 
         Assert.Equal([first, next], viewModel.State.Videos);
-        Assert.False(viewModel.State.HasMore);
+        Assert.False(viewModel.HasMore);
     }
     [Fact]
     public async Task SearchFailure_SetsIsSuccessFalse()
@@ -302,8 +318,8 @@ public sealed class ViewModelTests
         service.Requests[0].Completion.SetResult(new SearchResultPage([], "Failed to load results.", false));
         await search;
 
-        Assert.False(viewModel.State.IsSuccess);
-        Assert.Equal("Failed to load results.", viewModel.State.Summary);
+        Assert.True(viewModel.State.Status.ShowRetry);
+        Assert.Equal("Failed to load results.", viewModel.Summary);
         Assert.Empty(viewModel.State.Videos);
     }
 
@@ -317,8 +333,8 @@ public sealed class ViewModelTests
         service.Requests[0].Completion.SetException(new InvalidOperationException("Network down"));
         await search;
 
-        Assert.False(viewModel.State.IsSuccess);
-        Assert.Equal("Search could not be completed.", viewModel.State.Summary);
+        Assert.True(viewModel.State.Status.ShowRetry);
+        Assert.Equal("Search could not be completed.", viewModel.Summary);
         Assert.Empty(viewModel.State.Videos);
     }
 

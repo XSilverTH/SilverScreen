@@ -9,17 +9,10 @@ using SilverScreen.Core.Player;
 
 namespace SilverScreen.Browsing.Search;
 
-public sealed record SearchViewState(
-    IReadOnlyList<VideoSummary> Videos,
-    string Summary,
-    bool IsLoading,
-    bool IsLoadingMore = false,
-    bool HasMore = false,
-    bool IsSuccess = true);
 public sealed record SearchNavigationState(string? Query, FeedEngineSnapshot Feed);
 
 
-public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
+public sealed class SearchViewModel : IVideoListSource
 {
     /// <summary>
     ///     Single generic status line for every pasted URL that is not a playable video or Shorts
@@ -61,31 +54,12 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             "Search",
             clearOnRefresh: true);
 
-        _engine.EngineStateChanged += OnEngineStateChanged;
     }
 
+    public bool HasMore => _engine.HasMore;
+    public string Summary => State.Status.Description ?? string.Empty;
+
     public Func<string, Task>? OpenChannelRequested { get; set; }
-
-    public SearchViewState State
-    {
-        get;
-        private set
-        {
-            field = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsLoading));
-            OnPropertyChanged(nameof(IsLoadingMore));
-            OnPropertyChanged(nameof(HasMore));
-            StateChanged?.Invoke(this, value);
-        }
-    } = new([], "Search results will appear here.", false);
-
-
-
-    public string Summary => State.Summary;
-    public bool IsLoading => State.IsLoading;
-    public bool IsLoadingMore => State.IsLoadingMore;
-    public bool HasMore => State.HasMore;
 
     public string? CurrentQuery
     {
@@ -105,7 +79,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         }
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Dispose()
     {
@@ -114,9 +87,9 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.Dispose();
     }
 
-    VideoListPresentationState IVideoListSource.State => _engine.State;
+    public VideoListPresentationState State => _engine.State;
 
-    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    public event EventHandler<VideoListPresentationState>? StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
@@ -161,7 +134,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         return parsed.Kind == YouTubeUrlKind.Channel;
     }
 
-    public event EventHandler<SearchViewState>? StateChanged;
 
     public void Reset()
     {
@@ -298,29 +270,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
             result.StatusMessage ?? (result.IsSuccess ? "Search complete." : "Search failed."));
     }
 
-    private void OnEngineStateChanged(object? sender, FeedEngineState state)
-    {
-        var query = CurrentQuery;
-        var summary = state.IsLoading
-            ? query != null ? $"Searching YouTube for “{query}”… " : "Searching YouTube…"
-            : state.IsLoadingMore
-                ? "Loading more results…"
-                : !state.IsSuccess || state.LastError != null
-                    ? state.IsLoadingMore
-                        ? "Search could not be completed."
-                        : state.StatusMessage ?? "Search could not be completed."
-                    : query is null
-                        ? "Search results will appear here."
-                        : state.StatusMessage ?? "Search complete.";
-
-        State = new SearchViewState(
-            state.Videos,
-            summary,
-            state.IsLoading,
-            state.IsLoadingMore,
-            state.HasMore,
-            state is { IsSuccess: true, LastError: null });
-    }
 
     /// <summary>
     ///     Surfaces the generic unsupported-link status on the search page itself (via the engine
@@ -332,7 +281,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         ThrowIfDisposed();
         CurrentQuery = null;
         _engine.Reset(statusMessage: UnsupportedUrlMessage);
-        State = new SearchViewState([], UnsupportedUrlMessage, false);
     }
 
     private async Task<string?> PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
@@ -359,10 +307,6 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
         }
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 
     private void ThrowIfDisposed()
     {
@@ -373,12 +317,20 @@ public sealed class SearchViewModel : INotifyPropertyChanged, IVideoListSource
     {
         if (!state.IsSuccess || state.LastError != null)
         {
-            var description = "YouTube couldn’t complete the search. Try again in a moment.";
+            var description = state.StatusMessage ?? "Search could not be completed.";
             return new VideoListStatus(
                 "Could not complete search",
                 description,
                 "network-error-symbolic",
                 true);
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.StatusMessage))
+        {
+            return new VideoListStatus(
+                "Search",
+                state.StatusMessage,
+                "system-search-symbolic");
         }
 
         const string emptyDescription = "Try different keywords or check spelling.";

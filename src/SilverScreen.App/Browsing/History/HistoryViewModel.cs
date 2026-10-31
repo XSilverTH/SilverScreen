@@ -9,20 +9,8 @@ using SilverScreen.Core.Common;
 
 namespace SilverScreen.Browsing.History;
 
-public sealed record HistoryViewState(
-    IReadOnlyList<VideoSummary> Videos,
-    string Summary,
-    bool IsLoading,
-    bool IsSuccess,
-    AuthenticatedHistoryStatus Status,
-    bool IsLoadingMore = false,
-    bool HasMore = false)
-{
-    public static HistoryViewState Empty { get; } = new([], string.Empty, false, true,
-        AuthenticatedHistoryStatus.Success);
-}
 
-public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
+public sealed class HistoryViewModel : IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<HistoryViewModel>();
     private readonly PagedFeedEngine _engine;
@@ -74,27 +62,14 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             defaultTitle: "History",
             clearOnRefresh: true);
 
-        _engine.EngineStateChanged += OnEngineStateChanged;
 
         if (sessionService != null)
             sessionService.SessionChanged += OnSessionChanged;
 
         if (!IsSessionActive())
-            State = GatedState();
+            _engine.Reset();
     }
 
-    public HistoryViewState State
-    {
-        get;
-        private set
-        {
-            field = value;
-            OnPropertyChanged();
-            StateChanged?.Invoke(this, value);
-        }
-    } = HistoryViewState.Empty;
-
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Dispose()
     {
@@ -105,9 +80,11 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.Dispose();
     }
 
-    VideoListPresentationState IVideoListSource.State => _engine.State;
+    public VideoListPresentationState State => _engine.State;
 
-    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
+    public bool HasMore => _engine.HasMore;
+
+    public event EventHandler<VideoListPresentationState>? StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
@@ -132,7 +109,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
         return !IsSessionActive() ? Task.CompletedTask : _engine.LoadMoreAsync(count);
     }
 
-    public event EventHandler<HistoryViewState>? StateChanged;
 
     public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
@@ -140,25 +116,6 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
         return State.Videos.Count == 0 && !State.IsLoading ? RefreshAsync(count) : Task.CompletedTask;
     }
 
-    private void OnEngineStateChanged(object? sender, FeedEngineState state)
-    {
-        var summary = state.IsLoading
-            ? "Loading watch history…"
-            : state.IsLoadingMore
-                ? "Loading more watch history…"
-                : !state.IsSuccess || state.LastError != null
-                    ? "Could not load watch history."
-                    : state.StatusMessage ?? string.Empty;
-
-        State = new HistoryViewState(
-            state.Videos,
-            summary,
-            state.IsLoading,
-            state is { IsSuccess: true, LastError: null },
-            GetHistoryStatus(state),
-            state.IsLoadingMore,
-            state.HasMore);
-    }
 
     private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state)
     {
@@ -172,17 +129,13 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
             return AuthenticatedHistoryStatus.TemporaryBackendFailure;
 
         if (state.IsLoading || state.IsLoadingMore)
-            return State.Status;
+            return AuthenticatedHistoryStatus.Success;
 
         return state.Videos.Count == 0
             ? AuthenticatedHistoryStatus.Empty
             : AuthenticatedHistoryStatus.Success;
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 
     private void OnSessionChanged(object? sender, EventArgs e)
     {
@@ -195,18 +148,8 @@ public sealed class HistoryViewModel : INotifyPropertyChanged, IVideoListSource
     private void GateSignedOut()
     {
         _engine.Reset();
-        State = GatedState();
     }
 
-    private static HistoryViewState GatedState()
-    {
-        return new HistoryViewState(
-            [],
-            SessionGate.HistorySignedOutMessage,
-            false,
-            false,
-            AuthenticatedHistoryStatus.AuthenticationRequired);
-    }
 
     private VideoListStatus WithSignInAction(
         VideoListStatus status,

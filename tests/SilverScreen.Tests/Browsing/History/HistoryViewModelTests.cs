@@ -24,7 +24,7 @@ public sealed class HistoryViewModelTests
 
         await viewModel.LoadAsync();
 
-        var status = ((IVideoListSource)viewModel).State.Status;
+        var status = viewModel.State.Status;
         Assert.False(status.ShowRetry);
         Assert.Equal("Sign in again", status.ActionLabel);
         Assert.DoesNotContain("private-token", status.Description);
@@ -52,7 +52,7 @@ public sealed class HistoryViewModelTests
 
         Assert.Equal(1, service.NextPageCallCount);
         Assert.Equal(["v1", "v2"], viewModel.State.Videos.Select(video => video.Id));
-        Assert.False(viewModel.State.HasMore);
+        Assert.False(viewModel.HasMore);
     }
     [Fact]
     public async Task LoadAsync_WhenFirstPageOnlyContainsShorts_PreservesContinuation()
@@ -73,7 +73,7 @@ public sealed class HistoryViewModelTests
         await viewModel.LoadAsync();
 
         Assert.Empty(viewModel.State.Videos);
-        Assert.True(viewModel.State.HasMore);
+        Assert.True(viewModel.HasMore);
         await viewModel.LoadMoreAsync();
         Assert.Equal(["long"], viewModel.State.Videos.Select(video => video.Id));
     }
