@@ -1,118 +1,67 @@
 # SilverScreen
-SilverScreen is a GTK 4 and Libadwaita desktop app for finding YouTube videos and playing them in its embedded libmpv player or an external MPV install.
 
-Search YouTube or paste a video link, then play it with your local MPV install. With a YouTube session captured through the isolated in-app Google sign-in or added manually, SilverScreen can also load your Home recommendations.
+A GTK 4 / Libadwaita YouTube client for Linux. It uses `yt-dlp` to grab streams and plays them through a built-in player (or an external `mpv` window if you prefer). 
 
-## What you need
+This is an early alpha. Expect bugs. I build and test this on CachyOS, so other distros might be hit or miss.
 
-- The .NET 10 SDK.
-- GTK 4, Libadwaita, WebKitGTK 6 (`libwebkitgtk-6.0`), and libsoup 3 native libraries compatible with the GirCore bindings used by the app.
-- The sibling [`YoutubeAPI`](lib/YoutubeAPI/) project (vendored git submodule) for typed YouTube metadata, search, feeds, comments, ratings, and account operations.
-- [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) on `PATH` for stream extraction. Releases pin the yt-dlp version currently shipped by Arch Linux; the app logs the detected yt-dlp and mpv versions at startup and warns if they are missing or older.
-- The `libsecret` shared library and an unlocked Freedesktop Secret Service provider, such as GNOME Keyring or KWallet configured with Secret Service support. `secret-tool` is optional for manual diagnostics and is not an application dependency.
-- [`mpv`](https://mpv.io/) on `PATH` for external playback (or a working system libmpv for the embedded player).
+It supports personalized feeds but you can also use it without an account. If you sign in, you get access to your Home feed, Subscriptions, and Watch History. if you don't you still can search videos, browse channels, or just paste links directly.  it'll store your session in your system keyring.
 
-Supported platform: x86-64 Arch Linux. ARM is unsupported; other distributions are untested. See `PACKAGING.md` and `THIRD-PARTY.md`, shipped alongside this release, for pinned dependency versions, build/packaging notes, and third-party attribution.
+It also has a basic queue, SponsorBlock support, comments, dislikes/likes (via RYD), and Discord Rich Presence.
 
-The app uses YoutubeAPI for YouTube operations and logs actionable warnings at startup when the configured media extractor, MPV/libmpv, or Secret Service dependencies are unreachable. Install the missing executable or keyring provider, unlock the keyring, and use **Preferences** to correct the media extractor or MPV path before retrying the related action.
+## Screenshots
 
-## Run it
+<table>
+  <thead>
+    <tr>
+      <th width="33.3%" align="center">Subscriptions</th>
+      <th width="33.3%" align="center">Player</th>
+      <th width="33.3%" align="center">Comments</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="screenshots/Subscriptions.webp"><img src="screenshots/Subscriptions.webp" alt="Subscriptions" /></a></td>
+      <td><a href="screenshots/Player.webp"><img src="screenshots/Player.webp" alt="Player" /></a></td>
+      <td><a href="screenshots/Comments.webp"><img src="screenshots/Comments.webp" alt="Comments" /></a></td>
+    </tr>
+  </tbody>
+</table>
 
-From the repository root:
+## Install
 
-```sh
-dotnet run --project src/SilverScreen.App/SilverScreen.App.csproj
-```
-
-## Basic usage
-
-1. Select the search button in the header.
-2. Enter a normal YouTube search or paste a supported YouTube video URL.
-3. Select a result to play it in MPV, or open its menu to add it to the queue.
-
-Text searches use YoutubeAPI and show non-Shorts video results. Pasting a regular YouTube video URL skips the search and opens that video directly.
-
-The queue is a small in-memory list and is never persisted. **Add to queue** appends a video to the end of the queue (middle-clicking a video card does the same); the queue popover lets you remove items, clear the list, or **Play all**, and playback auto-advances to the next queued video when auto-advance is enabled in **Preferences**.
-
-## Home recommendations
-
-Home is opt-in because it needs a YouTube session.
-
-1. Open the account button in the header.
-2. Choose **Sign in with Google** and complete sign-in in the isolated in-app window.
-3. SilverScreen captures the resulting YouTube cookies, closes the sign-in window, and validates the session automatically.
-4. Refresh Home.
-
-If embedded Google sign-in is unavailable, choose **Add manual session** instead and paste a browser-exported Netscape-format `cookies.txt` file. SilverScreen stores either session in the logged-in user's desktop Secret Service keyring and restores it on the next app run. The embedded window uses a fresh ephemeral WebKit session for every attempt; its browser storage is discarded after closing, and refreshing never clears the previous saved session unless a new capture succeeds. Cookie values are not shown after saving and no plaintext persistent app configuration is created. Clearing the session removes the keyring entry. When the media extractor or MPV needs the cookies, the app creates a short-lived 0600 cookie file in a 0700 directory and removes it when practical.
-
-### Troubleshooting a restored session
-
-“Secret Service Restored” confirms that SilverScreen read a saved session from the local keyring; it does **not** confirm that YouTube still accepts those credentials. Home profile loading and authenticated Subscriptions use the stored session, so a failure affecting both can indicate YouTube authentication rejection, a request failure, or an unexpected protocol response. SilverScreen keeps the saved session after a failed profile request; it does not automatically log out.
-
-Account-menu parsing failures include the HTTP status, actual client version, signing time, authentication-header presence, allowlisted cookie names sent, and bounded popup/header structure. YouTube's `responseContext.mainAppWebResponseContext.loggedOut=true` means the server treated that request as signed out, even if it returned HTTP 200 and the local keyring still contains a session. Missing flags and truncated traversal are reported explicitly rather than treated as proof of an authenticated or signed-out response.
-
-Older test-suite versions contained a session-validation test that constructed the production Secret Service store instead of its fake store, allowing test cookies to overwrite the saved YouTube session. The test now uses an injected in-memory store and a temporary directory, and checks that persistence reaches that store. If an older suite has overwritten your session, sign out and sign in once to replace those stored credentials; the isolation fix prevents subsequent test runs from replacing them again.
-
-On creation of an authenticated API client, Information-level logs include counts and expiry/session/expired status for a fixed allowlist of authentication-cookie names, whether each imported row was retained, and aggregate counts for other cookie names. Cookie values, domains, paths, account identifiers, and response bodies are not included in this added metadata. Comparing raw and retained counts can show that import filtered rows; an expired companion cookie is one possibility to investigate, not a confirmed cause. Profile logs distinguish authentication rejection, protocol, and request failures by exception class, include sanitized exception details, and record whether a session remains locally present. A successful profile fetch is logged at Information level without an account name.
-
-To investigate, reproduce the issue, collect the normal application logs from startup through the failed profile/Subscriptions action, and include the exception class/category and cookie expiry/import metadata. Share only those logs through a trusted support channel; **never post or attach a browser cookie export (`cookies.txt`) or cookie values**. An Adwaita/GTK warning is a separate UI diagnostic and is unrelated to YoutubeAPI's HTTP response parsing path.
-
-## Important details
-
-- Home requires a YouTube session.
-- Search results and Home recommendations exclude YouTube Shorts.
-- Supported pasted URLs are ordinary YouTube video links. Shorts, channel pages, playlists, and other unsupported YouTube URLs are rejected or reported as not implemented.
-- Subscriptions and History require an active YouTube session.
-- Only search and queue contents are not persisted; the YouTube session persists in the Secret Service keyring.
-
-## Project layout
-
-| Path | What it contains |
-| --- | --- |
-| `src/SilverScreen.App/ApplicationServices.cs` | Explicit application composition and disposal owner for the shared queue, session, playback, search, thumbnail, and Home services. |
-| `src/SilverScreen.App/Views/Shell` | The thin application-window shell: header chrome, navigation stack, status presentation, global menu, and popover placement. |
-| `src/SilverScreen.App/Views/Home`, `Views/Search` | Independently compiled Blueprint page roots and their page-owned rendering/cancellation. |
-| `src/SilverScreen.App/Views/Components`, `Views/Popovers` | Reusable video cards plus independent queue and account popover roots. |
-| `src/SilverScreen.App/ViewModels` | GTK-free shell, Home, search, queue, and account presentation state/adapters. |
-| `src/SilverScreen.App/Features` | Search, playback, queue, session, feed, and thumbnail behavior. |
-| `src/SilverScreen.Infrastructure/YouTube` | YoutubeAPI client/session integration and the isolated media-extraction adapter used by MPV. |
-| `tests/SilverScreen.Tests` | Unit tests for feature and presentation-state behavior. |
-
-
-## Feature wishlist
-Things I hope to implement (these are big features I'm leaving for when the project is in less of an unstable state):
-
-Commenting on videos (reading comments in the player sidebar already works; posting does not)
-Offline playback (downloading)
-Managing offline (or online) playback (organize videos and make playlists and stuff)
-
-I hope to make this a better and complete replacement for the YouTube website. not just an alternative
-
-
-## Development
-
-Clone with submodules (the vendored `lib/YoutubeAPI` and `lib/Hi3Helper.SharpDiscordRPC` checkouts are required to build):
+The install script pulls dependencies, clones the repo, and builds the app. On Arch it uses makepkg and pacman; on other distros it installs to /usr/local (or ~/.local if you pass --user).
 
 ```sh
-git clone --recurse-submodules <repo-url>
-# inside an existing checkout:
-git submodule update --init --recursive
+curl -fsSL https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/packaging/install.sh | sh
+
 ```
 
-Requires the .NET 10 SDK or newer.
-
-Build the solution:
+To uninstall:
 
 ```sh
-dotnet build SilverScreen.slnx
+curl -fsSL https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/packaging/install.sh | sh -s -- --uninstall
+
 ```
 
-Run the app tests:
+## Building manually
+
+you'll need .NET 10 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, libsecret, mpv, and yt-dlp.
 
 ```sh
-dotnet test tests/SilverScreen.Tests/SilverScreen.Tests.csproj
+git clone --recurse-submodules https://github.com/XSilverTH/SilverScreen.git
+cd SilverScreen
+
+dotnet publish src/SilverScreen.App/SilverScreen.App.csproj /p:DebugType=None /p:DebugSymbols=false -o publish
 ```
 
-`lib/YoutubeAPI` is a separate solution (`lib/YoutubeAPI/YoutubeAPI.slnx`) with its own test suite; run its tests from that directory rather than from this solution.
+## Todo
 
-This README covers the application and its usual local setup. The source is the current reference for implementation details and default timeouts.
+* Posting comments (reading them in the sidebar already works)
+
+* Downloading videos for offline playback
+
+* Youtube playlist support
+
+## License
+
+[GPLv3](LICENSE)
