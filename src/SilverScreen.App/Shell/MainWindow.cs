@@ -100,7 +100,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             browsing.Subscriptions,
             browsing.Channels,
             account.Session,
-            true);
+            true,
+            OpenWebLogin);
         _subscriptions = new SubscriptionsView(
             _subscriptionsViewModel,
             browsing.Thumbnails,
