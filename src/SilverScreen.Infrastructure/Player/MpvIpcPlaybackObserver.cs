@@ -68,43 +68,27 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
             await SubscribeAsync(writer, _cancellation.Token).ConfigureAwait(false);
 
-            using var pollingCancellation = CancellationTokenSource.CreateLinkedTokenSource(_cancellation.Token);
-            var polling = PollPropertiesAsync(writer, pollingCancellation.Token);
-            try
+            var state = PlaybackPresenceState.CreateInitial(DateTimeOffset.UtcNow);
+            var hasPause = false;
+            var hasTimeline = false;
+            var hasPlaylistPosition = false;
+            while (await reader.ReadLineAsync(_cancellation.Token).ConfigureAwait(false) is { } line)
             {
-                var state = PlaybackPresenceState.CreateInitial(DateTimeOffset.UtcNow);
-                var hasPause = false;
-                var hasTimeline = false;
-                var hasPlaylistPosition = false;
-                while (await reader.ReadLineAsync(_cancellation.Token).ConfigureAwait(false) is { } line)
+                if (!MpvIpcPlaybackProtocol.TryApply(line, ref state, out var property)) continue;
+                switch (property)
                 {
-                    if (!MpvIpcPlaybackProtocol.TryApply(line, ref state, out var property)) continue;
-                    switch (property)
-                    {
-                        case "pause":
-                            hasPause = true;
-                            break;
-                        case "time-pos" or "duration":
-                            hasTimeline = true;
-                            break;
-                        case "playlist-pos":
-                            hasPlaylistPosition = true;
-                            break;
-                    }
+                    case "pause":
+                        hasPause = true;
+                        break;
+                    case "time-pos" or "duration":
+                        hasTimeline = true;
+                        break;
+                    case "playlist-pos":
+                        hasPlaylistPosition = true;
+                        break;
+                }
 
-                    if (hasPause && hasTimeline && hasPlaylistPosition) _stateChanged(state);
-                }
-            }
-            finally
-            {
-                await pollingCancellation.CancelAsync().ConfigureAwait(false);
-                try
-                {
-                    await polling.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (pollingCancellation.IsCancellationRequested)
-                {
-                }
+                if (hasPause && hasTimeline && hasPlaylistPosition) _stateChanged(state);
             }
         }
         catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
@@ -150,15 +134,6 @@ internal sealed class MpvIpcPlaybackObserver : IDisposable
             var observation = $"{{\"command\":[\"observe_property\",{index},\"{property}\"]}}";
             await writer.WriteLineAsync(observation.AsMemory(), cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    private static async Task PollPropertiesAsync(StreamWriter writer, CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-            for (var index = 0; index < ObservedProperties.Length; index++)
-                await RequestPropertyAsync(writer, ObservedProperties[index], index, cancellationToken)
-                    .ConfigureAwait(false);
     }
 
     private static Task RequestPropertyAsync(StreamWriter writer, string property, int index,
