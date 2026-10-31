@@ -1,8 +1,8 @@
+using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Browsing.Home;
@@ -11,11 +11,11 @@ public sealed class HomeFeedCoordinatorTests
 {
     private const string FakeCookieContent = "test-manual-session";
 
-    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<HomeFeedState, bool> predicate,
+    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<VideoListPresentationState, bool> predicate,
         TimeSpan timeout)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        EventHandler<HomeFeedState> handler = (_, state) =>
+        EventHandler<VideoListPresentationState> handler = (_, state) =>
         {
             if (predicate(state)) tcs.TrySetResult();
         };
@@ -71,9 +71,9 @@ public sealed class HomeFeedCoordinatorTests
 
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
-        await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
+        await WaitForStateAsync(coordinator, s => !s.IsLoading && s.Videos.Count > 0, TimeSpan.FromSeconds(5));
 
-        Assert.True(coordinator.State.HasContinuation);
+        Assert.True(coordinator.HasMore);
         Assert.Equal(1, fakeFeed.LoadFirstPageCallCount);
         Assert.Equal(0, fakeFeed.LoadNextPageCallCount);
 
@@ -92,9 +92,9 @@ public sealed class HomeFeedCoordinatorTests
         await loadMoreTask1;
 
         // Assert - Unique IDs appended
-        Assert.Equal(3, coordinator.State.Videos.Length);
+        Assert.Equal(3, coordinator.State.Videos.Count);
         Assert.Equal(["1", "2", "3"], coordinator.State.Videos.Select(v => v.Id));
-        Assert.True(coordinator.State.HasContinuation);
+        Assert.True(coordinator.HasMore);
         Assert.Equal(1, fakeFeed.LoadNextPageCallCount);
 
         // Reset tracking TCS for nextPage call
@@ -115,9 +115,9 @@ public sealed class HomeFeedCoordinatorTests
         await loadMoreTask2;
 
         // Assert - End of continuation hides continuation
-        Assert.Equal(4, coordinator.State.Videos.Length);
+        Assert.Equal(4, coordinator.State.Videos.Count);
         Assert.Equal(["1", "2", "3", "4"], coordinator.State.Videos.Select(v => v.Id));
-        Assert.False(coordinator.State.HasContinuation);
+        Assert.False(coordinator.HasMore);
         Assert.Equal(2, fakeFeed.LoadNextPageCallCount);
 
         // Act - Load More page 4 when continuation token is null/empty
@@ -145,7 +145,7 @@ public sealed class HomeFeedCoordinatorTests
 
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
-        await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
+        await WaitForStateAsync(coordinator, s => !s.IsLoading && s.Videos.Count > 0, TimeSpan.FromSeconds(5));
 
         Assert.NotEmpty(coordinator.State.Videos);
 
@@ -164,9 +164,9 @@ public sealed class HomeFeedCoordinatorTests
         await refreshTask;
 
         // Assert
-        Assert.Equal(HomeFeedStateKind.AuthenticationRequired, coordinator.State.Kind);
         Assert.Empty(coordinator.State.Videos);
-        Assert.False(string.IsNullOrWhiteSpace(coordinator.State.Message));
+        Assert.Equal(SessionGate.SignInActionLabel, coordinator.State.Status.ActionLabel);
+        Assert.False(string.IsNullOrWhiteSpace(coordinator.State.Status.Description));
     }
     [Fact]
     public async Task RejectedSessionKeepsHomeOutOfEmptyStateAndOffersSignInAgain()
@@ -184,11 +184,10 @@ public sealed class HomeFeedCoordinatorTests
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed, () => signInCalled = true);
         await fakeFeed.FirstPageCalledTask;
         await WaitForStateAsync(coordinator,
-            state => state.Kind == HomeFeedStateKind.AuthenticationRequired,
+            state => state.Status.ActionLabel == "Sign in again",
             TimeSpan.FromSeconds(5));
 
-        var status = ((IVideoListSource)coordinator).State.Status;
-        Assert.Equal(HomeFeedStateKind.AuthenticationRequired, coordinator.State.Kind);
+        var status = coordinator.State.Status;
         Assert.DoesNotContain("private-token", status.Description);
         Assert.Equal("Sign in again", status.ActionLabel);
         Assert.NotNull(status.Action);
@@ -223,8 +222,8 @@ public sealed class HomeFeedCoordinatorTests
         Assert.True(cancellationToken.IsCancellationRequested);
 
         // Coordinator state must be SignedOut with empty videos.
-        Assert.Equal(HomeFeedStateKind.SignedOut, coordinator.State.Kind);
         Assert.Empty(coordinator.State.Videos);
+        Assert.Equal(SessionGate.HomeSignedOutMessage, coordinator.State.Status.Description);
     }
 
     [Fact]
@@ -257,7 +256,6 @@ public sealed class HomeFeedCoordinatorTests
         ));
         await refreshTask2;
 
-        Assert.Equal(HomeFeedStateKind.Ready, coordinator.State.Kind);
         Assert.Single(coordinator.State.Videos);
         Assert.Equal("request2_video", coordinator.State.Videos[0].Id);
 
@@ -272,7 +270,6 @@ public sealed class HomeFeedCoordinatorTests
         await Task.Yield();
 
         // Verify that the stale Request 1 result did not overwrite coordinator state.
-        Assert.Equal(HomeFeedStateKind.Ready, coordinator.State.Kind);
         Assert.Single(coordinator.State.Videos);
         Assert.Equal("request2_video", coordinator.State.Videos[0].Id);
     }
@@ -295,9 +292,9 @@ public sealed class HomeFeedCoordinatorTests
 
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
-        await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
+        await WaitForStateAsync(coordinator, s => !s.IsLoading && s.Videos.Count > 0, TimeSpan.FromSeconds(5));
 
-        Assert.Equal(2, coordinator.State.Videos.Length);
+        Assert.Equal(2, coordinator.State.Videos.Count);
 
         // Step 2: Refresh again, returning TemporaryBackendFailure
         fakeFeed.ResetCalledTasks();
@@ -314,13 +311,11 @@ public sealed class HomeFeedCoordinatorTests
         await refreshTask;
 
         // Assert
-        Assert.Equal(HomeFeedStateKind.SafeError, coordinator.State.Kind);
-        Assert.DoesNotContain("private-token", coordinator.State.Message);
-        var status = ((IVideoListSource)coordinator).State.Status;
+        var status = coordinator.State.Status;
         Assert.True(status.ShowRetry);
         Assert.DoesNotContain("private-token", status.Description);
         // Existing video cards must be preserved!
-        Assert.Equal(2, coordinator.State.Videos.Length);
+        Assert.Equal(2, coordinator.State.Videos.Count);
         Assert.Equal(["1", "2"], coordinator.State.Videos.Select(v => v.Id));
     }
     [Fact]
@@ -338,7 +333,7 @@ public sealed class HomeFeedCoordinatorTests
 
         using var coordinator = new HomeFeedCoordinator(sessionService, fakeFeed);
         await fakeFeed.FirstPageCalledTask;
-        await WaitForStateAsync(coordinator, s => s.Kind == HomeFeedStateKind.Ready, TimeSpan.FromSeconds(5));
+        await WaitForStateAsync(coordinator, s => !s.IsLoading && s.Videos.Count > 0, TimeSpan.FromSeconds(5));
 
         fakeFeed.ResetCalledTasks();
         var nextPageTcs = fakeFeed.ExpectLoadNextPage();

@@ -1,7 +1,7 @@
+using SilverScreen.Core.Browsing.Home;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Account.Session;
 
@@ -50,23 +50,27 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             defaultTitle: "Home",
             clearOnRefresh: false);
 
-        _engine.EngineStateChanged += OnEngineStateChanged;
         _sessionService.SessionChanged += OnSessionChanged;
 
         if (IsSessionActive())
         {
-            State = new HomeFeedState(HomeFeedStateKind.InitialLoading, [], IsLoading: true);
             RefreshAsync().FireAndForget(Logger);
         }
         else
         {
-            State = HomeFeedState.SignedOut;
             _engine.SetStatus(MapSignedOutStatus());
         }
     }
 
-    public HomeFeedState State { get; private set; }
+    public VideoListPresentationState State => _engine.State;
 
+    public bool HasMore => _engine.HasMore;
+
+    public event EventHandler<VideoListPresentationState>? StateChanged
+    {
+        add => _engine.StateChanged += value;
+        remove => _engine.StateChanged -= value;
+    }
     public void Dispose()
     {
         lock (_lock)
@@ -80,20 +84,12 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         }
     }
 
-    VideoListPresentationState IVideoListSource.State => _engine.State;
-
-    event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
-    {
-        add => _engine.StateChanged += value;
-        remove => _engine.StateChanged -= value;
-    }
 
     public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
         Logger.Information("HomeFeedCoordinator refreshing home feed");
         if (IsSessionActive()) return _engine.RefreshAsync(count);
         _engine.Reset(MapSignedOutStatus());
-        UpdateHomeFeedState(HomeFeedState.SignedOut);
         return Task.CompletedTask;
     }
 
@@ -116,36 +112,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     }
 
 
-    public event EventHandler<HomeFeedState>? StateChanged;
-
-    private void OnEngineStateChanged(object? sender, FeedEngineState engineState)
-    {
-        if (!IsSessionActive())
-        {
-            UpdateHomeFeedState(HomeFeedState.SignedOut);
-            return;
-        }
-        var (kind, message) = MapHomeFeedOutcome(engineState.AuthenticationStatus, engineState);
-        var newState = new HomeFeedState(
-            kind,
-            [.. engineState.Videos],
-            message,
-            engineState.IsLoading,
-            engineState.IsLoadingMore,
-            engineState.HasMore);
-
-        UpdateHomeFeedState(newState);
-    }
-
-    private void UpdateHomeFeedState(HomeFeedState newState)
-    {
-        lock (_lock)
-        {
-            State = newState;
-        }
-
-        StateChanged?.Invoke(this, newState);
-    }
 
     private bool IsSessionActive()
     {
@@ -161,7 +127,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         else
         {
             _engine.Reset(MapSignedOutStatus());
-            UpdateHomeFeedState(HomeFeedState.SignedOut);
         }
     }
 
@@ -190,7 +155,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             SessionGate.HomeSignedOutMessage,
             "avatar-default-symbolic",
             false,
-            openWebLogin is null ? null : SessionGate.SignInActionLabel,
+            SessionGate.SignInActionLabel,
             openWebLogin);
     }
 
@@ -201,11 +166,9 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             authenticationRejected ? SessionGate.SessionNoLongerValidMessage : SessionGate.HomeSignedOutMessage,
             authenticationRejected ? "dialog-password-symbolic" : "avatar-default-symbolic",
             false,
-            openWebLogin is null
-                ? null
-                : authenticationRejected
-                    ? SessionGate.SignInAgainActionLabel
-                    : SessionGate.SignInActionLabel,
+            authenticationRejected
+                ? SessionGate.SignInAgainActionLabel
+                : SessionGate.SignInActionLabel,
             openWebLogin);
     }
 
@@ -226,32 +189,4 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             "applications-internet-symbolic");
     }
 
-    /// <summary>
-    ///     Maps a feed-level outcome to the Home state kind plus its user-facing
-    ///     message: signed-out is decided by callers via <see cref="SessionGate.RequireSignedIn" />
-    ///     before reaching here; auth-invalid and generic errors stay distinct so
-    ///     the UI can offer Sign In vs Retry respectively; loading/ready states
-    ///     keep the engine's own message.
-    /// </summary>
-    internal static (HomeFeedStateKind Kind, string? Message) MapHomeFeedOutcome(
-        FeedAuthenticationStatus authenticationStatus,
-        FeedEngineState state)
-    {
-        if (authenticationStatus == FeedAuthenticationStatus.Rejected)
-            return (HomeFeedStateKind.AuthenticationRequired, SessionGate.SessionNoLongerValidMessage);
-
-        if (authenticationStatus == FeedAuthenticationStatus.Required)
-            return (HomeFeedStateKind.AuthenticationRequired, SessionGate.HomeSignedOutMessage);
-
-        if (state.LastError != null || !state.IsSuccess)
-            return (HomeFeedStateKind.SafeError, SessionGate.HomeLoadErrorMessage);
-
-        if (state is { IsLoading: true, Videos.Count: 0 })
-            return (HomeFeedStateKind.InitialLoading, state.StatusMessage);
-
-        if (state.Videos.Count == 0 && !state.IsLoading)
-            return (HomeFeedStateKind.Empty, SessionGate.HomeEmptyMessage);
-
-        return (HomeFeedStateKind.Ready, state.StatusMessage);
-    }
 }
