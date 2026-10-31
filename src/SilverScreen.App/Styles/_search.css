@@ -74,7 +74,3 @@
     color: @popover_fg_color;
 }
 
-/* Dedicated Search View Styles */
-.search-view {
-    background-color: @window_bg_color;
-}

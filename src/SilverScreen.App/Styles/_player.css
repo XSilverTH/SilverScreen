@@ -131,8 +131,7 @@ button.player-queue-toggle.active:hover {
 
 /* Disabled state */
 button.player-overlay-button:disabled,
-menubutton.player-overlay-button > button:disabled,
-button.player-reaction-button:disabled {
+menubutton.player-overlay-button > button:disabled {
     color: alpha(#ffffff, 0.40);
 }
 
@@ -432,10 +431,6 @@ button.player-info-cue-button:focus-visible .player-info-cue-icon,
 }
 
 /* Right-Edge Prompt Buttons (SponsorBlock & Resume) */
-.player-prompt-stack {
-    margin-right: 0;
-    margin-bottom: 24px;
-}
 
 .player-edge-prompt-button {
     background-color: alpha(#000000, 0.76);
