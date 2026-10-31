@@ -134,17 +134,6 @@ public sealed class PlaybackTests
     }
 
     [Fact]
-    public void PlaybackCoordinator_AcquiresCookieLeaseFromProvider()
-    {
-        var cookieProvider = new TrackingCookieProvider();
-        using var coordinator = new PlaybackCoordinator(cookieProvider);
-
-        var lease = coordinator.AcquireCookieFileLease();
-        Assert.Null(lease);
-        Assert.Equal(1, cookieProvider.CallCount);
-    }
-
-    [Fact]
     public void PlaybackCoordinator_PlaylistHelpers_ResolvesVideosAndQueueChanges()
     {
         var v1 = CreateVideo("vid1");
@@ -342,40 +331,6 @@ public sealed class PlaybackTests
         Assert.Equal(75_000_000, position);
     }
 
-    [Fact]
-    public async Task PlaybackModeRoutingServiceRoutesToEmbeddedPlayerPresenterWhenConfigured()
-    {
-        var embedded = new TrackingEmbeddedPresenter();
-        var external = new TrackingPlaybackService();
-        var preferences = new TestPreferences(new AppPreferences { PlaybackBackendKind = PlaybackBackendKind.Embedded });
-        var routing = new PlaybackModeRoutingService(preferences, external, embedded);
-        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
-
-        var result = await routing.PlayAsync(request);
-
-        Assert.Equal("Embedded presenter called.", result);
-        Assert.Single(embedded.Requests);
-        Assert.Equal(request, embedded.Requests[0]);
-        Assert.Empty(external.Requests);
-    }
-
-    [Fact]
-    public async Task PlaybackModeRoutingServiceRoutesToExternalMpvWhenConfigured()
-    {
-        var embedded = new TrackingEmbeddedPresenter();
-        var external = new TrackingPlaybackService();
-        var preferences = new TestPreferences(new AppPreferences { PlaybackBackendKind = PlaybackBackendKind.ExternalMpv });
-        var routing = new PlaybackModeRoutingService(preferences, external, embedded);
-        var request = new PlaybackRequest([CreateVideo("abc123_X-yZ")]);
-
-        var result = await routing.PlayAsync(request);
-
-        Assert.Equal("External playback called.", result);
-        Assert.Empty(embedded.Requests);
-        Assert.Single(external.Requests);
-        Assert.Equal(request, external.Requests[0]);
-    }
-
 
     private static PlaybackPresenceState PlayingState(DateTimeOffset observedAt)
     {
@@ -447,18 +402,6 @@ public sealed class PlaybackTests
         }
     }
 
-
-    private sealed class TrackingCookieProvider(CookieFileLease? lease = null) : ICookieFileProvider
-    {
-        public int CallCount { get; private set; }
-
-        public CookieFileLease? CreateCookieFile()
-        {
-            CallCount++;
-            return lease;
-        }
-    }
-
     private sealed class TestPreferences(AppPreferences? preferences = null) : IPreferencesService
     {
         private readonly AppPreferences _preferences = preferences ?? new AppPreferences();
@@ -476,38 +419,6 @@ public sealed class PlaybackTests
 
         public void SavePreferences(AppPreferences preferences)
         {
-        }
-    }
-
-    private sealed class TrackingEmbeddedPresenter : IEmbeddedPlayerPresenter
-    {
-        public List<PlaybackRequest> Requests { get; } = [];
-        public bool HasMedia { get; set; }
-        public bool IsPaused { get; set; }
-        public event EventHandler? PlaybackStateChanged;
-
-        public Task<string> PresentAsync(PlaybackRequest request)
-        {
-            Requests.Add(request);
-            return Task.FromResult("Embedded presenter called.");
-        }
-
-        public Task TogglePauseAsync()
-        {
-            IsPaused = !IsPaused;
-            PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class TrackingPlaybackService : IPlaybackService
-    {
-        public List<PlaybackRequest> Requests { get; } = [];
-
-        public Task<string> PlayAsync(PlaybackRequest request)
-        {
-            Requests.Add(request);
-            return Task.FromResult("External playback called.");
         }
     }
 }

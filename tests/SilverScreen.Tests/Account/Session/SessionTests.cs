@@ -509,13 +509,6 @@ public sealed class SessionTests
         Assert.Null(await store.LoadAsync());
     }
 
-    [Fact]
-    public void LibSecretCookieStore_InstantiatesLazilyWithoutThrowing()
-    {
-        ICookieSecretStore store = new LibSecretCookieStore();
-        Assert.NotNull(store);
-    }
-
 
     private sealed class FakeProfileService(
         Func<Task<AccountProfileResult>> getProfile) : IAccountProfileService

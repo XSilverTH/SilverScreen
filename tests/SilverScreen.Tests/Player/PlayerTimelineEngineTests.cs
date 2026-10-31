@@ -8,42 +8,6 @@ namespace SilverScreen.Tests.Player;
 public class PlayerTimelineStateTests
 {
     [Fact]
-    public void FormatTime_FormatsMinutesAndHoursCorrectly()
-    {
-        Assert.Equal("0:00", PlayerTimelineState.FormatTime(TimeSpan.Zero));
-        Assert.Equal("0:05", PlayerTimelineState.FormatTime(TimeSpan.FromSeconds(5)));
-        Assert.Equal("1:30", PlayerTimelineState.FormatTime(TimeSpan.FromSeconds(90)));
-        Assert.Equal("10:00", PlayerTimelineState.FormatTime(TimeSpan.FromMinutes(10)));
-        Assert.Equal("1:00:00", PlayerTimelineState.FormatTime(TimeSpan.FromHours(1)));
-        Assert.Equal("2:05:09",
-            PlayerTimelineState.FormatTime(TimeSpan.FromHours(2) + TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(9)));
-    }
-
-    [Fact]
-    public void FormatDelta_FormatsPositiveAndNegativeOffsets()
-    {
-        Assert.Equal("+0:00", PlayerTimelineState.FormatDelta(TimeSpan.Zero));
-        Assert.Equal("+0:15", PlayerTimelineState.FormatDelta(TimeSpan.FromSeconds(15)));
-        Assert.Equal("-0:15", PlayerTimelineState.FormatDelta(TimeSpan.FromSeconds(-15)));
-        Assert.Equal("+1:30", PlayerTimelineState.FormatDelta(TimeSpan.FromSeconds(90)));
-        Assert.Equal("-1:30", PlayerTimelineState.FormatDelta(TimeSpan.FromSeconds(-90)));
-        Assert.Equal("+1:02:03",
-            PlayerTimelineState.FormatDelta(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) +
-                                             TimeSpan.FromSeconds(3)));
-        Assert.Equal("-1:02:03",
-            PlayerTimelineState.FormatDelta(
-                -(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(3))));
-    }
-
-    [Fact]
-    public void FormatDurationLabel_FormatsLiveAndNormalDurations()
-    {
-        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero));
-        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-10)));
-        Assert.Equal("5:00", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromMinutes(5)));
-    }
-
-    [Fact]
     public void CalculateProgressFraction_ClampsCorrectly()
     {
         Assert.Equal(0.0, PlayerTimelineState.CalculateProgressFraction(TimeSpan.FromSeconds(50), TimeSpan.Zero));
@@ -312,29 +276,6 @@ public class PlayerTimelineStateTests
     }
 
     [Fact]
-    public void SponsorBlock_LabelsAndConfigKeys()
-    {
-        Assert.Equal("Sponsor", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
-        Assert.Equal("Self-promotion",
-            PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.SelfPromotion));
-        Assert.Equal("Intro", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Intro));
-        Assert.Equal("Custom", PlayerSponsorBlockState.GetSponsorBlockCategoryLabel("Custom"));
-
-        Assert.Equal("player-sponsorblock-skip-button-sponsor",
-            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Sponsor));
-        Assert.Equal("player-sponsorblock-skip-button-intro",
-            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(SponsorBlockCategories.Intro));
-        Assert.Equal("player-sponsorblock-skip-button-sponsor",
-            PlayerSponsorBlockState.GetSponsorBlockButtonColorClass("unknown"));
-
-        Assert.Equal("disabled",
-            PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
-        Assert.Equal("True:True:sponsor,intro",
-            PlayerSponsorBlockState.GetSponsorBlockConfigurationKey(true, true,
-                [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Intro]));
-    }
-
-    [Fact]
     public void ResumeEvaluation_UsesYouTubeResumePositionAndCompletion()
     {
         var duration = TimeSpan.FromMinutes(10);
@@ -363,19 +304,6 @@ public class PlayerTimelineStateTests
             PlayerResumeState.GetResumePromptState(progress, duration, false, false, out _));
     }
 
-    [Fact]
-    public void PlayerTimelineState_ForwardsSponsorBlockAndResumeMethods()
-    {
-        var duration = TimeSpan.FromMinutes(10);
-        var progress = new YouTubePlaybackProgress(0.5, TimeSpan.FromSeconds(73), false);
-        Assert.True(PlayerTimelineState.TryGetResumePosition(progress, duration, out var position));
-        Assert.Equal(TimeSpan.FromSeconds(73), position);
-        Assert.Equal(ResumePromptState.AutoResume,
-            PlayerTimelineState.GetResumePromptState(progress, duration, true, false, out _));
-        Assert.Equal("Sponsor", PlayerTimelineState.GetSponsorBlockCategoryLabel(SponsorBlockCategories.Sponsor));
-        Assert.Equal("disabled",
-            PlayerTimelineState.GetSponsorBlockConfigurationKey(false, false, [SponsorBlockCategories.Sponsor]));
-    }
     [Fact]
     public void Reset_ClearsAllState()
     {

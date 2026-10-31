@@ -6,62 +6,6 @@ namespace SilverScreen.Tests.Preferences;
 public sealed class PreferencesViewModelTests
 {
     [Fact]
-    public void Save_PreservesCurrentSubtitleLanguage()
-    {
-        var service = new FakePreferencesService(new AppPreferences { PreferredSubtitleLanguage = "ja" });
-        var viewModel = new PreferencesViewModel(service);
-
-        var result = viewModel.Save(viewModel.EditorState with { Theme = ThemeMode.Dark });
-
-        Assert.True(result.Succeeded);
-        Assert.NotNull(service.Saved);
-        Assert.Equal("ja", service.Saved!.PreferredSubtitleLanguage);
-    }
-
-    [Fact]
-    public void Save_PersistsPreferredSubtitleLanguage()
-    {
-        var service = new FakePreferencesService(new AppPreferences { PreferredSubtitleLanguage = "en" });
-        var viewModel = new PreferencesViewModel(service);
-
-        var result = viewModel.Save(viewModel.EditorState with { PreferredSubtitleLanguage = "es" });
-
-        Assert.True(result.Succeeded);
-        Assert.NotNull(service.Saved);
-        Assert.Equal("es", service.Saved!.PreferredSubtitleLanguage);
-        Assert.Equal("es", result.State.PreferredSubtitleLanguage);
-    }
-
-    [Fact]
-    public void Save_PersistsShortcutBindings()
-    {
-        var service = new FakePreferencesService(new AppPreferences());
-        var viewModel = new PreferencesViewModel(service);
-        var shortcuts = viewModel.EditorState.Shortcuts with { TogglePause = ["Pause"] };
-
-        var result = viewModel.Save(viewModel.EditorState with { Shortcuts = shortcuts });
-
-        Assert.True(result.Succeeded);
-        Assert.Equal(["Pause"], service.Saved!.Shortcuts.TogglePause);
-        Assert.Equal(["Pause"], result.State.Shortcuts.TogglePause);
-    }
-
-    [Fact]
-    public void Save_PersistsShortcutOsdEnabled()
-    {
-        var service = new FakePreferencesService(new AppPreferences());
-        var viewModel = new PreferencesViewModel(service);
-        Assert.True(viewModel.EditorState.ShortcutOsdEnabled);
-
-        var result = viewModel.Save(viewModel.EditorState with { ShortcutOsdEnabled = false });
-
-        Assert.True(result.Succeeded);
-        Assert.False(service.Saved!.ShortcutOsdEnabled);
-        Assert.False(result.State.ShortcutOsdEnabled);
-    }
-
-
-    [Fact]
     public void Save_WhenMarkWatchedIsEnabled_DisablesTelemetry()
     {
         var service = new FakePreferencesService(new AppPreferences

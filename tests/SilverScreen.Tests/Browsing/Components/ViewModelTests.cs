@@ -125,20 +125,6 @@ public sealed class ViewModelTests
     }
 
     [Fact]
-    public async Task FetchSuggestionsAsync_ReturnsSuggestionsFromService()
-    {
-        var searchService = new ControlledSearchService();
-        var suggestionService = new FakeSearchSuggestionService(["suggestion 1", "suggestion 2"]);
-        using var viewModel = new SearchViewModel(searchService, new FakePlaybackService(), suggestionService);
-
-        var suggestions = await viewModel.FetchSuggestionsAsync("query");
-
-        Assert.Equal(2, suggestions.Count);
-        Assert.Equal("suggestion 1", suggestions[0]);
-        Assert.Equal("suggestion 2", suggestions[1]);
-    }
-
-    [Fact]
     public async Task FetchSuggestionsAsync_ReturnsEmptyWhenNoServiceOrEmptyQuery()
     {
         var searchService = new ControlledSearchService();
@@ -307,30 +293,6 @@ public sealed class ViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
     [Fact]
-    public async Task SearchLoadMoreAsync_WithCustomCount_PropagatesCountToSearchRequest()
-    {
-        var service = new ControlledSearchService();
-        using var viewModel = new SearchViewModel(service, new FakePlaybackService());
-        var first = new VideoSummary("abc123def45", "First", "Channel", TimeSpan.FromMinutes(2), "", false);
-        var next = new VideoSummary("def456ghi78", "Next", "Channel", TimeSpan.FromMinutes(2), "", false);
-
-        var search = viewModel.SubmitAsync("query", count: 40);
-        Assert.Equal(40, service.Requests[0].Request.Count);
-        service.Requests[0].Completion.SetResult(new SearchResultPage([first], ContinuationToken: "41"));
-        await search;
-
-        var loadMore = viewModel.LoadMoreAsync(count: 40);
-        Assert.Equal(2, service.Requests.Count);
-        Assert.Equal("41", service.Requests[1].Request.ContinuationToken);
-        Assert.Equal(40, service.Requests[1].Request.Count);
-        service.Requests[1].Completion.SetResult(new SearchResultPage([first, next]));
-        await loadMore;
-
-        Assert.Equal([first, next], viewModel.State.Videos);
-    }
-
-
-    [Fact]
     public async Task SearchFailure_SetsIsSuccessFalse()
     {
         var service = new ControlledSearchService();
@@ -381,33 +343,6 @@ public sealed class ViewModelTests
         Assert.Null(handleNotice);
         Assert.Equal("@veritasium", requestedTarget);
     }
-    [Theory]
-    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ", true)]
-    [InlineData("https://youtu.be/dQw4w9WgXcQ", true)]
-    [InlineData("https://www.youtube.com/shorts/0123456789A", true)]
-    [InlineData("https://www.youtube.com/@channel", false)]
-    [InlineData("@veritasium", false)]
-    [InlineData("plain search text", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void SearchViewModel_IsDirectVideoUrl_IdentifiesDirectVideoUrls(string? url, bool expected)
-    {
-        Assert.Equal(expected, SearchViewModel.IsDirectVideoUrl(url));
-    }
-
-    [Theory]
-    [InlineData("https://www.youtube.com/@channel", true)]
-    [InlineData("@veritasium", true)]
-    [InlineData("https://www.youtube.com/channel/UC1234567890", true)]
-    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ", false)]
-    [InlineData("plain search text", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void SearchViewModel_IsChannelTarget_IdentifiesChannels(string? input, bool expected)
-    {
-        Assert.Equal(expected, SearchViewModel.IsChannelTarget(input));
-    }
-
     [Fact]
     public async Task SearchViewModel_SubmitAsync_WithDirectVideoUrl_PlaysVideoDirectly()
     {

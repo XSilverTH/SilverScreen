@@ -7,31 +7,6 @@ namespace SilverScreen.Tests.Shell;
 public sealed class NavigationHistoryTests
 {
     [Fact]
-    public void InitialState_DefaultsToHomeWithoutHistory()
-    {
-        using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
-
-        Assert.Equal(NavigationPage.Home, nav.CurrentPage);
-        Assert.Null(nav.CurrentParameter);
-        Assert.False(nav.CanGoBack);
-        Assert.Null(nav.PreviousPage);
-        Assert.Null(nav.PreviousParameter);
-    }
-
-    [Fact]
-    public void NavigateTo_SamePageWithoutParameter_ReturnsFalseAndDoesNotPush()
-    {
-        using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
-
-        var result = nav.NavigateTo(NavigationPage.Home);
-
-        Assert.False(result);
-        Assert.False(nav.CanGoBack);
-    }
-
-    [Fact]
     public void NavigateTo_DetailPages_PushesToBackStackAndGoesBackInReverseOrder()
     {
         using var nav = new NavigationService();

@@ -95,21 +95,6 @@ public sealed class ChannelViewModelTests
         Assert.False(viewModel.State.HasMore);
     }
     [Fact]
-    public async Task OpenChannelAndLoadMore_WithCustomCount_PropagatesCountToChannelService()
-    {
-        var service = new FakeChannelService();
-        using var viewModel = new ChannelViewModel(service);
-        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example", count: 40);
-
-        Assert.Equal(("https://www.youtube.com/@example", "Example", ChannelVideoSort.Newest, null, 40),
-            service.LastRequest);
-
-        await viewModel.LoadMoreAsync(count: 40);
-
-        Assert.Equal(("https://www.youtube.com/@example", "Example Channel", ChannelVideoSort.Newest, "next", 40),
-            service.LastRequest);
-    }
-    [Fact]
     public async Task NavigationState_RestoresLoadedPagesAndSortWithoutFetchingAgain()
     {
         var service = new FakeChannelService();

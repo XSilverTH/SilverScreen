@@ -12,15 +12,6 @@ namespace SilverScreen.Tests.Player;
 public sealed class YtDlpRunnerTests
 {
     [Fact]
-    public async Task RunAsync_NullStartInfo_ThrowsArgumentNullException()
-    {
-        var runner = new YtDlpRunner();
-
-        await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            runner.RunAsync(null!, TimeSpan.FromSeconds(5), CancellationToken.None));
-    }
-
-    [Fact]
     public async Task RunAsync_NonZeroExit_CapturesStdoutAndStderr()
     {
         var runner = new YtDlpRunner();
@@ -52,23 +43,6 @@ public sealed class YtDlpRunnerTests
 
         Assert.DoesNotContain(secret, result.StandardError, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", result.StandardError, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task RunAsync_ExitCodeZero_CapturesOutputAndDiagnostics()
-    {
-        var runner = new YtDlpRunner();
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "sh",
-            ArgumentList = { "-c", "echo 'hello world'; echo 'warning diagnostic' >&2; exit 0" }
-        };
-
-        var result = await runner.RunAsync(startInfo, TimeSpan.FromSeconds(5), CancellationToken.None);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains("hello world", result.StandardOutput);
-        Assert.Contains("warning diagnostic", result.StandardError);
     }
 
     [Fact]

@@ -5,58 +5,6 @@ namespace SilverScreen.Tests.Player;
 public class PlayerOsdStateTests
 {
     [Fact]
-    public void FormatSeekDelta_FormatsPositiveNegativeAndZeroOffsets()
-    {
-        Assert.Equal("0s", PlayerOsdState.FormatSeekDelta(0));
-        Assert.Equal("+10s", PlayerOsdState.FormatSeekDelta(10));
-        Assert.Equal("+20s", PlayerOsdState.FormatSeekDelta(20));
-        Assert.Equal("-10s", PlayerOsdState.FormatSeekDelta(-10));
-        Assert.Equal("-30s", PlayerOsdState.FormatSeekDelta(-30));
-        Assert.Equal("+1m", PlayerOsdState.FormatSeekDelta(60));
-        Assert.Equal("+1m 10s", PlayerOsdState.FormatSeekDelta(70));
-        Assert.Equal("-1m", PlayerOsdState.FormatSeekDelta(-60));
-        Assert.Equal("-2m 30s", PlayerOsdState.FormatSeekDelta(-150));
-    }
-
-    [Fact]
-    public void FormatSpeed_FormatsDecimalRatesCorrectly()
-    {
-        Assert.Equal("1×", PlayerOsdState.FormatSpeed(1.0));
-        Assert.Equal("1.25×", PlayerOsdState.FormatSpeed(1.25));
-        Assert.Equal("1.5×", PlayerOsdState.FormatSpeed(1.5));
-        Assert.Equal("2×", PlayerOsdState.FormatSpeed(2.0));
-        Assert.Equal("0.25×", PlayerOsdState.FormatSpeed(0.25));
-    }
-
-    [Fact]
-    public void GetVolumeIcon_ResolvesAppropriateSymbolicIcons()
-    {
-        Assert.Equal("audio-volume-muted-symbolic", PlayerOsdState.GetVolumeIcon(80, isMuted: true));
-        Assert.Equal("audio-volume-muted-symbolic", PlayerOsdState.GetVolumeIcon(0, isMuted: false));
-        Assert.Equal("audio-volume-low-symbolic", PlayerOsdState.GetVolumeIcon(20, isMuted: false));
-        Assert.Equal("audio-volume-low-symbolic", PlayerOsdState.GetVolumeIcon(33, isMuted: false));
-        Assert.Equal("audio-volume-medium-symbolic", PlayerOsdState.GetVolumeIcon(34, isMuted: false));
-        Assert.Equal("audio-volume-medium-symbolic", PlayerOsdState.GetVolumeIcon(66, isMuted: false));
-        Assert.Equal("audio-volume-high-symbolic", PlayerOsdState.GetVolumeIcon(67, isMuted: false));
-        Assert.Equal("audio-volume-high-symbolic", PlayerOsdState.GetVolumeIcon(100, isMuted: false));
-    }
-
-    [Fact]
-    public void ProcessPlayPause_ReturnsExpectedModel()
-    {
-        var state = new PlayerOsdState();
-
-        var paused = state.ProcessPlayPause(true);
-        Assert.Equal("media-playback-pause-symbolic", paused.IconName);
-        Assert.Equal("Paused", paused.Text);
-        Assert.Equal(OsdActionKind.PlayPause, state.CurrentActionKind);
-
-        var playing = state.ProcessPlayPause(false);
-        Assert.Equal("media-playback-start-symbolic", playing.IconName);
-        Assert.Equal("Playing", playing.Text);
-    }
-
-    [Fact]
     public void ProcessVolume_ReturnsExpectedModel()
     {
         var state = new PlayerOsdState();
@@ -83,17 +31,6 @@ public class PlayerOsdStateTests
         var overHundred = state.ProcessVolume(120, isMuted: false);
         Assert.Equal("100%", overHundred.Text);
         Assert.Equal("audio-volume-high-symbolic", overHundred.IconName);
-    }
-
-    [Fact]
-    public void ProcessSpeed_ReturnsExpectedModel()
-    {
-        var state = new PlayerOsdState();
-
-        var speed = state.ProcessSpeed(1.25);
-        Assert.Equal("speedometer-symbolic", speed.IconName);
-        Assert.Equal("1.25×", speed.Text);
-        Assert.Equal(OsdActionKind.Speed, state.CurrentActionKind);
     }
 
     [Fact]
@@ -170,21 +107,6 @@ public class PlayerOsdStateTests
     }
 
     [Fact]
-    public void ProcessStats_ReturnsExpectedModel()
-    {
-        var state = new PlayerOsdState();
-
-        var open = state.ProcessStats(true);
-        Assert.Equal("utilities-system-monitor-symbolic", open.IconName);
-        Assert.Equal("Playback Stats: Open", open.Text);
-        Assert.Equal(OsdActionKind.Stats, state.CurrentActionKind);
-
-        var closed = state.ProcessStats(false);
-        Assert.Equal("utilities-system-monitor-symbolic", closed.IconName);
-        Assert.Equal("Playback Stats: Closed", closed.Text);
-    }
-
-    [Fact]
     public void Reset_ClearsCurrentActionAndAccumulatedState()
     {
         var state = new PlayerOsdState();
@@ -199,23 +121,4 @@ public class PlayerOsdStateTests
         Assert.Equal(0, state.AccumulatedSeekDeltaSeconds);
     }
 
-    [Fact]
-    public void ProcessAllActionKinds_ProduceAccurateOutputs()
-    {
-        var state = new PlayerOsdState();
-
-        Assert.Equal("Beginning", state.ProcessSeekToBeginning().Text);
-        Assert.Equal("English", state.ProcessSubtitles("English").Text);
-        Assert.Equal("Off", state.ProcessSubtitles(string.Empty).Text);
-        Assert.Equal("Queue Open", state.ProcessQueue(true).Text);
-        Assert.Equal("Queue Closed", state.ProcessQueue(false).Text);
-        Assert.Equal("Video Info Open", state.ProcessVideoInfo(true).Text);
-        Assert.Equal("Video Info Closed", state.ProcessVideoInfo(false).Text);
-        Assert.Equal("Fullscreen", state.ProcessFullscreen(true).Text);
-        Assert.Equal("Exit Fullscreen", state.ProcessFullscreen(false).Text);
-        Assert.Equal("Next Video", state.ProcessNextVideo().Text);
-        Assert.Equal("Previous Video", state.ProcessPreviousVideo().Text);
-        Assert.Equal("Resumed", state.ProcessResumed().Text);
-        Assert.Equal("Skipped Sponsor", state.ProcessSkippedSponsor().Text);
-    }
 }

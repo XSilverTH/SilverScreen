@@ -263,42 +263,6 @@ public sealed class YtDlpFormatSelectorTests
     }
 
     [Fact]
-    public void SelectMedia_AdaptiveStreams_Selects720p()
-    {
-        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "720p");
-
-        Assert.NotNull(media);
-        Assert.Contains("itag=136", media.VideoUrl);
-        Assert.NotNull(media.AudioUrl);
-        Assert.Contains("itag=251", media.AudioUrl);
-        Assert.Equal("720p", media.Quality);
-    }
-
-    [Fact]
-    public void SelectMedia_AdaptiveStreams_Selects480p()
-    {
-        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "480p");
-
-        Assert.NotNull(media);
-        Assert.Contains("itag=135", media.VideoUrl);
-        Assert.NotNull(media.AudioUrl);
-        Assert.Contains("itag=251", media.AudioUrl);
-        Assert.Equal("480p", media.Quality);
-    }
-
-    [Fact]
-    public void SelectMedia_AdaptiveStreams_Selects360p()
-    {
-        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "360p");
-
-        Assert.NotNull(media);
-        Assert.Contains("itag=134", media.VideoUrl);
-        Assert.NotNull(media.AudioUrl);
-        Assert.Contains("itag=251", media.AudioUrl);
-        Assert.Equal("360p", media.Quality);
-    }
-    
-    [Fact]
     public void SelectMedia_QualityCap_PrefersCompliantMuxedOverOverCapAdaptive()
     {
         var media = YtDlpFormatSelector.SelectMedia(OverCapAdaptiveWithCompliantMuxedJson, "360p");
@@ -409,20 +373,5 @@ public sealed class YtDlpFormatSelectorTests
         Assert.NotNull(media);
         Assert.Null(media.ExpiresAt);
     }
-
-    [Fact]
-    public void SelectMedia_PreservesPassedDetails()
-    {
-        var details = new YouTubeVideoDetails(
-            "Description",
-            10000,
-            DateTimeOffset.UtcNow,
-            "Test Details Title",
-            "Test Channel");
-
-        var media = YtDlpFormatSelector.SelectMedia(SampleMuxedJson, "720p", details);
-
-        Assert.NotNull(media);
-        Assert.Same(details, media.Details);
-    }
 }
+

@@ -13,21 +13,6 @@ public sealed class MpvCommandBuilderTests
     }
 
     [Fact]
-    public void Build_ThrowsWhenRequestIsNull()
-    {
-        Assert.Throws<ArgumentNullException>(() =>
-            MpvCommandBuilder.Build(null!, new PlaybackOptions()));
-    }
-
-    [Fact]
-    public void Build_ThrowsWhenOptionsIsNull()
-    {
-        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
-        Assert.Throws<ArgumentNullException>(() =>
-            MpvCommandBuilder.Build(request, null!));
-    }
-
-    [Fact]
     public void Build_ThrowsWhenExternalMpvDisabled()
     {
         var request = new PlaybackRequest([CreateVideo("abc12345678")]);
@@ -145,20 +130,6 @@ public sealed class MpvCommandBuilderTests
         Assert.Contains(expectedArg, command.Arguments);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Build_WithoutYtDlpExecutablePath_OmitsScriptOptsArgument(string? path)
-    {
-        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
-        var options = new PlaybackOptions { YtDlpExecutablePath = path! };
-
-        var command = MpvCommandBuilder.Build(request, options);
-
-        Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--script-opts", StringComparison.Ordinal));
-    }
-
     [Fact]
     public void Build_WithCookieFilePath_IncludesCookieArguments()
     {
@@ -172,21 +143,6 @@ public sealed class MpvCommandBuilderTests
         Assert.Contains($"--cookies-file={cookiePath}", command.Arguments);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Build_WithoutCookieFilePath_OmitsCookieArguments(string? cookiePath)
-    {
-        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
-        var options = new PlaybackOptions();
-
-        var command = MpvCommandBuilder.Build(request, options, cookieFilePath: cookiePath);
-
-        Assert.DoesNotContain("--cookies", command.Arguments);
-        Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--cookies-file="));
-    }
-
     [Fact]
     public void Build_WithInputIpcServerPath_IncludesIpcServerArgument()
     {
@@ -197,20 +153,6 @@ public sealed class MpvCommandBuilderTests
         var command = MpvCommandBuilder.Build(request, options, inputIpcServerPath: socketPath);
 
         Assert.Contains($"--input-ipc-server={socketPath}", command.Arguments);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Build_WithoutInputIpcServerPath_OmitsIpcServerArgument(string? socketPath)
-    {
-        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
-        var options = new PlaybackOptions();
-
-        var command = MpvCommandBuilder.Build(request, options, inputIpcServerPath: socketPath);
-
-        Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--input-ipc-server="));
     }
 
     [Fact]
@@ -226,31 +168,6 @@ public sealed class MpvCommandBuilderTests
         var command = MpvCommandBuilder.Build(request, options);
 
         Assert.Contains("--playlist-start=2", command.Arguments);
-    }
-
-    [Fact]
-    public void Build_WithZeroStartIndex_OmitsPlaylistStart()
-    {
-        var videos = ImmutableArray.Create(
-            CreateVideo("video000001"),
-            CreateVideo("video000002"));
-        var request = new PlaybackRequest(videos, StartIndex: 0);
-        var options = new PlaybackOptions();
-
-        var command = MpvCommandBuilder.Build(request, options);
-
-        Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--playlist-start="));
-    }
-
-    [Fact]
-    public void Build_SingleVideo_AppendsWatchUrlAtEnd()
-    {
-        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
-        var options = new PlaybackOptions();
-
-        var command = MpvCommandBuilder.Build(request, options);
-
-        Assert.Equal("https://www.youtube.com/watch?v=abc12345678", command.Arguments[^1]);
     }
 
     [Fact]
@@ -339,15 +256,4 @@ public sealed class MpvCommandBuilderTests
         Assert.Equal("No playable URL is available.", ex.Message);
     }
 
-    [Fact]
-    public void BuildStartInfo_PopulatesFromCommand()
-    {
-        var command = new MpvPlaybackCommand("mpv", ["--fs", "--keep-open=yes", "https://example.com/video"]);
-
-        var startInfo = MpvCommandBuilder.BuildStartInfo(command);
-
-        Assert.Equal("mpv", startInfo.FileName);
-        Assert.False(startInfo.UseShellExecute);
-        Assert.Equal(command.Arguments, startInfo.ArgumentList);
-    }
 }

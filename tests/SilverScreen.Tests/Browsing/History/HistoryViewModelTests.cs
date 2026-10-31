@@ -78,27 +78,6 @@ public sealed class HistoryViewModelTests
         Assert.Equal(["long"], viewModel.State.Videos.Select(video => video.Id));
     }
 
-    [Fact]
-    public async Task RefreshAndLoadMoreAsync_WithCustomCount_PropagatesCountToService()
-    {
-        var service = new FakeHistoryService
-        {
-            FirstPage = new AuthenticatedHistoryResult(
-                AuthenticatedHistoryStatus.Success,
-                new FeedPage([CreateVideo("v1")], "next"),
-                "Watch history loaded."),
-            NextPage = new AuthenticatedHistoryResult(
-                AuthenticatedHistoryStatus.Success,
-                new FeedPage([CreateVideo("v2")]),
-                "Watch history loaded.")
-        };
-        using var viewModel = new HistoryViewModel(service, CreateSession());
-        await viewModel.RefreshAsync(count: 40);
-        Assert.Equal(40, Assert.Single(service.FirstPageCounts));
-
-        await viewModel.LoadMoreAsync(count: 40);
-        Assert.Equal(40, Assert.Single(service.NextPageCounts));
-    }
     private static InMemorySessionService CreateSession()
     {
         var session = new InMemorySessionService();

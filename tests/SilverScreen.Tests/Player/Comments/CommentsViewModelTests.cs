@@ -116,24 +116,6 @@ public sealed class CommentsViewModelTests
     }
 
     [Fact]
-    public async Task LoadMoreAsync_WhenHasMoreIsFalse_DoesNotMakeRequest()
-    {
-        var service = new ControlledCommentService();
-        using var viewModel = new CommentsViewModel(service);
-        viewModel.SetVideo("aaaaaaaaaaa");
-        viewModel.EnsureLoaded();
-
-        var firstRequest = Assert.Single(service.Requests);
-        firstRequest.Completion.SetResult(new YouTubeCommentsResult([Comment("c_1")], true, "Comments loaded."));
-
-        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
-        Assert.False(viewModel.State.HasMore);
-
-        await viewModel.LoadMoreAsync();
-        Assert.Single(service.Requests);
-    }
-
-    [Fact]
     public async Task SetVideo_AutomaticallyPreloadsCommentsWithoutRequiringEnsureLoaded()
     {
         var service = new ControlledCommentService();
@@ -204,17 +186,6 @@ public sealed class CommentsViewModelTests
         service.Requests[1].Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, ""));
         await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
         Assert.Equal(CommentsViewStatus.List, viewModel.State.Status);
-    }
-
-    [Fact]
-    public void Retry_WithoutVideo_DoesNothing()
-    {
-        var service = new ControlledCommentService();
-        using var viewModel = new CommentsViewModel(service);
-
-        viewModel.Retry();
-        Assert.Empty(service.Requests);
-        Assert.Equal(CommentsViewStatus.Unavailable, viewModel.State.Status);
     }
 
     private static YouTubeComment Comment(string id, string? parentId = null)

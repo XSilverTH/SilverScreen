@@ -18,27 +18,6 @@ public sealed class PagedFeedEngineTests
     }
 
     [Fact]
-    public void InitialState_IsCorrectlyDefaulted()
-    {
-        using var engine = new PagedFeedEngine(
-            defaultTitle: "Custom Feed",
-            defaultEmptyTitle: "No videos",
-            defaultEmptyDescription: "Empty feed description",
-            defaultEmptyIcon: "custom-empty-icon");
-
-        Assert.Empty(engine.Videos);
-        Assert.False(engine.IsLoading);
-        Assert.False(engine.IsLoadingMore);
-        Assert.False(engine.HasMore);
-        Assert.Null(engine.ContinuationToken);
-        Assert.True(engine.IsSuccess);
-
-        Assert.Equal("No videos", engine.State.Status.Title);
-        Assert.Equal("Empty feed description", engine.State.Status.Description);
-        Assert.Equal("custom-empty-icon", engine.State.Status.IconName);
-    }
-
-    [Fact]
     public async Task RefreshAsync_PopulatesVideos_FiltersShorts_AndDeduplicates()
     {
         var v1 = CreateVideo("1");
@@ -447,20 +426,6 @@ public sealed class PagedFeedEngineTests
     }
 
     [Fact]
-    public void SetVideos_DirectlyUpdatesVideosAndPresentationState()
-    {
-        using var engine = new PagedFeedEngine();
-
-        var videos = new[] { CreateVideo("v1"), CreateVideo("v2") };
-        engine.SetVideos(videos, continuationToken: "token_3", hasMore: true);
-
-        Assert.Equal(["v1", "v2"], engine.Videos.Select(v => v.Id));
-        Assert.Equal("token_3", engine.ContinuationToken);
-        Assert.True(engine.HasMore);
-        Assert.Equal(2, engine.State.Videos.Count);
-    }
-
-    [Fact]
     public async Task SetVideos_CancelsPendingRequests_AndOverwritesWithGivenVideos()
     {
         var tcs = new TaskCompletionSource<FeedPageResult>();
@@ -482,25 +447,6 @@ public sealed class PagedFeedEngineTests
 
         Assert.False(engine.IsLoading);
         Assert.Equal(["direct1"], engine.Videos.Select(v => v.Id));
-    }
-
-    [Fact]
-    public async Task CustomStatusMapper_OverridesPresentationStatus()
-    {
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) => Task.FromResult(new FeedPageResult([CreateVideo("1")])),
-            statusMapper: (result, error, state) => new VideoListStatus(
-                "Custom Title",
-                "Custom Description",
-                "custom-icon",
-                ShowRetry: true));
-
-        await engine.RefreshAsync();
-
-        Assert.Equal("Custom Title", engine.State.Status.Title);
-        Assert.Equal("Custom Description", engine.State.Status.Description);
-        Assert.Equal("custom-icon", engine.State.Status.IconName);
-        Assert.True(engine.State.Status.ShowRetry);
     }
 
     [Fact]

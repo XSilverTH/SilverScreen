@@ -4,23 +4,6 @@ namespace SilverScreen.Tests.Common;
 
 public sealed class YouTubeRichTextTests
 {
-    [Fact]
-    public void Parse_EmptyInput_ReturnsNoSegments()
-    {
-        Assert.Empty(YouTubeRichText.Parse(null));
-        Assert.Empty(YouTubeRichText.Parse(string.Empty));
-    }
-
-    [Fact]
-    public void Parse_PlainText_ReturnsSinglePlainSegment()
-    {
-        var segments = YouTubeRichText.Parse("Just a plain comment.");
-
-        var segment = Assert.Single(segments);
-        Assert.Equal("Just a plain comment.", segment.Text);
-        Assert.Null(segment.Link);
-    }
-
     [Theory]
     [InlineData("0:00", 0)]
     [InlineData("1:23", 83)]

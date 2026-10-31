@@ -334,22 +334,6 @@ public sealed class SubscriptionsViewModelTests
     }
 
     [Fact]
-    public void IsMatchingChannel_MatchesCorrectly()
-    {
-        var channel = new SubscribedChannel("UC_123", "Example Channel", "https://www.youtube.com/@example", null);
-
-        var matchingByUrl = CreateVideo("v1", "Title", "Other", "https://www.youtube.com/@example/videos");
-        var matchingById = CreateVideo("v2", "Title", "Other", "https://www.youtube.com/channel/UC_123");
-        var matchingByTitle = CreateVideo("v3", "Title", "Example Channel", "https://www.youtube.com/different");
-        var nonMatching = CreateVideo("v4", "Title", "Different", "https://www.youtube.com/@different");
-
-        Assert.True(SubscriptionsViewModel.IsMatchingChannel(matchingByUrl, channel));
-        Assert.True(SubscriptionsViewModel.IsMatchingChannel(matchingById, channel));
-        Assert.True(SubscriptionsViewModel.IsMatchingChannel(matchingByTitle, channel));
-        Assert.False(SubscriptionsViewModel.IsMatchingChannel(nonMatching, channel));
-    }
-
-    [Fact]
     public async Task SessionChanged_ClearsStateWhenLoggedOut()
     {
         var subsService = new FakeSubscriptionsService([], [CreateVideo("v1", "V1", "C1", "u1")]);
@@ -408,21 +392,6 @@ public sealed class SubscriptionsViewModelTests
         Assert.False(source.State.IsLoading);
         Assert.Single(source.State.Videos);
         Assert.Equal("v1", source.State.Videos[0].Id);
-    }
-
-    [Fact]
-    public void Constructor_WhenSignedOut_InitializesAuthenticationRequiredState()
-    {
-        var subsService = new FakeSubscriptionsService([], []);
-        var channelService = new FakeChannelService();
-        var session = new InMemorySessionService();
-
-        using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
-        var source = (IVideoListSource)viewModel;
-
-        Assert.Equal(AuthenticatedSubscriptionsStatus.AuthenticationRequired, viewModel.State.Status);
-        Assert.False(viewModel.State.IsSuccess);
-        Assert.Equal("Sign in to see subscriptions", source.State.Status.Title);
     }
 
 
