@@ -6,6 +6,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly TimeSpan _debounceDelay;
     private readonly Lock _gate = new();
+    private readonly AsyncLocal<bool> _isDraining = new();
 
     private readonly Func<string, Task<bool>> _persist;
     private readonly Action _persisted;
@@ -65,23 +66,31 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
 
     internal async Task StopAsync()
     {
+        Task drainTask;
         lock (_gate)
         {
             _stopped = true;
             _captureRequested = false;
+            drainTask = _drainTask;
         }
 
         try
         {
-            await _cts.CancelAsync();
+            await _cts.CancelAsync().ConfigureAwait(false);
         }
         catch (ObjectDisposedException)
         {
         }
 
+        if (_isDraining.Value)
+            return;
+
         try
         {
-            await _drainTask.ConfigureAwait(false);
+            if (drainTask != Task.CompletedTask && !drainTask.IsCompleted)
+            {
+                await drainTask.ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -90,6 +99,7 @@ internal sealed class WebLoginCaptureCoordinator : IDisposable
 
     private async Task DrainAsync()
     {
+        _isDraining.Value = true;
         while (true)
         {
             lock (_gate)

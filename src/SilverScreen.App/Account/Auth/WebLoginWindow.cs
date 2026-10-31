@@ -331,8 +331,11 @@ public sealed partial class WebLoginWindow : WindowBase<Window>
         if (Volatile.Read(ref _disposeState) != 0)
             return;
 
-        _account.ValidateAsync().FireAndForget(Logger);
-        Dispose();
+        Functions.IdleAdd(0, () =>
+        {
+            Dispose();
+            return false;
+        });
     }
 
     private void OnReadFailed(Exception exception)
