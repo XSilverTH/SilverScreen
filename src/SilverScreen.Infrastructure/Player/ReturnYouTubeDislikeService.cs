@@ -69,6 +69,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         {
             // Fail closed: no network and no cached (possibly stale) entries while disabled.
             _engagementByVideoId.Clear();
+            _insertionOrder.Clear();
             return null;
         }
 
