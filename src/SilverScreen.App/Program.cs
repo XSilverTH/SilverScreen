@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using Adw;
 using Serilog;
 using Serilog.Events;
@@ -8,7 +10,7 @@ using XSTH.Blueprint.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Preferences;
 
-
+var applicationConfiguration = ApplicationConfiguration.FromEnvironment();
 var applicationStateDirectory = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
     ".local",
@@ -19,7 +21,7 @@ try
 {
     Directory.CreateDirectory(logDirectory);
     Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Is(ResolveLogLevel())
+        .MinimumLevel.Is(ResolveLogLevel(applicationConfiguration.LogLevelOverride))
         .WriteTo.Console()
         .WriteTo.File(
             Path.Combine(logDirectory, "silverscreen-.log"),
@@ -34,8 +36,7 @@ catch (Exception setupException)
     Console.Error.WriteLine(
         $"SilverScreen: file log setup failed ({setupException.Message}); continuing with console logging.");
     Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Is(ResolveLogLevel())
-        .WriteTo.Console()
+        .MinimumLevel.Is(ResolveLogLevel(applicationConfiguration.LogLevelOverride))
         .CreateLogger();
 }
 
@@ -43,7 +44,7 @@ IServiceProvider? serviceProvider = null;
 var servicesHandedToApplication = false;
 try
 {
-    serviceProvider = ApplicationComposition.CreateServiceProvider(ApplicationConfiguration.FromEnvironment());
+    serviceProvider = ApplicationComposition.CreateServiceProvider(applicationConfiguration);
     Log.Information(
         "Starting SilverScreen {Version} on {RuntimeIdentifier} ({OSArchitecture}, {Framework})",
         ApplicationMetadata.Version,
@@ -75,14 +76,9 @@ finally
     Log.CloseAndFlush();
 }
 
-static LogEventLevel ResolveLogLevel()
+static LogEventLevel ResolveLogLevel(string? logLevelOverride)
 {
-    // Read SILVERSCREEN_LOG_LEVEL directly so startup logging never hard-depends on
-    // ApplicationConfiguration.LogLevelOverride (W0-CentralPkgs owns that property and may
-    // land before or after this file). Both sides read the same variable, so behavior
-    // converges regardless of merge order.
-    var raw = Environment.GetEnvironmentVariable("SILVERSCREEN_LOG_LEVEL");
-    return raw?.Trim().ToLowerInvariant() switch
+    return logLevelOverride?.Trim().ToLowerInvariant() switch
     {
         "debug" or "verbose" => LogEventLevel.Debug,
         "warning" or "warn" => LogEventLevel.Warning,
@@ -91,7 +87,6 @@ static LogEventLevel ResolveLogLevel()
         _ => LogEventLevel.Information
     };
 }
-
 static void LogExternalDependencyVersions(AppPreferences preferences)
 {
     // Floors mirror what Arch Linux x86-64 ships at release time (yt-dlp 2026.08.19-1,
@@ -105,12 +100,14 @@ static void LogExternalDependencyVersions(AppPreferences preferences)
     LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version", mpvFloorVersion,
         static output =>
         {
-            // First line looks like "mpv v0.41.0 Copyright ...".
             var firstLine = output.Split('\n', 2)[0].Trim();
-            const string prefix = "mpv v";
-            return firstLine.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? firstLine[prefix.Length..].Split(' ', 2)[0]
-                : firstLine;
+            var tokens = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length > 1 && tokens[0].Equals("mpv", StringComparison.OrdinalIgnoreCase))
+            {
+                return tokens[1].TrimStart('v', 'V');
+            }
+
+            return firstLine.TrimStart('v', 'V');
         });
 }
 
@@ -135,14 +132,28 @@ static void LogToolVersion(
 
     Log.Information("{Tool} version {Version}", displayName, version);
 
-    if (Version.TryParse(version, out var actual)
-        && Version.TryParse(floorVersion, out var floor)
+    if (TryParseToolVersion(version, out var actual)
+        && TryParseToolVersion(floorVersion, out var floor)
         && actual < floor)
         Log.Warning(
             "{Tool} {ActualVersion} is older than the supported floor {FloorVersion}; please upgrade",
             displayName,
             version,
             floorVersion);
+}
+
+static bool TryParseToolVersion(string? raw, [NotNullWhen(true)] out Version? parsedVersion)
+{
+    parsedVersion = null;
+    if (string.IsNullOrWhiteSpace(raw))
+        return false;
+
+    var trimmed = raw.Trim().TrimStart('v', 'V');
+    if (Version.TryParse(trimmed, out parsedVersion))
+        return true;
+
+    var match = Regex.Match(trimmed, @"^(\d+(?:\.\d+){1,3})");
+    return match.Success && Version.TryParse(match.Groups[1].Value, out parsedVersion);
 }
 
 static string? ProbeToolVersion(
