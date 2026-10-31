@@ -197,6 +197,24 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
 
         try
         {
+            if (_selectedChannel is { } activeChannel)
+            {
+                var activeChannelsResult = await _subscriptionsService.LoadSubscribedChannelsAsync(cancellationToken).ConfigureAwait(false);
+
+                if (!IsRefreshCurrent(generation, cancellationToken))
+                    return;
+
+                lock (_lock)
+                {
+                    _channels.Clear();
+                    _channels.AddRange(activeChannelsResult.Channels);
+                    _loadedAtLeastOnce = true;
+                }
+
+                await RefreshSelectedChannelAsync(activeChannel, generation, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             var channelsTask = _subscriptionsService.LoadSubscribedChannelsAsync(cancellationToken);
             var feedTask = _subscriptionsService.LoadFirstFeedPageAsync(_lastRequestedCount, cancellationToken);
 
@@ -225,12 +243,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                 _feedSuccess = feedResult.Status is AuthenticatedSubscriptionsStatus.Success
                     or AuthenticatedSubscriptionsStatus.Empty;
                 _loadedAtLeastOnce = true;
-            }
-
-            if (_selectedChannel is { } activeChannel)
-            {
-                await RefreshSelectedChannelAsync(activeChannel, generation, cancellationToken).ConfigureAwait(false);
-                return;
             }
 
             if (!IsRefreshCurrent(generation, cancellationToken))
@@ -548,12 +560,23 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                         or AuthenticatedSubscriptionsStatus.Empty,
                     res.StatusMessage);
 
-            if (res.Status == AuthenticatedSubscriptionsStatus.Success)
+            if (res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty)
             {
-                foreach (var video in res.FeedPage.Videos
-                             .Where(v => !v.IsShort)
-                             .Where(video => _feedVideos.All(existing => existing.Id != video.Id)))
-                    _feedVideos.Add(video);
+                if (res.Status == AuthenticatedSubscriptionsStatus.Success)
+                {
+                    foreach (var video in res.FeedPage.Videos
+                                 .Where(v => !v.IsShort)
+                                 .Where(video => _feedVideos.All(existing => existing.Id != video.Id)))
+                        _feedVideos.Add(video);
+                }
+
+                _feedContinuationToken = res.FeedPage.ContinuationToken;
+                _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
+            }
+            else if (SessionGate.IsAuthInvalid(res.Status))
+            {
+                _feedContinuationToken = null;
+                _hasMoreFeed = false;
             }
 
             _feedStatus = res.Status;
@@ -561,8 +584,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             _feedSuccess =
                 res.Status is AuthenticatedSubscriptionsStatus.Success or AuthenticatedSubscriptionsStatus.Empty;
             feedSuccess = _feedSuccess;
-            _feedContinuationToken = res.FeedPage.ContinuationToken;
-            _hasMoreFeed = !string.IsNullOrEmpty(_feedContinuationToken);
         }
 
         return new FeedPageResult(
@@ -824,6 +845,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
             state.IsLoading,
             state.IsLoadingMore,
             status,
-            safePaginationError);
+            PaginationError: safePaginationError);
     }
 }
