@@ -247,7 +247,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         });
         _shortcutController.RegisterAction(PlayerShortcutActions.ResumeOrSkip, () =>
         {
-            if (_session.TryResume())
+            if (_resumeController.TryConsumeSeekPrompt(out var returnPosition))
+                SeekBackTo(returnPosition);
+            else if (_session.TryResume())
                 _osdController.ShowResumed();
             else if (_session.TrySkipManualSegment())
                 _osdController.ShowSkippedSponsor();
