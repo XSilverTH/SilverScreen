@@ -67,20 +67,16 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
     public void UpdatePlayback(PlaybackRequest? request, LibMpvPlaybackState state)
     {
-        DesktopPlaybackSnapshot previous;
-        DesktopPlaybackSnapshot current;
-        MprisHandler? handler;
         lock (_gate)
         {
             if (_disposed) return;
 
-            previous = _snapshot;
-            current = DesktopPlaybackSnapshot.Create(request, state);
+            var previous = _snapshot;
+            var current = DesktopPlaybackSnapshot.Create(request, state);
             _snapshot = current;
-            handler = _mprisHandler;
+            _mprisHandler?.PublishChanges(previous, current);
         }
 
-        handler?.PublishChanges(previous, current);
         UpdateInhibition();
     }
 
@@ -439,11 +435,27 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             try
             {
-                if (!Equals(previous.TrackId, current.TrackId))
+                var prevDuration = previous.Duration != TimeSpan.Zero
+                    ? previous.Duration
+                    : (previous.Metadata.TryGetValue("mpris:length", out var pl) ? TimeSpan.FromTicks(pl.GetInt64() * 10) : TimeSpan.Zero);
+                var currDuration = current.Duration != TimeSpan.Zero
+                    ? current.Duration
+                    : (current.Metadata.TryGetValue("mpris:length", out var cl) ? TimeSpan.FromTicks(cl.GetInt64() * 10) : TimeSpan.Zero);
+                var durationChangedFromZero = prevDuration == TimeSpan.Zero && currDuration > TimeSpan.Zero;
+
+                var prevTitle = !string.IsNullOrEmpty(previous.Title)
+                    ? previous.Title
+                    : (previous.Metadata.TryGetValue("xesam:title", out var pt) ? pt.GetString() : string.Empty);
+                var currTitle = !string.IsNullOrEmpty(current.Title)
+                    ? current.Title
+                    : (current.Metadata.TryGetValue("xesam:title", out var ct) ? ct.GetString() : string.Empty);
+                var titleChanged = !string.Equals(prevTitle, currTitle, StringComparison.Ordinal);
+
+                if (!Equals(previous.TrackId, current.TrackId) || durationChangedFromZero || titleChanged)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Metadata);
                 if (previous.PlaybackStatus != current.PlaybackStatus)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.PlaybackStatus);
-                if (Math.Abs(previous.Volume - current.Volume) > 0.1)
+                if (Math.Abs(previous.Volume - current.Volume) > 0.01)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Volume);
                 if (Math.Abs(previous.Rate - current.Rate) > 0.1)
                     Connection.EmitPropertyChanged(MprisObjectPath, this, PlayerProperty.Rate);
@@ -482,7 +494,9 @@ internal sealed class DesktopMediaIntegration : IDisposable
         bool CanPause,
         ObjectPath TrackId,
         Dictionary<string, VariantValue> Metadata,
-        long Timestamp = 0)
+        long Timestamp = 0,
+        TimeSpan Duration = default,
+        string Title = "")
     {
         public static DesktopPlaybackSnapshot Stopped { get; } = new(false, false, "Stopped", 0, 1, 1, false,
             false, false, false, false, new ObjectPath("/org/mpris/MediaPlayer2/Track/none"), []);
@@ -491,7 +505,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             if (!state.HasMedia || request is null || state.PlaylistIndex < 0 ||
                 state.PlaylistIndex >= request.Videos.Length)
-                return Stopped with { Volume = Math.Clamp(state.Volume / 100, 0, 1), Rate = state.Speed };
+                return Stopped with { Volume = state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), Rate = state.Speed };
 
             var video = request.Videos[state.PlaylistIndex];
             var trackId =
@@ -510,9 +524,9 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 metadata["mpris:length"] = duration.Ticks / 10;
 
             return new DesktopPlaybackSnapshot(true, !state.IsPaused, state.IsPaused ? "Paused" : "Playing",
-                state.Position.Ticks / 10, Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,
+                state.Position.Ticks / 10, state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,
                 state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId,
-                metadata, Stopwatch.GetTimestamp());
+                metadata, Stopwatch.GetTimestamp(), duration, video.Title);
         }
     }
 }

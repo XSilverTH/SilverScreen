@@ -244,6 +244,17 @@ public sealed class PlaybackTests
     }
 
     [Fact]
+    public void DesktopPlaybackSnapshot_WhenMuted_ReportsZeroVolume()
+    {
+        var video = CreateVideo("vid1");
+        var request = new PlaybackRequest([video]);
+        var mutedState = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, true,
+            100, 1, true, true, false, [], []);
+        var snapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, mutedState);
+        Assert.Equal(0.0, snapshot.Volume);
+    }
+
+    [Fact]
     public void TryGetSeekedPosition_DetectsTrackJump()
     {
         var video1 = CreateVideo("vid1");
