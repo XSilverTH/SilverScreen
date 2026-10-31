@@ -26,16 +26,6 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         _sessionService.SessionChanged += OnSessionChanged;
     }
 
-    public AccountProfile? GetCachedProfile()
-    {
-        if (!HasAuthenticatedSession())
-            return null;
-
-        lock (_cacheGate)
-        {
-            return _cachedProfile;
-        }
-    }
 
     public async Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
     {

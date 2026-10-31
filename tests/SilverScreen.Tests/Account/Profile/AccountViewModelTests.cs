@@ -143,8 +143,6 @@ public sealed class AccountViewModelTests
     {
         public Queue<Task<AccountProfileResult>> Results { get; } = new();
 
-        public AccountProfile? GetCachedProfile() => null;
-
         public Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default) =>
             Results.Count > 0
                 ? Results.Dequeue()

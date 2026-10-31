@@ -512,8 +512,6 @@ public sealed class SessionTests
     private sealed class FakeProfileService(
         Func<Task<AccountProfileResult>> getProfile) : IAccountProfileService
     {
-        public AccountProfile? GetCachedProfile() => null;
-
         public Task<AccountProfileResult> GetCurrentProfileAsync(
             CancellationToken cancellationToken = default) => getProfile();
     }
