@@ -25,7 +25,9 @@ public sealed record PreferencesEditorState
     public bool ResumePlaybackOnDemand { get; init; }
     public bool ShortcutOsdEnabled { get; init; } = true;
     public PlayerShortcutBindings Shortcuts { get; init; } = new();
-
+    public int WindowWidth { get; init; } = 1180;
+    public int WindowHeight { get; init; } = 760;
+    public bool WindowMaximized { get; init; }
 
     public IReadOnlyList<string> SponsorBlockCategories { get; init; } =
         [.. Core.Player.SponsorBlockCategories.All];
@@ -131,7 +133,9 @@ public sealed class PreferencesViewModel
             ResumePlaybackOnDemand = preferences.ResumePlaybackOnDemand,
             ShortcutOsdEnabled = preferences.ShortcutOsdEnabled,
             Shortcuts = preferences.Shortcuts,
-
+            WindowWidth = preferences.WindowWidth,
+            WindowHeight = preferences.WindowHeight,
+            WindowMaximized = preferences.WindowMaximized,
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
             PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage
         };
@@ -158,7 +162,9 @@ public sealed class PreferencesViewModel
             ResumePlaybackOnDemand = state.ResumePlaybackOnDemand,
             ShortcutOsdEnabled = state.ShortcutOsdEnabled,
             Shortcuts = state.Shortcuts,
-
+            WindowWidth = state.WindowWidth,
+            WindowHeight = state.WindowHeight,
+            WindowMaximized = state.WindowMaximized,
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = state.PreferredSubtitleLanguage
         };
