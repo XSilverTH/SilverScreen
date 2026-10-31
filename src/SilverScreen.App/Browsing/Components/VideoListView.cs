@@ -338,6 +338,19 @@ public partial class VideoListView : ViewBase<Bin>
         var removedMiddleCount = _displayedVideos.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextVideos.Length - prefixLength - suffixLength;
         var isPaginationAppend = removedMiddleCount == 0 && prefixLength == _displayedVideos.Length;
+        var isInPlaceUpdate = removedMiddleCount > 0 && removedMiddleCount == addedMiddleCount;
+        if (isInPlaceUpdate)
+        {
+            for (var i = 0; i < removedMiddleCount; i++)
+            {
+                if (_displayedVideos[prefixLength + i].Id != nextVideos[prefixLength + i].Id)
+                {
+                    isInPlaceUpdate = false;
+                    break;
+                }
+            }
+        }
+
         _videosById.Clear();
         foreach (var video in nextVideos)
             _videosById[video.Id] = video;
@@ -346,7 +359,7 @@ public partial class VideoListView : ViewBase<Bin>
         if (removedMiddleCount == 0 && addedMiddleCount == 0)
             return;
 
-        if (!isPaginationAppend)
+        if (!isPaginationAppend && !isInPlaceUpdate)
         {
             if (!_refreshScrollPending)
             {
