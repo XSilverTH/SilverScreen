@@ -167,14 +167,8 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        while (_backStack.Count > 0)
-        {
-            var target = _backStack.Pop();
-            if (target.Page == NavigationPage.Player)
-                continue;
-
+        if (_backStack.TryPop(out var target))
             return NavigateInternal(target, false, true);
-        }
 
         return false;
     }
@@ -213,6 +207,14 @@ public sealed class NavigationService : INavigationService, IDisposable
         Action? onLeave = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_registry.TryGetValue(page, out var existing))
+        {
+            if (existing.IsShellPage && (!isShellPage || !string.Equals(existing.StackName, stackName, StringComparison.Ordinal)))
+            {
+                _viewStackNameToPage.Remove(existing.StackName);
+            }
+        }
+
         var registration = new NavigationPageRegistration(page, stackName, isShellPage, onEnter, onLeave);
         _registry[page] = registration;
         if (isShellPage) _viewStackNameToPage[stackName] = page;
