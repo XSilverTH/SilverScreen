@@ -24,7 +24,9 @@ public sealed record LibMpvPlaybackState(
     bool HasMedia,
     bool IsLoading,
     IReadOnlyList<LibMpvSubtitleTrack> SubtitleTracks,
-    IReadOnlyList<LibMpvChapter> Chapters);
+    IReadOnlyList<LibMpvChapter> Chapters,
+    bool IsBuffering = false,
+    int BufferingPercent = 0);
 
 public sealed class LibMpvPlayer : IDisposable
 {
@@ -52,6 +54,7 @@ public sealed class LibMpvPlayer : IDisposable
     private PlaybackRequest? _request;
     private bool _resumeAfterRenderer;
     private bool _seekQueued;
+    private string? _lastErrorMessage;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
         false, [], []);
@@ -94,6 +97,8 @@ public sealed class LibMpvPlayer : IDisposable
             Observe("playlist-pos", LibMpvFormat.Int64);
             Observe("path", LibMpvFormat.String);
             Observe("sid", LibMpvFormat.Int64);
+            Observe("paused-for-cache", LibMpvFormat.Flag);
+            Observe("cache-buffering-state", LibMpvFormat.Int64);
             _commandPump = Task.Run(PumpCommandsAsync);
             _eventPump = Task.Run(PumpEvents);
             Logger.Information("LibMpvPlayer initialized successfully");
@@ -208,7 +213,8 @@ public sealed class LibMpvPlayer : IDisposable
             _cookieFilePath = cookieFilePath;
             _quality = preferences.Quality.ToPersistedString();
             _reload = null;
-            _state = _state with { IsPaused = false, IsLoading = true, SubtitleTracks = [], Chapters = [] };
+            _lastErrorMessage = null;
+            _state = _state with { IsPaused = false, IsLoading = true, IsBuffering = false, BufferingPercent = 0, SubtitleTracks = [], Chapters = [] };
         }
 
         var primaryVideo = request.Videos.FirstOrDefault();
@@ -426,6 +432,8 @@ public sealed class LibMpvPlayer : IDisposable
                 IsSeekable = false,
                 HasMedia = false,
                 IsLoading = false,
+                IsBuffering = false,
+                BufferingPercent = 0,
                 SubtitleTracks = [],
                 Chapters = []
             };
@@ -496,7 +504,7 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
         }
     }
-    private static void HandleLogMessage(nint data)
+    private void HandleLogMessage(nint data)
     {
         if (data == 0) return;
         var message = Marshal.PtrToStructure<LibMpvEventLogMessage>(data);
@@ -504,6 +512,11 @@ public sealed class LibMpvPlayer : IDisposable
         var text = DiagnosticSanitizer.Sanitize(Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n'));
         if (string.IsNullOrWhiteSpace(text)) return;
 
+        if (message.LogLevel <= LibMpvLogLevel.Error ||
+            (message.LogLevel <= LibMpvLogLevel.Warn && (prefix == "ytdl_hook" || text.Contains("ERROR"))))
+        {
+            _lastErrorMessage = text;
+        }
         switch (message.LogLevel)
         {
             case LibMpvLogLevel.Fatal:
@@ -569,6 +582,14 @@ public sealed class LibMpvPlayer : IDisposable
                 {
                     SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, Marshal.ReadInt64(property.Data))
                 },
+                "paused-for-cache" when property.Format == LibMpvFormat.Flag => _state with
+                {
+                    IsBuffering = Marshal.ReadInt32(property.Data) != 0
+                },
+                "cache-buffering-state" when property.Format == LibMpvFormat.Int64 => _state with
+                {
+                    BufferingPercent = (int)Math.Clamp(Marshal.ReadInt64(property.Data), 0, 100)
+                },
                 _ => _state
             };
             // A reload snapshot is immutable until HandleFileLoaded consumes it.
@@ -625,7 +646,12 @@ public sealed class LibMpvPlayer : IDisposable
     private void HandleEndFile(LibMpvEventEndFile endFile)
     {
         if (endFile.Reason == LibMpvEndFileReason.Error)
-            PublishFailure(_native.ErrorString(endFile.Error));
+        {
+            var detail = !string.IsNullOrWhiteSpace(_lastErrorMessage)
+                ? _lastErrorMessage
+                : _native.ErrorString(endFile.Error);
+            PublishFailure(detail);
+        }
     }
 
     private void LoadCurrentRequest()

@@ -470,6 +470,28 @@ public sealed class LibMpvPlayerTests
         Assert.DoesNotContain(loadedUrls, url => url.Contains("vid2"));
     }
 
+    [Fact]
+    public void ConstructorObservesBufferingProperties()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        Assert.Contains(native.ObservedProperties, p => p.Name == "paused-for-cache" && p.Format == LibMpvFormat.Flag);
+        Assert.Contains(native.ObservedProperties, p => p.Name == "cache-buffering-state" && p.Format == LibMpvFormat.Int64);
+    }
+
+    [Fact]
+    public void LibMpvPlaybackStateTracksBufferingDefaultsAndValues()
+    {
+        var defaultState = new LibMpvPlaybackState(0, TimeSpan.Zero, TimeSpan.FromMinutes(2), false, false, 100, 1, true, true, false, [], []);
+        Assert.False(defaultState.IsBuffering);
+        Assert.Equal(0, defaultState.BufferingPercent);
+
+        var bufferingState = defaultState with { IsBuffering = true, BufferingPercent = 65 };
+        Assert.True(bufferingState.IsBuffering);
+        Assert.Equal(65, bufferingState.BufferingPercent);
+    }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);
@@ -480,6 +502,7 @@ public sealed class LibMpvPlayerTests
         public ConcurrentBag<string> Commands { get; } = [];
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
         public ConcurrentQueue<(string Name, bool Value)> FlagProperties { get; } = [];
+        public ConcurrentQueue<(string Name, LibMpvFormat Format)> ObservedProperties { get; } = [];
         public ManualResetEventSlim? BlockCommandEvent { get; set; }
         public ManualResetEventSlim? CommandStartedEvent { get; set; }
         public Dictionary<string, string> ReadProperties { get; } = [];
@@ -506,6 +529,7 @@ public sealed class LibMpvPlayerTests
 
         public int ObserveProperty(nint handle, ulong replyUserdata, string name, LibMpvFormat format)
         {
+            ObservedProperties.Enqueue((name, format));
             return 0;
         }
         public int RequestLogMessages(nint handle, string minLevel)

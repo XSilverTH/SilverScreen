@@ -41,6 +41,18 @@ public class PlayerTimelineState(
     public long ReconciliationLatchExpiry { get; private set; }
 
     public long LastThrottledSeekTime { get; private set; }
+    public bool IsLive { get; private set; }
+    public TimeSpan? ExpectedDuration { get; private set; }
+
+    public void SetExpectedMedia(TimeSpan? expectedDuration, bool isLive)
+    {
+        ExpectedDuration = expectedDuration;
+        IsLive = isLive;
+        if (expectedDuration is { } duration && duration > TimeSpan.Zero)
+        {
+            Duration = duration;
+        }
+    }
 
     // --- Timeline State Management & Seeking Reconciliation ---
 
@@ -116,6 +128,8 @@ public class PlayerTimelineState(
         PendingSeekTargetSeconds = -1;
         ReconciliationLatchExpiry = 0;
         LastThrottledSeekTime = 0;
+        IsLive = false;
+        ExpectedDuration = null;
     }
 
     // --- Scrubbing Lifecycle ---
@@ -235,9 +249,10 @@ public class PlayerTimelineState(
             : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
     }
 
-    public static string FormatDurationLabel(TimeSpan duration)
+    public static string FormatDurationLabel(TimeSpan duration, bool isLive = false)
     {
-        return duration <= TimeSpan.Zero ? "Live" : FormatTime(duration);
+        if (isLive) return "Live";
+        return duration <= TimeSpan.Zero ? "--:--" : FormatTime(duration);
     }
 
     public static double CalculateProgressFraction(TimeSpan position, TimeSpan duration)
@@ -346,14 +361,49 @@ internal sealed class PlayerTimelineController : IDisposable
         _updatingControls = true;
         try
         {
-            _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(state.Duration));
-            _timeline.SetRange(0, Math.Max(0, state.Duration.TotalSeconds));
-            _timeline.SetSensitive(state.IsSeekable && state.Duration > TimeSpan.Zero);
+            if (state.Duration > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(state.Duration));
+                _timeline.SetRange(0, state.Duration.TotalSeconds);
+                _timeline.SetSensitive(state.IsSeekable && !state.IsLoading);
+            }
+            else if (State.IsLive)
+            {
+                _durationLabel.SetText("Live");
+                _timeline.SetRange(0, 0);
+                _timeline.SetSensitive(false);
+            }
+            else if (State.ExpectedDuration is { } expected && expected > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(expected));
+                _timeline.SetRange(0, expected.TotalSeconds);
+                _timeline.SetSensitive(false);
+            }
+            else
+            {
+                _durationLabel.SetText(state.IsLoading ? "--:--" : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive));
+                _timeline.SetRange(0, 0);
+                _timeline.SetSensitive(false);
+            }
 
-            if (!State.UpdatePlaybackState(state.HasMedia, state.Position, state.Duration, state.Chapters,
+            var effectiveDuration = state.Duration > TimeSpan.Zero
+                ? state.Duration
+                : State.ExpectedDuration ?? TimeSpan.Zero;
+
+            if (!State.UpdatePlaybackState(state.HasMedia, state.Position, effectiveDuration, state.Chapters,
                     out var accepted) || !accepted) return;
-            _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
-            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, state.Duration.TotalSeconds)));
+
+            if (state.IsLoading && state.Position <= TimeSpan.Zero)
+            {
+                _positionLabel.SetText(State.IsLive ? "Live" : "--:--");
+            }
+            else
+            {
+                _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
+            }
+
+            var maxSeconds = effectiveDuration.TotalSeconds;
+            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, maxSeconds)));
         }
         finally
         {
@@ -398,8 +448,45 @@ internal sealed class PlayerTimelineController : IDisposable
             _timeline.SetRange(0, 0);
             _timeline.SetValue(0);
             _timeline.SetSensitive(false);
-            _positionLabel.SetText("0:00");
-            _durationLabel.SetText("0:00");
+            _positionLabel.SetText("--:--");
+            _durationLabel.SetText("--:--");
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    public void SetExpectedMedia(TimeSpan? expectedDuration, bool isLive)
+    {
+        State.SetExpectedMedia(expectedDuration, isLive);
+        _updatingControls = true;
+        try
+        {
+            if (isLive)
+            {
+                _durationLabel.SetText("Live");
+                _positionLabel.SetText("Live");
+                _timeline.SetRange(0, 0);
+                _timeline.SetValue(0);
+                _timeline.SetSensitive(false);
+            }
+            else if (expectedDuration is { } duration && duration > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(duration));
+                _positionLabel.SetText("--:--");
+                _timeline.SetRange(0, duration.TotalSeconds);
+                _timeline.SetValue(0);
+                _timeline.SetSensitive(false);
+            }
+            else
+            {
+                _durationLabel.SetText("--:--");
+                _positionLabel.SetText("--:--");
+                _timeline.SetRange(0, 0);
+                _timeline.SetValue(0);
+                _timeline.SetSensitive(false);
+            }
         }
         finally
         {
@@ -410,7 +497,7 @@ internal sealed class PlayerTimelineController : IDisposable
     public void SetDuration(TimeSpan duration)
     {
         State.SetDuration(duration);
-        _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(duration));
+        _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(duration, State.IsLive));
     }
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)

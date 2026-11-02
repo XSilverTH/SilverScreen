@@ -47,16 +47,155 @@ Adw.OverlaySplitView EmbeddedPlayerView {
         halign: center;
         valign: center;
         visible: false;
+        can-target: false;
 
         styles [
           "player-loading-indicator",
         ]
 
-        Gtk.Spinner {
-          spinning: true;
-          width-request: 40;
-          height-request: 40;
-        }
+        child: Adw.Spinner player_loading_spinner {
+          width-request: 72;
+          height-request: 72;
+
+          styles [
+            "player-big-spinner",
+          ]
+        };
+      }
+
+      [overlay]
+      Adw.Bin player_buffering_indicator {
+        halign: center;
+        valign: center;
+        visible: false;
+        can-target: false;
+
+        styles [
+          "player-buffering-indicator",
+        ]
+
+        child: Gtk.Box {
+          orientation: horizontal;
+          spacing: 12;
+          halign: center;
+          valign: center;
+
+          styles [
+            "player-buffering-badge",
+          ]
+
+          Adw.Spinner player_buffering_spinner {
+            width-request: 24;
+            height-request: 24;
+
+            styles [
+              "player-buffering-spinner",
+            ]
+          }
+
+          Gtk.Label player_buffering_label {
+            label: "Buffering…";
+
+            styles [
+              "player-buffering-label",
+            ]
+          }
+        };
+      }
+
+      [overlay]
+      Adw.StatusPage player_error_page {
+        hexpand: true;
+        vexpand: true;
+        visible: false;
+        icon-name: "dialog-error-symbolic";
+        title: "Playback Failed";
+        description: "The media player encountered an error while loading or decoding this video.";
+
+        styles [
+          "player-error-page",
+        ]
+
+        child: Gtk.Box {
+          orientation: vertical;
+          spacing: 16;
+          halign: center;
+
+          Gtk.Box {
+            orientation: horizontal;
+            spacing: 12;
+            halign: center;
+            homogeneous: true;
+
+            Gtk.Button player_error_browser_button {
+              clicked => $OnErrorBrowserClicked();
+              tooltip-text: "Open in web browser";
+
+              styles [
+                "pill",
+              ]
+
+              child: Gtk.Box {
+                spacing: 8;
+                halign: center;
+                Gtk.Image { icon-name: "web-browser-symbolic"; }
+                Gtk.Label { label: "Open in Browser"; }
+              };
+            }
+
+            Gtk.Button player_error_retry_button {
+              clicked => $OnErrorRetryClicked();
+              tooltip-text: "Try loading this video again";
+
+              styles [
+                "suggested-action",
+                "pill",
+              ]
+
+              child: Gtk.Box {
+                spacing: 8;
+                halign: center;
+                Gtk.Image { icon-name: "view-refresh-symbolic"; }
+                Gtk.Label { label: "Try Again"; }
+              };
+            }
+          }
+
+          Gtk.Button player_error_toggle_detail_button {
+            clicked => $OnErrorToggleDetailClicked();
+            halign: center;
+            label: "Show technical details";
+
+            styles [
+              "flat",
+              "caption",
+            ]
+          }
+
+          Gtk.Box player_error_detail_box {
+            orientation: vertical;
+            spacing: 6;
+            visible: false;
+
+            styles [
+              "player-error-detail-box",
+            ]
+
+            Gtk.Label player_error_detail_label {
+              label: "";
+              wrap: true;
+              wrap-mode: char;
+              selectable: true;
+              xalign: 0;
+
+              styles [
+                "caption",
+                "monospace",
+                "player-error-detail-label",
+              ]
+            }
+          }
+        };
       }
 
       [overlay]

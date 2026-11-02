@@ -65,6 +65,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private string? _commentsVideoId;
     private bool _isMuted;
     private PlaybackRequest? _loadedRequest;
+    private PlaybackRequest? _lastPlaybackRequest;
+    private VideoSummary? _failedVideo;
+    private PlayerErrorInfo? _currentErrorInfo;
+    private bool _isLoading;
+    private bool _hasPlaybackError;
     private bool _rendererReady;
     private double _speed = 1;
     private bool _syncingQueue;
@@ -329,8 +334,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _queueViewModel.SetCurrentPlayingIndex(0);
             var preferences = _preferences.GetPreferences();
             var firstVideo = request.Videos[0];
+            _hasPlaybackError = false;
+            _failedVideo = null;
+            _lastPlaybackRequest = request;
+            player_error_page.SetVisible(false);
+
             _timelineController.Reset();
-            _timelineController.SetDuration(firstVideo.Duration);
+            _timelineController.SetExpectedMedia(firstVideo.Duration, firstVideo.Duration <= TimeSpan.Zero);
             _infoPanel.SetVideo(firstVideo);
             RegisterActivity();
             _chapterOverlay.Update([], TimeSpan.Zero);
@@ -731,7 +741,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _session.UpdatePlayback(state);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
 
-        SetLoading(state.IsLoading);
+        if (_isLoading)
+        {
+            if (state.HasMedia && !state.IsLoading)
+                SetLoading(false);
+        }
+        else if (state.IsLoading)
+        {
+            SetLoading(true);
+        }
+        SetBuffering(state.IsBuffering && !state.IsLoading, state.BufferingPercent);
         _updatingControls = true;
         _subtitleController.UpdateTracks(state.SubtitleTracks, _updatingControls);
         try
@@ -768,7 +787,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _infoPanel.SetVideo(video);
         player_title_label.SetText(video.Title);
         player_channel_label.SetText(video.ChannelName);
-        if (string.Equals(_commentsVideoId, video.Id, StringComparison.Ordinal)) return;
+        _timelineController.SetExpectedMedia(video.Duration, video.Duration <= TimeSpan.Zero);
 
         _commentsVideoId = video.Id;
         _commentsView.SetVideo(video.Id);
@@ -784,15 +803,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnSessionFailed(string detail)
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
+        _hasPlaybackError = true;
+        _failedVideo = _session.CurrentVideo ?? _loadedRequest?.Videos.FirstOrDefault() ?? _lastPlaybackRequest?.Videos.FirstOrDefault();
+
         _infoPanel.Close();
         _infoPanel.SetVideo(null);
-        player_title_label.SetText("Playback failed");
         SetLoading(false);
-        player_channel_label.SetText($"Embedded playback failed: {detail}");
+        SetBuffering(false, 0);
+
         _timelineController.Reset();
         _osdController.HideImmediate();
         player_play_pause_button.SetIconName("media-playback-start-symbolic");
-
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
@@ -804,7 +825,60 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _player.Stop();
         _loadedRequest = null;
+
+        ShowPlaybackError(detail);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ShowPlaybackError(string detail)
+    {
+        _currentErrorInfo = PlayerErrorClassifier.Classify(detail);
+
+        player_error_page.IconName = _currentErrorInfo.IconName;
+        player_error_page.Title = _currentErrorInfo.Title;
+        player_error_page.Description = _currentErrorInfo.Message;
+        player_error_detail_label.SetText(_currentErrorInfo.TechnicalDetail);
+        player_error_detail_box.SetVisible(false);
+        player_error_toggle_detail_button.SetLabel("Show technical details");
+
+        var canOpenBrowser = _failedVideo is not null && !string.IsNullOrWhiteSpace(_failedVideo.Id);
+        player_error_browser_button.SetVisible(canOpenBrowser);
+
+        player_error_page.SetVisible(true);
+        player_loading_indicator.SetVisible(false);
+        player_buffering_indicator.SetVisible(false);
+        player_center_controls.SetVisible(false);
+
+        player_title_label.SetText(_currentErrorInfo.Title);
+        player_channel_label.SetText(_currentErrorInfo.Message);
+    }
+
+    private void OnErrorRetryClicked(object? sender, EventArgs args)
+    {
+        player_error_page.SetVisible(false);
+        _hasPlaybackError = false;
+        if (_lastPlaybackRequest is not null)
+        {
+            PresentAsync(_lastPlaybackRequest);
+        }
+    }
+
+    private void OnErrorBrowserClicked(object? sender, EventArgs args)
+    {
+        if (_failedVideo is not { } video) return;
+        var url = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id);
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            OpenExternalLink(url);
+        }
+    }
+
+
+    private void OnErrorToggleDetailClicked(object? sender, EventArgs args)
+    {
+        var isVisible = !player_error_detail_box.GetVisible();
+        player_error_detail_box.SetVisible(isVisible);
+        player_error_toggle_detail_button.SetLabel(isVisible ? "Hide technical details" : "Show technical details");
     }
 
     private void EndSession(bool stop)
@@ -819,6 +893,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _timelineController.Reset();
         _osdController.HideImmediate();
         _loadedRequest = null;
+        _hasPlaybackError = false;
+        player_error_page.SetVisible(false);
+        SetBuffering(false, 0);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
         _infoPanel.SetVideo(null);
         player_queue_controls.SetVisible(false);
@@ -836,8 +913,28 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void SetLoading(bool loading)
     {
+        _isLoading = loading;
         player_loading_indicator.SetVisible(loading);
+        if (_hasPlaybackError)
+        {
+            player_center_controls.SetVisible(false);
+            return;
+        }
+
         player_center_controls.SetVisible(!loading);
+    }
+
+    private void SetBuffering(bool buffering, int percent)
+    {
+        if (buffering && !_isLoading && !_hasPlaybackError)
+        {
+            player_buffering_label.SetText(percent > 0 ? $"Buffering {percent}%" : "Buffering…");
+            player_buffering_indicator.SetVisible(true);
+        }
+        else
+        {
+            player_buffering_indicator.SetVisible(false);
+        }
     }
 
     private void SetControls(double volume, double speed, string quality)

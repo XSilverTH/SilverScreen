@@ -5,13 +5,65 @@
     background-color: #000000;
 }
 
+/* Video Loading Indicator */
 .player-loading-indicator {
-    color: #ffffff;
     margin-bottom: 28px;
 }
 
-.player-loading-subtitle {
+.player-big-spinner {
+    color: #ffffff;
+    min-width: 72px;
+    min-height: 72px;
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    filter: drop-shadow(0 2px 4px alpha(#000000, 0.55));
+}
+/* Video Buffering Indicator */
+.player-buffering-indicator {
+    margin-bottom: 28px;
+}
+
+.player-buffering-badge {
+    background-color: alpha(#161616, 0.90);
+    border: 1px solid alpha(#ffffff, 0.16);
+    border-radius: 9999px;
+    padding: 8px 18px;
+    box-shadow: 0 6px 20px alpha(#000000, 0.6);
+}
+
+.player-buffering-spinner {
+    color: #ffffff;
+}
+
+.player-buffering-label {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    font-feature-settings: "tnum";
+    letter-spacing: 0.2px;
+}
+
+/* Playback Error Screen */
+.player-error-page {
+    background-color: @window_bg_color;
+}
+
+.player-error-detail-box {
+    background-color: alpha(#ffffff, 0.08);
+    border: 1px solid alpha(#ffffff, 0.12);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 4px;
+}
+
+.player-error-detail-label {
     color: alpha(#ffffff, 0.72);
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 .player-headerbar,

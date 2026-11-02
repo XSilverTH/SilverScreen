@@ -326,5 +326,43 @@ public class PlayerTimelineStateTests
         Assert.Equal(-1, state.PendingSeekTargetSeconds);
         Assert.Equal(0, state.ReconciliationLatchExpiry);
         Assert.Equal(0, state.LastThrottledSeekTime);
+        Assert.False(state.IsLive);
+        Assert.Null(state.ExpectedDuration);
+    }
+
+    [Fact]
+    public void FormatDurationLabel_ReturnsDashesWhenNotLiveAndZeroOrNegativeDuration()
+    {
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, isLive: false));
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-5), isLive: false));
+    }
+
+    [Fact]
+    public void FormatDurationLabel_ReturnsLiveWhenIsLive()
+    {
+        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, isLive: true));
+        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromMinutes(10), isLive: true));
+    }
+
+    [Fact]
+    public void FormatDurationLabel_FormatsTimeWhenPositiveDurationAndNotLive()
+    {
+        Assert.Equal("12:34", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(754), isLive: false));
+        Assert.Equal("1:02:03", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(3723), isLive: false));
+    }
+
+    [Fact]
+    public void SetExpectedMedia_ConfiguresStateCorrectly()
+    {
+        var state = new PlayerTimelineState();
+        state.SetExpectedMedia(TimeSpan.FromMinutes(5), isLive: false);
+
+        Assert.False(state.IsLive);
+        Assert.Equal(TimeSpan.FromMinutes(5), state.ExpectedDuration);
+        Assert.Equal(TimeSpan.FromMinutes(5), state.Duration);
+
+        state.SetExpectedMedia(null, isLive: true);
+        Assert.True(state.IsLive);
+        Assert.Null(state.ExpectedDuration);
     }
 }
