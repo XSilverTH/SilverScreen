@@ -211,6 +211,6 @@ static string? ProbeToolVersion(
 
 internal partial class Program
 {
-    [LibraryImport("*", EntryPoint = "run_auth_helper")]
+    [LibraryImport("auth_helper", EntryPoint = "run_auth_helper")]
     private static partial int RunAuthHelper();
 }

@@ -75,9 +75,20 @@
         <MakeDir Directories="$(IntermediateOutputPath)"/>
         <Exec Command="$(AuthCC) -c -fPIC -O2 $(MSBuildProjectDirectory)/Auth/auth.c -o $(IntermediateOutputPath)auth.o `pkg-config --cflags gtk4 webkitgtk-6.0 libsoup-3.0`"/>
     </Target>
+    <Target Name="CompileAuthHelperShared" AfterTargets="Build" Condition="'$(_IsPublishing)' != 'true'"
+            Inputs="$(MSBuildProjectDirectory)/Auth/auth.c"
+            Outputs="$(TargetDir)libauth_helper.so">
+        <PropertyGroup>
+            <AuthCC Condition="'$(CC)' != ''">$(CC)</AuthCC>
+            <AuthCC Condition="'$(AuthCC)' == ''">cc</AuthCC>
+        </PropertyGroup>
+        <Exec Command="$(AuthCC) -shared -fPIC -O2 $(MSBuildProjectDirectory)/Auth/auth.c -o $(TargetDir)libauth_helper.so `pkg-config --cflags --libs gtk4 webkitgtk-6.0 libsoup-3.0`" />
+    </Target>
+
 
     <ItemGroup>
         <NativeLibrary Include="$(IntermediateOutputPath)auth.o" Visible="false"/>
         <NativeSystemLibrary Include="gtk-4;webkitgtk-6.0;soup-3.0;glib-2.0;gobject-2.0;gio-2.0" Visible="false"/>
+        <DirectPInvoke Include="auth_helper" Visible="false"/>
     </ItemGroup>
 </Project>

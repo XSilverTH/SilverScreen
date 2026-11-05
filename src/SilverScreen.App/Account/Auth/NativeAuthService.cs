@@ -91,11 +91,17 @@ public sealed class NativeAuthService : INativeAuthService
 
                     if (process.ExitCode != 0)
                     {
-                        Logger.Information(
-                            "Native auth worker exited with code {ExitCode} (user cancelled or closed)",
-                            process.ExitCode);
-                        if (!string.IsNullOrWhiteSpace(stderr))
-                            Logger.Debug("Native auth worker stderr: {Stderr}", stderr);
+                        if (process.ExitCode == 1)
+                        {
+                            Logger.Information("Native auth worker was cancelled or closed by user");
+                        }
+                        else
+                        {
+                            Logger.Warning(
+                                "Native auth worker exited unexpectedly with code {ExitCode}. Stderr: {Stderr}",
+                                process.ExitCode,
+                                string.IsNullOrWhiteSpace(stderr) ? "<empty>" : stderr);
+                        }
                         return false;
                     }
 
