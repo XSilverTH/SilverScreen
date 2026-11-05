@@ -437,18 +437,26 @@ internal sealed class DesktopMediaIntegration : IDisposable
             {
                 var prevDuration = previous.Duration != TimeSpan.Zero
                     ? previous.Duration
-                    : (previous.Metadata.TryGetValue("mpris:length", out var pl) ? TimeSpan.FromTicks(pl.GetInt64() * 10) : TimeSpan.Zero);
+                    : previous.Metadata.TryGetValue("mpris:length", out var pl)
+                        ? TimeSpan.FromTicks(pl.GetInt64() * 10)
+                        : TimeSpan.Zero;
                 var currDuration = current.Duration != TimeSpan.Zero
                     ? current.Duration
-                    : (current.Metadata.TryGetValue("mpris:length", out var cl) ? TimeSpan.FromTicks(cl.GetInt64() * 10) : TimeSpan.Zero);
+                    : current.Metadata.TryGetValue("mpris:length", out var cl)
+                        ? TimeSpan.FromTicks(cl.GetInt64() * 10)
+                        : TimeSpan.Zero;
                 var durationChangedFromZero = prevDuration == TimeSpan.Zero && currDuration > TimeSpan.Zero;
 
                 var prevTitle = !string.IsNullOrEmpty(previous.Title)
                     ? previous.Title
-                    : (previous.Metadata.TryGetValue("xesam:title", out var pt) ? pt.GetString() : string.Empty);
+                    : previous.Metadata.TryGetValue("xesam:title", out var pt)
+                        ? pt.GetString()
+                        : string.Empty;
                 var currTitle = !string.IsNullOrEmpty(current.Title)
                     ? current.Title
-                    : (current.Metadata.TryGetValue("xesam:title", out var ct) ? ct.GetString() : string.Empty);
+                    : current.Metadata.TryGetValue("xesam:title", out var ct)
+                        ? ct.GetString()
+                        : string.Empty;
                 var titleChanged = !string.Equals(prevTitle, currTitle, StringComparison.Ordinal);
 
                 if (!Equals(previous.TrackId, current.TrackId) || durationChangedFromZero || titleChanged)
@@ -505,7 +513,10 @@ internal sealed class DesktopMediaIntegration : IDisposable
         {
             if (!state.HasMedia || request is null || state.PlaylistIndex < 0 ||
                 state.PlaylistIndex >= request.Videos.Length)
-                return Stopped with { Volume = state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), Rate = state.Speed };
+                return Stopped with
+                {
+                    Volume = state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), Rate = state.Speed
+                };
 
             var video = request.Videos[state.PlaylistIndex];
             var trackId =
@@ -524,7 +535,8 @@ internal sealed class DesktopMediaIntegration : IDisposable
                 metadata["mpris:length"] = duration.Ticks / 10;
 
             return new DesktopPlaybackSnapshot(true, !state.IsPaused, state.IsPaused ? "Paused" : "Playing",
-                state.Position.Ticks / 10, state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), state.Speed, state.IsSeekable,
+                state.Position.Ticks / 10, state.IsMuted ? 0.0 : Math.Clamp(state.Volume / 100, 0, 1), state.Speed,
+                state.IsSeekable,
                 state.PlaylistIndex < request.Videos.Length - 1, state.PlaylistIndex > 0, true, true, trackId,
                 metadata, Stopwatch.GetTimestamp(), duration, video.Title);
         }

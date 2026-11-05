@@ -1,7 +1,7 @@
 using Gtk;
 using SilverScreen.Core.Player;
-using static GLib.Functions;
 using XSTH.Blueprint.Helpers;
+using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -12,6 +12,7 @@ namespace SilverScreen.Player.Controllers;
 internal sealed class PlayerResumeController : IDisposable
 {
     private const uint PromptDurationMilliseconds = PlayerResumeState.DefaultResumePromptDurationMilliseconds;
+    private readonly DisposeScope _lifetime = new();
     private readonly Button _restartButton;
     private readonly Label _restartLabel;
     private readonly Revealer _restartRevealer;
@@ -19,7 +20,6 @@ internal sealed class PlayerResumeController : IDisposable
     private readonly Label _resumeLabel;
     private readonly Revealer _resumeRevealer;
     private readonly PlaybackSession _session;
-    private readonly DisposeScope _lifetime = new();
     private uint _promptHideSource;
     private TimeSpan? _seekPromptPosition;
 
@@ -40,7 +40,8 @@ internal sealed class PlayerResumeController : IDisposable
         _restartButton = restartButton;
         _restartLabel = restartLabel;
 
-        _lifetime.Track(() => _session.ResumePromptChanged += OnResumePromptChanged, () => _session.ResumePromptChanged -= OnResumePromptChanged);
+        _lifetime.Track(() => _session.ResumePromptChanged += OnResumePromptChanged,
+            () => _session.ResumePromptChanged -= OnResumePromptChanged);
         _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
     }
@@ -95,6 +96,7 @@ internal sealed class PlayerResumeController : IDisposable
             return false;
         });
     }
+
     /// <summary>
     ///     Offers a jump back to <paramref name="returnPosition" /> (where playback was
     ///     before a timestamp link seek) using the resume prompt UI. Consuming the

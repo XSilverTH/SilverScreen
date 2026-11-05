@@ -4,16 +4,15 @@ using Gio;
 using GObject;
 using Gtk;
 using Serilog;
-using SilverScreen.Account.Auth;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
@@ -26,6 +25,7 @@ using ApplicationWindow = Adw.ApplicationWindow;
 using Constants = Gdk.Constants;
 using Functions = GLib.Functions;
 using License = Gtk.License;
+using Object = GObject.Object;
 using PreferencesDialog = SilverScreen.Preferences.PreferencesDialog;
 using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
@@ -35,11 +35,14 @@ namespace SilverScreen.Shell;
 public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
+    private readonly AccountServices _account;
 
     private readonly AccountPopoverView _accountPopover;
     private readonly AccountViewModel _accountViewModel;
     private readonly ChannelView _channel;
+    private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
     private readonly ChannelViewModel _channelViewModel;
+    private readonly RuntimeDependencyDiagnostics _diagnostics;
     private readonly Action _disposeApplicationServices;
     private readonly EmbeddedPlayerView _embeddedPlayer;
     private readonly VideoListView _history;
@@ -49,16 +52,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly PlaybackModeRoutingService _playback;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
+    private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
     private readonly SearchPopoverView _searchPopover;
     private readonly VideoListView _searchView;
     private readonly SearchViewModel _searchViewModel;
-    private readonly AccountServices _account;
-    private readonly RuntimeDependencyDiagnostics _diagnostics;
     private readonly SubscriptionsView _subscriptions;
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private bool _closed;
-    private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
-    private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
 
 
     public MainWindow(
@@ -93,7 +93,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged,
             () => _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged);
         _historyViewModel = new HistoryViewModel(browsing.History, account.Session, OpenWebLogin);
-        _history = new VideoListView((IVideoListSource)_historyViewModel, browsing.Thumbnails, actions);
+        _history = new VideoListView(_historyViewModel, browsing.Thumbnails, actions);
         Lifetime.Track(() => _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged,
             () => _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged);
         _subscriptionsViewModel = new SubscriptionsViewModel(
@@ -129,7 +129,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => search_popover.OnNotify += OnSearchPopoverNotify,
             () => search_popover.OnNotify -= OnSearchPopoverNotify);
 
-        _searchView = new VideoListView((IVideoListSource)_searchViewModel, browsing.Thumbnails, actions);
+        _searchView = new VideoListView(_searchViewModel, browsing.Thumbnails, actions);
         Lifetime.Track(() => _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged,
             () => _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged);
         search_host.Append(_searchView.Widget);
@@ -246,7 +246,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _searchPopover.OnClosed();
     }
 
-    private void OnSearchPopoverNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    private void OnSearchPopoverNotify(Object sender, Object.NotifySignalArgs args)
     {
         if (args.Pspec.GetName() == "visible" && search_popover.GetVisible())
             _searchPopover.OnOpened();
@@ -452,9 +452,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (!_closed && _navigationService.CurrentPage == NavigationPage.Channel)
             UpdateHomeRefreshButton(_channel.IsLoading);
     }
-    private sealed record SearchBrowsingState(SearchNavigationState ViewModel, double ScrollValue);
-
-    private sealed record ChannelBrowsingState(ChannelNavigationState ViewModel, double ScrollValue);
 
     private void ClearBrowsingHistory()
     {
@@ -671,7 +668,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void UpdateBackButton()
     {
-        var visible = (_navigationService.CurrentPage is NavigationPage.Search or NavigationPage.Channel) &&
+        var visible = _navigationService.CurrentPage is NavigationPage.Search or NavigationPage.Channel &&
                       _navigationService.CanGoBack;
         navigation_back_button.Visible = visible;
         navigation_back_button.TooltipText = visible ? GetBackButtonTooltip() : "Back";
@@ -765,12 +762,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             var success = await _account.Auth.StartAuthAsync().ConfigureAwait(false);
             if (!success)
             {
-                return;
             }
         }
         catch (SessionPersistenceException)
         {
-            GLib.Functions.IdleAdd(0, () =>
+            Functions.IdleAdd(0, () =>
             {
                 ShowToast("Could not save the YouTube session because the system keyring is unavailable.");
                 return false;
@@ -779,7 +775,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         catch (Exception exception)
         {
             Logger.Error(exception, "Failed to run native auth");
-            GLib.Functions.IdleAdd(0, () =>
+            Functions.IdleAdd(0, () =>
             {
                 ShowToast("An error occurred during sign-in.");
                 return false;
@@ -864,4 +860,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         base.Dispose(disposing);
     }
+
+    private sealed record SearchBrowsingState(SearchNavigationState ViewModel, double ScrollValue);
+
+    private sealed record ChannelBrowsingState(ChannelNavigationState ViewModel, double ScrollValue);
 }

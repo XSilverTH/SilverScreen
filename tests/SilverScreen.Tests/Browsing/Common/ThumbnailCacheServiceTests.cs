@@ -1,7 +1,4 @@
 using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Infrastructure.Browsing.Common;
 
 namespace SilverScreen.Tests.Browsing.Common;

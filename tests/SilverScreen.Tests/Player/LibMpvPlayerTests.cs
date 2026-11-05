@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
@@ -47,7 +47,8 @@ public sealed class LibMpvPlayerTests
         player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), preferences, null);
 
         Assert.True(SpinWait.SpinUntil(
-            () => native.StringProperties.Any(p => p.Name == "script-opts" && p.Value == "ytdl_hook-ytdl_path=/custom/path/to/yt-dlp"),
+            () => native.StringProperties.Any(p =>
+                p.Name == "script-opts" && p.Value == "ytdl_hook-ytdl_path=/custom/path/to/yt-dlp"),
             TimeSpan.FromSeconds(2)));
     }
 
@@ -149,7 +150,7 @@ public sealed class LibMpvPlayerTests
         // Rapid seeks while first seek is in progress
         player.SeekAbsolute(20, false);
         player.SeekAbsolute(30, false);
-        player.SeekAbsolute(40, true);
+        player.SeekAbsolute(40);
 
         native.BlockCommandEvent = null;
         blockEvent.Set();
@@ -161,6 +162,7 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("seek|10|absolute+keyframes", native.Commands);
         Assert.Contains("seek|40|absolute+exact", native.Commands);
     }
+
     [Fact]
     public void ProcessesLogMessageEventWithoutError()
     {
@@ -252,7 +254,8 @@ public sealed class LibMpvPlayerTests
             // When file is reloaded on resumption, reload snapshot is applied
             player.HandleFileLoaded();
 
-            Assert.True(SpinWait.SpinUntil(() => native.Commands.Any(c => c.Contains("seek|42.5|absolute+exact")), TimeSpan.FromSeconds(2)));
+            Assert.True(SpinWait.SpinUntil(() => native.Commands.Any(c => c.Contains("seek|42.5|absolute+exact")),
+                TimeSpan.FromSeconds(2)));
         }
         finally
         {
@@ -343,7 +346,8 @@ public sealed class LibMpvPlayerTests
             player.InitializeRenderer();
             player.HandleFileLoaded();
 
-            Assert.True(SpinWait.SpinUntil(() => native.FlagProperties.Any(p => p.Name == "pause" && p.Value), TimeSpan.FromSeconds(2)));
+            Assert.True(SpinWait.SpinUntil(() => native.FlagProperties.Any(p => p.Name == "pause" && p.Value),
+                TimeSpan.FromSeconds(2)));
         }
         finally
         {
@@ -427,8 +431,8 @@ public sealed class LibMpvPlayerTests
         Assert.Single(stats.Tracks);
         Assert.Equal("av1", stats.Tracks[0].Codec);
         Assert.True(stats.Tracks[0].IsSelected);
-
     }
+
     [Fact]
     public void UpdatePlaylistRequest_SyncsReloadSourceSoRemovedEntryDoesNotReappearOnReload()
     {
@@ -438,23 +442,27 @@ public sealed class LibMpvPlayerTests
         var video1 = Video("vid1_123456");
         var video2 = Video("vid2_123456");
         var video3 = Video("vid3_123456");
-        var initialRequest = new PlaybackRequest([video1, video2, video3], 0);
+        var initialRequest = new PlaybackRequest([video1, video2, video3]);
         player.Load(initialRequest, preferences, null);
         Assert.True(SpinWait.SpinUntil(() => native.Commands.Count >= 3, TimeSpan.FromSeconds(2)));
 
         player.HandleFileLoaded();
 
         // Clear commands recorded from initial load
-        while (native.Commands.TryTake(out _)) { }
+        while (native.Commands.TryTake(out _))
+        {
+        }
 
         // Simulate removing vid2 from the queue and updating player's saved request
-        var updatedRequest = new PlaybackRequest([video1, video3], 0);
+        var updatedRequest = new PlaybackRequest([video1, video3]);
         player.UpdatePlaylistRequest(updatedRequest);
 
         // Trigger quality change which invokes LoadCurrentRequest using the saved request
         player.SetQuality("720p");
 
-        Assert.True(SpinWait.SpinUntil(() => native.Commands.Any(c => c.StartsWith("loadfile|", StringComparison.Ordinal)), TimeSpan.FromSeconds(2)));
+        Assert.True(SpinWait.SpinUntil(
+            () => native.Commands.Any(c => c.StartsWith("loadfile|", StringComparison.Ordinal)),
+            TimeSpan.FromSeconds(2)));
         // Allow enqueued commands to finish
         Thread.Sleep(50);
 
@@ -477,13 +485,15 @@ public sealed class LibMpvPlayerTests
         using var player = new LibMpvPlayer(native, action => action());
 
         Assert.Contains(native.ObservedProperties, p => p.Name == "paused-for-cache" && p.Format == LibMpvFormat.Flag);
-        Assert.Contains(native.ObservedProperties, p => p.Name == "cache-buffering-state" && p.Format == LibMpvFormat.Int64);
+        Assert.Contains(native.ObservedProperties,
+            p => p.Name == "cache-buffering-state" && p.Format == LibMpvFormat.Int64);
     }
 
     [Fact]
     public void LibMpvPlaybackStateTracksBufferingDefaultsAndValues()
     {
-        var defaultState = new LibMpvPlaybackState(0, TimeSpan.Zero, TimeSpan.FromMinutes(2), false, false, 100, 1, true, true, false, [], []);
+        var defaultState = new LibMpvPlaybackState(0, TimeSpan.Zero, TimeSpan.FromMinutes(2), false, false, 100, 1,
+            true, true, false, [], []);
         Assert.False(defaultState.IsBuffering);
         Assert.Equal(0, defaultState.BufferingPercent);
 
@@ -506,11 +516,11 @@ public sealed class LibMpvPlayerTests
         public ManualResetEventSlim? BlockCommandEvent { get; set; }
         public ManualResetEventSlim? CommandStartedEvent { get; set; }
         public Dictionary<string, string> ReadProperties { get; } = [];
-        public bool IsAvailable => true;
-        public string? AvailabilityError => null;
         public string? RequestedLogLevel { get; private set; }
         public bool KeepEventLoopAlive { get; set; }
         public ConcurrentQueue<LibMpvEvent> EventsToYield { get; } = [];
+        public bool IsAvailable => true;
+        public string? AvailabilityError => null;
 
         public nint Create()
         {
@@ -532,6 +542,7 @@ public sealed class LibMpvPlayerTests
             ObservedProperties.Enqueue((name, format));
             return 0;
         }
+
         public int RequestLogMessages(nint handle, string minLevel)
         {
             RequestedLogLevel = minLevel;

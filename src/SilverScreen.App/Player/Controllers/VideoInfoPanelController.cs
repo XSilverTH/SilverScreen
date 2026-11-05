@@ -4,8 +4,9 @@ using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
-using Functions = GLib.Functions;
+using SilverScreen.Player.RichText;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -21,6 +22,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     private readonly Revealer _cueRevealer;
     private readonly Label _description;
     private readonly ScrolledWindow _descriptionScroller;
+    private readonly DisposeScope _lifetime = new();
     private readonly Func<string, bool> _linkActivated;
     private readonly IYouTubeMediaResolver _mediaResolver;
     private readonly Revealer _revealer;
@@ -30,7 +32,6 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
-    private readonly DisposeScope _lifetime = new();
     private CancellationTokenSource? _infoLoadCancellation;
     private int _infoLoadGeneration;
     private YouTubeVideoDetails? _loadedDetails;
@@ -270,7 +271,7 @@ internal sealed class VideoInfoPanelController : IDisposable
     {
         try
         {
-            _description.SetMarkup(RichText.RichLabelMarkup.Build(description));
+            _description.SetMarkup(RichLabelMarkup.Build(description));
         }
         catch (Exception exception)
         {

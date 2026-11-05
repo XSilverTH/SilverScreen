@@ -1,6 +1,5 @@
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Shell;
-using Xunit;
 
 namespace SilverScreen.Tests.Shell;
 
@@ -10,7 +9,7 @@ public sealed class NavigationHistoryTests
     public void NavigateTo_DetailPages_PushesToBackStackAndGoesBackInReverseOrder()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         Assert.True(nav.NavigateTo(NavigationPage.Search, "query"));
         var channel = new ChannelNavigationArgs("https://youtube.com/@channel", "Channel");
@@ -36,7 +35,7 @@ public sealed class NavigationHistoryTests
     public void NavigateTo_NestedChannels_PushesEachChannelToBackStack()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         var channelA = new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A");
         var channelB = new ChannelNavigationArgs("https://youtube.com/@channelB", "Channel B");
@@ -80,12 +79,13 @@ public sealed class NavigationHistoryTests
     public void NavigateTo_SamePageWithSameParameter_ReturnsFalse()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         var channelA = new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A");
 
         Assert.True(nav.NavigateTo(NavigationPage.Channel, channelA));
-        Assert.False(nav.NavigateTo(NavigationPage.Channel, new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A")));
+        Assert.False(nav.NavigateTo(NavigationPage.Channel,
+            new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A")));
 
         // Back stack should only have Home, not a duplicate Channel A
         Assert.True(nav.GoBack());
@@ -97,7 +97,7 @@ public sealed class NavigationHistoryTests
     public void PageChanged_FiresWithCorrectPayloadAndDirection()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         NavigationPageChangedEventArgs? lastArgs = null;
         nav.PageChanged += (_, args) => lastArgs = args;
@@ -126,7 +126,7 @@ public sealed class NavigationHistoryTests
     public void SyncFromViewStack_SelectsNewRootWithoutCreatingBackEntry()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         nav.SyncFromViewStack("subscriptions");
 
@@ -141,11 +141,12 @@ public sealed class NavigationHistoryTests
         Assert.Equal(NavigationPage.Subscriptions, nav.CurrentPage);
         Assert.False(nav.CanGoBack);
     }
+
     [Fact]
     public void SyncFromViewStack_WhenTypedEntryAlreadyVisible_PreservesEntryAndHistory()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
         nav.NavigateTo(NavigationPage.Search, "query");
 
         nav.SyncFromViewStack("search");
@@ -177,7 +178,7 @@ public sealed class NavigationHistoryTests
     public void NavigatingBetweenChannelsThroughPlayer_ReturnsToPageBeforeVideo()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
         var channelA = new ChannelNavigationArgs("https://youtube.com/@channelA", "Channel A");
         var channelB = new ChannelNavigationArgs("https://youtube.com/@channelB", "Channel B");
 
@@ -195,7 +196,7 @@ public sealed class NavigationHistoryTests
     public void DirectVideoPlayback_FromHome_PushesOnlyHomeBeforePlayer()
     {
         using var nav = new NavigationService();
-        nav.Initialize(NavigationPage.Home);
+        nav.Initialize();
 
         // Direct playback navigates straight to Player without Search intermediate page
         Assert.True(nav.NavigateTo(NavigationPage.Player));

@@ -208,12 +208,9 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_registry.TryGetValue(page, out var existing))
-        {
-            if (existing.IsShellPage && (!isShellPage || !string.Equals(existing.StackName, stackName, StringComparison.Ordinal)))
-            {
+            if (existing.IsShellPage &&
+                (!isShellPage || !string.Equals(existing.StackName, stackName, StringComparison.Ordinal)))
                 _viewStackNameToPage.Remove(existing.StackName);
-            }
-        }
 
         var registration = new NavigationPageRegistration(page, stackName, isShellPage, onEnter, onLeave);
         _registry[page] = registration;
@@ -280,6 +277,7 @@ public sealed class NavigationService : INavigationService, IDisposable
                     !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
                     _mainStack.VisibleChildName = entry.StackName;
             }
+
             if (pushToBackStack)
             {
                 if (IsShellRoot(target.Page))
@@ -287,6 +285,7 @@ public sealed class NavigationService : INavigationService, IDisposable
                 else if (previous.Page != NavigationPage.Player)
                     _backStack.Push(previous);
             }
+
             CurrentEntry = target;
             entry.OnEnter?.Invoke();
         }
@@ -303,6 +302,7 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History;
     }
+
     public bool TryGetPage(string stackName, out NavigationPage page)
     {
         return _viewStackNameToPage.TryGetValue(stackName, out page);

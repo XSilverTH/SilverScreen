@@ -1,9 +1,8 @@
-using SilverScreen.Browsing.Components;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Infrastructure.Account.Session;
 using SilverScreen.Browsing.History;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
+using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Browsing.History;
 
@@ -31,6 +30,7 @@ public sealed class HistoryViewModelTests
         status.Action?.Invoke();
         Assert.True(signInCalled);
     }
+
     [Fact]
     public async Task LoadMoreAsync_AppendsTheNextServerPageWithoutDuplicatingVideos()
     {
@@ -54,6 +54,7 @@ public sealed class HistoryViewModelTests
         Assert.Equal(["v1", "v2"], viewModel.State.Videos.Select(video => video.Id));
         Assert.False(viewModel.HasMore);
     }
+
     [Fact]
     public async Task LoadAsync_WhenFirstPageOnlyContainsShorts_PreservesContinuation()
     {
@@ -61,7 +62,7 @@ public sealed class HistoryViewModelTests
         {
             FirstPage = new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.Empty,
-                new FeedPage([CreateVideo("short", isShort: true)], "next"),
+                new FeedPage([CreateVideo("short", true)], "next"),
                 "No watch history was returned."),
             NextPage = new AuthenticatedHistoryResult(
                 AuthenticatedHistoryStatus.Success,
@@ -84,7 +85,6 @@ public sealed class HistoryViewModelTests
         session.SetManualSession("test-manual-session", SessionCookieFormat.NetscapeCookiesText);
         return session;
     }
-
 
 
     private static VideoSummary CreateVideo(string id, bool isShort = false)

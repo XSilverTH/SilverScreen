@@ -32,9 +32,9 @@ public static class PlayerShortcutActions
 public sealed class PlayerShortcutController : IDisposable
 {
     private readonly Dictionary<string, List<Action>> _actionHandlers = new(StringComparer.Ordinal);
+    private readonly DisposeScope _lifetime = new();
     private readonly Dictionary<uint, string> _shortcutMap = [];
     private readonly Widget _viewWidget;
-    private readonly DisposeScope _lifetime = new();
 
 
     private EventControllerKey? _keyboardController;

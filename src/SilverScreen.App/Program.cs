@@ -3,17 +3,14 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Adw;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
-using Microsoft.Extensions.DependencyInjection;
-using SilverScreen.Core.Preferences;
 
-if (args.Length > 0 && args.Contains("--auth"))
-{
-    return RunAuthHelper();
-}
+if (args.Length > 0 && args.Contains("--auth")) return RunAuthHelper();
 
 var applicationConfiguration = ApplicationConfiguration.FromEnvironment();
 var applicationStateDirectory = Path.Combine(
@@ -91,6 +88,7 @@ static LogEventLevel ResolveLogLevel(string? logLevelOverride)
         _ => LogEventLevel.Information
     };
 }
+
 static void LogExternalDependencyVersions(AppPreferences preferences)
 {
     // Floors mirror what Arch Linux x86-64 ships at release time (yt-dlp 2026.08.19-1,
@@ -107,9 +105,7 @@ static void LogExternalDependencyVersions(AppPreferences preferences)
             var firstLine = output.Split('\n', 2)[0].Trim();
             var tokens = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (tokens.Length > 1 && tokens[0].Equals("mpv", StringComparison.OrdinalIgnoreCase))
-            {
                 return tokens[1].TrimStart('v', 'V');
-            }
 
             return firstLine.TrimStart('v', 'V');
         });
@@ -213,7 +209,7 @@ static string? ProbeToolVersion(
     }
 }
 
-partial class Program
+internal partial class Program
 {
     [LibraryImport("*", EntryPoint = "run_auth_helper")]
     private static partial int RunAuthHelper();

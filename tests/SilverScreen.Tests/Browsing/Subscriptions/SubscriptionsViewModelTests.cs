@@ -1,5 +1,5 @@
-using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Browsing.Components;
+using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Common;
@@ -101,7 +101,7 @@ public sealed class SubscriptionsViewModelTests
         };
 
         var subsService = new FakeSubscriptionsService([targetChannel], feedVideos);
-        var channelService = new FakeChannelService(channelUploads, nextContinuationToken: "next");
+        var channelService = new FakeChannelService(channelUploads, "next");
         var session = CreateSession();
 
         using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
@@ -146,8 +146,7 @@ public sealed class SubscriptionsViewModelTests
                 CreateVideo("v1", "Video 1", "Channel 1", "https://www.youtube.com/@chan1"),
                 CreateVideo("v2", "Video 2", "Channel 1", "https://www.youtube.com/@chan1")
             ],
-            ChannelVideoSort.Newest,
-            null, true, null));
+            ChannelVideoSort.Newest));
 
         await selectTask;
 
@@ -294,7 +293,7 @@ public sealed class SubscriptionsViewModelTests
         var subsService = new FakeSubscriptionsService(
             [],
             firstPage,
-            secondFeedPage: [],
+            [],
             secondPageStatus: AuthenticatedSubscriptionsStatus.TemporaryBackendFailure,
             secondPageMessage: "private-token " + "x".PadRight(4000, 'x'));
 
@@ -314,11 +313,13 @@ public sealed class SubscriptionsViewModelTests
     public async Task LoadMoreAsync_PaginatesChannelWhenFilterActive()
     {
         var channel = new SubscribedChannel("UC1", "Channel 1", "https://www.youtube.com/@chan1", null);
-        var initialUploads = new List<VideoSummary> { CreateVideo("v1", "V1", "Channel 1", "https://www.youtube.com/@chan1") };
-        var moreUploads = new List<VideoSummary> { CreateVideo("v2", "V2", "Channel 1", "https://www.youtube.com/@chan1") };
+        var initialUploads = new List<VideoSummary>
+            { CreateVideo("v1", "V1", "Channel 1", "https://www.youtube.com/@chan1") };
+        var moreUploads = new List<VideoSummary>
+            { CreateVideo("v2", "V2", "Channel 1", "https://www.youtube.com/@chan1") };
 
         var subsService = new FakeSubscriptionsService([channel], []);
-        var channelService = new FakeChannelService(initialUploads, nextContinuationToken: "next", secondPage: moreUploads);
+        var channelService = new FakeChannelService(initialUploads, "next", moreUploads);
         var session = CreateSession();
 
         using var viewModel = new SubscriptionsViewModel(subsService, channelService, session);
@@ -340,7 +341,7 @@ public sealed class SubscriptionsViewModelTests
         var channelService = new FakeChannelService();
         var session = CreateSession();
 
-        using var viewModel = new SubscriptionsViewModel(subsService, channelService, session, subscribeSessionEvents: true);
+        using var viewModel = new SubscriptionsViewModel(subsService, channelService, session, true);
         await viewModel.LoadAsync(20);
 
         Assert.Single(viewModel.State.Videos);
@@ -383,7 +384,7 @@ public sealed class SubscriptionsViewModelTests
 
         tcs.SetResult(new AuthenticatedSubscriptionsFeedResult(
             AuthenticatedSubscriptionsStatus.Success,
-            new FeedPage(videos, null),
+            new FeedPage(videos),
             "Success"));
 
         await refreshTask;
@@ -424,7 +425,8 @@ public sealed class SubscriptionsViewModelTests
         IReadOnlyList<VideoSummary>? thirdFeedPage = null,
         AuthenticatedSubscriptionsStatus secondPageStatus = AuthenticatedSubscriptionsStatus.Success,
         string? secondPageMessage = null,
-        AuthenticatedSubscriptionsStatus firstPageStatus = AuthenticatedSubscriptionsStatus.Success) : IAuthenticatedSubscriptionsService
+        AuthenticatedSubscriptionsStatus firstPageStatus = AuthenticatedSubscriptionsStatus.Success)
+        : IAuthenticatedSubscriptionsService
     {
         private int _feedPageCalls;
 
@@ -433,7 +435,10 @@ public sealed class SubscriptionsViewModelTests
             CancellationToken cancellationToken = default)
         {
             _feedPageCalls = 1;
-            var continuation = secondFeedPage is { Count: > 0 } || secondPageStatus != AuthenticatedSubscriptionsStatus.Success ? "21" : null;
+            var continuation =
+                secondFeedPage is { Count: > 0 } || secondPageStatus != AuthenticatedSubscriptionsStatus.Success
+                    ? "21"
+                    : null;
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
                 firstPageStatus,
                 new FeedPage(firstFeedPage, continuation),
@@ -485,7 +490,7 @@ public sealed class SubscriptionsViewModelTests
             CancellationToken cancellationToken)
         {
             _calls++;
-            var list = _calls > 1 && secondPage != null ? secondPage : (uploads ?? []);
+            var list = _calls > 1 && secondPage != null ? secondPage : uploads ?? [];
             var next = _calls > 1 ? null : nextContinuationToken;
             return Task.FromResult(new ChannelPage(
                 channelUrl,
@@ -532,7 +537,7 @@ public sealed class SubscriptionsViewModelTests
         {
             return Task.FromResult(new AuthenticatedSubscriptionsFeedResult(
                 AuthenticatedSubscriptionsStatus.Success,
-                new FeedPage([], null),
+                new FeedPage([]),
                 "Success"));
         }
 

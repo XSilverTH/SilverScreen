@@ -21,7 +21,6 @@ public partial class ChannelView : ViewBase<Box>
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
     private readonly IThumbnailService _thumbnails;
-    private readonly Adjustment? _vadjustment;
     private readonly VideoListView _videoList;
     private readonly ChannelViewModel _viewModel;
 
@@ -48,16 +47,16 @@ public partial class ChannelView : ViewBase<Box>
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
 
         _videoList = Lifetime.Own(new VideoListView(
-            (IVideoListSource)viewModel,
+            viewModel,
             thumbnails,
             videoActions ?? throw new ArgumentNullException(nameof(videoActions))));
         channel_video_list_host.Append(_videoList.Widget);
 
-        _vadjustment = _videoList.Vadjustment;
-        if (_vadjustment is not null)
+        Vadjustment = _videoList.Vadjustment;
+        if (Vadjustment is not null)
             Lifetime.Track(
-                () => _vadjustment.OnValueChanged += OnScrollValueChanged,
-                () => _vadjustment.OnValueChanged -= OnScrollValueChanged);
+                () => Vadjustment.OnValueChanged += OnScrollValueChanged,
+                () => Vadjustment.OnValueChanged -= OnScrollValueChanged);
 
         var scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
         scrollController.SetPropagationPhase(PropagationPhase.Capture);
@@ -89,7 +88,7 @@ public partial class ChannelView : ViewBase<Box>
     }
 
     public bool IsLoading => _videoList.IsLoading;
-    public Adjustment? Vadjustment => _vadjustment;
+    public Adjustment? Vadjustment { get; }
 
 
     public event EventHandler<bool>? RefreshLoadingChanged;
@@ -143,9 +142,9 @@ public partial class ChannelView : ViewBase<Box>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (IsDisposed || _vadjustment is null) return;
+        if (IsDisposed || Vadjustment is null) return;
 
-        var currentY = _vadjustment.Value;
+        var currentY = Vadjustment.Value;
         var now = Environment.TickCount64;
 
         if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs)
@@ -195,7 +194,7 @@ public partial class ChannelView : ViewBase<Box>
         _isHeaderCollapsed = collapsed;
         channel_header_revealer.RevealChild = !collapsed;
         _lastHeaderStateChangeTicks = Environment.TickCount64;
-        if (_vadjustment is not null) _lastScrollY = _vadjustment.Value;
+        if (Vadjustment is not null) _lastScrollY = Vadjustment.Value;
     }
 
     private void OnStateChanged(object? sender, ChannelViewState state)

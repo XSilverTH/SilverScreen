@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Serilog;
@@ -76,12 +77,12 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
 
     public YouTubeClient GetClient()
     {
-        return GetClient(requireAuthentication: false);
+        return GetClient(false);
     }
 
     public YouTubeClient GetAuthenticatedClient()
     {
-        return GetClient(requireAuthentication: true);
+        return GetClient(true);
     }
 
     private YouTubeClient GetClient(bool requireAuthentication)
@@ -123,10 +124,8 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 authentication = null;
             }
         else if (requireAuthentication)
-        {
             throw new AuthenticationRequiredException(
                 "This operation requires a valid authenticated YouTube session.");
-        }
 
         List<YouTubeClient>? evicted = null;
         YouTubeClient client;
@@ -211,8 +210,8 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 if (fields.Length != 7)
                     fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                 if (fields.Length != 7 || !long.TryParse(fields[4],
-                        System.Globalization.NumberStyles.Integer,
-                        System.Globalization.CultureInfo.InvariantCulture, out var expiryUnix))
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var expiryUnix))
                     continue;
 
                 var name = fields[5];
@@ -255,7 +254,8 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 expiryCounts[row.Name] = (counts.Sessions, counts.Expired + (isExpired ? 1 : 0));
                 Logger.Information(
                     "Imported YouTube cookie metadata: {CookieName}, raw count {RawCount}, retained count {RetainedCount}, expiry UTC {ExpiryUtc}, session {IsSessionCookie}, expired {IsExpired}, retained at import {RetainedAtImport}",
-                    row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), expiresUtc, false, isExpired, retained);
+                    row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), expiresUtc, false, isExpired,
+                    retained);
             }
             catch (ArgumentOutOfRangeException)
             {

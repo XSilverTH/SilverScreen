@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Player;
+
 namespace SilverScreen.Tests.Player;
 
 public sealed class SponsorBlockServiceTests
@@ -64,20 +65,21 @@ public sealed class SponsorBlockServiceTests
         {
             var prefix = request.RequestUri!.AbsolutePath.Split('/')[^1];
             var matchingIds = ids.Where(id =>
-                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(id))).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(id)))
+                    .StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
 
             var json = $$"""
-                        [
-                          {{string.Join(",\n", matchingIds.Select(id => $$"""
-                          {
-                            "videoID": "{{id}}",
-                            "segments": [
-                              { "segment": [1, 2], "UUID": "id-{{id}}", "category": "sponsor", "actionType": "skip" }
-                            ]
-                          }
-                          """))}}
-                        ]
-                        """;
+                         [
+                           {{string.Join(",\n", matchingIds.Select(id => $$"""
+                                                                           {
+                                                                             "videoID": "{{id}}",
+                                                                             "segments": [
+                                                                               { "segment": [1, 2], "UUID": "id-{{id}}", "category": "sponsor", "actionType": "skip" }
+                                                                             ]
+                                                                           }
+                                                                           """))}}
+                         ]
+                         """;
             return Task.FromResult(JsonResponse(json));
         });
         using var client = new HttpClient(handler);
@@ -94,6 +96,7 @@ public sealed class SponsorBlockServiceTests
         Assert.NotEmpty(await service.GetSegmentsAsync(ids[^1], categories));
         Assert.Equal(ids.Length + 1, handler.CallCount);
     }
+
     [Fact]
     public async Task GetSegmentsAsync_WhenNotFound_ReturnsEmpty()
     {

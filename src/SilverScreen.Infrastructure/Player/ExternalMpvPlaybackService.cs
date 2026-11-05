@@ -24,12 +24,12 @@ public sealed class ExternalMpvPlaybackService(
         playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
 
     private readonly YtDlpMediaResolver? _mediaResolver = mediaResolver;
+    private readonly bool _ownsCoordinator;
 
     private readonly IPreferencesService _preferencesService =
         preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
 
     private bool _disposed;
-    private readonly bool _ownsCoordinator;
 
 
     internal ExternalMpvPlaybackService(
@@ -75,7 +75,7 @@ public sealed class ExternalMpvPlaybackService(
         if (request.Videos.IsDefaultOrEmpty)
             return Task.FromResult(PlaybackRequest.EmptyQueueMessage);
 
-        return LaunchMpvAsync(request, isFallbackRetry: false);
+        return LaunchMpvAsync(request, false);
     }
 
     private async Task<string> LaunchMpvAsync(
@@ -99,7 +99,7 @@ public sealed class ExternalMpvPlaybackService(
             var command =
                 MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, playbackUrls);
             if (extraArguments is { Count: > 0 })
-                command = command with { Arguments = [..command.Arguments, ..extraArguments] };
+                command = command with { Arguments = [.. command.Arguments, .. extraArguments] };
             Logger.Information(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; TempCookiesProvided: {TempCookiesProvided}; CookiesOption: {CookiesOption}; VideoCount: {VideoCount}; StartIndex: {StartIndex}",
                 command.ExecutablePath,
@@ -219,6 +219,7 @@ public sealed class ExternalMpvPlaybackService(
 
         _coordinator.CompleteActivePlayback(playbackId);
     }
+
     private static async Task DrainProcessOutputAsync(Process process)
     {
         try
@@ -314,6 +315,7 @@ public sealed class ExternalMpvPlaybackService(
             Logger.Debug("Skipping MPV fallback retry: no media resolver configured");
             return;
         }
+
         if (request.Videos.IsDefaultOrEmpty)
             return;
 
@@ -343,9 +345,9 @@ public sealed class ExternalMpvPlaybackService(
 
         var status = await LaunchMpvAsync(
                 request,
-                isFallbackRetry: true,
-                extraArguments: extraArguments,
-                playbackUrls: retryPlaybackUrls)
+                true,
+                extraArguments,
+                retryPlaybackUrls)
             .ConfigureAwait(false);
         Logger.Information("MPV fallback relaunch finished: {Status}", status);
     }

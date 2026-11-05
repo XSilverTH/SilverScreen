@@ -26,7 +26,9 @@ public static class SessionGate
     public const string HistorySignedOutMessage = "Sign in with Google or use cookies.txt to see your watch history.";
     public const string SubscriptionsSignedOutMessage = "Sign in to YouTube to load your subscriptions.";
 
-    public const string SessionNoLongerValidMessage = "Your YouTube sign-in is no longer valid. Sign in again to continue.";
+    public const string SessionNoLongerValidMessage =
+        "Your YouTube sign-in is no longer valid. Sign in again to continue.";
+
     public const string HomeLoadErrorMessage = "YouTube couldn’t load your Home feed. Try again in a moment.";
     public const string HomeEmptyMessage = "No recommendations are available right now.";
 

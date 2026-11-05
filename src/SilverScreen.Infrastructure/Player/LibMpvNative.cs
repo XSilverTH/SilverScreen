@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using SilverScreen.Core.Common;
+
 namespace SilverScreen.Infrastructure.Player;
 
 internal enum LibMpvFormat

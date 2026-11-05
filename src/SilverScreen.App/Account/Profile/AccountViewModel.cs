@@ -17,7 +17,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
     private AccountProfile? _profile;
     private CancellationTokenSource? _profileCancellation;
     private AccountSession _session;
-    private AccountProfilePresentationStatus _profileStatus = AccountProfilePresentationStatus.SignedOut;
+
     public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService)
     {
         _accountProfileService = accountProfileService;
@@ -43,13 +43,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public AccountProfilePresentationStatus ProfileStatus => _profileStatus;
+    public AccountProfilePresentationStatus ProfileStatus { get; private set; } =
+        AccountProfilePresentationStatus.SignedOut;
 
-    public bool IsProfileChecking => _profileStatus == AccountProfilePresentationStatus.Checking;
+    public bool IsProfileChecking => ProfileStatus == AccountProfilePresentationStatus.Checking;
 
-    public bool IsProfileRejected => _profileStatus == AccountProfilePresentationStatus.Rejected;
+    public bool IsProfileRejected => ProfileStatus == AccountProfilePresentationStatus.Rejected;
 
-    public bool IsProfileUnavailable => _profileStatus == AccountProfilePresentationStatus.Unavailable;
+    public bool IsProfileUnavailable => ProfileStatus == AccountProfilePresentationStatus.Unavailable;
 
     public bool HasManualSession => SessionGate.RequireSignedIn(_sessionService);
 
@@ -246,9 +247,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     private void SetProfileStatus(AccountProfilePresentationStatus status)
     {
-        if (_profileStatus == status)
+        if (ProfileStatus == status)
             return;
-        _profileStatus = status;
+        ProfileStatus = status;
         OnPropertyChanged(nameof(ProfileStatus));
         OnPropertyChanged(nameof(IsProfileChecking));
         OnPropertyChanged(nameof(IsProfileRejected));

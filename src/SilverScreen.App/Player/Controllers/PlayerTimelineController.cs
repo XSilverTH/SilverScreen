@@ -1,15 +1,9 @@
-using Point = Graphene.Point;
-using System.Diagnostics.CodeAnalysis;
 using Gtk;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Player;
-using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using Functions = GLib.Functions;
 using XSTH.Blueprint.Helpers;
+using Point = Graphene.Point;
 
 namespace SilverScreen.Player.Controllers;
-
 
 /// <summary>
 ///     Pure timeline/playback-position state: scrubbing lifecycle, seek reconciliation,
@@ -25,8 +19,12 @@ public class PlayerTimelineState(
     internal const uint DefaultSeekThrottleIntervalMilliseconds = 120;
     internal const long DefaultReconciliationLatchMilliseconds = 400;
     internal const double DefaultSeekReconciliationToleranceSeconds = 1.5;
-    public const uint DefaultSkipPromptDurationMilliseconds = PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
-    public const uint DefaultResumePromptDurationMilliseconds = PlayerResumeState.DefaultResumePromptDurationMilliseconds;
+
+    public const uint DefaultSkipPromptDurationMilliseconds =
+        PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
+
+    public const uint DefaultResumePromptDurationMilliseconds =
+        PlayerResumeState.DefaultResumePromptDurationMilliseconds;
 
     private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
 
@@ -48,10 +46,7 @@ public class PlayerTimelineState(
     {
         ExpectedDuration = expectedDuration;
         IsLive = isLive;
-        if (expectedDuration is { } duration && duration > TimeSpan.Zero)
-        {
-            Duration = duration;
-        }
+        if (expectedDuration is { } duration && duration > TimeSpan.Zero) Duration = duration;
     }
 
     // --- Timeline State Management & Seeking Reconciliation ---
@@ -264,6 +259,8 @@ public class PlayerTimelineState(
 internal sealed class PlayerTimelineController : IDisposable
 {
     private readonly Label _durationLabel;
+
+    private readonly DisposeScope _lifetime = new();
     private readonly Label _positionLabel;
     private readonly Action _registerActivity;
     private readonly Label _scrubChapterLabel;
@@ -276,8 +273,6 @@ internal sealed class PlayerTimelineController : IDisposable
     private readonly GestureDrag _timelineDragGesture;
     private readonly EventControllerMotion _timelineMotionController;
     private readonly Overlay _timelineOverlay;
-
-    private readonly DisposeScope _lifetime = new();
     private uint _throttledSeekSource;
     private bool _updatingControls;
 
@@ -381,7 +376,9 @@ internal sealed class PlayerTimelineController : IDisposable
             }
             else
             {
-                _durationLabel.SetText(state.IsLoading ? "--:--" : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive));
+                _durationLabel.SetText(state.IsLoading
+                    ? "--:--"
+                    : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive));
                 _timeline.SetRange(0, 0);
                 _timeline.SetSensitive(false);
             }
@@ -394,13 +391,9 @@ internal sealed class PlayerTimelineController : IDisposable
                     out var accepted) || !accepted) return;
 
             if (state.IsLoading && state.Position <= TimeSpan.Zero)
-            {
                 _positionLabel.SetText(State.IsLive ? "Live" : "--:--");
-            }
             else
-            {
                 _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
-            }
 
             var maxSeconds = effectiveDuration.TotalSeconds;
             _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, maxSeconds)));

@@ -22,6 +22,7 @@
     padding: 0;
     filter: drop-shadow(0 2px 4px alpha(#000000, 0.55));
 }
+
 /* Video Buffering Indicator */
 .player-buffering-indicator {
     margin-bottom: 28px;
@@ -233,6 +234,7 @@ button.player-reaction-button:disabled label {
 .player-seek-button {
     min-height: 40px;
 }
+
 .player-primary-control {
     min-height: 72px;
     min-width: 72px;

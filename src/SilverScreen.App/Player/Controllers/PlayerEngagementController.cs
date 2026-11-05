@@ -1,8 +1,8 @@
 using Gtk;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
-using static GLib.Functions;
 using XSTH.Blueprint.Helpers;
+using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -15,11 +15,11 @@ internal sealed class PlayerEngagementController : IDisposable
     private readonly Button _dislikeButton;
     private readonly Image _dislikeImage;
     private readonly Label _dislikesLabel;
+    private readonly DisposeScope _lifetime = new();
     private readonly Button _likeButton;
     private readonly Image _likeImage;
     private readonly Label _likesLabel;
     private readonly PlaybackSession _session;
-    private readonly DisposeScope _lifetime = new();
 
     public PlayerEngagementController(
         PlaybackSession session,
@@ -38,8 +38,10 @@ internal sealed class PlayerEngagementController : IDisposable
         _dislikeImage = dislikeImage;
         _dislikesLabel = dislikesLabel;
 
-        _lifetime.Track(() => _session.EngagementChanged += OnEngagementChanged, () => _session.EngagementChanged -= OnEngagementChanged);
-        _lifetime.Track(() => _session.RatingStateChanged += OnRatingStateChanged, () => _session.RatingStateChanged -= OnRatingStateChanged);
+        _lifetime.Track(() => _session.EngagementChanged += OnEngagementChanged,
+            () => _session.EngagementChanged -= OnEngagementChanged);
+        _lifetime.Track(() => _session.RatingStateChanged += OnRatingStateChanged,
+            () => _session.RatingStateChanged -= OnRatingStateChanged);
         _lifetime.Track(() => _session.VideoChanged += OnVideoChanged, () => _session.VideoChanged -= OnVideoChanged);
         _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);

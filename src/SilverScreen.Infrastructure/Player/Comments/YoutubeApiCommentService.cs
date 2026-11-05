@@ -169,7 +169,8 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
                 .ConfigureAwait(false);
             lock (_gate)
             {
-                if (_replyContinuations.Count > 0 && (_replyContinuations.Peek() == continuation || ReferenceEquals(_replyContinuations.Peek(), continuation)))
+                if (_replyContinuations.Count > 0 && (_replyContinuations.Peek() == continuation ||
+                                                      ReferenceEquals(_replyContinuations.Peek(), continuation)))
                     _replyContinuations.Dequeue();
 
                 foreach (var reply in page.Items)

@@ -2,7 +2,6 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Home;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
@@ -46,6 +45,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
             var generation = BeginRequest();
             return await FetchPageAsync(null, pageSize, true, generation, cancellationToken).ConfigureAwait(false);
         }
+
         InvalidateAndClearCachedResults();
         return new AuthenticatedHomeFeedResult(
             AuthenticatedHomeFeedStatus.AuthenticationRequired,
@@ -94,6 +94,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 GetHomeFeed(),
                 InvalidContinuationMessage);
         }
+
         return await FetchPageAsync(continuation, pageSize, false, generation, cancellationToken).ConfigureAwait(false);
     }
 
@@ -129,7 +130,8 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
                 var page = currentContinuation is null
                     ? await _clientProvider.GetAuthenticatedClient().Feeds.GetHomePageAsync(cancellationToken)
                         .ConfigureAwait(false)
-                    : await _clientProvider.GetAuthenticatedClient().Feeds.GetHomePageAsync(currentContinuation, cancellationToken)
+                    : await _clientProvider.GetAuthenticatedClient().Feeds
+                        .GetHomePageAsync(currentContinuation, cancellationToken)
                         .ConfigureAwait(false);
 
                 videos.AddRange(page.Items.OfType<VideoFeedItem>().Where(item => !item.Video.IsShort)

@@ -1,5 +1,3 @@
-using System.Text.Json;
-using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests.Player;
@@ -7,220 +5,220 @@ namespace SilverScreen.Tests.Player;
 public sealed class YtDlpFormatSelectorTests
 {
     private const string SampleMuxedJson = """
-        {
-            "id": "dQw4w9WgXcQ",
-            "title": "Muxed Video",
-            "formats": [
-                {
-                    "format_id": "18",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=18",
-                    "ext": "mp4",
-                    "height": 360,
-                    "width": 640,
-                    "fps": 30,
-                    "vcodec": "avc1.42001E",
-                    "acodec": "mp4a.40.2",
-                    "tbr": 500
-                },
-                {
-                    "format_id": "22",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=22",
-                    "ext": "mp4",
-                    "height": 720,
-                    "width": 1280,
-                    "fps": 30,
-                    "vcodec": "avc1.64001F",
-                    "acodec": "mp4a.40.2",
-                    "tbr": 1500
-                }
-            ]
-        }
-        """;
+                                           {
+                                               "id": "dQw4w9WgXcQ",
+                                               "title": "Muxed Video",
+                                               "formats": [
+                                                   {
+                                                       "format_id": "18",
+                                                       "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=18",
+                                                       "ext": "mp4",
+                                                       "height": 360,
+                                                       "width": 640,
+                                                       "fps": 30,
+                                                       "vcodec": "avc1.42001E",
+                                                       "acodec": "mp4a.40.2",
+                                                       "tbr": 500
+                                                   },
+                                                   {
+                                                       "format_id": "22",
+                                                       "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=22",
+                                                       "ext": "mp4",
+                                                       "height": 720,
+                                                       "width": 1280,
+                                                       "fps": 30,
+                                                       "vcodec": "avc1.64001F",
+                                                       "acodec": "mp4a.40.2",
+                                                       "tbr": 1500
+                                                   }
+                                               ]
+                                           }
+                                           """;
 
     private const string SampleAdaptiveJson = """
-        {
-            "id": "abc12345678",
-            "title": "Adaptive Streams Video",
-            "formats": [
-                {
-                    "format_id": "137",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=137",
-                    "ext": "mp4",
-                    "height": 1080,
-                    "width": 1920,
-                    "fps": 60,
-                    "vcodec": "avc1.64002a",
-                    "acodec": "none",
-                    "tbr": 4000
-                },
-                {
-                    "format_id": "248",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=248",
-                    "ext": "webm",
-                    "height": 1080,
-                    "width": 1920,
-                    "fps": 30,
-                    "vcodec": "vp9",
-                    "acodec": "none",
-                    "tbr": 2500
-                },
-                {
-                    "format_id": "136",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=136",
-                    "ext": "mp4",
-                    "height": 720,
-                    "width": 1280,
-                    "fps": 30,
-                    "vcodec": "avc1.4d401f",
-                    "acodec": "none",
-                    "tbr": 1500
-                },
-                {
-                    "format_id": "135",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=135",
-                    "ext": "mp4",
-                    "height": 480,
-                    "width": 854,
-                    "fps": 30,
-                    "vcodec": "avc1.4d401e",
-                    "acodec": "none",
-                    "tbr": 800
-                },
-                {
-                    "format_id": "134",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=134",
-                    "ext": "mp4",
-                    "height": 360,
-                    "width": 640,
-                    "fps": 30,
-                    "vcodec": "avc1.4d4015",
-                    "acodec": "none",
-                    "tbr": 400
-                },
-                {
-                    "format_id": "249",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757250000&itag=249",
-                    "ext": "webm",
-                    "height": null,
-                    "vcodec": "none",
-                    "acodec": "opus",
-                    "tbr": 50,
-                    "abr": 50
-                },
-                {
-                    "format_id": "251",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757190000&itag=251",
-                    "ext": "webm",
-                    "height": null,
-                    "vcodec": "none",
-                    "acodec": "opus",
-                    "tbr": 160,
-                    "abr": 160
-                }
-            ]
-        }
-        """;
-    
+                                              {
+                                                  "id": "abc12345678",
+                                                  "title": "Adaptive Streams Video",
+                                                  "formats": [
+                                                      {
+                                                          "format_id": "137",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=137",
+                                                          "ext": "mp4",
+                                                          "height": 1080,
+                                                          "width": 1920,
+                                                          "fps": 60,
+                                                          "vcodec": "avc1.64002a",
+                                                          "acodec": "none",
+                                                          "tbr": 4000
+                                                      },
+                                                      {
+                                                          "format_id": "248",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=248",
+                                                          "ext": "webm",
+                                                          "height": 1080,
+                                                          "width": 1920,
+                                                          "fps": 30,
+                                                          "vcodec": "vp9",
+                                                          "acodec": "none",
+                                                          "tbr": 2500
+                                                      },
+                                                      {
+                                                          "format_id": "136",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=136",
+                                                          "ext": "mp4",
+                                                          "height": 720,
+                                                          "width": 1280,
+                                                          "fps": 30,
+                                                          "vcodec": "avc1.4d401f",
+                                                          "acodec": "none",
+                                                          "tbr": 1500
+                                                      },
+                                                      {
+                                                          "format_id": "135",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=135",
+                                                          "ext": "mp4",
+                                                          "height": 480,
+                                                          "width": 854,
+                                                          "fps": 30,
+                                                          "vcodec": "avc1.4d401e",
+                                                          "acodec": "none",
+                                                          "tbr": 800
+                                                      },
+                                                      {
+                                                          "format_id": "134",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=134",
+                                                          "ext": "mp4",
+                                                          "height": 360,
+                                                          "width": 640,
+                                                          "fps": 30,
+                                                          "vcodec": "avc1.4d4015",
+                                                          "acodec": "none",
+                                                          "tbr": 400
+                                                      },
+                                                      {
+                                                          "format_id": "249",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757250000&itag=249",
+                                                          "ext": "webm",
+                                                          "height": null,
+                                                          "vcodec": "none",
+                                                          "acodec": "opus",
+                                                          "tbr": 50,
+                                                          "abr": 50
+                                                      },
+                                                      {
+                                                          "format_id": "251",
+                                                          "url": "https://rr1.googlevideo.com/videoplayback?expire=1757190000&itag=251",
+                                                          "ext": "webm",
+                                                          "height": null,
+                                                          "vcodec": "none",
+                                                          "acodec": "opus",
+                                                          "tbr": 160,
+                                                          "abr": 160
+                                                      }
+                                                  ]
+                                              }
+                                              """;
+
     private const string OverCapAdaptiveWithCompliantMuxedJson = """
-        {
-            "id": "quality-cap-regression",
-            "formats": [
-                {
-                    "format_id": "1080",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=1080",
-                    "ext": "mp4",
-                    "height": 1080,
-                    "width": 1920,
-                    "fps": 30,
-                    "vcodec": "avc1.64002a",
-                    "acodec": "none",
-                    "tbr": 4000
-                },
-                {
-                    "format_id": "251",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757190000&itag=251",
-                    "ext": "webm",
-                    "vcodec": "none",
-                    "acodec": "opus",
-                    "tbr": 160
-                },
-                {
-                    "format_id": "18",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=18",
-                    "ext": "mp4",
-                    "height": 360,
-                    "width": 640,
-                    "fps": 30,
-                    "vcodec": "avc1.42001E",
-                    "acodec": "mp4a.40.2",
-                    "tbr": 500
-                }
-            ]
-        }
-        """;
+                                                                 {
+                                                                     "id": "quality-cap-regression",
+                                                                     "formats": [
+                                                                         {
+                                                                             "format_id": "1080",
+                                                                             "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=1080",
+                                                                             "ext": "mp4",
+                                                                             "height": 1080,
+                                                                             "width": 1920,
+                                                                             "fps": 30,
+                                                                             "vcodec": "avc1.64002a",
+                                                                             "acodec": "none",
+                                                                             "tbr": 4000
+                                                                         },
+                                                                         {
+                                                                             "format_id": "251",
+                                                                             "url": "https://rr1.googlevideo.com/videoplayback?expire=1757190000&itag=251",
+                                                                             "ext": "webm",
+                                                                             "vcodec": "none",
+                                                                             "acodec": "opus",
+                                                                             "tbr": 160
+                                                                         },
+                                                                         {
+                                                                             "format_id": "18",
+                                                                             "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=18",
+                                                                             "ext": "mp4",
+                                                                             "height": 360,
+                                                                             "width": 640,
+                                                                             "fps": 30,
+                                                                             "vcodec": "avc1.42001E",
+                                                                             "acodec": "mp4a.40.2",
+                                                                             "tbr": 500
+                                                                         }
+                                                                     ]
+                                                                 }
+                                                                 """;
 
     private const string SampleLiveDirectUrlJson = """
-        {
-            "id": "live1234567",
-            "title": "Live Stream Direct",
-            "is_live": true,
-            "url": "https://manifest.googlevideo.com/api/manifest/hls_live/live.m3u8?expire=1757300000",
-            "formats": []
-        }
-        """;
+                                                   {
+                                                       "id": "live1234567",
+                                                       "title": "Live Stream Direct",
+                                                       "is_live": true,
+                                                       "url": "https://manifest.googlevideo.com/api/manifest/hls_live/live.m3u8?expire=1757300000",
+                                                       "formats": []
+                                                   }
+                                                   """;
 
     private const string SampleLiveManifestJson = """
-        {
-            "id": "live7654321",
-            "title": "Live Stream Manifest",
-            "is_live": true,
-            "formats": [
-                {
-                    "format_id": "hls-720",
-                    "url": "https://manifest.googlevideo.com/api/manifest/hls_live/720p.m3u8?expire=1757300000",
-                    "ext": "mp4",
-                    "height": 720,
-                    "width": 1280,
-                    "fps": 30,
-                    "vcodec": "avc1.4d401f",
-                    "acodec": "mp4a.40.2",
-                    "tbr": 2500
-                }
-            ]
-        }
-        """;
+                                                  {
+                                                      "id": "live7654321",
+                                                      "title": "Live Stream Manifest",
+                                                      "is_live": true,
+                                                      "formats": [
+                                                          {
+                                                              "format_id": "hls-720",
+                                                              "url": "https://manifest.googlevideo.com/api/manifest/hls_live/720p.m3u8?expire=1757300000",
+                                                              "ext": "mp4",
+                                                              "height": 720,
+                                                              "width": 1280,
+                                                              "fps": 30,
+                                                              "vcodec": "avc1.4d401f",
+                                                              "acodec": "mp4a.40.2",
+                                                              "tbr": 2500
+                                                          }
+                                                      ]
+                                                  }
+                                                  """;
 
     private const string SampleDrmAndUnplayableJson = """
-        {
-            "id": "drm12345678",
-            "title": "DRM / Storyboard Video",
-            "formats": [
-                {
-                    "format_id": "drm-1",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=1",
-                    "has_drm": true,
-                    "height": 1080,
-                    "vcodec": "avc1",
-                    "acodec": "mp4a"
-                },
-                {
-                    "format_id": "sb-0",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=2",
-                    "format_note": "storyboard",
-                    "height": 180,
-                    "vcodec": "none",
-                    "acodec": "none"
-                },
-                {
-                    "format_id": "mhtml-1",
-                    "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=3",
-                    "protocol": "mhtml",
-                    "vcodec": "none",
-                    "acodec": "none"
-                }
-            ]
-        }
-        """;
+                                                      {
+                                                          "id": "drm12345678",
+                                                          "title": "DRM / Storyboard Video",
+                                                          "formats": [
+                                                              {
+                                                                  "format_id": "drm-1",
+                                                                  "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=1",
+                                                                  "has_drm": true,
+                                                                  "height": 1080,
+                                                                  "vcodec": "avc1",
+                                                                  "acodec": "mp4a"
+                                                              },
+                                                              {
+                                                                  "format_id": "sb-0",
+                                                                  "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=2",
+                                                                  "format_note": "storyboard",
+                                                                  "height": 180,
+                                                                  "vcodec": "none",
+                                                                  "acodec": "none"
+                                                              },
+                                                              {
+                                                                  "format_id": "mhtml-1",
+                                                                  "url": "https://rr1.googlevideo.com/videoplayback?expire=1757200000&itag=3",
+                                                                  "protocol": "mhtml",
+                                                                  "vcodec": "none",
+                                                                  "acodec": "none"
+                                                              }
+                                                          ]
+                                                      }
+                                                      """;
 
     [Theory]
     [InlineData("Best", null)]
@@ -296,7 +294,8 @@ public sealed class YtDlpFormatSelectorTests
         var media = YtDlpFormatSelector.SelectMedia(SampleLiveDirectUrlJson, "Best");
 
         Assert.NotNull(media);
-        Assert.Equal("https://manifest.googlevideo.com/api/manifest/hls_live/live.m3u8?expire=1757300000", media.VideoUrl);
+        Assert.Equal("https://manifest.googlevideo.com/api/manifest/hls_live/live.m3u8?expire=1757300000",
+            media.VideoUrl);
         Assert.Null(media.AudioUrl);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1757300000), media.ExpiresAt);
     }
@@ -307,7 +306,8 @@ public sealed class YtDlpFormatSelectorTests
         var media = YtDlpFormatSelector.SelectMedia(SampleLiveManifestJson, "720p");
 
         Assert.NotNull(media);
-        Assert.Equal("https://manifest.googlevideo.com/api/manifest/hls_live/720p.m3u8?expire=1757300000", media.VideoUrl);
+        Assert.Equal("https://manifest.googlevideo.com/api/manifest/hls_live/720p.m3u8?expire=1757300000",
+            media.VideoUrl);
         Assert.Null(media.AudioUrl);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1757300000), media.ExpiresAt);
     }
@@ -354,24 +354,23 @@ public sealed class YtDlpFormatSelectorTests
     public void SelectMedia_UrlWithoutExpire_LeavesExpiryNull()
     {
         var json = """
-            {
-                "id": "noexpire",
-                "formats": [
-                    {
-                        "format_id": "1",
-                        "url": "https://example.com/video.mp4",
-                        "ext": "mp4",
-                        "height": 720,
-                        "vcodec": "avc1",
-                        "acodec": "mp4a"
-                    }
-                ]
-            }
-            """;
+                   {
+                       "id": "noexpire",
+                       "formats": [
+                           {
+                               "format_id": "1",
+                               "url": "https://example.com/video.mp4",
+                               "ext": "mp4",
+                               "height": 720,
+                               "vcodec": "avc1",
+                               "acodec": "mp4a"
+                           }
+                       ]
+                   }
+                   """;
         var media = YtDlpFormatSelector.SelectMedia(json, "720p");
 
         Assert.NotNull(media);
         Assert.Null(media.ExpiresAt);
     }
 }
-

@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using VideoQualityEnum = SilverScreen.Core.Preferences.VideoQuality;
 
 namespace SilverScreen.Core.Preferences;

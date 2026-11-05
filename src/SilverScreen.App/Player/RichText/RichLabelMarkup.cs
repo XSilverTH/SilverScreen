@@ -35,7 +35,7 @@ internal static class RichLabelMarkup
                     $"{SeekScheme}{(long)segment.Link.Timestamp.GetValueOrDefault().TotalSeconds}",
                 YouTubeRichTextKind.Hashtag => $"{HashtagScheme}{segment.Link.Value}",
                 YouTubeRichTextKind.Mention => "https://www.youtube.com/@" + segment.Link.Value,
-                _ => segment.Link.Value,
+                _ => segment.Link.Value
             };
 
             builder.Append("<a href=\"")

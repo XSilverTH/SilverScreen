@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
@@ -8,7 +6,6 @@ using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Common;
 
 namespace SilverScreen.Browsing.History;
-
 
 public sealed class HistoryViewModel : IVideoListSource
 {
@@ -37,8 +34,9 @@ public sealed class HistoryViewModel : IVideoListSource
                     ? SessionGate.SessionNoLongerValidMessage
                     : res.StatusMessage;
                 var isSuccess = res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty;
-                var hasContinuation = (res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty) &&
-                                      !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
+                var hasContinuation =
+                    res.Status is AuthenticatedHistoryStatus.Success or AuthenticatedHistoryStatus.Empty &&
+                    !string.IsNullOrEmpty(res.FeedPage.ContinuationToken);
 
                 return new FeedPageResult(
                     res.FeedPage.Videos,
@@ -70,6 +68,8 @@ public sealed class HistoryViewModel : IVideoListSource
             _engine.Reset();
     }
 
+    public bool HasMore => _engine.HasMore;
+
 
     public void Dispose()
     {
@@ -81,8 +81,6 @@ public sealed class HistoryViewModel : IVideoListSource
     }
 
     public VideoListPresentationState State => _engine.State;
-
-    public bool HasMore => _engine.HasMore;
 
     public event EventHandler<VideoListPresentationState>? StateChanged
     {

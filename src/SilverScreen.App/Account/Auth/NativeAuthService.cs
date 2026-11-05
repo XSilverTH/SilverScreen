@@ -13,13 +13,13 @@ public interface INativeAuthService : IDisposable
 public sealed class NativeAuthService : INativeAuthService
 {
     private static readonly ILogger Logger = Log.ForContext<NativeAuthService>();
-    private readonly ISessionService _sessionService;
-    private readonly Func<ProcessStartInfo, Process?> _processStarter;
-    private readonly Func<string?> _processPathResolver;
     private readonly CancellationTokenSource _disposalCts = new();
+    private readonly Func<string?> _processPathResolver;
+    private readonly Func<ProcessStartInfo, Process?> _processStarter;
+    private readonly ISessionService _sessionService;
     private Process? _currentProcess;
-    private int _isRunning;
     private bool _disposed;
+    private int _isRunning;
 
     public NativeAuthService(ISessionService sessionService)
         : this(sessionService, static psi => Process.Start(psi), static () => Environment.ProcessPath)
@@ -55,10 +55,7 @@ public sealed class NativeAuthService : INativeAuthService
         try
         {
             var binaryPath = _processPathResolver();
-            if (string.IsNullOrEmpty(binaryPath) || !File.Exists(binaryPath))
-            {
-                binaryPath = "/proc/self/exe";
-            }
+            if (string.IsNullOrEmpty(binaryPath) || !File.Exists(binaryPath)) binaryPath = "/proc/self/exe";
 
             Logger.Information("Starting native auth worker: {BinaryPath} --auth", binaryPath);
 
@@ -98,9 +95,7 @@ public sealed class NativeAuthService : INativeAuthService
                             "Native auth worker exited with code {ExitCode} (user cancelled or closed)",
                             process.ExitCode);
                         if (!string.IsNullOrWhiteSpace(stderr))
-                        {
                             Logger.Debug("Native auth worker stderr: {Stderr}", stderr);
-                        }
                         return false;
                     }
 
@@ -141,15 +136,14 @@ public sealed class NativeAuthService : INativeAuthService
         {
             _disposalCts.Cancel();
         }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException)
+        {
+        }
 
         try
         {
             var proc = _currentProcess;
-            if (proc is { HasExited: false })
-            {
-                proc.Kill();
-            }
+            if (proc is { HasExited: false }) proc.Kill();
         }
         catch (Exception exception)
         {

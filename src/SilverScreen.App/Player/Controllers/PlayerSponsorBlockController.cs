@@ -2,8 +2,8 @@ using Cairo;
 using Gtk;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using static GLib.Functions;
 using XSTH.Blueprint.Helpers;
+using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -14,6 +14,7 @@ namespace SilverScreen.Player.Controllers;
 internal sealed class PlayerSponsorBlockController : IDisposable
 {
     private const uint SkipPromptDurationMilliseconds = PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
+    private readonly DisposeScope _lifetime = new();
     private readonly IPreferencesService _preferences;
     private readonly PlaybackSession _session;
     private readonly Button _skipButton;
@@ -22,7 +23,6 @@ internal sealed class PlayerSponsorBlockController : IDisposable
     private readonly Scale _timeline;
     private readonly DrawingArea _timelineDrawingArea;
     private readonly Overlay _timelineOverlay;
-    private readonly DisposeScope _lifetime = new();
     private uint _promptHideSource;
     private string? _skipButtonColorClass;
 
@@ -50,8 +50,10 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _timelineDrawingArea.SetDrawFunc(DrawTimeline);
         _timelineOverlay.AddOverlay(_timelineDrawingArea);
 
-        _lifetime.Track(() => _session.SponsorBlockSegmentsChanged += OnSegmentsChanged, () => _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged);
-        _lifetime.Track(() => _session.SponsorBlockPromptChanged += OnPromptChanged, () => _session.SponsorBlockPromptChanged -= OnPromptChanged);
+        _lifetime.Track(() => _session.SponsorBlockSegmentsChanged += OnSegmentsChanged,
+            () => _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged);
+        _lifetime.Track(() => _session.SponsorBlockPromptChanged += OnPromptChanged,
+            () => _session.SponsorBlockPromptChanged -= OnPromptChanged);
         _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
     }

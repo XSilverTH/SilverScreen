@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
@@ -8,7 +8,6 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
-using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.ValueTypes;
 
 namespace SilverScreen.Infrastructure.YouTube;
@@ -123,16 +122,13 @@ public sealed class YtDlpMediaResolver(
             var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
             if (details is null)
             {
-                var apiDetailsResult = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
+                var apiDetailsResult =
+                    await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
                 if (apiDetailsResult.IsSuccess)
-                {
                     details = apiDetailsResult.Details;
-                }
                 else
-                {
                     Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
                         videoId, DiagnosticSanitizer.Sanitize(apiDetailsResult.ErrorMessage));
-                }
             }
 
             var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
@@ -155,43 +151,6 @@ public sealed class YtDlpMediaResolver(
         {
             fetchLock.Release();
         }
-    }
-
-    /// <summary>
-    ///     Fallback entry for mpv ytdl_hook failures: accepts a bare video id or watch/shorts/share URL,
-    ///     then delegates to <see cref="ResolveMediaAsync" /> (cache/timeout reuse). Never throws.
-    /// </summary>
-    public async Task<YouTubeMediaResolutionResult> TryResolveAsFallbackAsync(
-        string videoIdOrUrl,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var videoId = NormalizeToVideoId(videoIdOrUrl);
-            if (videoId is null)
-                return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
-            return await ResolveMediaAsync(videoId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Fallback media resolution failed for {Input}", videoIdOrUrl);
-            return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
-        }
-    }
-
-    private static string? NormalizeToVideoId(string? videoIdOrUrl)
-    {
-        if (string.IsNullOrWhiteSpace(videoIdOrUrl))
-            return null;
-        var text = videoIdOrUrl.Trim();
-        if (PlaybackRequest.LooksLikeYouTubeVideoId(text))
-            return text;
-        var parsed = YouTubeUrlParser.Parse(text);
-        return parsed.VideoId;
     }
 
     public async Task<YouTubeVideoDetailsResult> GetVideoDetailsAsync(
@@ -242,6 +201,43 @@ public sealed class YtDlpMediaResolver(
         {
             fetchLock.Release();
         }
+    }
+
+    /// <summary>
+    ///     Fallback entry for mpv ytdl_hook failures: accepts a bare video id or watch/shorts/share URL,
+    ///     then delegates to <see cref="ResolveMediaAsync" /> (cache/timeout reuse). Never throws.
+    /// </summary>
+    public async Task<YouTubeMediaResolutionResult> TryResolveAsFallbackAsync(
+        string videoIdOrUrl,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var videoId = NormalizeToVideoId(videoIdOrUrl);
+            if (videoId is null)
+                return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+            return await ResolveMediaAsync(videoId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Fallback media resolution failed for {Input}", videoIdOrUrl);
+            return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+        }
+    }
+
+    private static string? NormalizeToVideoId(string? videoIdOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(videoIdOrUrl))
+            return null;
+        var text = videoIdOrUrl.Trim();
+        if (PlaybackRequest.LooksLikeYouTubeVideoId(text))
+            return text;
+        var parsed = YouTubeUrlParser.Parse(text);
+        return parsed.VideoId;
     }
 
     public void Invalidate(string videoId)
@@ -376,6 +372,7 @@ public sealed class YtDlpMediaResolver(
                 $"YoutubeAPI could not load video details: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }
     }
+
     internal static YouTubeVideoDetails? TryParseVideoDetailsFromRawJson(string rawJson)
     {
         if (string.IsNullOrWhiteSpace(rawJson)) return null;
@@ -389,7 +386,8 @@ public sealed class YtDlpMediaResolver(
             string? title = null;
             if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
                 title = titleProp.GetString();
-            else if (root.TryGetProperty("fulltitle", out var fullTitleProp) && fullTitleProp.ValueKind == JsonValueKind.String)
+            else if (root.TryGetProperty("fulltitle", out var fullTitleProp) &&
+                     fullTitleProp.ValueKind == JsonValueKind.String)
                 title = fullTitleProp.GetString();
 
             if (string.IsNullOrWhiteSpace(title))
@@ -398,9 +396,11 @@ public sealed class YtDlpMediaResolver(
             string? channel = null;
             if (root.TryGetProperty("channel", out var channelProp) && channelProp.ValueKind == JsonValueKind.String)
                 channel = channelProp.GetString();
-            else if (root.TryGetProperty("uploader", out var uploaderProp) && uploaderProp.ValueKind == JsonValueKind.String)
+            else if (root.TryGetProperty("uploader", out var uploaderProp) &&
+                     uploaderProp.ValueKind == JsonValueKind.String)
                 channel = uploaderProp.GetString();
-            else if (root.TryGetProperty("uploader_id", out var uploaderIdProp) && uploaderIdProp.ValueKind == JsonValueKind.String)
+            else if (root.TryGetProperty("uploader_id", out var uploaderIdProp) &&
+                     uploaderIdProp.ValueKind == JsonValueKind.String)
                 channel = uploaderIdProp.GetString();
 
             if (string.IsNullOrWhiteSpace(channel))
@@ -415,7 +415,8 @@ public sealed class YtDlpMediaResolver(
             {
                 if (viewProp.ValueKind == JsonValueKind.Number && viewProp.TryGetInt64(out var vc))
                     viewCount = vc;
-                else if (viewProp.ValueKind == JsonValueKind.String && long.TryParse(viewProp.GetString(), out var parsedVc))
+                else if (viewProp.ValueKind == JsonValueKind.String &&
+                         long.TryParse(viewProp.GetString(), out var parsedVc))
                     viewCount = parsedVc;
             }
 
@@ -423,23 +424,17 @@ public sealed class YtDlpMediaResolver(
             if (root.TryGetProperty("timestamp", out var tsProp) &&
                 tsProp.ValueKind == JsonValueKind.Number &&
                 tsProp.TryGetInt64(out var ts))
-            {
                 publishedAt = DateTimeOffset.FromUnixTimeSeconds(ts);
-            }
             else if (root.TryGetProperty("release_timestamp", out var rtsProp) &&
                      rtsProp.ValueKind == JsonValueKind.Number &&
                      rtsProp.TryGetInt64(out var rts))
-            {
                 publishedAt = DateTimeOffset.FromUnixTimeSeconds(rts);
-            }
             else if (root.TryGetProperty("upload_date", out var udProp) &&
                      udProp.ValueKind == JsonValueKind.String &&
                      udProp.GetString() is { Length: 8 } ud &&
                      DateTime.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
                          DateTimeStyles.AssumeUniversal, out var dt))
-            {
                 publishedAt = new DateTimeOffset(dt, TimeSpan.Zero);
-            }
 
             return new YouTubeVideoDetails(
                 description,

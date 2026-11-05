@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using SilverScreen.Account.Auth;
 using Serilog;
+using SilverScreen.Account.Auth;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
@@ -33,7 +33,6 @@ using SilverScreen.Player;
 namespace SilverScreen.Shell;
 
 /// <summary>Narrow facade over browsing services consumed by the application shell.</summary>
-
 public sealed record BrowsingServices(
     ISearchService Search,
     ISearchSuggestionService SearchSuggestions,

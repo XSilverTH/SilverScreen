@@ -1,10 +1,8 @@
-using SilverScreen.Core.Account.Session;
+using System.Diagnostics;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Player;
-using SilverScreen.Player.Views;
 using SilverScreen.Shell;
 
 namespace SilverScreen.Tests.Player;
@@ -67,7 +65,6 @@ public sealed class PlaybackTests
 
         Assert.Single(telemetry.Sessions[0].Session.Updates);
         Assert.Equal(state, telemetry.Sessions[0].Session.Updates[0]);
-
     }
 
     [Fact]
@@ -83,7 +80,7 @@ public sealed class PlaybackTests
 
         coordinator.UpdateActivePlayback(playbackId, new PlaybackPresenceState(
             1, TimeSpan.FromSeconds(12), TimeSpan.FromMinutes(3), false, 1, DateTimeOffset.UtcNow));
-        var reordered = new PlaybackRequest([current, first, appended], 0);
+        var reordered = new PlaybackRequest([current, first, appended]);
         coordinator.UpdateActivePlaybackQueue(playbackId, reordered, 0);
 
         var presenceUpdate = Assert.Single(presence.SetCalls.Skip(1));
@@ -261,10 +258,12 @@ public sealed class PlaybackTests
         var video2 = CreateVideo("vid2");
         var request = new PlaybackRequest([video1, video2]);
 
-        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(50), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(50), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
         var snapshot1 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state1);
 
-        var state2 = new LibMpvPlaybackState(1, TimeSpan.FromSeconds(0), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var state2 = new LibMpvPlaybackState(1, TimeSpan.FromSeconds(0), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
         var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state2);
 
         Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(snapshot1, snapshot2, out var seekedPosition));
@@ -277,19 +276,28 @@ public sealed class PlaybackTests
         var video = CreateVideo("vid1");
         var request = new PlaybackRequest([video]);
 
-        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(50), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(50), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
         var snapshot1 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state1);
 
         // Forward seek to 90 seconds
-        var state2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(90), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
-        var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state2) with { Timestamp = snapshot1.Timestamp };
+        var state2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(90), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
+        var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state2) with
+        {
+            Timestamp = snapshot1.Timestamp
+        };
 
         Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(snapshot1, snapshot2, out var seekedForward));
         Assert.Equal(90_000_000, seekedForward);
 
         // Backward seek to 10 seconds
-        var state3 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
-        var snapshot3 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state3) with { Timestamp = snapshot2.Timestamp };
+        var state3 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
+        var snapshot3 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state3) with
+        {
+            Timestamp = snapshot2.Timestamp
+        };
 
         Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(snapshot2, snapshot3, out var seekedBackward));
         Assert.Equal(10_000_000, seekedBackward);
@@ -301,10 +309,12 @@ public sealed class PlaybackTests
         var video = CreateVideo("vid1");
         var request = new PlaybackRequest([video]);
 
-        var paused1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(3), true, false, 100, 1, true, true, false, [], []);
+        var paused1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(3), true, false, 100, 1,
+            true, true, false, [], []);
         var snapshot1 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, paused1);
 
-        var paused2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(3), true, false, 100, 1, true, true, false, [], []);
+        var paused2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(3), true, false, 100, 1,
+            true, true, false, [], []);
         var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, paused2);
 
         Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(snapshot1, snapshot2, out var seeked));
@@ -317,14 +327,22 @@ public sealed class PlaybackTests
         var video = CreateVideo("vid1");
         var request = new PlaybackRequest([video]);
 
-        var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
-        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
-        var snapshot1 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state1) with { Timestamp = startTimestamp };
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var state1 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3), false, false, 100, 1,
+            true, true, false, [], []);
+        var snapshot1 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state1) with
+        {
+            Timestamp = startTimestamp
+        };
 
         // 100ms later in normal playback, position advanced by ~100ms
-        var laterTimestamp = startTimestamp + (long)(System.Diagnostics.Stopwatch.Frequency * 0.1);
-        var state2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10.1), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
-        var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state2) with { Timestamp = laterTimestamp };
+        var laterTimestamp = startTimestamp + (long)(Stopwatch.Frequency * 0.1);
+        var state2 = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(10.1), TimeSpan.FromMinutes(3), false, false, 100,
+            1, true, true, false, [], []);
+        var snapshot2 = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, state2) with
+        {
+            Timestamp = laterTimestamp
+        };
 
         Assert.False(DesktopMediaIntegration.TryGetSeekedPosition(snapshot1, snapshot2, out _));
     }
@@ -335,10 +353,12 @@ public sealed class PlaybackTests
         var video = CreateVideo("vid1");
         var request = new PlaybackRequest([video]);
 
-        var resumeState = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(75), TimeSpan.FromMinutes(3), false, false, 100, 1, true, true, false, [], []);
+        var resumeState = new LibMpvPlaybackState(0, TimeSpan.FromSeconds(75), TimeSpan.FromMinutes(3), false, false,
+            100, 1, true, true, false, [], []);
         var resumeSnapshot = DesktopMediaIntegration.DesktopPlaybackSnapshot.Create(request, resumeState);
 
-        Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(DesktopMediaIntegration.DesktopPlaybackSnapshot.Stopped, resumeSnapshot, out var position));
+        Assert.True(DesktopMediaIntegration.TryGetSeekedPosition(
+            DesktopMediaIntegration.DesktopPlaybackSnapshot.Stopped, resumeSnapshot, out var position));
         Assert.Equal(75_000_000, position);
     }
 

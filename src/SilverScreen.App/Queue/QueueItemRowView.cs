@@ -9,7 +9,6 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Queue;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
-using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 using Type = GObject.Type;
 
@@ -31,7 +30,7 @@ internal sealed class QueueRowBinding
         Item = null;
         Index = -1;
     }
-    
+
     public bool TryGetPlayTarget(out Guid itemId, out int index)
     {
         if (Item is { } item && Index >= 0)
@@ -60,14 +59,19 @@ internal sealed class QueueRowBinding
         return false;
     }
 
-    public int ResolveDropIndex(bool dropBefore) => Index < 0 ? 0 : dropBefore ? Index : Index + 1;
+    public int ResolveDropIndex(bool dropBefore)
+    {
+        return Index < 0 ? 0 : dropBefore ? Index : Index + 1;
+    }
 }
+
 public partial class QueueItemRowView : ViewBase<Box>
 {
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
     private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
     private readonly SimpleActionGroup _actions;
+    private readonly QueueRowBinding _binding = new();
     private readonly WidgetPaintable _dragPaintable;
     private readonly DragSource _dragSource;
     private readonly Action<Guid, int> _dropRequested;
@@ -80,7 +84,6 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly Action<Guid> _removeRequested;
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
-    private readonly QueueRowBinding _binding = new();
     private Picture? _boundPicture;
     private Texture? _boundTexture;
     private CancellationTokenSource? _thumbnailCancellation;
@@ -146,6 +149,8 @@ public partial class QueueItemRowView : ViewBase<Box>
             c => c.OnReleased -= OnDetailsOrThumbnailClicked);
     }
 
+    public QueueItem? Item => _binding.Item;
+
     private ContentProvider? OnDragPrepare(DragSource sender, DragSource.PrepareSignalArgs args)
     {
         if (_binding.Item is not { } item)
@@ -172,15 +177,14 @@ public partial class QueueItemRowView : ViewBase<Box>
             _removeRequested(item.Id);
     }
 
-    public QueueItem? Item => _binding.Item;
-
 
     public void Bind(QueueItem item, int index, int itemCount, int currentPlayingIndex = -1)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
 
         var isSameItem = _binding.Item?.Id == item.Id &&
-                         string.Equals(_binding.Item.Video.ThumbnailUrl, item.Video.ThumbnailUrl, StringComparison.Ordinal);
+                         string.Equals(_binding.Item.Video.ThumbnailUrl, item.Video.ThumbnailUrl,
+                             StringComparison.Ordinal);
 
         if (!isSameItem)
         {
@@ -427,10 +431,7 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            Unbind();
-        }
+        if (disposing) Unbind();
 
         base.Dispose(disposing);
     }

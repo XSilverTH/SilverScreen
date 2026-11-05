@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
@@ -124,7 +123,8 @@ public sealed class YtDlpMediaResolverTests
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
         Assert.False(result.IsSuccess);
-        Assert.Contains("error code 1: ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you're not a bot", result.StatusMessage);
+        Assert.Contains("error code 1: ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you're not a bot",
+            result.StatusMessage);
     }
 
     [Fact]
@@ -156,6 +156,7 @@ public sealed class YtDlpMediaResolverTests
         Assert.False(result.IsSuccess);
         Assert.Contains("the process returned no output", result.StatusMessage);
     }
+
     [Fact]
     public async Task ResolveMediaAsync_WhenMetadataLookupFails_ReturnsResolvedMedia()
     {
@@ -177,15 +178,15 @@ public sealed class YtDlpMediaResolverTests
     public async Task ResolveMediaAsync_WhenYtDlpOutputHasDetails_ParsesDetailsWithoutCallingApi()
     {
         var json = """
-            {
-                "url": "https://cdn.example/video.mp4",
-                "title": "Test Title",
-                "channel": "Test Channel",
-                "description": "Test Description",
-                "view_count": 12345,
-                "timestamp": 1600000000
-            }
-            """;
+                   {
+                       "url": "https://cdn.example/video.mp4",
+                       "title": "Test Title",
+                       "channel": "Test Channel",
+                       "description": "Test Description",
+                       "view_count": 12345,
+                       "timestamp": 1600000000
+                   }
+                   """;
         var runner = new FakeYtDlpRunner
         {
             Result = new ProcessResult(0, json, "")
@@ -234,7 +235,8 @@ public sealed class YtDlpMediaResolverTests
         public ProcessResult Result { get; set; } = new(0, "{}", "");
         public Exception? ExceptionToThrow { get; set; }
 
-        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
+            CancellationToken cancellationToken)
         {
             if (ExceptionToThrow is not null)
                 throw ExceptionToThrow;
@@ -245,13 +247,22 @@ public sealed class YtDlpMediaResolverTests
 
     private sealed class FakeCookieFileProvider : ICookieFileProvider
     {
-        public CookieFileLease? CreateCookieFile() => null;
+        public CookieFileLease? CreateCookieFile()
+        {
+            return null;
+        }
     }
 
     private sealed class FakePreferencesService : IPreferencesService
     {
-        public AppPreferences GetPreferences() => new() { YtDlpExecutablePath = "yt-dlp", Quality = VideoQuality.P1080 };
-        public void SavePreferences(AppPreferences preferences) { }
+        public AppPreferences GetPreferences()
+        {
+            return new AppPreferences { YtDlpExecutablePath = "yt-dlp", Quality = VideoQuality.P1080 };
+        }
+
+        public void SavePreferences(AppPreferences preferences)
+        {
+        }
 #pragma warning disable CS0067
         public event EventHandler<AppPreferences>? PreferencesChanged;
 #pragma warning restore CS0067
@@ -259,7 +270,14 @@ public sealed class YtDlpMediaResolverTests
 
     private sealed class FakeYouTubeClientProvider : IYouTubeClientProvider
     {
-        public YouTubeClient GetClient() => throw new NotImplementedException();
-        public YouTubeClient GetAuthenticatedClient() => throw new NotImplementedException();
+        public YouTubeClient GetClient()
+        {
+            throw new NotImplementedException();
+        }
+
+        public YouTubeClient GetAuthenticatedClient()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

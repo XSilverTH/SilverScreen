@@ -78,6 +78,7 @@ public partial class VideoListView : ViewBase<Bin>
         EnsurePaginationErrorFooter();
         Render(_source.State);
     }
+
     public ScrolledWindow ScrolledWindow => video_list_scrolled_window;
 
     public Adjustment? Vadjustment { get; }
@@ -340,16 +341,12 @@ public partial class VideoListView : ViewBase<Bin>
         var isPaginationAppend = removedMiddleCount == 0 && prefixLength == _displayedVideos.Length;
         var isInPlaceUpdate = removedMiddleCount > 0 && removedMiddleCount == addedMiddleCount;
         if (isInPlaceUpdate)
-        {
             for (var i = 0; i < removedMiddleCount; i++)
-            {
                 if (_displayedVideos[prefixLength + i].Id != nextVideos[prefixLength + i].Id)
                 {
                     isInPlaceUpdate = false;
                     break;
                 }
-            }
-        }
 
         _videosById.Clear();
         foreach (var video in nextVideos)

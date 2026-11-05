@@ -4,7 +4,6 @@ using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Queue;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Queue;
 
@@ -41,7 +40,8 @@ public partial class QueueView : ViewBase<Box>
         queue_list.Model = _selection;
         queue_list.Factory = _factory;
 
-        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged, () => _viewModel.StateChanged -= OnStateChanged);
+        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged,
+            () => _viewModel.StateChanged -= OnStateChanged);
         Render(_viewModel.State);
     }
 

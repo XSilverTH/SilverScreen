@@ -3,9 +3,9 @@ using SilverScreen.Core.Browsing.Common;
 namespace SilverScreen.Queue;
 
 /// <summary>
-/// Translates a queue reorder into the single playlist move represented by a
-/// drag operation. The item identity, rather than the first positional
-/// mismatch, identifies the item that was moved.
+///     Translates a queue reorder into the single playlist move represented by a
+///     drag operation. The item identity, rather than the first positional
+///     mismatch, identifies the item that was moved.
 /// </summary>
 internal static class QueuePlaylistMove
 {
@@ -40,13 +40,11 @@ internal static class QueuePlaylistMove
 
             var matches = true;
             for (var index = 0; index < next.Count; index++)
-            {
                 if (!string.Equals(expected[index], next[index].Id, StringComparison.Ordinal))
                 {
                     matches = false;
                     break;
                 }
-            }
 
             if (matches)
             {

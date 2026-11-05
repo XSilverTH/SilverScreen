@@ -34,6 +34,14 @@ public static partial class TemporaryCookieFile
 {
     internal const string DirectoryPrefix = "silverscreen-cookies-";
     private const string IpcDirectoryPrefix = "silverscreen-mpv-";
+
+    private const int OpenWriteOnly = 1;
+    private const int OpenNonBlock = 0x800;
+    private const int OpenCloseOnExec = 0x80000;
+    private const int OpenNoFollowFlag = 0x20000;
+    private const uint UnixFileTypeMask = 0xF000;
+    private const uint UnixRegularFile = 0x8000;
+    private const uint UnixSocket = 0xC000;
     private static readonly TimeSpan DefaultStaleAge = TimeSpan.FromHours(1);
     private static readonly ConcurrentDictionary<string, byte> ActiveLeaseDirectories = new();
 
@@ -152,12 +160,13 @@ public static partial class TemporaryCookieFile
         }
     }
 
-    ///     Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
-    ///     leases must match the exact process-id/GUID directory pattern and contain only the
-    ///     expected regular, non-symlink cookies.txt file. Unexpected entries are never
-    ///     traversed or deleted. Orphaned directories from dead sessions or untracked leases
-    ///     are purged immediately; otherwise entries older than <paramref name="maxAge" />
-    ///     (default 1 hour) are deleted. Best-effort, never throws.
+    /// Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
+    /// leases must match the exact process-id/GUID directory pattern and contain only the
+    /// expected regular, non-symlink cookies.txt file. Unexpected entries are never
+    /// traversed or deleted. Orphaned directories from dead sessions or untracked leases
+    /// are purged immediately; otherwise entries older than
+    /// <paramref name="maxAge" />
+    /// (default 1 hour) are deleted. Best-effort, never throws.
     /// </summary>
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {
@@ -243,7 +252,6 @@ public static partial class TemporaryCookieFile
         // Never recurse from a directory selected by a filename prefix. A nested directory,
         // link, or unexpected file is untrusted and must remain untouched.
         foreach (var entry in directory.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly).ToList())
-        {
             if (prefix == DirectoryPrefix)
             {
                 if (entry is FileInfo file && IsOwnedCookieFile(file))
@@ -255,7 +263,6 @@ public static partial class TemporaryCookieFile
                 // to the exact application-owned entry name.
                 TryDeleteFile(ipcFile.FullName);
             }
-        }
 
         try
         {
@@ -509,10 +516,10 @@ public static partial class TemporaryCookieFile
         if (descriptor < 0)
             throw new IOException($"Could not open temporary cookie file (errno {Marshal.GetLastWin32Error()}).");
 
-        var handle = new SafeFileHandle((nint)descriptor, ownsHandle: true);
+        var handle = new SafeFileHandle(descriptor, true);
         try
         {
-            return new FileStream(handle, FileAccess.Write, 4096, isAsync: false);
+            return new FileStream(handle, FileAccess.Write, 4096, false);
         }
         catch
         {
@@ -521,13 +528,11 @@ public static partial class TemporaryCookieFile
         }
     }
 
-    private const int OpenWriteOnly = 1;
-    private const int OpenNonBlock = 0x800;
-    private const int OpenCloseOnExec = 0x80000;
-    private const int OpenNoFollowFlag = 0x20000;
-    private const uint UnixFileTypeMask = 0xF000;
-    private const uint UnixRegularFile = 0x8000;
-    private const uint UnixSocket = 0xC000;
+    [LibraryImport("libc", EntryPoint = "lstat", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int LStat(string path, out UnixStat stat);
+
+    [LibraryImport("libc", EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int OpenNoFollow(string path, int flags);
 
     [StructLayout(LayoutKind.Sequential, Size = 256)]
     private struct UnixStat
@@ -540,11 +545,4 @@ public static partial class TemporaryCookieFile
         public uint GroupId;
         public uint Padding;
     }
-
-    [LibraryImport("libc", EntryPoint = "lstat", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int LStat(string path, out UnixStat stat);
-
-    [LibraryImport("libc", EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int OpenNoFollow(string path, int flags);
-
 }

@@ -1,8 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 using SilverScreen.Core.Account.Profile;
-
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Account.Session;
@@ -61,7 +60,7 @@ public sealed class SessionTests
         Assert.Equal(1, setEvents);
         Assert.Equal(FakeCookieContent, store.StoredContent);
         var restartedService = new SecretServiceSessionService(store);
-        await WaitForSessionAsync(restartedService, signedIn: true);
+        await WaitForSessionAsync(restartedService, true);
         Assert.True(restartedService.GetCurrentSession().IsSignedIn);
         Assert.Equal(SessionCookieFormat.NetscapeCookiesText, restartedService.GetCurrentSession().CookieFormat);
         Assert.Equal(FakeCookieContent, restartedService.GetManualSessionCookies()?.Content);
@@ -77,7 +76,7 @@ public sealed class SessionTests
         Assert.Equal(1, clearEvents);
         Assert.Null(store.StoredContent);
         var clearedService = new SecretServiceSessionService(store);
-        await WaitForSessionAsync(clearedService, signedIn: false);
+        await WaitForSessionAsync(clearedService, false);
         Assert.False(clearedService.GetCurrentSession().IsSignedIn);
     }
 
@@ -159,7 +158,7 @@ public sealed class SessionTests
                 AccountProfileLoadStatus.Success, new AccountProfile("Test account")));
         });
         using var service = new SecretServiceSessionService(
-            store, tempRoot.Path, profileServiceFactory: () => profile);
+            store, tempRoot.Path, () => profile);
         service.SetManualSession(FakeCookieContent, SessionCookieFormat.NetscapeCookiesText);
 
         await service.ValidateSessionAsync();
@@ -168,13 +167,14 @@ public sealed class SessionTests
         Assert.True(service.GetCurrentSession().IsSignedIn);
         Assert.Equal(1, profileCalls);
     }
+
     [Fact]
     public async Task SecretServiceSessionRecoversAfterStartupKeyringFailure()
     {
         var store = new FakeCookieSecretStore { FailLoad = true };
         var service = new SecretServiceSessionService(store);
 
-        await WaitForAvailabilityAsync(service, available: false);
+        await WaitForAvailabilityAsync(service, false);
         Assert.False(service.GetCurrentSession().IsSignedIn);
         Assert.False(service.IsAvailable);
 
@@ -185,6 +185,7 @@ public sealed class SessionTests
         Assert.True(service.GetCurrentSession().IsSignedIn);
         Assert.Equal(FakeCookieContent, store.StoredContent);
     }
+
     [Fact]
     public async Task SecretServiceSession_RestoresWithoutBlockingConstruction()
     {
@@ -208,7 +209,7 @@ public sealed class SessionTests
     }
 
 
-[Fact]
+    [Fact]
     public void SessionService_CreatesTempFileWithExpectedContent()
     {
         using var tempRoot = new TemporaryDirectory();
@@ -285,10 +286,7 @@ public sealed class SessionTests
         if (OperatingSystem.IsLinux())
         {
             var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-            if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg))
-            {
-                Assert.Equal(xdg, root);
-            }
+            if (!string.IsNullOrWhiteSpace(xdg) && Directory.Exists(xdg)) Assert.Equal(xdg, root);
         }
     }
 
@@ -424,8 +422,10 @@ public sealed class SessionTests
         Assert.True(Directory.Exists(malformedDirectory));
     }
 
-    private static string LeaseDirectoryName(int pid) =>
-        $"{TemporaryCookieFile.DirectoryPrefix}{pid}-{Guid.NewGuid():N}";
+    private static string LeaseDirectoryName(int pid)
+    {
+        return $"{TemporaryCookieFile.DirectoryPrefix}{pid}-{Guid.NewGuid():N}";
+    }
 
     private static async Task WaitForSessionAsync(SecretServiceSessionService service, bool signedIn)
     {
@@ -433,6 +433,7 @@ public sealed class SessionTests
             return;
 
         var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         void OnChanged(object? _, EventArgs __)
         {
             if (service.GetCurrentSession().IsSignedIn == signedIn)
@@ -457,6 +458,7 @@ public sealed class SessionTests
             return;
 
         var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         void OnChanged(object? _, EventArgs __)
         {
             if (service.IsAvailable == available)
@@ -478,16 +480,14 @@ public sealed class SessionTests
     private static int FindDeadPid()
     {
         for (var pid = 999999; pid > 100000; pid--)
-        {
             try
             {
-                System.Diagnostics.Process.GetProcessById(pid);
+                Process.GetProcessById(pid);
             }
             catch (ArgumentException)
             {
                 return pid;
             }
-        }
 
         return 999999;
     }
@@ -513,7 +513,10 @@ public sealed class SessionTests
         Func<Task<AccountProfileResult>> getProfile) : IAccountProfileService
     {
         public Task<AccountProfileResult> GetCurrentProfileAsync(
-            CancellationToken cancellationToken = default) => getProfile();
+            CancellationToken cancellationToken = default)
+        {
+            return getProfile();
+        }
     }
 
     private sealed class FakeCookieSecretStore : ICookieSecretStore
@@ -550,6 +553,7 @@ public sealed class SessionTests
             return Task.CompletedTask;
         }
     }
+
     private sealed class ControllableCookieSecretStore : ICookieSecretStore
     {
         private readonly TaskCompletionSource<byte[]?> _load =
@@ -564,11 +568,20 @@ public sealed class SessionTests
             return _load.Task;
         }
 
-        public Task SaveAsync(byte[] secret) => Task.CompletedTask;
+        public Task SaveAsync(byte[] secret)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DeleteAsync() => Task.CompletedTask;
+        public Task DeleteAsync()
+        {
+            return Task.CompletedTask;
+        }
 
-        public void ReleaseLoad(byte[]? secret) => _load.TrySetResult(secret);
+        public void ReleaseLoad(byte[]? secret)
+        {
+            _load.TrySetResult(secret);
+        }
     }
 
     private sealed class TemporaryDirectory : IDisposable

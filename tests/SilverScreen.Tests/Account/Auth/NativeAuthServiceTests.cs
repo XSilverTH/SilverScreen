@@ -2,7 +2,6 @@ using System.Diagnostics;
 using SilverScreen.Account.Auth;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Infrastructure.Account.Session;
-using Xunit;
 
 namespace SilverScreen.Tests.Account.Auth;
 
@@ -19,7 +18,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         using var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ =>
+            _ =>
             {
                 var psi = new ProcessStartInfo
                 {
@@ -32,7 +31,7 @@ public sealed class NativeAuthServiceTests
                 psi.ArgumentList.Add($"cat << 'EOF'\n{SampleNetscapeCookies}EOF");
                 return Process.Start(psi);
             },
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         var result = await authService.StartAuthAsync();
 
@@ -49,7 +48,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         using var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ => Process.Start(new ProcessStartInfo
+            _ => Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 Arguments = "-c 'exit 1'",
@@ -57,7 +56,7 @@ public sealed class NativeAuthServiceTests
                 RedirectStandardError = true,
                 UseShellExecute = false
             }),
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         var result = await authService.StartAuthAsync();
 
@@ -71,7 +70,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         using var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ => Process.Start(new ProcessStartInfo
+            _ => Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 Arguments = "-c 'exit 0'",
@@ -79,7 +78,7 @@ public sealed class NativeAuthServiceTests
                 RedirectStandardError = true,
                 UseShellExecute = false
             }),
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         var result = await authService.StartAuthAsync();
 
@@ -93,7 +92,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         using var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ => Process.Start(new ProcessStartInfo
+            _ => Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 Arguments = "-c 'sleep 0.5'",
@@ -101,7 +100,7 @@ public sealed class NativeAuthServiceTests
                 RedirectStandardError = true,
                 UseShellExecute = false
             }),
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         var task1 = authService.StartAuthAsync();
         var task2 = authService.StartAuthAsync();
@@ -117,7 +116,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         using var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ => Process.Start(new ProcessStartInfo
+            _ => Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 Arguments = "-c 'sleep 5'",
@@ -125,7 +124,7 @@ public sealed class NativeAuthServiceTests
                 RedirectStandardError = true,
                 UseShellExecute = false
             }),
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
         var result = await authService.StartAuthAsync(cts.Token);
@@ -139,7 +138,7 @@ public sealed class NativeAuthServiceTests
         using var sessionService = new InMemorySessionService();
         var authService = new NativeAuthService(
             sessionService,
-            processStarter: _ => Process.Start(new ProcessStartInfo
+            _ => Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 Arguments = "-c 'sleep 5'",
@@ -147,7 +146,7 @@ public sealed class NativeAuthServiceTests
                 RedirectStandardError = true,
                 UseShellExecute = false
             }),
-            processPathResolver: () => "/bin/sh");
+            () => "/bin/sh");
 
         var task = authService.StartAuthAsync();
         await Task.Delay(50);

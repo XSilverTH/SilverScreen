@@ -1,6 +1,5 @@
 using Serilog;
 using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Common;

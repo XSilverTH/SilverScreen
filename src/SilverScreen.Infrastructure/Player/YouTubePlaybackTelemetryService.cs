@@ -17,9 +17,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     // so the oldest-tracked session is evicted (disposed) past the cap.
     private const int MaxActiveSessions = 200;
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
+    private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _sessionService;
-    private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
     private bool _disposed;
@@ -68,6 +68,22 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         return session;
     }
 
+    public void Dispose()
+    {
+        TelemetrySession[] sessions;
+        lock (_sessionsLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            sessions = [.. _sessions];
+            _sessions.Clear();
+        }
+
+        _preferences.PreferencesChanged -= OnPreferencesChanged;
+        _sessionService.SessionChanged -= OnSessionChanged;
+        foreach (var session in sessions) session.Dispose();
+    }
+
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         TelemetrySession[] sessions;
@@ -92,22 +108,6 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         }
 
         foreach (var session in sessions) session.DisableConsent();
-    }
-
-    public void Dispose()
-    {
-        TelemetrySession[] sessions;
-        lock (_sessionsLock)
-        {
-            if (_disposed) return;
-            _disposed = true;
-            sessions = [.. _sessions];
-            _sessions.Clear();
-        }
-
-        _preferences.PreferencesChanged -= OnPreferencesChanged;
-        _sessionService.SessionChanged -= OnSessionChanged;
-        foreach (var session in sessions) session.Dispose();
     }
 
     private bool IsEnabled()
@@ -157,12 +157,12 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         // reorders and removals. The active queue snapshot is replaced atomically
         // with the current entry so a later state update cannot address another video.
         private const int MaxVideosPerSession = 200;
-        private readonly YouTubePlaybackTelemetryService _owner;
         private readonly Lock _lock = new();
+        private readonly YouTubePlaybackTelemetryService _owner;
         private readonly Dictionary<string, VideoTelemetrySession> _videos = new(StringComparer.Ordinal);
-        private PlaybackRequest _request;
         private string? _currentVideoId;
         private bool _disposed;
+        private PlaybackRequest _request;
 
         public TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
         {
@@ -186,7 +186,6 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                         _videos.Remove(_currentVideoId, out previous);
                     _currentVideoId = videoId;
                 }
-
             }
 
             previous?.Dispose();
@@ -230,19 +229,6 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
             previous?.Dispose();
         }
-        public void DisableConsent()
-        {
-            VideoTelemetrySession[] videos;
-            lock (_lock)
-            {
-                if (_disposed) return;
-                videos = [.. _videos.Values];
-                _videos.Clear();
-                _currentVideoId = null;
-            }
-
-            foreach (var video in videos) video.InvalidateConsent();
-        }
 
         public void Dispose()
         {
@@ -257,6 +243,20 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
             foreach (var video in videos) video.Dispose();
             _owner.Remove(this);
+        }
+
+        public void DisableConsent()
+        {
+            VideoTelemetrySession[] videos;
+            lock (_lock)
+            {
+                if (_disposed) return;
+                videos = [.. _videos.Values];
+                _videos.Clear();
+                _currentVideoId = null;
+            }
+
+            foreach (var video in videos) video.InvalidateConsent();
         }
 
         public void Retire()
@@ -279,18 +279,19 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     {
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan MinimumObservedInterval = TimeSpan.FromMilliseconds(500);
-        private readonly string _cpn = CreateCpn();
-        private readonly Lock _consentLock = new();
         private readonly CancellationTokenSource _consentCancellation = new();
+        private readonly Lock _consentLock = new();
+        private readonly string _cpn = CreateCpn();
         private HttpClient? _client;
         private bool _disposed;
         private Task<TrackingEndpoints?>? _endpointsTask;
-        private TimeSpan _lastPosition;
         private DateTimeOffset _lastObservedAt;
+        private TimeSpan _lastPosition;
         private double _lastSpeed;
         private bool _playing;
-        private Task _sendTail = Task.CompletedTask;
         private TimeSpan _segmentStart;
+        private Task _sendTail = Task.CompletedTask;
+
         public void UpdateState(PlaybackPresenceState state)
         {
             if (_disposed) return;
@@ -365,9 +366,11 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 FlushSegment(_lastPosition);
                 _playing = false;
             }
+
             _disposed = true;
             DisposeClientAfterSendsAsync(_sendTail).FireAndForget(Logger);
         }
+
         public void InvalidateConsent()
         {
             lock (_consentLock)
@@ -391,6 +394,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             _client?.Dispose();
             _client = null;
         }
+
         private void FlushSegment(TimeSpan end)
         {
             if (!_playing || end <= _segmentStart) return;
@@ -401,6 +405,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         {
             _sendTail = SendAfterAsync(_sendTail, telemetryEvent);
         }
+
         private async Task SendAfterAsync(Task previous, TelemetryEvent telemetryEvent)
         {
             var cancellationToken = _consentCancellation.Token;
@@ -501,6 +506,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 client?.Dispose();
             }
         }
+
         private static string CreateCpn()
         {
             const string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";

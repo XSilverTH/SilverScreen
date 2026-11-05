@@ -59,7 +59,7 @@ public sealed class YouTubePlaybackTelemetryTests
         telemetry.UpdateState(State(50, false));
         telemetry.UpdateState(State(55, true));
 
-        var beacons = await handler.WaitForBeaconsAsync(3);
+        var beacons = await handler.WaitForBeaconsAsync();
         var watchtime = beacons.Where(uri => uri.AbsolutePath == "/api/stats/watchtime").ToArray();
         Assert.Equal(2, watchtime.Length);
         Assert.Contains(watchtime, uri => QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "5");
@@ -84,7 +84,7 @@ public sealed class YouTubePlaybackTelemetryTests
         telemetry.UpdateState(State(5, false));
         telemetry.UpdateState(State(0, false) with { PlaylistIndex = 1 });
 
-        var beacons = await handler.WaitForBeaconsAsync(3);
+        var beacons = await handler.WaitForBeaconsAsync();
         var previousVideoWatchtime = Assert.Single(beacons, uri =>
             uri.AbsolutePath == "/api/stats/watchtime" &&
             QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "5");
@@ -118,7 +118,8 @@ public sealed class YouTubePlaybackTelemetryTests
     {
         var handler = new TrackingHandler();
         var session = new ManualSessionService();
-        using var service = new YouTubePlaybackTelemetryService(new MutablePreferencesService(true), session, _ => handler);
+        using var service =
+            new YouTubePlaybackTelemetryService(new MutablePreferencesService(true), session, _ => handler);
         using var telemetry = service.Start(CreateRequest());
 
         telemetry.UpdateState(State(0, false));
@@ -196,10 +197,10 @@ public sealed class YouTubePlaybackTelemetryTests
         var beacons = handler.Snapshot;
         Assert.Equal(4, beacons.Count);
         Assert.Equal(1, beacons.Count(uri => uri.AbsolutePath == "/api/stats/watchtime" &&
-            QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "12"));
+                                             QueryValue(uri, "st") == "0" && QueryValue(uri, "et") == "12"));
         Assert.Contains(beacons, uri => uri.AbsolutePath == "/api/stats/playback" && QueryValue(uri, "cmt") == "20");
         Assert.Contains(beacons, uri => uri.AbsolutePath == "/api/stats/watchtime" &&
-            QueryValue(uri, "st") == "20" && QueryValue(uri, "et") == "32");
+                                        QueryValue(uri, "st") == "20" && QueryValue(uri, "et") == "32");
     }
 
     private static PlaybackRequest CreateRequest()
@@ -239,15 +240,16 @@ public sealed class YouTubePlaybackTelemetryTests
         {
             return _preferences;
         }
-        public void SetEnabled(bool enabled)
-        {
-            SavePreferences(_preferences with { YouTubePlaybackTelemetryEnabled = enabled });
-        }
 
         public void SavePreferences(AppPreferences preferences)
         {
             _preferences = preferences;
             PreferencesChanged?.Invoke(this, preferences);
+        }
+
+        public void SetEnabled(bool enabled)
+        {
+            SavePreferences(_preferences with { YouTubePlaybackTelemetryEnabled = enabled });
         }
     }
 
@@ -275,6 +277,7 @@ public sealed class YouTubePlaybackTelemetryTests
         {
             return null;
         }
+
         public CookieContainer? CreateCookieContainer()
         {
             return NetscapeCookieParser.CreateCookieContainer(".youtube.com\tTRUE\t/\tTRUE\t0\tSID\tvalue\n");
@@ -299,23 +302,41 @@ public sealed class YouTubePlaybackTelemetryTests
                                               """;
 
         private readonly List<Uri> _beacons = [];
-        private readonly List<string> _referrers = [];
         private readonly TaskCompletionSource<IReadOnlyList<Uri>> _beaconsReceived = new();
         private readonly Lock _lock = new();
+        private readonly List<string> _referrers = [];
         private int _expectedBeaconCount = 3;
 
         public IReadOnlyList<string> Referrers
         {
             get
             {
-                lock (_lock) return [.. _referrers];
+                lock (_lock)
+                {
+                    return [.. _referrers];
+                }
             }
         }
+
         public IReadOnlyList<Uri> Snapshot
         {
             get
             {
-                lock (_lock) return [.. _beacons];
+                lock (_lock)
+                {
+                    return [.. _beacons];
+                }
+            }
+        }
+
+        public int BeaconCount
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _beacons.Count;
+                }
             }
         }
 
@@ -325,14 +346,6 @@ public sealed class YouTubePlaybackTelemetryTests
             while (BeaconCount < expectedCount && DateTime.UtcNow < timeout)
                 await Task.Delay(10);
             Assert.True(BeaconCount >= expectedCount, $"Expected at least {expectedCount} beacons.");
-        }
-
-        public int BeaconCount
-        {
-            get
-            {
-                lock (_lock) return _beacons.Count;
-            }
         }
 
         public Task<IReadOnlyList<Uri>> WaitForBeaconsAsync(int expectedCount = 3)
@@ -366,11 +379,13 @@ public sealed class YouTubePlaybackTelemetryTests
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
     }
+
     private sealed class BlockingBeaconHandler : HttpMessageHandler
     {
         private const string PlayerResponse = """
                                               <script>var ytInitialPlayerResponse = {"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback"},"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime"}}};</script>
                                               """;
+
         private readonly TaskCompletionSource _beaconStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releaseBeacon = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _beaconCount;

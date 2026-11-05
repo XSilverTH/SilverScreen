@@ -1,5 +1,4 @@
 using System.Text.Json;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Preferences;
@@ -211,6 +210,7 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(1, events);
         Assert.True(File.Exists(_tempFilePath));
     }
+
     [Fact]
     public void SavePreferences_ExternalMutation_DoesNotCorruptServiceState()
     {

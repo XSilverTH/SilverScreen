@@ -1,6 +1,5 @@
 using SilverScreen.Account.Profile;
 using SilverScreen.Core.Account.Profile;
-using SilverScreen.Core.Account.Session;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Account.Profile;
@@ -143,9 +142,11 @@ public sealed class AccountViewModelTests
     {
         public Queue<Task<AccountProfileResult>> Results { get; } = new();
 
-        public Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default) =>
-            Results.Count > 0
+        public Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
+        {
+            return Results.Count > 0
                 ? Results.Dequeue()
                 : Task.FromResult(new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRequired));
+        }
     }
 }

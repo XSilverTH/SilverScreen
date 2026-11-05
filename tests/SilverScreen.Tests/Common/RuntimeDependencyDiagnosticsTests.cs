@@ -1,6 +1,5 @@
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
-using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 

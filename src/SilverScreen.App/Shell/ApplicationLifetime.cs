@@ -35,10 +35,13 @@ internal sealed class ActivationWindowGuard<TWindow>
 internal sealed class ApplicationServiceLifetime(Action dispose)
 {
     private readonly Action _dispose = dispose ?? throw new ArgumentNullException(nameof(dispose));
-    private int _windowCount;
     private int _disposed;
+    private int _windowCount;
 
-    public void WindowOpened() => Interlocked.Increment(ref _windowCount);
+    public void WindowOpened()
+    {
+        Interlocked.Increment(ref _windowCount);
+    }
 
     public void WindowClosed()
     {
@@ -46,7 +49,10 @@ internal sealed class ApplicationServiceLifetime(Action dispose)
             DisposeOnce();
     }
 
-    public void ApplicationStopped() => DisposeOnce();
+    public void ApplicationStopped()
+    {
+        DisposeOnce();
+    }
 
     private void DisposeOnce()
     {

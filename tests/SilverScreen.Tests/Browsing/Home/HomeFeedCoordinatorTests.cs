@@ -1,8 +1,8 @@
-using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Browsing.Home;
@@ -11,7 +11,8 @@ public sealed class HomeFeedCoordinatorTests
 {
     private const string FakeCookieContent = "test-manual-session";
 
-    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator, Func<VideoListPresentationState, bool> predicate,
+    private static async Task WaitForStateAsync(HomeFeedCoordinator coordinator,
+        Func<VideoListPresentationState, bool> predicate,
         TimeSpan timeout)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -168,6 +169,7 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Equal(SessionGate.SignInActionLabel, coordinator.State.Status.ActionLabel);
         Assert.False(string.IsNullOrWhiteSpace(coordinator.State.Status.Description));
     }
+
     [Fact]
     public async Task RejectedSessionKeepsHomeOutOfEmptyStateAndOffersSignInAgain()
     {
@@ -318,6 +320,7 @@ public sealed class HomeFeedCoordinatorTests
         Assert.Equal(2, coordinator.State.Videos.Count);
         Assert.Equal(["1", "2"], coordinator.State.Videos.Select(v => v.Id));
     }
+
     [Fact]
     public async Task RefreshAndLoadMore_WithCustomCount_PropagatesCountToService()
     {
@@ -342,7 +345,7 @@ public sealed class HomeFeedCoordinatorTests
             new FeedPage([CreateTestVideo("2")], "token_2"),
             "Success"));
 
-        await coordinator.LoadMoreAsync(count: 40);
+        await coordinator.LoadMoreAsync(40);
         Assert.Equal(40, Assert.Single(fakeFeed.NextPageCounts));
     }
 

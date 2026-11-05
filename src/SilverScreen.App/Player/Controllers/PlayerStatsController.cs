@@ -3,7 +3,6 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
-using static GLib.Functions;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -22,12 +21,13 @@ internal sealed class PlayerStatsController(
     private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
 
     private readonly Label _label = label ?? throw new ArgumentNullException(nameof(label));
+
+    private readonly DisposeScope _lifetime = new();
     private readonly Revealer _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
 
     private readonly Func<PlaybackStats?> _statsProvider =
         statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
 
-    private readonly DisposeScope _lifetime = new();
     private uint _refreshTimerSource;
 
     public PlayerStatsController(

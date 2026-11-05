@@ -2,7 +2,6 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.History;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
@@ -45,6 +44,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             var generation = BeginRequest();
             return await FetchPageAsync(null, true, generation, cancellationToken).ConfigureAwait(false);
         }
+
         InvalidateAndClearCachedResults();
         return new AuthenticatedHistoryResult(
             AuthenticatedHistoryStatus.AuthenticationRequired,
@@ -112,7 +112,8 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
             var page = continuation is null
                 ? await _clientProvider.GetAuthenticatedClient().Feeds.GetHistoryPageAsync(cancellationToken)
                     .ConfigureAwait(false)
-                : await _clientProvider.GetAuthenticatedClient().Feeds.GetHistoryPageAsync(continuation, cancellationToken)
+                : await _clientProvider.GetAuthenticatedClient().Feeds
+                    .GetHistoryPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
             var videos = page.Items
                 .Select(entry => entry.Item)

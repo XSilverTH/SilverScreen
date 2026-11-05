@@ -309,9 +309,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             VideoQuality = GetSelectedQuality(quality_row.Selected),
             YtDlpExecutablePath = ((Editable)ytdlp_path_row).GetText(),
             MpvExecutablePath = ((Editable)mpv_path_row).GetText(),
-            PlaybackBackend = (playback_backend_row.Selected == 1
+            PlaybackBackend = playback_backend_row.Selected == 1
                 ? PlaybackBackendKind.Embedded
-                : PlaybackBackendKind.ExternalMpv),
+                : PlaybackBackendKind.ExternalMpv,
             OpenInFullscreen = fullscreen_row.Active,
             PreferredSubtitleLanguage = ((Editable)subtitle_language_row).GetText(),
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,

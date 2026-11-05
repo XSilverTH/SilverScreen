@@ -93,7 +93,7 @@ public sealed class YouTubeRichTextTests
             YouTubeRichTextKind.Timestamp,
             YouTubeRichTextKind.Url,
             YouTubeRichTextKind.Hashtag,
-            YouTubeRichTextKind.Mention,
+            YouTubeRichTextKind.Mention
         ], links.Select(link => link.Link!.Kind));
         Assert.Equal("Start ", segments[0].Text);
         Assert.Equal(" end", segments[^1].Text);

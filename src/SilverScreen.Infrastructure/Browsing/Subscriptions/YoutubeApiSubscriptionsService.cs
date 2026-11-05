@@ -2,7 +2,6 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Browsing.Subscriptions;
-using SilverScreen.Core.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Channels;
@@ -48,6 +47,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             var generation = BeginRequest();
             return await FetchFeedPageAsync(null, pageSize, true, generation, cancellationToken).ConfigureAwait(false);
         }
+
         InvalidateAndClearCachedResults();
         return new AuthenticatedSubscriptionsFeedResult(
             AuthenticatedSubscriptionsStatus.AuthenticationRequired,
@@ -68,6 +68,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                 FeedPage.Empty,
                 SessionGate.SubscriptionsSignedOutMessage);
         }
+
         var generation = BeginRequest();
 
         string? token;
@@ -96,7 +97,8 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                 InvalidContinuationMessage);
         }
 
-        return await FetchFeedPageAsync(continuation, pageSize, false, generation, cancellationToken).ConfigureAwait(false);
+        return await FetchFeedPageAsync(continuation, pageSize, false, generation, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<SubscribedChannelsResult> LoadSubscribedChannelsAsync(
@@ -110,13 +112,15 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                 [],
                 SessionGate.SubscriptionsSignedOutMessage);
         }
+
         var generation = GetCurrentGeneration();
 
         try
         {
             // Channel pages have their own typed continuation protocol. The first page is the complete
             // channel-page request exposed by the Core contract; unlike the video feed it is not accumulated.
-            var page = await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscribedChannelsPageAsync(cancellationToken)
+            var page = await _clientProvider.GetAuthenticatedClient().Feeds
+                .GetSubscribedChannelsPageAsync(cancellationToken)
                 .ConfigureAwait(false);
             var channels = page.Items.Select(MapChannel).ToArray();
             return new SubscribedChannelsResult(
@@ -172,7 +176,8 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             var page = continuation is null
                 ? await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscriptionsPageAsync(cancellationToken)
                     .ConfigureAwait(false)
-                : await _clientProvider.GetAuthenticatedClient().Feeds.GetSubscriptionsPageAsync(continuation, cancellationToken)
+                : await _clientProvider.GetAuthenticatedClient().Feeds
+                    .GetSubscriptionsPageAsync(continuation, cancellationToken)
                     .ConfigureAwait(false);
             var videos = page.Items
                 .OfType<VideoFeedItem>()
@@ -197,6 +202,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                     new FeedPage(videos, nextToken),
                     EmptySubscriptionsMessage);
             }
+
             lock (_lock)
             {
                 if (generation != _requestGeneration || !IsSessionActive())
@@ -293,6 +299,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
             return ++_requestGeneration;
         }
     }
+
     private long GetCurrentGeneration()
     {
         lock (_lock)
@@ -314,7 +321,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
     private static SubscribedChannel MapChannel(ChannelSummary channel)
     {
-        var avatarUrl = channel.Thumbnails.Count > 0 ? channel.Thumbnails[0].Url.ToString():null;
+        var avatarUrl = channel.Thumbnails.Count > 0 ? channel.Thumbnails[0].Url.ToString() : null;
         return new SubscribedChannel(
             channel.Id.Value,
             channel.Title,

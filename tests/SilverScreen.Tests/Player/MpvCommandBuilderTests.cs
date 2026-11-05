@@ -9,7 +9,7 @@ public sealed class MpvCommandBuilderTests
 {
     private static VideoSummary CreateVideo(string id, string? watchUrl = null)
     {
-        return new VideoSummary(id, $"Title {id}", "Channel", TimeSpan.FromMinutes(3), "", false, WatchUrl: watchUrl);
+        return new VideoSummary(id, $"Title {id}", "Channel", TimeSpan.FromMinutes(3), "", false, watchUrl);
     }
 
     [Fact]
@@ -108,13 +108,9 @@ public sealed class MpvCommandBuilderTests
         var command = MpvCommandBuilder.Build(request, options);
 
         if (expectedArg is not null)
-        {
             Assert.Contains(expectedArg, command.Arguments);
-        }
         else
-        {
             Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--ytdl-format="));
-        }
     }
 
     [Theory]
@@ -137,7 +133,7 @@ public sealed class MpvCommandBuilderTests
         var request = new PlaybackRequest([CreateVideo("abc12345678")]);
         var options = new PlaybackOptions();
 
-        var command = MpvCommandBuilder.Build(request, options, cookieFilePath: cookiePath);
+        var command = MpvCommandBuilder.Build(request, options, cookiePath);
 
         Assert.Contains("--cookies", command.Arguments);
         Assert.Contains($"--cookies-file={cookiePath}", command.Arguments);
@@ -162,7 +158,7 @@ public sealed class MpvCommandBuilderTests
             CreateVideo("video000001"),
             CreateVideo("video000002"),
             CreateVideo("video000003"));
-        var request = new PlaybackRequest(videos, StartIndex: 2);
+        var request = new PlaybackRequest(videos, 2);
         var options = new PlaybackOptions();
 
         var command = MpvCommandBuilder.Build(request, options);
@@ -195,7 +191,7 @@ public sealed class MpvCommandBuilderTests
     public void Build_VideoWithCustomWatchUrl_PreservesCustomUrl()
     {
         const string customUrl = "https://example.com/custom/watch?v=xyz";
-        var request = new PlaybackRequest([CreateVideo("abc12345678", watchUrl: customUrl)]);
+        var request = new PlaybackRequest([CreateVideo("abc12345678", customUrl)]);
         var options = new PlaybackOptions();
 
         var command = MpvCommandBuilder.Build(request, options);
@@ -227,7 +223,7 @@ public sealed class MpvCommandBuilderTests
     {
         var v1 = CreateVideo("vid1_123456");
         var v2 = CreateVideo("vid2_123456");
-        var request = new PlaybackRequest([v1, v2], 0);
+        var request = new PlaybackRequest([v1, v2]);
         var transportUrls = new[] { "https://example.com/stream1" };
 
         Assert.Throws<ArgumentException>(() =>
@@ -237,7 +233,7 @@ public sealed class MpvCommandBuilderTests
     [Fact]
     public void GetPlaybackUrls_ThrowsWhenUrlIsNotHttpOrHttps()
     {
-        var request = new PlaybackRequest([CreateVideo("abc12345678", watchUrl: "file:///local/video.mp4")]);
+        var request = new PlaybackRequest([CreateVideo("abc12345678", "file:///local/video.mp4")]);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             MpvCommandBuilder.GetPlaybackUrls(request));
@@ -255,5 +251,4 @@ public sealed class MpvCommandBuilderTests
 
         Assert.Equal("No playable URL is available.", ex.Message);
     }
-
 }

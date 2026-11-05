@@ -5,7 +5,8 @@ namespace SilverScreen.Tests.Player;
 public sealed class PlayerErrorClassifierTests
 {
     [Theory]
-    [InlineData("ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you’re not a bot", "Sign-in Required", "avatar-default-symbolic")]
+    [InlineData("ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you’re not a bot", "Sign-in Required",
+        "avatar-default-symbolic")]
     [InlineData("Sign in to confirm your age", "Sign-in Required", "avatar-default-symbolic")]
     [InlineData("Login required for age-restricted content", "Sign-in Required", "avatar-default-symbolic")]
     public void Classify_RecognizesSignInAndBotVerification(string detail, string expectedTitle, string expectedIcon)
@@ -18,7 +19,8 @@ public sealed class PlayerErrorClassifierTests
     }
 
     [Theory]
-    [InlineData("Failed to connect to rr1---sn.googlevideo.com: Connection refused", "Connection Failed", "network-error-symbolic")]
+    [InlineData("Failed to connect to rr1---sn.googlevideo.com: Connection refused", "Connection Failed",
+        "network-error-symbolic")]
     [InlineData("Network is unreachable", "Connection Failed", "network-error-symbolic")]
     [InlineData("Connection timed out", "Connection Failed", "network-error-symbolic")]
     [InlineData("Could not resolve host: www.youtube.com", "Connection Failed", "network-error-symbolic")]
@@ -38,7 +40,8 @@ public sealed class PlayerErrorClassifierTests
     [InlineData("Private video. Sign in if you've been granted access", "Sign-in Required", "avatar-default-symbolic")]
     [InlineData("This video has been removed by the uploader", "Video Unavailable", "dialog-error-symbolic")]
     [InlineData("Geo-blocked content", "Video Unavailable", "dialog-error-symbolic")]
-    public void Classify_RecognizesUnavailableAndRestrictedVideos(string detail, string expectedTitle, string expectedIcon)
+    public void Classify_RecognizesUnavailableAndRestrictedVideos(string detail, string expectedTitle,
+        string expectedIcon)
     {
         var info = PlayerErrorClassifier.Classify(detail);
         Assert.Equal(expectedTitle, info.Title);

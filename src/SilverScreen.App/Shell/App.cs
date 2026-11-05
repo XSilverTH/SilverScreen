@@ -6,23 +6,25 @@ using Gtk;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
-using SilverScreen.Core.Preferences;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;
+
 namespace SilverScreen.Shell;
 
 [Subclass<Application>]
 public partial class App
 {
     private static CssProvider? _styles;
-    private IServiceProvider? _serviceProvider;
     private readonly ActivationWindowGuard<Window> _windowGuard = new();
-    private ApplicationServiceLifetime? _serviceLifetime;
-    private EventHandler<AppPreferences>? _preferencesChangedHandler;
     private AccountServices? _accountServices;
+    private EventHandler<AppPreferences>? _preferencesChangedHandler;
+    private ApplicationServiceLifetime? _serviceLifetime;
+    private IServiceProvider? _serviceProvider;
+
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -37,6 +39,7 @@ public partial class App
                 _accountServices.Preferences.PreferencesChanged -= _preferencesChangedHandler;
                 _preferencesChangedHandler = null;
             }
+
             _accountServices = null;
             _serviceLifetime?.ApplicationStopped();
         };
@@ -56,6 +59,7 @@ public partial class App
                 _accountServices.Preferences.PreferencesChanged -= _preferencesChangedHandler;
                 _preferencesChangedHandler = null;
             }
+
             _accountServices = null;
             var provider = Interlocked.Exchange(ref _serviceProvider, null);
             (provider as IDisposable)?.Dispose();
@@ -142,5 +146,4 @@ public partial class App
 
         StyleContext.AddProviderForDisplay(display, _styles, 600);
     }
-
 }

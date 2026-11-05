@@ -1,9 +1,9 @@
-using SilverScreen.Core.Browsing.Home;
 using Serilog;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Core.Browsing.Common;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Common;
 
 namespace SilverScreen.Browsing.Home;
 
@@ -15,6 +15,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private readonly ISessionService _sessionService;
     private bool _disposed;
     private Action? _openWebLogin;
+
     public HomeFeedCoordinator(ISessionService sessionService, IAuthenticatedHomeFeedService feedService,
         Action? openWebLogin = null)
     {
@@ -30,8 +31,8 @@ public sealed class HomeFeedCoordinator : IVideoListSource
                 if (SessionGate.IsAuthInvalid(res.Status))
                     return FeedPageResult.Failed(
                         SessionGate.SessionNoLongerValidMessage,
-                        clearExisting: true,
-                        authenticationStatus: res.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected
+                        true,
+                        res.Status == AuthenticatedHomeFeedStatus.AuthenticationRejected
                             ? FeedAuthenticationStatus.Rejected
                             : FeedAuthenticationStatus.Required);
                 var isSuccess = res.Status is AuthenticatedHomeFeedStatus.Success or AuthenticatedHomeFeedStatus.Empty;
@@ -53,24 +54,21 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         _sessionService.SessionChanged += OnSessionChanged;
 
         if (IsSessionActive())
-        {
             RefreshAsync().FireAndForget(Logger);
-        }
         else
-        {
             _engine.SetStatus(MapSignedOutStatus());
-        }
     }
 
-    public VideoListPresentationState State => _engine.State;
-
     public bool HasMore => _engine.HasMore;
+
+    public VideoListPresentationState State => _engine.State;
 
     public event EventHandler<VideoListPresentationState>? StateChanged
     {
         add => _engine.StateChanged += value;
         remove => _engine.StateChanged -= value;
     }
+
     public void Dispose()
     {
         lock (_lock)
@@ -112,7 +110,6 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     }
 
 
-
     private bool IsSessionActive()
     {
         return SessionGate.RequireSignedIn(_sessionService);
@@ -121,13 +118,9 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         if (IsSessionActive())
-        {
             RefreshAsync().FireAndForget(Logger);
-        }
         else
-        {
             _engine.Reset(MapSignedOutStatus());
-        }
     }
 
     private VideoListStatus MapSignedOutStatus()
@@ -188,5 +181,4 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             SessionGate.HomeEmptyMessage,
             "applications-internet-symbolic");
     }
-
 }

@@ -2,15 +2,14 @@ using SilverScreen.Player.RichText;
 
 namespace SilverScreen.Tests.Player.RichText;
 
-
 public sealed class PlayerLinkRouterTests
 {
-    private readonly List<double> _seeks = [];
-    private readonly List<string> _videos = [];
     private readonly List<string> _channels = [];
-    private readonly List<string> _searches = [];
     private readonly List<string> _externals = [];
     private readonly PlayerLinkRouter _router;
+    private readonly List<string> _searches = [];
+    private readonly List<double> _seeks = [];
+    private readonly List<string> _videos = [];
 
     public PlayerLinkRouterTests()
     {

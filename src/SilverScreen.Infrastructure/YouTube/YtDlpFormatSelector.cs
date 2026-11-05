@@ -99,7 +99,7 @@ internal static class YtDlpFormatSelector
             // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
             // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
             ResolvedMediaStream? selectedVideo = null;
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, allowRelaxation: false);
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false);
 
             ResolvedMediaStream? selectedAudio = null;
             if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
@@ -120,7 +120,7 @@ internal static class YtDlpFormatSelector
 
             // A compliant muxed stream is preferable to relaxing the adaptive video selection.
             var selectedMuxed = muxed.Count > 0
-                ? SelectBestVideoStream(muxed, maxTargetHeight, allowRelaxation: false)
+                ? SelectBestVideoStream(muxed, maxTargetHeight, false)
                 : null;
             if (selectedMuxed is not null)
             {

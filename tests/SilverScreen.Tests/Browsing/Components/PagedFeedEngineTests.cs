@@ -23,12 +23,11 @@ public sealed class PagedFeedEngineTests
         var v1 = CreateVideo("1");
         var v1Dup = CreateVideo("1");
         var v2 = CreateVideo("2");
-        var shortVideo = CreateVideo("short", isShort: true);
+        var shortVideo = CreateVideo("short", true);
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) => Task.FromResult(new FeedPageResult(
-                [v1, v1Dup, v2, shortVideo],
-                ContinuationToken: "token_page_2")));
+        using var engine = new PagedFeedEngine((token, count, ct) => Task.FromResult(new FeedPageResult(
+            [v1, v1Dup, v2, shortVideo],
+            "token_page_2")));
 
         var stateChanges = 0;
         engine.StateChanged += (_, _) => stateChanges++;
@@ -50,22 +49,21 @@ public sealed class PagedFeedEngineTests
         var passedTokens = new List<string?>();
         var page = 1;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            passedTokens.Add(token);
+            if (page == 1)
             {
-                passedTokens.Add(token);
-                if (page == 1)
-                {
-                    page++;
-                    return Task.FromResult(new FeedPageResult(
-                        [CreateVideo("1"), CreateVideo("2")],
-                        ContinuationToken: "token_2"));
-                }
-
+                page++;
                 return Task.FromResult(new FeedPageResult(
-                    [CreateVideo("2"), CreateVideo("3")],
-                    ContinuationToken: null));
-            });
+                    [CreateVideo("1"), CreateVideo("2")],
+                    "token_2"));
+            }
+
+            return Task.FromResult(new FeedPageResult(
+                [CreateVideo("2"), CreateVideo("3")],
+                null));
+        });
 
         await engine.RefreshAsync();
         Assert.Equal([null], passedTokens);
@@ -85,12 +83,11 @@ public sealed class PagedFeedEngineTests
         var fetchTcs = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var fetchCount = 0;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
-            {
-                fetchCount++;
-                return fetchTcs.Task;
-            });
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            fetchCount++;
+            return fetchTcs.Task;
+        });
 
         // 1. When HasMore is false, LoadMore does not invoke fetcher
         await engine.LoadMoreAsync();
@@ -104,7 +101,7 @@ public sealed class PagedFeedEngineTests
         await engine.LoadMoreAsync();
         Assert.Equal(1, fetchCount);
 
-        fetchTcs.SetResult(new FeedPageResult([CreateVideo("1")], ContinuationToken: "token_2"));
+        fetchTcs.SetResult(new FeedPageResult([CreateVideo("1")], "token_2"));
         await refreshTask;
 
         // 4. Start a LoadMore
@@ -133,14 +130,13 @@ public sealed class PagedFeedEngineTests
             TaskCreationOptions.RunContinuationsAsynchronously);
         var fetchCount = 0;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (_, _, _) =>
-            {
-                Interlocked.Increment(ref fetchCount);
-                fetchStarted.TrySetResult();
-                return fetchCompletion.Task;
-            });
-        engine.SetVideos([CreateVideo("1")], continuationToken: "token_2");
+        using var engine = new PagedFeedEngine((_, _, _) =>
+        {
+            Interlocked.Increment(ref fetchCount);
+            fetchStarted.TrySetResult();
+            return fetchCompletion.Task;
+        });
+        engine.SetVideos([CreateVideo("1")], "token_2");
 
         var firstLoad = engine.LoadMoreAsync();
         await fetchStarted.Task;
@@ -160,13 +156,12 @@ public sealed class PagedFeedEngineTests
         var tokens = new List<CancellationToken>();
         var call = 0;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
-            {
-                tokens.Add(ct);
-                call++;
-                return call == 1 ? tcs1.Task : tcs2.Task;
-            });
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            tokens.Add(ct);
+            call++;
+            return call == 1 ? tcs1.Task : tcs2.Task;
+        });
 
         var refresh1 = engine.RefreshAsync();
         Assert.Single(tokens);
@@ -191,14 +186,15 @@ public sealed class PagedFeedEngineTests
         // Verify stale request did not overwrite state
         Assert.Equal(["req2"], engine.Videos.Select(v => v.Id));
     }
-[Fact]
+
+    [Fact]
     public async Task StaleAuthenticationResultCannotReplaceAcceptedEmptyPage()
     {
         var stale = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var current = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var call = 0;
-        using var engine = new PagedFeedEngine(
-            fetcher: (_, _, _) => Interlocked.Increment(ref call) == 1 ? stale.Task : current.Task);
+        using var engine =
+            new PagedFeedEngine((_, _, _) => Interlocked.Increment(ref call) == 1 ? stale.Task : current.Task);
 
         var staleRefresh = engine.RefreshAsync();
         var currentRefresh = engine.RefreshAsync();
@@ -207,8 +203,8 @@ public sealed class PagedFeedEngineTests
 
         stale.SetResult(FeedPageResult.Failed(
             "Rejected",
-            clearExisting: true,
-            authenticationStatus: FeedAuthenticationStatus.Rejected));
+            true,
+            FeedAuthenticationStatus.Rejected));
         await staleRefresh;
 
         Assert.Empty(engine.EngineState.Videos);
@@ -219,12 +215,11 @@ public sealed class PagedFeedEngineTests
     [Fact]
     public async Task AuthenticationMetadataSurvivesSnapshotAndClearsOnResetAndSetVideos()
     {
-        using var engine = new PagedFeedEngine(
-            fetcher: (_, _, _) => Task.FromResult(new FeedPageResult(
-                [],
-                IsSuccess: false,
-                StatusMessage: "Sign in",
-                AuthenticationStatus: FeedAuthenticationStatus.Required)));
+        using var engine = new PagedFeedEngine((_, _, _) => Task.FromResult(new FeedPageResult(
+            [],
+            IsSuccess: false,
+            StatusMessage: "Sign in",
+            AuthenticationStatus: FeedAuthenticationStatus.Required)));
 
         await engine.RefreshAsync();
         Assert.Equal(FeedAuthenticationStatus.Required, engine.EngineState.AuthenticationStatus);
@@ -244,7 +239,7 @@ public sealed class PagedFeedEngineTests
     public async Task ServiceException_SetsErrorState_WithoutCrashing()
     {
         using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) => throw new InvalidOperationException("Network down"),
+            (token, count, ct) => throw new InvalidOperationException("Network down"),
             defaultTitle: "Test Feed");
 
         await engine.RefreshAsync();
@@ -262,7 +257,7 @@ public sealed class PagedFeedEngineTests
     {
         var page = 1;
         using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+            (token, count, ct) =>
             {
                 if (page == 1)
                 {
@@ -270,7 +265,7 @@ public sealed class PagedFeedEngineTests
                     return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
                 }
 
-                return Task.FromResult(FeedPageResult.Failed("Server error", clearExisting: false));
+                return Task.FromResult(FeedPageResult.Failed("Server error", false));
             },
             clearOnRefresh: false);
 
@@ -289,7 +284,7 @@ public sealed class PagedFeedEngineTests
     {
         var page = 1;
         using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+            (token, count, ct) =>
             {
                 if (page == 1)
                 {
@@ -297,7 +292,7 @@ public sealed class PagedFeedEngineTests
                     return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
                 }
 
-                return Task.FromResult(FeedPageResult.Failed("Auth required", clearExisting: true));
+                return Task.FromResult(FeedPageResult.Failed("Auth required", true));
             },
             clearOnRefresh: false);
 
@@ -314,17 +309,16 @@ public sealed class PagedFeedEngineTests
     public async Task FailedRefresh_WithDefaultSettings_PreservesExistingVideosOnResultFailure()
     {
         var page = 1;
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            if (page == 1)
             {
-                if (page == 1)
-                {
-                    page++;
-                    return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
-                }
+                page++;
+                return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
+            }
 
-                return Task.FromResult(FeedPageResult.Failed("Server error", clearExisting: false));
-            });
+            return Task.FromResult(FeedPageResult.Failed("Server error", false));
+        });
 
         await engine.RefreshAsync();
         Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
@@ -340,19 +334,18 @@ public sealed class PagedFeedEngineTests
     public async Task FailedRefresh_OnNetworkException_PreservesExistingVideosAndSetsPaginationError()
     {
         var page = 1;
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            if (page == 1)
             {
-                if (page == 1)
-                {
-                    page++;
-                    return Task.FromResult(new FeedPageResult(
-                        [CreateVideo("1"), CreateVideo("2")],
-                        ContinuationToken: "token_1"));
-                }
+                page++;
+                return Task.FromResult(new FeedPageResult(
+                    [CreateVideo("1"), CreateVideo("2")],
+                    "token_1"));
+            }
 
-                throw new InvalidOperationException("Network down");
-            });
+            throw new InvalidOperationException("Network down");
+        });
 
         await engine.RefreshAsync();
         Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
@@ -374,7 +367,7 @@ public sealed class PagedFeedEngineTests
     {
         var page = 1;
         using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
+            (token, count, ct) =>
             {
                 if (page == 1)
                 {
@@ -382,7 +375,7 @@ public sealed class PagedFeedEngineTests
                     return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
                 }
 
-                return Task.FromResult(FeedPageResult.Failed("Server error", clearExisting: false));
+                return Task.FromResult(FeedPageResult.Failed("Server error", false));
             },
             clearOnRefresh: true);
 
@@ -402,12 +395,11 @@ public sealed class PagedFeedEngineTests
         var tcs = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken capturedToken = default;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
-            {
-                capturedToken = ct;
-                return tcs.Task;
-            });
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            capturedToken = ct;
+            return tcs.Task;
+        });
 
         var refreshTask = engine.RefreshAsync();
         Assert.True(engine.IsLoading);
@@ -429,8 +421,7 @@ public sealed class PagedFeedEngineTests
     public async Task SetVideos_CancelsPendingRequests_AndOverwritesWithGivenVideos()
     {
         var tcs = new TaskCompletionSource<FeedPageResult>();
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) => tcs.Task);
+        using var engine = new PagedFeedEngine((token, count, ct) => tcs.Task);
 
         var refreshTask = engine.RefreshAsync();
         Assert.True(engine.IsLoading);
@@ -456,19 +447,19 @@ public sealed class PagedFeedEngineTests
         var nextPageCalled = false;
 
         using var engine = PagedFeedEngine.Create(
-            fetchFirstPage: (count, ct) =>
+            (count, ct) =>
             {
                 firstPageCalled = true;
                 return Task.FromResult("page_1_data");
             },
-            fetchNextPage: (token, count, ct) =>
+            (token, count, ct) =>
             {
                 nextPageCalled = true;
                 return Task.FromResult("page_2_data");
             },
-            extractResult: raw => new FeedPageResult(
+            raw => new FeedPageResult(
                 [CreateVideo(raw)],
-                ContinuationToken: raw == "page_1_data" ? "tok2" : null));
+                raw == "page_1_data" ? "tok2" : null));
 
         await engine.RefreshAsync();
         Assert.True(firstPageCalled);
@@ -488,18 +479,17 @@ public sealed class PagedFeedEngineTests
         var requestedTokens = new List<string?>();
         var failNextPageTwo = true;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
-            {
-                requestedTokens.Add(token);
-                if (token is null)
-                    return Task.FromResult(new FeedPageResult(
-                        [CreateVideo("1"), CreateVideo("2")],
-                        ContinuationToken: "token_2"));
-                if (failNextPageTwo)
-                    throw new InvalidOperationException("Flaky page");
-                return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
-            });
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            requestedTokens.Add(token);
+            if (token is null)
+                return Task.FromResult(new FeedPageResult(
+                    [CreateVideo("1"), CreateVideo("2")],
+                    "token_2"));
+            if (failNextPageTwo)
+                throw new InvalidOperationException("Flaky page");
+            return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
+        });
 
         await engine.RefreshAsync();
         Assert.Equal(["1", "2"], engine.Videos.Select(v => v.Id));
@@ -532,18 +522,17 @@ public sealed class PagedFeedEngineTests
         var requestedTokens = new List<string?>();
         var failNextPageTwo = true;
 
-        using var engine = new PagedFeedEngine(
-            fetcher: (token, count, ct) =>
-            {
-                requestedTokens.Add(token);
-                if (token is null)
-                    return Task.FromResult(new FeedPageResult(
-                        [CreateVideo("1"), CreateVideo("2")],
-                        ContinuationToken: "token_2"));
-                if (failNextPageTwo)
-                    return Task.FromResult(FeedPageResult.Failed("Server error"));
-                return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
-            });
+        using var engine = new PagedFeedEngine((token, count, ct) =>
+        {
+            requestedTokens.Add(token);
+            if (token is null)
+                return Task.FromResult(new FeedPageResult(
+                    [CreateVideo("1"), CreateVideo("2")],
+                    "token_2"));
+            if (failNextPageTwo)
+                return Task.FromResult(FeedPageResult.Failed("Server error"));
+            return Task.FromResult(new FeedPageResult([CreateVideo("3")]));
+        });
 
         await engine.RefreshAsync();
         Assert.True(engine.HasMore);
@@ -567,12 +556,11 @@ public sealed class PagedFeedEngineTests
         var tcs = new TaskCompletionSource<FeedPageResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken token = default;
 
-        var engine = new PagedFeedEngine(
-            fetcher: (_, _, ct) =>
-            {
-                token = ct;
-                return tcs.Task;
-            });
+        var engine = new PagedFeedEngine((_, _, ct) =>
+        {
+            token = ct;
+            return tcs.Task;
+        });
 
         _ = engine.RefreshAsync();
         Assert.False(token.IsCancellationRequested);

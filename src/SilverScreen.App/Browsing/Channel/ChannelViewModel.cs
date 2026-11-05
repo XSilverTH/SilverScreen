@@ -26,6 +26,7 @@ public sealed record ChannelViewState(
 }
 
 public sealed record ChannelNavigationArgs(string Url, string? Name = null);
+
 public sealed record ChannelNavigationState(
     string? Url,
     string Name,
@@ -34,7 +35,6 @@ public sealed record ChannelNavigationState(
     long? SubscriberCount,
     ChannelVideoSort Sort,
     FeedEngineSnapshot Feed);
-
 
 public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 {
@@ -74,7 +74,6 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
             StateChanged?.Invoke(this, value);
         }
     } = ChannelViewState.Empty;
-
 
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -156,6 +155,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.Reset();
         State = ChannelViewState.Empty;
     }
+
     public ChannelNavigationState CaptureNavigationState()
     {
         ThrowIfDisposed();

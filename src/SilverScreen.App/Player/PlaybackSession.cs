@@ -29,37 +29,6 @@ internal sealed class PlaybackSession : IDisposable
 
     private static readonly ILogger Logger = Log.ForContext<PlaybackSession>();
 
-    #region Session infrastructure sidecars (telemetry / presence / cookies / queue plumbing)
-
-    private readonly PlaybackCoordinator _coordinator;
-    private readonly DesktopMediaIntegration? _desktopMedia;
-    private readonly IPreferencesService _preferences;
-    private readonly ISessionService _session;
-    private CookieFileLease? _cookieFile;
-    private bool _disposed;
-    private string? _lastPlaybackVideoId;
-    private CancellationTokenSource? _loadCts;
-    private long _loadVersion;
-    private long _playbackId;
-
-    #endregion
-
-    #region Content sidecars (SponsorBlock / resume / engagement / playlist)
-
-    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
-    private readonly IYouTubePlaybackProgressService _playbackProgress;
-    private readonly ISponsorBlockService _sponsorBlock;
-    private readonly IVideoEngagementService _videoEngagement;
-    private readonly IYouTubeRatingService _youtubeRating;
-    private bool _hadSeek;
-    private bool _handledResumeForCurrentVideo;
-    private bool _playbackProgressLoaded;
-    private string _sponsorBlockConfigurationKey = string.Empty;
-    private bool _wasPaused;
-    private YouTubePlaybackProgress? _youtubePlaybackProgress;
-
-    #endregion
-
     public PlaybackSession(
         PlaybackCoordinator coordinator,
         IPreferencesService preferences,
@@ -138,6 +107,37 @@ internal sealed class PlaybackSession : IDisposable
     public event Action<SponsorBlockSegment?>? SponsorBlockPromptChanged;
     public event Action<SponsorBlockSegment>? SponsorBlockAutoSkipped;
     public event Action<ResumePromptMode, TimeSpan>? ResumePromptChanged;
+
+    #region Session infrastructure sidecars (telemetry / presence / cookies / queue plumbing)
+
+    private readonly PlaybackCoordinator _coordinator;
+    private readonly DesktopMediaIntegration? _desktopMedia;
+    private readonly IPreferencesService _preferences;
+    private readonly ISessionService _session;
+    private CookieFileLease? _cookieFile;
+    private bool _disposed;
+    private string? _lastPlaybackVideoId;
+    private CancellationTokenSource? _loadCts;
+    private long _loadVersion;
+    private long _playbackId;
+
+    #endregion
+
+    #region Content sidecars (SponsorBlock / resume / engagement / playlist)
+
+    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    private readonly IYouTubePlaybackProgressService _playbackProgress;
+    private readonly ISponsorBlockService _sponsorBlock;
+    private readonly IVideoEngagementService _videoEngagement;
+    private readonly IYouTubeRatingService _youtubeRating;
+    private bool _hadSeek;
+    private bool _handledResumeForCurrentVideo;
+    private bool _playbackProgressLoaded;
+    private string _sponsorBlockConfigurationKey = string.Empty;
+    private bool _wasPaused;
+    private YouTubePlaybackProgress? _youtubePlaybackProgress;
+
+    #endregion
 
     #region Session infrastructure (telemetry / presence / cookies / queue plumbing)
 

@@ -517,6 +517,7 @@ public partial class VideoCardView : ViewBase<Bin>
             ? $"{video.Title}\n{video.ChannelName}"
             : $"{video.Title}\n{video.ChannelName}\nPublished: {publishedText}";
     }
+
     private static string FormatTooltipMeta(string? publishedText)
     {
         return string.IsNullOrWhiteSpace(publishedText) ? string.Empty : $"Published: {publishedText}";
@@ -525,10 +526,7 @@ public partial class VideoCardView : ViewBase<Bin>
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            Unbind();
-        }
+        if (disposing) Unbind();
 
         base.Dispose(disposing);
     }

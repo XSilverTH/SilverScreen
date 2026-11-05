@@ -80,6 +80,7 @@ public sealed class ChannelViewModelTests
         Assert.False(viewModel.State.IsSuccess);
         Assert.Equal("Could not load channel.", viewModel.State.Summary);
     }
+
     [Fact]
     public async Task LoadMoreAsync_AppendsTheNextChannelPage()
     {
@@ -94,6 +95,7 @@ public sealed class ChannelViewModelTests
         Assert.Equal(["dQw4w9WgXcQ", "abc123def45"], viewModel.State.Videos.Select(video => video.Id));
         Assert.False(viewModel.State.HasMore);
     }
+
     [Fact]
     public async Task NavigationState_RestoresLoadedPagesAndSortWithoutFetchingAgain()
     {
@@ -161,18 +163,19 @@ public sealed class ChannelViewModelTests
             string? continuationToken, int count, CancellationToken cancellationToken)
         {
             if (continuationToken is null)
-            {
                 return Task.FromResult(new ChannelPage(
                     channelUrl,
                     "Original Channel",
                     "Original Description",
                     "https://example.com/avatar.jpg",
                     42000L,
-                    [new VideoSummary("v1", "V1", "Original Channel", TimeSpan.FromMinutes(1), "", false, ChannelUrl: channelUrl)],
+                    [
+                        new VideoSummary("v1", "V1", "Original Channel", TimeSpan.FromMinutes(1), "", false,
+                            ChannelUrl: channelUrl)
+                    ],
                     sort,
                     "Loaded",
                     NextContinuationToken: "page2"));
-            }
 
             return Task.FromResult(new ChannelPage(
                 channelUrl,
@@ -180,7 +183,10 @@ public sealed class ChannelViewModelTests
                 null,
                 null,
                 null,
-                [new VideoSummary("v2", "V2", fallbackName, TimeSpan.FromMinutes(1), "", false, ChannelUrl: channelUrl)],
+                [
+                    new VideoSummary("v2", "V2", fallbackName, TimeSpan.FromMinutes(1), "", false,
+                        ChannelUrl: channelUrl)
+                ],
                 sort,
                 "Loaded page 2",
                 NextContinuationToken: null));
@@ -190,11 +196,9 @@ public sealed class ChannelViewModelTests
 
     private sealed class FakeChannelService : IChannelService
     {
-        public (string Url, string FallbackName, ChannelVideoSort Sort, string? ContinuationToken, int Count)? LastRequest
-        {
-            get;
-            private set;
-        }
+        public (string Url, string FallbackName, ChannelVideoSort Sort, string? ContinuationToken, int Count)?
+            LastRequest { get; private set; }
+
         public int RequestCount { get; private set; }
 
 
@@ -209,7 +213,8 @@ public sealed class ChannelViewModelTests
                 : new VideoSummary("abc123def45", "More Video", "Example Channel", TimeSpan.FromSeconds(42),
                     string.Empty, false, ChannelUrl: channelUrl);
             return Task.FromResult(new ChannelPage(channelUrl, "Example Channel", "Description", null, 1,
-                [video], sort, "Loaded Example Channel.", NextContinuationToken: continuationToken is null ? "next" : null));
+                [video], sort, "Loaded Example Channel.",
+                NextContinuationToken: continuationToken is null ? "next" : null));
         }
     }
 }

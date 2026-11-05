@@ -36,19 +36,6 @@ public sealed class ReturnYouTubeDislikeServiceTests
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
     }
 
-    private sealed class FakeHttpMessageHandler(
-        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler
-    {
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return handler(request, cancellationToken);
-        }
-    }
-
     [Fact]
     public void FreshPreferences_RydIsOffByDefault()
     {
@@ -71,8 +58,8 @@ public sealed class ReturnYouTubeDislikeServiceTests
     public async Task GetEngagementAsync_WhenStoredTrueIsHonored_FetchesCounts()
     {
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(JsonResponse("""
-                                                { "id": "dQw4w9WgXcQ", "likes": 10, "dislikes": 3 }
-                                                """)));
+            { "id": "dQw4w9WgXcQ", "likes": 10, "dislikes": 3 }
+            """)));
         using var client = new HttpClient(handler);
         var preferences = new FakePreferencesService(new AppPreferences { RydEnabled = true });
         using var service = new ReturnYouTubeDislikeService(client, preferences);
@@ -88,8 +75,8 @@ public sealed class ReturnYouTubeDislikeServiceTests
     public async Task GetEngagementAsync_WhenDisabledAfterCaching_ReturnsNullAndDropsStale()
     {
         var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(JsonResponse("""
-                                                { "id": "dQw4w9WgXcQ", "likes": 10, "dislikes": 3 }
-                                                """)));
+            { "id": "dQw4w9WgXcQ", "likes": 10, "dislikes": 3 }
+            """)));
         using var client = new HttpClient(handler);
         var preferences = new FakePreferencesService(new AppPreferences { RydEnabled = true });
         using var service = new ReturnYouTubeDislikeService(client, preferences);
@@ -157,6 +144,19 @@ public sealed class ReturnYouTubeDislikeServiceTests
         Assert.Equal(ids.Length + 1, handler.CallCount);
     }
 
+    private sealed class FakeHttpMessageHandler(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return handler(request, cancellationToken);
+        }
+    }
+
     private sealed class FakePreferencesService(AppPreferences initial) : IPreferencesService
     {
         public AppPreferences Current { get; set; } = initial;
@@ -174,5 +174,4 @@ public sealed class ReturnYouTubeDislikeServiceTests
             PreferencesChanged?.Invoke(this, preferences);
         }
     }
-
 }

@@ -9,12 +9,12 @@ public class PlayerOsdStateTests
     {
         var state = new PlayerOsdState();
 
-        var muted = state.ProcessVolume(80, isMuted: true);
+        var muted = state.ProcessVolume(80, true);
         Assert.Equal("audio-volume-muted-symbolic", muted.IconName);
         Assert.Equal("Muted", muted.Text);
         Assert.Equal(OsdActionKind.Volume, state.CurrentActionKind);
 
-        var unmuted = state.ProcessVolume(80, isMuted: false);
+        var unmuted = state.ProcessVolume(80, false);
         Assert.Equal("audio-volume-high-symbolic", unmuted.IconName);
         Assert.Equal("80%", unmuted.Text);
     }
@@ -24,11 +24,11 @@ public class PlayerOsdStateTests
     {
         var state = new PlayerOsdState();
 
-        var negative = state.ProcessVolume(-10, isMuted: false);
+        var negative = state.ProcessVolume(-10, false);
         Assert.Equal("0%", negative.Text);
         Assert.Equal("audio-volume-muted-symbolic", negative.IconName);
 
-        var overHundred = state.ProcessVolume(120, isMuted: false);
+        var overHundred = state.ProcessVolume(120, false);
         Assert.Equal("100%", overHundred.Text);
         Assert.Equal("audio-volume-high-symbolic", overHundred.IconName);
     }
@@ -37,7 +37,7 @@ public class PlayerOsdStateTests
     public void ProcessSeek_AggregatesWithinWindow()
     {
         long currentTick = 1000;
-        var state = new PlayerOsdState(aggregationWindowMilliseconds: 600, tickCountProvider: () => currentTick);
+        var state = new PlayerOsdState(600, () => currentTick);
 
         // First seek +10s
         var first = state.ProcessSeek(10);
@@ -71,7 +71,7 @@ public class PlayerOsdStateTests
     public void ActionSwitch_ResetsSeekAggregation()
     {
         long currentTick = 1000;
-        var state = new PlayerOsdState(aggregationWindowMilliseconds: 600, tickCountProvider: () => currentTick);
+        var state = new PlayerOsdState(600, () => currentTick);
 
         // Seek +10s
         state.ProcessSeek(10);
@@ -79,7 +79,7 @@ public class PlayerOsdStateTests
 
         // VolumeUp at tick = 1200
         currentTick = 1200;
-        var volume = state.ProcessVolume(85, isMuted: false);
+        var volume = state.ProcessVolume(85, false);
         Assert.Equal(OsdActionKind.Volume, state.CurrentActionKind);
         Assert.Equal("85%", volume.Text);
         Assert.Equal(0, state.AccumulatedSeekDeltaSeconds);
@@ -95,7 +95,7 @@ public class PlayerOsdStateTests
     public void ProcessSeek_MixedRapidDeltas_AccumulateToZero()
     {
         long currentTick = 1000;
-        var state = new PlayerOsdState(aggregationWindowMilliseconds: 600, tickCountProvider: () => currentTick);
+        var state = new PlayerOsdState(600, () => currentTick);
 
         state.ProcessSeek(10);
         currentTick = 1200;
@@ -120,5 +120,4 @@ public class PlayerOsdStateTests
         Assert.Equal(OsdActionKind.None, state.CurrentActionKind);
         Assert.Equal(0, state.AccumulatedSeekDeltaSeconds);
     }
-
 }

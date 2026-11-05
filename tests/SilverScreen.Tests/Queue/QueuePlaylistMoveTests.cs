@@ -22,6 +22,7 @@ public sealed class QueuePlaylistMoveTests
         Assert.Equal(0, from);
         Assert.Equal(2, to);
     }
+
     [Fact]
     public void TranslatesSwap()
     {
@@ -49,6 +50,8 @@ public sealed class QueuePlaylistMoveTests
         return (from, to);
     }
 
-    private static VideoSummary Video(string id) =>
-        new(id, id, "channel", TimeSpan.Zero, string.Empty, false);
+    private static VideoSummary Video(string id)
+    {
+        return new VideoSummary(id, id, "channel", TimeSpan.Zero, string.Empty, false);
+    }
 }

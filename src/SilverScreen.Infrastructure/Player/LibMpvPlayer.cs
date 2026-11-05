@@ -6,6 +6,7 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+
 namespace SilverScreen.Infrastructure.Player;
 
 public sealed record LibMpvSubtitleTrack(long Id, string Language, string Label, bool IsSelected);
@@ -46,6 +47,7 @@ public sealed class LibMpvPlayer : IDisposable
     private readonly Lock _seekGate = new();
     private string? _cookieFilePath;
     private nint _handle;
+    private string? _lastErrorMessage;
     private (double Seconds, bool Exact)? _pendingSeek;
     private AppPreferences? _preferences;
     private string _quality = "Best";
@@ -54,7 +56,6 @@ public sealed class LibMpvPlayer : IDisposable
     private PlaybackRequest? _request;
     private bool _resumeAfterRenderer;
     private bool _seekQueued;
-    private string? _lastErrorMessage;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
         false, [], []);
@@ -214,7 +215,11 @@ public sealed class LibMpvPlayer : IDisposable
             _quality = preferences.Quality.ToPersistedString();
             _reload = null;
             _lastErrorMessage = null;
-            _state = _state with { IsPaused = false, IsLoading = true, IsBuffering = false, BufferingPercent = 0, SubtitleTracks = [], Chapters = [] };
+            _state = _state with
+            {
+                IsPaused = false, IsLoading = true, IsBuffering = false, BufferingPercent = 0, SubtitleTracks = [],
+                Chapters = []
+            };
         }
 
         var primaryVideo = request.Videos.FirstOrDefault();
@@ -261,7 +266,6 @@ public sealed class LibMpvPlayer : IDisposable
     {
         Enqueue(() =>
             Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
-
     }
 
 
@@ -283,6 +287,7 @@ public sealed class LibMpvPlayer : IDisposable
     {
         Enqueue(() => Check(_native.Command(_handle, "loadfile", url, "append-play")));
     }
+
     /// <summary>
     ///     Updates the request used by renderer reloads without restarting the current
     ///     playlist. Live queue edits are applied to mpv separately by the caller.
@@ -504,6 +509,7 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
         }
     }
+
     private void HandleLogMessage(nint data)
     {
         if (data == 0) return;
@@ -514,9 +520,7 @@ public sealed class LibMpvPlayer : IDisposable
 
         if (message.LogLevel <= LibMpvLogLevel.Error ||
             (message.LogLevel <= LibMpvLogLevel.Warn && (prefix == "ytdl_hook" || text.Contains("ERROR"))))
-        {
             _lastErrorMessage = text;
-        }
         switch (message.LogLevel)
         {
             case LibMpvLogLevel.Fatal:
@@ -629,7 +633,6 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         if (reload is not null)
-        {
             Enqueue(() =>
             {
                 Check(_native.SetPropertyDouble(_handle, "volume", reload.Volume));
@@ -638,7 +641,6 @@ public sealed class LibMpvPlayer : IDisposable
                     reload.Position.TotalSeconds.ToString(CultureInfo.InvariantCulture), "absolute+exact"));
                 Check(_native.SetPropertyFlag(_handle, "pause", reload.IsPaused));
             });
-        }
 
         PublishState();
     }

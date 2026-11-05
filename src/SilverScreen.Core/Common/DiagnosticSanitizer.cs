@@ -32,15 +32,23 @@ public static partial class DiagnosticSanitizer
     [GeneratedRegex(@"\b(Bearer|Basic)\s+\S+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex BearerRegex();
 
-    [GeneratedRegex(@"\b((?:SAPISID|__Secure-3PAPISID|__Secure-1PAPISID|SID|SSID|HSID|APISID|LOGIN_INFO|__Secure-1PSID|__Secure-3PSID)\s*[=:]\s*)[^;\s&,]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(
+        @"\b((?:SAPISID|__Secure-3PAPISID|__Secure-1PAPISID|SID|SSID|HSID|APISID|LOGIN_INFO|__Secure-1PSID|__Secure-3PSID)\s*[=:]\s*)[^;\s&,]+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CookieAssignmentRegex();
 
-[GeneratedRegex(@"\b((?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)\s*[=:]\s*)[^&\s,;}""']+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(
+        @"\b((?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)\s*[=:]\s*)[^&\s,;}""']+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex QuerySecretRegex();
 
-    [GeneratedRegex(@"(""(?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)""\s*:\s*"")[^""]*("")", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(
+        @"(""(?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)""\s*:\s*"")[^""]*("")",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex JsonSecretRegex();
 
-[GeneratedRegex(@"(--(?:password|client-secret|access-token|refresh-token|token|api-key|cookies(?:-from-browser)?)(?:=|\s+))(?:""[^""]*""|'[^']*'|\S+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(
+        @"(--(?:password|client-secret|access-token|refresh-token|token|api-key|cookies(?:-from-browser)?)(?:=|\s+))(?:""[^""]*""|'[^']*'|\S+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ArgumentSecretRegex();
 }

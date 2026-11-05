@@ -1,7 +1,6 @@
 using System.Globalization;
 using Gtk;
 using SilverScreen.Core.Preferences;
-using static GLib.Functions;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
@@ -204,13 +203,13 @@ public class PlayerOsdState(
 
 internal sealed class PlayerOsdController : IDisposable
 {
-    private readonly PlayerOsdState _state;
     private readonly uint _holdDurationMilliseconds;
+    private readonly DisposeScope _lifetime = new();
     private readonly Image _osdIcon;
     private readonly Label _osdLabel;
     private readonly Revealer _osdRevealer;
     private readonly IPreferencesService _preferences;
-    private readonly DisposeScope _lifetime = new();
+    private readonly PlayerOsdState _state;
     private bool _enabled;
     private uint _hideTimeoutSource;
 

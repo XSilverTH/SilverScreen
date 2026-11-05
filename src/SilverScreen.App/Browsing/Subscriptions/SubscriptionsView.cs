@@ -201,15 +201,18 @@ public partial class SubscriptionsView : ViewBase<Box>
         // Primary click: Filter by this channel
         var leftClick = GestureClick.New();
         leftClick.Button = 1;
+
         void OnLeftClickReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
         {
             _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
         }
+
         holder.Lifetime.Attach(itemBox, leftClick,
             c => c.OnReleased += OnLeftClickReleased,
             c => c.OnReleased -= OnLeftClickReleased);
 
         var keyController = EventControllerKey.New();
+
         bool OnKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
         {
             var keyval = args.Keyval;
@@ -241,6 +244,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
             return false;
         }
+
         holder.Lifetime.Attach(itemBox, keyController,
             c => c.OnKeyPressed += OnKeyControllerKeyPressed,
             c => c.OnKeyPressed -= OnKeyControllerKeyPressed);
@@ -251,10 +255,12 @@ public partial class SubscriptionsView : ViewBase<Box>
 
         var actionGroup = holder.Lifetime.Own(SimpleActionGroup.New());
         var openAction = holder.Lifetime.Own(SimpleAction.New("open-channel", null));
+
         void OnOpenActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
         {
             _openChannel(channel.Url, channel.Title);
         }
+
         holder.Lifetime.Track(
             () => openAction.OnActivate += OnOpenActionActivated,
             () => openAction.OnActivate -= OnOpenActionActivated);
@@ -277,6 +283,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
         var rightClick = GestureClick.New();
         rightClick.Button = 3;
+
         void OnRightClickPressed(GestureClick sender, GestureClick.PressedSignalArgs args)
         {
             sender.SetState(EventSequenceState.Claimed);
@@ -290,6 +297,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             popover.SetPointingTo(rect);
             popover.Popup();
         }
+
         holder.Lifetime.Attach(itemBox, rightClick,
             c => c.OnPressed += OnRightClickPressed,
             c => c.OnPressed -= OnRightClickPressed);
@@ -440,7 +448,6 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private sealed class ChannelItemHolder : IDisposable
     {
-        private readonly DisposeScope _lifetime = new();
         private bool _disposed;
 
         public ChannelItemHolder(
@@ -453,7 +460,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             Overlay = overlay;
         }
 
-        public DisposeScope Lifetime => _lifetime;
+        public DisposeScope Lifetime { get; } = new();
 
         public SubscribedChannel Channel { get; }
 
@@ -474,7 +481,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             BoundTexture?.Dispose();
             BoundTexture = null;
 
-            _lifetime.Dispose();
+            Lifetime.Dispose();
         }
     }
 }

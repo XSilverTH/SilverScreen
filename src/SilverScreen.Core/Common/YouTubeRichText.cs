@@ -7,7 +7,7 @@ public enum YouTubeRichTextKind
     Url,
     Timestamp,
     Hashtag,
-    Mention,
+    Mention
 }
 
 /// <summary>
@@ -179,10 +179,8 @@ public static partial class YouTubeRichText
     {
         var end = start + length;
         foreach (var (urlStart, urlEnd) in urlSpans)
-        {
             if (start < urlEnd && end > urlStart)
                 return;
-        }
 
         links.Add((start, length, token));
     }
@@ -196,10 +194,8 @@ public static partial class YouTubeRichText
         var openParentheses = 0;
         var closeParentheses = 0;
         for (var i = 0; i < end; i++)
-        {
             if (url[i] == '(') openParentheses++;
             else if (url[i] == ')') closeParentheses++;
-        }
 
         while (end > 0 && url[end - 1] == ')' && closeParentheses > openParentheses)
         {
@@ -225,10 +221,8 @@ public static partial class YouTubeRichText
             return false;
 
         foreach (var character in text)
-        {
             if (!char.IsAsciiDigit(character))
                 return false;
-        }
 
         return true;
     }

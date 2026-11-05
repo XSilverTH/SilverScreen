@@ -103,7 +103,10 @@ public sealed class PreferencesViewModelTests
         var service = new FakePreferencesService(original) { ThrowOnSave = true };
         var viewModel = new PreferencesViewModel(service);
 
-        var result = viewModel.Save(viewModel.EditorState with { Theme = ThemeMode.Dark, YtDlpExecutablePath = "/custom/yt-dlp" });
+        var result = viewModel.Save(viewModel.EditorState with
+        {
+            Theme = ThemeMode.Dark, YtDlpExecutablePath = "/custom/yt-dlp"
+        });
 
         Assert.False(result.Succeeded);
         Assert.Equal(ThemeMode.Light, result.State.Theme);

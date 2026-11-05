@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Net;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Common;
@@ -12,13 +11,13 @@ namespace SilverScreen.Tests.Player;
 public sealed class PlaybackSessionTests : IDisposable
 {
     private readonly TrackingCoordinator _coordinator;
-    private readonly FakePreferencesService _preferences;
-    private readonly FakeSponsorBlockService _sponsorBlock;
     private readonly FakeYouTubePlaybackProgressService _playbackProgress;
+    private readonly FakePreferencesService _preferences;
+    private readonly PlaybackSession _session;
+    private readonly FakeSessionService _sessionService;
+    private readonly FakeSponsorBlockService _sponsorBlock;
     private readonly FakeVideoEngagementService _videoEngagement;
     private readonly FakeYouTubeRatingService _youtubeRating;
-    private readonly FakeSessionService _sessionService;
-    private readonly PlaybackSession _session;
 
     public PlaybackSessionTests()
     {
@@ -79,7 +78,7 @@ public sealed class PlaybackSessionTests : IDisposable
         var request = new PlaybackRequest([v1, v2]);
         _session.Start(request);
 
-        var state1 = CreateState(0, 10, 180);
+        var state1 = CreateState(0, 10);
         _session.UpdatePlayback(state1);
 
         Assert.True(_session.HasMedia);
@@ -131,7 +130,7 @@ public sealed class PlaybackSessionTests : IDisposable
         var second = CreateVideo("vid2", "Second");
         var third = CreateVideo("vid3", "Third");
         _session.Start(new PlaybackRequest([first, second]));
-        _session.UpdatePlayback(CreateState(1, 20, 180));
+        _session.UpdatePlayback(CreateState(1, 20));
 
         _session.UpdateQueue([first]);
         Assert.Equal("vid1", _session.CurrentVideo?.Id);
@@ -199,7 +198,7 @@ public sealed class PlaybackSessionTests : IDisposable
         double? soughtPosition = null;
         _session.SeekRequested += (pos, _) => soughtPosition = pos;
 
-        ResumePromptMode promptMode = ResumePromptMode.None;
+        var promptMode = ResumePromptMode.None;
         _session.ResumePromptChanged += (mode, _) => promptMode = mode;
 
         _session.Start(new PlaybackRequest([video]));
@@ -314,7 +313,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25), SponsorBlockCategories.Sponsor);
+        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25),
+            SponsorBlockCategories.Sponsor);
         _sponsorBlock.Segments[video.Id] = [segment];
 
         double? soughtPosition = null;
@@ -346,7 +346,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(35), SponsorBlockCategories.Sponsor);
+        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(35),
+            SponsorBlockCategories.Sponsor);
         _sponsorBlock.Segments[video.Id] = [segment];
 
         SponsorBlockSegment? promptSegment = null;
@@ -431,7 +432,11 @@ public sealed class PlaybackSessionTests : IDisposable
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
         _playbackProgress.Progress[video.Id] =
             new YouTubePlaybackProgress(null, TimeSpan.FromSeconds(30), false);
-        _sponsorBlock.Segments[video.Id] = [new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), SponsorBlockCategories.Sponsor)];
+        _sponsorBlock.Segments[video.Id] =
+        [
+            new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20),
+                SponsorBlockCategories.Sponsor)
+        ];
 
         _session.Start(new PlaybackRequest([video]));
         await WaitForAsync(() => _session.SponsorBlockSegments.Count > 0);
@@ -484,7 +489,11 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("local-file-path", "Local Video");
-        _sponsorBlock.Segments[video.Id] = [new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), SponsorBlockCategories.Sponsor)];
+        _sponsorBlock.Segments[video.Id] =
+        [
+            new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20),
+                SponsorBlockCategories.Sponsor)
+        ];
         _videoEngagement.Engagements[video.Id] = new VideoEngagement(100, 10);
 
         _session.Start(new PlaybackRequest([video]));
@@ -511,13 +520,21 @@ public sealed class PlaybackSessionTests : IDisposable
         _videoEngagement.Engagements[v1.Id] = new VideoEngagement(100, 1);
         _videoEngagement.Engagements[v2.Id] = new VideoEngagement(200, 2);
 
-        _sponsorBlock.Segments[v1.Id] = [new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), SponsorBlockCategories.Sponsor)];
-        _sponsorBlock.Segments[v2.Id] = [new SponsorBlockSegment("seg2", TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(25), SponsorBlockCategories.Sponsor)];
+        _sponsorBlock.Segments[v1.Id] =
+        [
+            new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10),
+                SponsorBlockCategories.Sponsor)
+        ];
+        _sponsorBlock.Segments[v2.Id] =
+        [
+            new SponsorBlockSegment("seg2", TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(25),
+                SponsorBlockCategories.Sponsor)
+        ];
 
         _session.Start(new PlaybackRequest([v1, v2]));
 
         // Immediately switch to video 2 before video 1 loads
-        _session.UpdatePlayback(CreateState(1, 0, 180));
+        _session.UpdatePlayback(CreateState(1));
 
         await WaitForAsync(() => _session.Engagement?.Likes == 200);
 
@@ -547,7 +564,8 @@ public sealed class PlaybackSessionTests : IDisposable
         };
 
         var video = CreateVideo("dQw4w9WgXcQ", "Video");
-        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), SponsorBlockCategories.Sponsor);
+        var segment = new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20),
+            SponsorBlockCategories.Sponsor);
         _sponsorBlock.Segments[video.Id] = [segment];
 
         _session.Start(new PlaybackRequest([video]));
@@ -605,25 +623,23 @@ public sealed class PlaybackSessionTests : IDisposable
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 2000)
     {
         var start = Environment.TickCount64;
-        while (!condition() && Environment.TickCount64 - start < timeoutMs)
-        {
-            await Task.Delay(20);
-        }
+        while (!condition() && Environment.TickCount64 - start < timeoutMs) await Task.Delay(20);
     }
 
     private sealed class TrackingCoordinator : IDisposable
     {
+        private readonly TrackingCookieProvider _cookieProvider = new();
         private readonly TrackingPresence _presence = new();
         private readonly TrackingTelemetry _telemetry = new();
-        private readonly TrackingCookieProvider _cookieProvider = new();
 
-        public PlaybackCoordinator Coordinator { get; }
-        public List<PlaybackPresenceState> PresenceUpdates => _presence.SetCalls.Select(c => c.State).ToList();
-        public List<(PlaybackRequest Request, PlaybackPresenceState State)> PresenceCalls => _presence.SetCalls;
         public TrackingCoordinator()
         {
             Coordinator = new PlaybackCoordinator(_cookieProvider, _presence, _telemetry);
         }
+
+        public PlaybackCoordinator Coordinator { get; }
+        public List<PlaybackPresenceState> PresenceUpdates => _presence.SetCalls.Select(c => c.State).ToList();
+        public List<(PlaybackRequest Request, PlaybackPresenceState State)> PresenceCalls => _presence.SetCalls;
 
         public void Dispose()
         {
@@ -636,9 +652,15 @@ public sealed class PlaybackSessionTests : IDisposable
         public AppPreferences Current { get; set; } = new();
         public event EventHandler<AppPreferences>? PreferencesChanged;
 
-        public AppPreferences GetPreferences() => Current;
+        public AppPreferences GetPreferences()
+        {
+            return Current;
+        }
 
-        public void SavePreferences(AppPreferences preferences) => UpdatePreferences(preferences);
+        public void SavePreferences(AppPreferences preferences)
+        {
+            UpdatePreferences(preferences);
+        }
 
         public void UpdatePreferences(AppPreferences preferences)
         {
@@ -675,6 +697,7 @@ public sealed class PlaybackSessionTests : IDisposable
             return Task.FromResult(progress);
         }
     }
+
     private sealed class FakeVideoEngagementService : IVideoEngagementService
     {
         public Dictionary<string, VideoEngagement> Engagements { get; } = new(StringComparer.Ordinal);
@@ -690,7 +713,8 @@ public sealed class PlaybackSessionTests : IDisposable
     {
         public Dictionary<string, YouTubeRatingState> Ratings { get; } = new(StringComparer.Ordinal);
 
-        public Task<YouTubeRatingState> GetRatingStateAsync(string videoId, CancellationToken cancellationToken = default)
+        public Task<YouTubeRatingState> GetRatingStateAsync(string videoId,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(Ratings.TryGetValue(videoId, out var rating) ? rating : YouTubeRatingState.None);
         }
@@ -713,11 +737,19 @@ public sealed class PlaybackSessionTests : IDisposable
         public AccountSession Current { get; set; } = initial;
         public event EventHandler? SessionChanged;
 
-        public AccountSession GetCurrentSession() => Current;
+        public AccountSession GetCurrentSession()
+        {
+            return Current;
+        }
 
-        public ManualSessionCookies? GetManualSessionCookies() => null;
+        public ManualSessionCookies? GetManualSessionCookies()
+        {
+            return null;
+        }
 
-        public void SetManualSession(string cookieContent, SessionCookieFormat format) { }
+        public void SetManualSession(string cookieContent, SessionCookieFormat format)
+        {
+        }
 
         public void ClearSession()
         {
@@ -725,9 +757,15 @@ public sealed class PlaybackSessionTests : IDisposable
             SessionChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        public CookieFileLease? AcquireCookieFileLease() => null;
+        public CookieFileLease? AcquireCookieFileLease()
+        {
+            return null;
+        }
 
-        public CookieContainer? CreateCookieContainer() => null;
+        public CookieContainer? CreateCookieContainer()
+        {
+            return null;
+        }
     }
 
     private sealed class TrackingPresence : IPlaybackPresenceService
@@ -735,9 +773,19 @@ public sealed class PlaybackSessionTests : IDisposable
         public int ClearCount { get; private set; }
         public List<(PlaybackRequest Request, PlaybackPresenceState State)> SetCalls { get; } = [];
 
-        public void SetPlaybackState(PlaybackRequest request, PlaybackPresenceState state) => SetCalls.Add((request, state));
-        public void Clear() => ClearCount++;
-        public void Dispose() { }
+        public void SetPlaybackState(PlaybackRequest request, PlaybackPresenceState state)
+        {
+            SetCalls.Add((request, state));
+        }
+
+        public void Clear()
+        {
+            ClearCount++;
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class TrackingTelemetry : IYouTubePlaybackTelemetryService
@@ -751,7 +799,9 @@ public sealed class PlaybackSessionTests : IDisposable
             return session;
         }
 
-        public void Dispose() { }
+        public void Dispose()
+        {
+        }
 
         private sealed class TrackingTelemetrySession(PlaybackRequest request) : IYouTubePlaybackTelemetrySession
         {
@@ -765,14 +815,24 @@ public sealed class PlaybackSessionTests : IDisposable
                 QueueUpdates.Add((request, currentIndex));
             }
 
-            public void UpdateState(PlaybackPresenceState state) => Updates.Add(state);
-            public void Dispose() => IsDisposed = true;
+            public void UpdateState(PlaybackPresenceState state)
+            {
+                Updates.Add(state);
+            }
+
+            public void Dispose()
+            {
+                IsDisposed = true;
+            }
         }
     }
 
 
     private sealed class TrackingCookieProvider : ICookieFileProvider
     {
-        public CookieFileLease? CreateCookieFile() => null;
+        public CookieFileLease? CreateCookieFile()
+        {
+            return null;
+        }
     }
 }

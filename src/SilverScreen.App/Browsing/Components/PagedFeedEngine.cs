@@ -50,6 +50,7 @@ public sealed record FeedEngineState(
     Exception? LastError,
     string? PaginationError = null,
     FeedAuthenticationStatus AuthenticationStatus = FeedAuthenticationStatus.None);
+
 public sealed record FeedEngineSnapshot(
     IReadOnlyList<VideoSummary> Videos,
     string? ContinuationToken,
@@ -60,8 +61,6 @@ public sealed record FeedEngineSnapshot(
     string? PaginationError,
     VideoListStatus? ExplicitStatus = null,
     FeedAuthenticationStatus AuthenticationStatus = FeedAuthenticationStatus.None);
-
-
 
 public class PagedFeedEngine : IVideoListSource
 {
@@ -76,13 +75,13 @@ public class PagedFeedEngine : IVideoListSource
     private readonly Lock _lock = new();
     private readonly string _paginationLoadingMessage;
     private readonly List<VideoSummary> _videos = [];
+    private FeedAuthenticationStatus _authenticationStatus;
     private string? _continuationToken;
 
     private CancellationTokenSource? _cts;
     private long _currentGeneration;
     private bool _disposed;
     private VideoListStatus? _explicitStatus;
-    private FeedAuthenticationStatus _authenticationStatus;
     private FeedPageFetcher? _fetcher;
     private bool _hasMore;
     private bool _isLoading;

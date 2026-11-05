@@ -45,6 +45,7 @@ public sealed class YtDlpRunner : IYtDlpRunner
             "--cookies",
             "--cookies-from-browser"
         };
+
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,
         TimeSpan timeout,
@@ -122,9 +123,6 @@ public sealed class YtDlpRunner : IYtDlpRunner
                     "yt-dlp process exited successfully (ExitCode 0) with stderr diagnostics: {StdErr}",
                     redactedStderr);
             }
-            else
-            {
-            }
         }
 
         return new ProcessResult(process.ExitCode, standardOutput, DiagnosticSanitizer.Sanitize(standardError));
@@ -184,8 +182,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
             Logger.Warning(ex, "Could not query yt-dlp process exit state");
             return false;
         }
-
     }
+
     private static string RedactArgumentList(ProcessStartInfo startInfo)
     {
         if (startInfo.ArgumentList.Count <= 0)

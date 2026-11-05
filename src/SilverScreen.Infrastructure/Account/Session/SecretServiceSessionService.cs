@@ -4,8 +4,8 @@ using System.Text;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Common;
 using YoutubeAPI;
 
 namespace SilverScreen.Infrastructure.Account.Session;
@@ -21,13 +21,13 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     private static readonly ILogger Logger = Log.ForContext<SecretServiceSessionService>();
     private readonly Func<IAuthenticatedHomeFeedService>? _feedServiceFactory;
     private readonly Lock _gate = new();
+    private readonly SemaphoreSlim _persistenceGate = new(1, 1);
     private readonly Func<IAccountProfileService>? _profileServiceFactory;
+    private readonly Task _restoreTask;
+    private readonly string _signOutIntentPath;
 
     private readonly ICookieSecretStore _store;
     private readonly string? _tempRoot;
-    private readonly string _signOutIntentPath;
-    private readonly Task _restoreTask;
-    private readonly SemaphoreSlim _persistenceGate = new(1, 1);
     private bool _isAvailable = true;
     private bool _isValidating;
     private ManualSessionCookies? _manualCookies;
@@ -66,8 +66,6 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
         CancelValidation();
     }
-
-    internal Task WaitForRestoreAsync() => _restoreTask;
 
     public bool IsAvailable
     {
@@ -180,9 +178,11 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                     false,
                     profileRequiresAuth,
                     profileStatus,
-                    succeeded ? "Account profile loaded." : profileRequiresAuth
-                        ? "The YouTube session was rejected or has expired."
-                        : "The account profile could not be verified right now.");
+                    succeeded
+                        ? "Account profile loaded."
+                        : profileRequiresAuth
+                            ? "The YouTube session was rejected or has expired."
+                            : "The account profile could not be verified right now.");
                 return SessionValidationFormatter.FormatResult(profileValidationResult);
             }
 
@@ -240,6 +240,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     {
         SetManualSessionAsync(cookieContent, format).GetAwaiter().GetResult();
     }
+
     public async Task SetManualSessionAsync(string cookieContent, SessionCookieFormat format)
     {
         if (string.IsNullOrWhiteSpace(cookieContent))
@@ -260,7 +261,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                     _manualCookies = new ManualSessionCookies(format, cookieContent);
                 }
 
-                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format}", format);
+                Logger.Information("Successfully persisted YouTube session to Secret Service (Format: {Format}",
+                    format);
                 SessionChanged?.Invoke(this, EventArgs.Empty);
             }
             catch (SessionPersistenceException ex)
@@ -332,6 +334,11 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
         }
     }
 
+    internal Task WaitForRestoreAsync()
+    {
+        return _restoreTask;
+    }
+
     private async Task RestoreStoredCookiesAsync()
     {
         try
@@ -374,6 +381,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
 
         SessionChanged?.Invoke(this, EventArgs.Empty);
     }
+
     private async Task<ManualSessionCookies?> LoadStoredCookiesAsync()
     {
         byte[]? encodedCookies = null;

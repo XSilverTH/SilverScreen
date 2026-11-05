@@ -68,7 +68,8 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             LogProfileFailure(exception, "request timeout");
             return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
         }
-        catch (Exception exception) when (exception is AuthenticationRequiredException or AuthenticationExpiredException)
+        catch (Exception exception) when
+            (exception is AuthenticationRequiredException or AuthenticationExpiredException)
         {
             LogProfileFailure(exception, "authentication rejection");
             return new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRejected);
@@ -85,6 +86,15 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         }
     }
 
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _sessionService.SessionChanged -= OnSessionChanged;
+    }
+
     private bool HasMatchingAuthenticatedSession(AccountSession session, ManualSessionCookies? cookies)
     {
         return _sessionService.GetCurrentSession() == session &&
@@ -99,14 +109,6 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        _sessionService.SessionChanged -= OnSessionChanged;
-    }
     private void LogProfileFailure(Exception exception, string category)
     {
         Logger.Warning(

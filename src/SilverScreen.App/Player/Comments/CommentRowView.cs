@@ -1,5 +1,7 @@
 using Adw;
+using Gtk;
 using SilverScreen.Core.Player.Comments;
+using SilverScreen.Player.RichText;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
@@ -12,7 +14,8 @@ public partial class CommentRowView : ViewBase<Bin>
 
     public CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated)
     {
-        _repliesToggleRequested = repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+        _repliesToggleRequested =
+            repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
 
         Lifetime.Track(
@@ -20,10 +23,11 @@ public partial class CommentRowView : ViewBase<Bin>
             () => comment_text_label.OnActivateLink -= OnCommentTextActivateLink);
     }
 
-    private bool OnCommentTextActivateLink(Gtk.Label sender, Gtk.Label.ActivateLinkSignalArgs args)
+    private bool OnCommentTextActivateLink(Label sender, Label.ActivateLinkSignalArgs args)
     {
         return _linkActivated(args.Uri);
     }
+
     private void OnRepliesButtonClicked(object? sender, EventArgs args)
     {
         if (_boundCommentId is { } commentId)
@@ -62,7 +66,7 @@ public partial class CommentRowView : ViewBase<Bin>
     {
         try
         {
-            comment_text_label.SetMarkup(RichText.RichLabelMarkup.Build(text));
+            comment_text_label.SetMarkup(RichLabelMarkup.Build(text));
         }
         catch (Exception)
         {

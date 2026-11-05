@@ -1,5 +1,4 @@
 using Gtk;
-using Functions = GLib.Functions;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controllers;
@@ -13,6 +12,8 @@ internal sealed class PlayerChromeController : IDisposable
 
     private readonly Widget _headerBar;
 
+    private readonly DisposeScope _lifetime = new();
+
     private readonly EventControllerMotion _motionController;
     private readonly Action? _onActivity;
     private readonly Action<bool>? _onControlsVisibilityChanged;
@@ -20,8 +21,6 @@ internal sealed class PlayerChromeController : IDisposable
     private readonly Widget _playerControls;
 
     private readonly Widget _viewWidget;
-
-    private readonly DisposeScope _lifetime = new();
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;

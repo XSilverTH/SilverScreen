@@ -242,7 +242,8 @@ public class PlayerTimelineStateTests
         Assert.Null(s4);
 
         // Inside seg2 but auto-skip disabled -> false
-        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, false, skippedIds,
+        Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(65), segments, false, false,
+            skippedIds,
             out var s5));
         Assert.Null(s5);
 
@@ -333,35 +334,35 @@ public class PlayerTimelineStateTests
     [Fact]
     public void FormatDurationLabel_ReturnsDashesWhenNotLiveAndZeroOrNegativeDuration()
     {
-        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, isLive: false));
-        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-5), isLive: false));
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, false));
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-5), false));
     }
 
     [Fact]
     public void FormatDurationLabel_ReturnsLiveWhenIsLive()
     {
-        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, isLive: true));
-        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromMinutes(10), isLive: true));
+        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, true));
+        Assert.Equal("Live", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromMinutes(10), true));
     }
 
     [Fact]
     public void FormatDurationLabel_FormatsTimeWhenPositiveDurationAndNotLive()
     {
-        Assert.Equal("12:34", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(754), isLive: false));
-        Assert.Equal("1:02:03", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(3723), isLive: false));
+        Assert.Equal("12:34", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(754), false));
+        Assert.Equal("1:02:03", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(3723), false));
     }
 
     [Fact]
     public void SetExpectedMedia_ConfiguresStateCorrectly()
     {
         var state = new PlayerTimelineState();
-        state.SetExpectedMedia(TimeSpan.FromMinutes(5), isLive: false);
+        state.SetExpectedMedia(TimeSpan.FromMinutes(5), false);
 
         Assert.False(state.IsLive);
         Assert.Equal(TimeSpan.FromMinutes(5), state.ExpectedDuration);
         Assert.Equal(TimeSpan.FromMinutes(5), state.Duration);
 
-        state.SetExpectedMedia(null, isLive: true);
+        state.SetExpectedMedia(null, true);
         Assert.True(state.IsLive);
         Assert.Null(state.ExpectedDuration);
     }

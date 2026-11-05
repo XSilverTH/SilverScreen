@@ -1,3 +1,4 @@
+using System.Globalization;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 
@@ -66,8 +67,8 @@ internal sealed class PlayerLinkRouter(
         seconds = 0;
         return uri.StartsWith(RichLabelMarkup.SeekScheme, StringComparison.Ordinal) &&
                double.TryParse(uri.AsSpan(RichLabelMarkup.SeekScheme.Length),
-                   System.Globalization.NumberStyles.Float,
-                   System.Globalization.CultureInfo.InvariantCulture,
+                   NumberStyles.Float,
+                   CultureInfo.InvariantCulture,
                    out seconds) &&
                seconds >= 0;
     }

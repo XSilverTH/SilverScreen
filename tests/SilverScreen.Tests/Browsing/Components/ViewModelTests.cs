@@ -46,8 +46,8 @@ public sealed class ViewModelTests
         var second = viewModel.SubmitAsync("new query");
         Assert.Empty(viewModel.State.Videos);
         Assert.False(viewModel.HasMore);
-        service.Requests[1].Completion.SetResult(new SearchResultPage([], StatusMessage: "New query failed",
-            IsSuccess: false));
+        service.Requests[1].Completion.SetResult(new SearchResultPage([], "New query failed",
+            false));
         await second;
 
         Assert.Empty(viewModel.State.Videos);
@@ -76,6 +76,7 @@ public sealed class ViewModelTests
         viewModel.Reset();
         Assert.Null(viewModel.CurrentQuery);
     }
+
     [Fact]
     public async Task NavigationState_RestoresLoadedSearchPagesWithoutFetchingAgain()
     {
@@ -308,6 +309,7 @@ public sealed class ViewModelTests
         Assert.Equal([first, next], viewModel.State.Videos);
         Assert.False(viewModel.HasMore);
     }
+
     [Fact]
     public async Task SearchFailure_SetsIsSuccessFalse()
     {
@@ -359,6 +361,7 @@ public sealed class ViewModelTests
         Assert.Null(handleNotice);
         Assert.Equal("@veritasium", requestedTarget);
     }
+
     [Fact]
     public async Task SearchViewModel_SubmitAsync_WithDirectVideoUrl_PlaysVideoDirectly()
     {
@@ -391,7 +394,6 @@ public sealed class ViewModelTests
         Assert.Equal("Enter search terms to find videos.", notice);
         Assert.Empty(service.Requests);
     }
-
 
 
     private sealed class ControlledSearchService : ISearchService

@@ -2,7 +2,6 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Comments;
 
@@ -11,9 +10,9 @@ public partial class CommentsView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
 
     private readonly Action _closeRequested;
-    private readonly Func<string, bool> _linkActivated;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
+    private readonly Func<string, bool> _linkActivated;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly NoSelection _selection;
     private readonly Adjustment? _vadjustment;
@@ -35,11 +34,9 @@ public partial class CommentsView : ViewBase<Box>
 
         _vadjustment = comments_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
-        {
             Lifetime.Track(
                 () => _vadjustment.OnValueChanged += OnScrollValueChanged,
                 () => _vadjustment.OnValueChanged -= OnScrollValueChanged);
-        }
 
         _itemIds = Lifetime.Own(StringList.New([]));
         _selection = Lifetime.Own(NoSelection.New(_itemIds));

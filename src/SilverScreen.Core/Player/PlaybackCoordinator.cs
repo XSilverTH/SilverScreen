@@ -29,7 +29,6 @@ public sealed class PlaybackCoordinator(
     private readonly Dictionary<long, ActivePlayback> _activePlaybacks = [];
     private readonly Lock _lock = new();
     private bool _disposed;
-    private long _nextPlaybackId;
 
     // O(1) latest-presence tracking: playback ids increase monotonically, so the
     // most recently registered id is the presence owner. Maintained under _lock
@@ -37,6 +36,7 @@ public sealed class PlaybackCoordinator(
     // itself completes). UpdateActivePlayback compares against this field instead
     // of scanning _activePlaybacks.Keys.Max() per update.
     private long _latestPlaybackId;
+    private long _nextPlaybackId;
 
     public void Dispose()
     {
@@ -93,9 +93,9 @@ public sealed class PlaybackCoordinator(
     }
 
     /// <summary>
-    /// Replaces the active playback queue without losing the identity of the entry
-    /// that is currently playing. Queue order is part of the playback state, not
-    /// merely a view-level request snapshot.
+    ///     Replaces the active playback queue without losing the identity of the entry
+    ///     that is currently playing. Queue order is part of the playback state, not
+    ///     merely a view-level request snapshot.
     /// </summary>
     public void UpdateActivePlaybackQueue(long playbackId, PlaybackRequest request, int currentIndex)
     {
@@ -215,6 +215,7 @@ public sealed class PlaybackCoordinator(
             Logger.Warning(ex, "Failed to update playback telemetry for playback {PlaybackId}", playbackId);
         }
     }
+
     private void TryUpdateTelemetryQueue(
         IYouTubePlaybackTelemetrySession? telemetry,
         PlaybackRequest request,
@@ -275,12 +276,15 @@ public sealed class PlaybackCoordinator(
                 playbackId, operation);
         }
     }
+
     private sealed class ActivePlayback(long id, PlaybackRequest request, IYouTubePlaybackTelemetrySession? telemetry)
     {
         public long Id { get; } = id;
         public PlaybackRequest Request { get; set; } = request;
+
         public string? CurrentVideoId { get; set; } =
             request.Videos.IsDefaultOrEmpty ? null : request.Videos[request.EffectiveStartIndex].Id;
+
         public IYouTubePlaybackTelemetrySession? Telemetry { get; } = telemetry;
         public PlaybackPresenceState? State { get; set; }
     }

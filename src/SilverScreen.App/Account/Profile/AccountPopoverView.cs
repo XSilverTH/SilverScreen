@@ -6,7 +6,6 @@ using Serilog;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Account.Profile;
 
@@ -32,7 +31,8 @@ public partial class AccountPopoverView : ViewBase<Bin>
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _openWebLogin = openWebLogin;
         _sessionAppearanceChanged = sessionAppearanceChanged;
-        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged, () => _viewModel.StateChanged -= OnStateChanged);
+        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged,
+            () => _viewModel.StateChanged -= OnStateChanged);
         Lifetime.Track(() => Widget.OnUnmap += OnWidgetUnmap, () => Widget.OnUnmap -= OnWidgetUnmap);
         Render();
     }
@@ -89,7 +89,6 @@ public partial class AccountPopoverView : ViewBase<Bin>
                 _ => "signed_out"
             };
         }
-
     }
 
     private void UpdateAvatar(string? avatarUrl)
@@ -153,7 +152,8 @@ public partial class AccountPopoverView : ViewBase<Bin>
                         return false;
 
                     var pixbufForTexture = decodedPixbuf ??
-                                           throw new InvalidOperationException("Avatar image decode returned no pixbuf.");
+                                           throw new InvalidOperationException(
+                                               "Avatar image decode returned no pixbuf.");
                     var texture = Texture.NewForPixbuf(pixbufForTexture);
                     pixbufForTexture.Dispose();
                     decodedPixbuf = null;
@@ -198,11 +198,11 @@ public partial class AccountPopoverView : ViewBase<Bin>
     {
         OpenManualEditor();
     }
+
     private void OnRetryProfileClicked(object? sender, EventArgs args)
     {
         _viewModel.RefreshProfile();
     }
-
 
 
     private async void OnClearButtonClicked(object? sender, EventArgs args)

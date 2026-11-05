@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Common;
@@ -10,7 +8,6 @@ using SilverScreen.Core.Player;
 namespace SilverScreen.Browsing.Search;
 
 public sealed record SearchNavigationState(string? Query, FeedEngineSnapshot Feed);
-
 
 public sealed class SearchViewModel : IVideoListSource
 {
@@ -53,7 +50,6 @@ public sealed class SearchViewModel : IVideoListSource
             new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
             "Search",
             clearOnRefresh: true);
-
     }
 
     public bool HasMore => _engine.HasMore;
@@ -143,6 +139,7 @@ public sealed class SearchViewModel : IVideoListSource
             new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
             "Search results will appear here.");
     }
+
     public SearchNavigationState CaptureNavigationState()
     {
         ThrowIfDisposed();
@@ -243,11 +240,8 @@ public sealed class SearchViewModel : IVideoListSource
         var identityChanged = !string.Equals(CurrentQuery, query, StringComparison.Ordinal);
         CurrentQuery = query;
         if (identityChanged)
-        {
             _engine.Reset(
-                new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"),
-                null);
-        }
+                new VideoListStatus("No results found", "Search results will appear here.", "system-search-symbolic"));
 
         _engine.SetLoadingMessage($"Searching YouTube for “{query}”…");
         await _engine.RefreshAsync(count).ConfigureAwait(false);
@@ -326,12 +320,10 @@ public sealed class SearchViewModel : IVideoListSource
         }
 
         if (!string.IsNullOrWhiteSpace(state.StatusMessage))
-        {
             return new VideoListStatus(
                 "Search",
                 state.StatusMessage,
                 "system-search-symbolic");
-        }
 
         const string emptyDescription = "Try different keywords or check spelling.";
 
