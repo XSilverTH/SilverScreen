@@ -4,7 +4,7 @@ namespace SilverScreen.Core.Common;
 public static class RuntimeDependencyGuidance
 {
     public const string SecretServiceUnavailable =
-        "Secret Service is unavailable. Install libsecret and unlock or start a Secret Service provider, such as GNOME Keyring or KWallet, then retry.";
+        "Secret Service is unavailable. Unlock or start a Secret Service provider, such as GNOME Keyring, KWallet, or KeePassXC, then retry.";
 
     public const string YtDlpTimedOut =
         "yt-dlp timed out. Verify your network connection, update yt-dlp, and retry.";

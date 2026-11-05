@@ -366,7 +366,7 @@ Could not install prerequisites automatically.
 Install the following manually, then re-run install.sh:
 
   Runtime:
-    GTK 4, Libadwaita, WebKitGTK 6.0, libsoup 3, libsecret, mpv, yt-dlp,
+    GTK 4, Libadwaita, WebKitGTK 6.0, libsoup 3, mpv, yt-dlp,
     hicolor-icon-theme
   Build:
     git, .NET 10 SDK, clang, pkg-config, zlib development headers, glib2 development
@@ -412,23 +412,23 @@ ensure_prereqs() {
   case "${DISTRO_ID} ${DISTRO_LIKE}" in
     *arch*|*artix*|*manjaro*|*endeavouros*|*cachyos*|*garuda*)
       PKG_MGR="pacman"
-      PKGS="git dotnet-sdk clang pkgconf glib2 blueprint-compiler gtk4 libadwaita webkitgtk-6.0 libsoup3 libsecret mpv yt-dlp hicolor-icon-theme"
+      PKGS="git dotnet-sdk clang pkgconf glib2 blueprint-compiler gtk4 libadwaita webkitgtk-6.0 libsoup3 mpv yt-dlp hicolor-icon-theme"
       ;;
     *debian*|*ubuntu*|*mint*|*pop*|*neon*|*zorin*|*raspbian*|*kali*)
       PKG_MGR="apt"
-      PKGS="git dotnet-sdk-10.0 clang pkg-config zlib1g-dev libglib2.0-dev blueprint-compiler libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev libsoup-3.0-dev libsecret-1-0 mpv yt-dlp"
+      PKGS="git dotnet-sdk-10.0 clang pkg-config zlib1g-dev libglib2.0-dev blueprint-compiler libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev libsoup-3.0-dev mpv yt-dlp"
       ;;
     *fedora*|*rhel*|*centos*|*rocky*|*alma*|*nobara*)
       PKG_MGR="dnf"
-      PKGS="git dotnet-sdk-10.0 clang pkgconf-pkg-config zlib-devel glib2-devel blueprint-compiler gtk4-devel libadwaita-devel webkitgtk6.0-devel libsoup3-devel libsecret mpv yt-dlp"
+      PKGS="git dotnet-sdk-10.0 clang pkgconf-pkg-config zlib-devel glib2-devel blueprint-compiler gtk4-devel libadwaita-devel webkitgtk6.0-devel libsoup3-devel mpv yt-dlp"
       ;;
     *suse*)
       PKG_MGR="zypper"
-      PKGS="git dotnet-sdk-10.0 clang pkg-config zlib-devel glib2-devel blueprint-compiler gtk4-devel libadwaita-devel webkitgtk-6.0-devel libsoup-3_0-devel libsecret-1-0 mpv yt-dlp"
+      PKGS="git dotnet-sdk-10.0 clang pkg-config zlib-devel glib2-devel blueprint-compiler gtk4-devel libadwaita-devel webkitgtk-6.0-devel libsoup-3_0-devel mpv yt-dlp"
       ;;
     *alpine*)
       PKG_MGR="apk"
-      PKGS="git dotnet-sdk-10 clang pkgconf zlib-dev glib2-dev blueprint-compiler gtk4.0-dev libadwaita-dev webkitgtk-6.0-dev libsoup3-dev libsecret mpv yt-dlp"
+      PKGS="git dotnet-sdk-10 clang pkgconf zlib-dev glib2-dev blueprint-compiler gtk4.0-dev libadwaita-dev webkitgtk-6.0-dev libsoup3-dev mpv yt-dlp"
       ;;
   esac
 

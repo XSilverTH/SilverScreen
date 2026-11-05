@@ -45,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/packa
 
 ## Building manually
 
-you'll need .NET 10 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, libsecret, mpv, and yt-dlp.
+you'll need .NET 10 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, mpv, and yt-dlp.
 
 ```sh
 git clone --recurse-submodules https://github.com/XSilverTH/SilverScreen.git

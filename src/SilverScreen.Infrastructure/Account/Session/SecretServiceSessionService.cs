@@ -36,7 +36,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
     public SecretServiceSessionService(
         Func<IAccountProfileService>? profileServiceFactory,
         string? tempRoot = null)
-        : this(new LibSecretCookieStore(), profileServiceFactory, null, tempRoot)
+        : this(new DBusCookieSecretStore(), profileServiceFactory, null, tempRoot)
     {
     }
 

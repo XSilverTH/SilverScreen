@@ -15,7 +15,7 @@ namespace SilverScreen.Infrastructure.Common;
 ///         <b>Platform Support & Arch Linux x86-64 Tier-1 Target:</b>
 ///         SilverScreen targets modern 64-bit Linux, with <b>Arch Linux x86-64</b> designated as the primary tier-1
 ///         reference platform.
-///         Dependencies such as <c>yt-dlp</c>, <c>mpv</c>, <c>libmpv.so.2</c>, and <c>libsecret-1.so.0</c> are expected to
+///         Dependencies such as <c>yt-dlp</c>, <c>mpv</c>, and <c>libmpv.so.2</c> are expected to
 ///         follow standard
 ///         Arch package layouts and system search paths (<c>/usr/bin</c>, <c>/usr/lib</c>).
 ///     </para>

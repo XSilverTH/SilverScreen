@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Ace4896.DBus.Services.Secrets"/>
         <PackageReference Include="Serilog"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
         <ProjectReference Include="..\..\lib\Hi3Helper.SharpDiscordRPC\DiscordRPC\DiscordRPC.csproj"/>

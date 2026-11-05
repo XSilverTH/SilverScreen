@@ -2,7 +2,7 @@ namespace SilverScreen.Infrastructure.Account.Session;
 
 /// <summary>
 ///     OS-keyring persistence for the manual-session cookie secret. Secrets are stored via
-///     the OS keyring (libsecret), never as plaintext config. Buffer discipline: <c>SaveAsync</c>
+///     the OS keyring (Secret Service), never as plaintext config. Buffer discipline: <c>SaveAsync</c>
 ///     zeroes its input before returning (including on failure); <c>LoadAsync</c> hands ownership
 ///     of the returned buffer to the caller, which MUST zero it after use.
 /// </summary>
