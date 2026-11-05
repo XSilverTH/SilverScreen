@@ -46,8 +46,8 @@ public sealed class PlayerShortcutController : IDisposable
 
         var key = EventControllerKey.New();
         key.SetPropagationPhase(PropagationPhase.Capture);
-        _lifetime.Track(() => key.OnKeyPressed += OnKeyPressed, () => key.OnKeyPressed -= OnKeyPressed);
         _keyboardController = _lifetime.Own(key);
+        _lifetime.Track(() => key.OnKeyPressed += OnKeyPressed, () => key.OnKeyPressed -= OnKeyPressed);
     }
 
     public Func<uint, bool>? KeyInterceptor { get; set; }

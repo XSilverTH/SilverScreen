@@ -22,6 +22,7 @@ public partial class App
     private readonly ActivationWindowGuard<Window> _windowGuard = new();
     private ApplicationServiceLifetime? _serviceLifetime;
     private EventHandler<AppPreferences>? _preferencesChangedHandler;
+    private AccountServices? _accountServices;
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -31,13 +32,12 @@ public partial class App
         {
             _styles?.Dispose();
             _styles = null;
-            if (_preferencesChangedHandler is not null && _serviceProvider is not null)
+            if (_preferencesChangedHandler is not null && _accountServices is not null)
             {
-                var account = _serviceProvider.GetService<AccountServices>();
-                if (account is not null)
-                    account.Preferences.PreferencesChanged -= _preferencesChangedHandler;
+                _accountServices.Preferences.PreferencesChanged -= _preferencesChangedHandler;
                 _preferencesChangedHandler = null;
             }
+            _accountServices = null;
             _serviceLifetime?.ApplicationStopped();
         };
     }
@@ -49,8 +49,17 @@ public partial class App
         if (Interlocked.CompareExchange(ref _serviceProvider, serviceProvider, null) is not null)
             throw new InvalidOperationException("Application services have already been configured.");
 
-        _serviceLifetime = new ApplicationServiceLifetime(
-            () => (_serviceProvider as IDisposable)?.Dispose());
+        _serviceLifetime = new ApplicationServiceLifetime(() =>
+        {
+            if (_preferencesChangedHandler is not null && _accountServices is not null)
+            {
+                _accountServices.Preferences.PreferencesChanged -= _preferencesChangedHandler;
+                _preferencesChangedHandler = null;
+            }
+            _accountServices = null;
+            var provider = Interlocked.Exchange(ref _serviceProvider, null);
+            (provider as IDisposable)?.Dispose();
+        });
     }
 
     private void Activate(Gio.Application sender, EventArgs args)
@@ -63,6 +72,7 @@ public partial class App
 
         InstallStyles();
         var account = _serviceProvider.GetRequiredService<AccountServices>();
+        _accountServices = account;
         ApplyTheme(account.Preferences.GetPreferences().ThemeMode);
         if (_preferencesChangedHandler is null)
         {

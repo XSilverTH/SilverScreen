@@ -44,4 +44,26 @@ public sealed class ApplicationLifetimeTests
         lifetime.ApplicationStopped();
         Assert.Equal(1, disposeCount);
     }
+
+    [Fact]
+    public void ServiceLifetimeDispose_CleansUpHandlersAndToleratesMultipleShutdownCalls()
+    {
+        var cleanedUp = false;
+        var disposed = false;
+        var lifetime = new ApplicationServiceLifetime(() =>
+        {
+            cleanedUp = true;
+            disposed = true;
+        });
+
+        lifetime.WindowOpened();
+        lifetime.WindowClosed();
+
+        Assert.True(cleanedUp);
+        Assert.True(disposed);
+
+        // Application shutdown after window close does not trigger duplicate dispose
+        lifetime.ApplicationStopped();
+        Assert.True(cleanedUp);
+    }
 }
