@@ -1,8 +1,7 @@
 <Project>
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-        <ManagePackageVersionsCentrally Condition="'$(MSBuildProjectName)' == 'DiscordRPC' or '$(MSBuildProjectName)' == 'DiscordRPC.Example'">false</ManagePackageVersionsCentrally>
+        <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     </PropertyGroup>
     <ItemGroup>
         <PackageVersion Include="GirCore.Adw-1" Version="0.8.1"/>
@@ -10,13 +9,13 @@
         <PackageVersion Include="Serilog" Version="4.4.0"/>
         <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1"/>
         <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0"/>
-        <PackageVersion Include="Tmds.DBus.Generator" Version="0.95.1"/>
-        <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.1"/>
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12"/>
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12"/>
-        <PackageVersion Include="coverlet.collector" Version="10.0.1"/>
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1"/>
+        <PackageVersion Include="Tmds.DBus.Generator" Version="0.95.2"/>
+        <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.2"/>
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14"/>
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14"/>
+        <PackageVersion Include="coverlet.collector" Version="10.1.0"/>
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0"/>
         <PackageVersion Include="xunit" Version="2.9.3"/>
-        <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0"/>
+        <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1"/>
     </ItemGroup>
 </Project>
