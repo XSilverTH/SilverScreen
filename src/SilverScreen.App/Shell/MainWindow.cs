@@ -13,6 +13,7 @@ using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
@@ -56,7 +57,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly SubscriptionsView _subscriptions;
     private readonly SubscriptionsViewModel _subscriptionsViewModel;
     private bool _closed;
-    private WebLoginWindow? _webLogin;
     private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
     private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
 
@@ -755,14 +755,36 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OpenWebLogin()
     {
         account_button.Popover?.Popdown();
-        if (_webLogin is not null)
-        {
-            _webLogin.Present();
-            return;
-        }
+        StartNativeAuthAsync().FireAndForget(Logger);
+    }
 
-        _webLogin = new WebLoginWindow(Widget, _accountViewModel, () => _webLogin = null);
-        _webLogin.Present();
+    private async Task StartNativeAuthAsync()
+    {
+        try
+        {
+            var success = await _account.Auth.StartAuthAsync().ConfigureAwait(false);
+            if (!success)
+            {
+                return;
+            }
+        }
+        catch (SessionPersistenceException)
+        {
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                ShowToast("Could not save the YouTube session because the system keyring is unavailable.");
+                return false;
+            });
+        }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, "Failed to run native auth");
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                ShowToast("An error occurred during sign-in.");
+                return false;
+            });
+        }
     }
 
     private void UpdateAccountAppearance(
@@ -832,8 +854,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             _channelViewModel.Dispose();
             _home.Dispose();
             _queueView.Dispose();
-            _webLogin?.Dispose();
-            _webLogin = null;
+            _account.Auth.Dispose();
             _accountPopover.Dispose();
             _embeddedPlayer.Dispose();
             _queueViewModel.Dispose();

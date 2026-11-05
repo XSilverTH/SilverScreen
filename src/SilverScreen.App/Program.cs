@@ -10,6 +10,11 @@ using XSTH.Blueprint.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Preferences;
 
+if (args.Length > 0 && args.Contains("--auth"))
+{
+    return RunAuthHelper();
+}
+
 var applicationConfiguration = ApplicationConfiguration.FromEnvironment();
 var applicationStateDirectory = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -55,7 +60,6 @@ try
 
 
     Module.Initialize();
-    WebKit.Module.Initialize();
     GResourceHelper.RegisterAssemblyResources(typeof(Program).Assembly);
 
     var app = App.NewWithProperties([]);
@@ -207,4 +211,10 @@ static string? ProbeToolVersion(
         // Missing binary, permission denied, etc. The caller logs a warning.
         return null;
     }
+}
+
+partial class Program
+{
+    [LibraryImport("*", EntryPoint = "run_auth_helper")]
+    private static partial int RunAuthHelper();
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SilverScreen.Account.Auth;
 using Serilog;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Profile;
@@ -47,7 +48,8 @@ public sealed record AccountServices(
     ISessionService Session,
     IAccountProfileService AccountProfile,
     IPreferencesService Preferences,
-    IQueueService Queue);
+    IQueueService Queue,
+    INativeAuthService Auth);
 
 /// <summary>Registers the application's production services.</summary>
 public static class ApplicationServiceCollectionExtensions
@@ -109,11 +111,13 @@ public static class ApplicationServiceCollectionExtensions
             provider.GetRequiredService<HomeFeedCoordinator>(),
             provider.GetRequiredService<IAuthenticatedHistoryService>(),
             provider.GetRequiredService<IAuthenticatedSubscriptionsService>()));
+        services.AddSingleton<INativeAuthService, NativeAuthService>();
         services.AddSingleton(static provider => new AccountServices(
             provider.GetRequiredService<ISessionService>(),
             provider.GetRequiredService<IAccountProfileService>(),
             provider.GetRequiredService<IPreferencesService>(),
-            provider.GetRequiredService<IQueueService>()));
+            provider.GetRequiredService<IQueueService>(),
+            provider.GetRequiredService<INativeAuthService>()));
         services.AddSingleton<PlayerDependencies>();
         return services;
     }
