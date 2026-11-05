@@ -282,15 +282,17 @@ if [ "$USE_PKGBUILD" -eq 1 ] && [ "$USER_MODE" -eq 0 ] && [ -z "${DESTDIR}" ] &&
         fi
       done
 
+      CLONED_URL=""
       if [ -z "${PKGBUILD_SRC}" ]; then
         TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/silverscreen-build.XXXXXX")"
         urls="${REPO_URL}"
         [ -n "${urls}" ] || urls="${REPO_URLS_DEFAULT}"
         for url in ${urls}; do
           echo "Cloning ${url} to retrieve PKGBUILD..."
-          if git clone --recurse-submodules "${url}" "${TEMP_DIR}/repo" 2>&1; then
+          if git clone --depth 1 --no-tags --single-branch "${url}" "${TEMP_DIR}/repo" 2>&1; then
             if [ -f "${TEMP_DIR}/repo/packaging/PKGBUILD" ]; then
               PKGBUILD_SRC="${TEMP_DIR}/repo/packaging/PKGBUILD"
+              CLONED_URL="${url}"
               break
             fi
           fi
@@ -303,11 +305,11 @@ if [ "$USE_PKGBUILD" -eq 1 ] && [ "$USER_MODE" -eq 0 ] && [ -z "${DESTDIR}" ] &&
         PKG_BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/silverscreen-pkgbuild.XXXXXX")"
         cp "${PKGBUILD_SRC}" "${PKG_BUILD_DIR}/PKGBUILD"
 
-        if [ -n "${REPO_URL}" ]; then
-          clean_url="${REPO_URL%.git}"
+        target_url="${REPO_URL:-${CLONED_URL:-}}"
+        if [ -n "${target_url}" ]; then
+          clean_url="${target_url%.git}"
           sed -i "s|^url=.*|url='${clean_url}'|" "${PKG_BUILD_DIR}/PKGBUILD"
         fi
-
         if [ -n "${RUN_AS_USER}" ]; then
           chown -R "${RUN_AS_USER}:" "${PKG_BUILD_DIR}"
         fi
