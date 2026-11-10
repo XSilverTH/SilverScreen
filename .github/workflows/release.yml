@@ -90,10 +90,11 @@ jobs:
           ARCHIVE="silverscreen-v${VERSION}-x86_64.tar.zst"
           SHA256=$(sha256sum "${ARCHIVE}" | awk '{print $1}')
 
-          mkdir -p ~/.ssh
-          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          mkdir -p ~/.ssh /root/.ssh
+          ssh-keyscan -H aur.archlinux.org 2>/dev/null | tee /root/.ssh/known_hosts >> ~/.ssh/known_hosts || true
           eval $(ssh-agent -s)
           ssh-add - <<< "${AUR_SSH_PRIVATE_KEY}"
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
 
           git clone ssh://aur@aur.archlinux.org/silverscreen-bin.git aur-repo
 
@@ -101,9 +102,11 @@ jobs:
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur-repo/PKGBUILD
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" aur-repo/PKGBUILD
 
-          useradd -m builder || true
-          chown -R builder:builder aur-repo
-          su builder -c "cd aur-repo && makepkg --printsrcinfo" > aur-repo/.SRCINFO
+          AUR_DIR="$(pwd)/aur-repo"
+          useradd -m builder 2>/dev/null || true
+          chown -R builder:builder "${AUR_DIR}"
+          (cd "${AUR_DIR}" && su builder -c "makepkg --printsrcinfo") > "${AUR_DIR}/.SRCINFO"
+          chown -R root:root "${AUR_DIR}"
 
           cd aur-repo
           git config user.name "github-actions[bot]"
