@@ -259,6 +259,8 @@ public static class PlaybackStatsFormatter
             .ToList();
         var subTracks = stats.Tracks.Where(t => string.Equals(t.Type, "sub", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        const int maxTracksPerCategory = 10;
+
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Video</b></span>");
         if (videoTracks.Count == 0)
         {
@@ -273,8 +275,13 @@ public static class PlaybackStatsFormatter
         }
         else
         {
+            var displayedVideo = 0;
+            var selectedVideoTrack = videoTracks.FirstOrDefault(t => t.IsSelected);
             foreach (var track in videoTracks)
             {
+                if (displayedVideo >= maxTracksPerCategory && track != selectedVideoTrack)
+                    continue;
+
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
                 var dim = track is { Width: > 0, Height: > 0 } ? $" ({track.Width}×{track.Height})" : "";
@@ -282,7 +289,12 @@ public static class PlaybackStatsFormatter
                 var br = track.Bitrate is > 0 ? $" • {FormatBitrate(track.Bitrate)}" : "";
                 sb.AppendLine(
                     $"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "video")}</b>{dim}{fps}{br}{def}{tag}");
+                displayedVideo++;
             }
+
+            if (videoTracks.Count > displayedVideo)
+                sb.AppendLine(
+                    $"  <span foreground=\"#9a9996\">… and {videoTracks.Count - displayedVideo} more video tracks</span>");
         }
 
         sb.AppendLine();
@@ -301,8 +313,13 @@ public static class PlaybackStatsFormatter
         }
         else
         {
+            var displayedAudio = 0;
+            var selectedAudioTrack = audioTracks.FirstOrDefault(t => t.IsSelected);
             foreach (var track in audioTracks)
             {
+                if (displayedAudio >= maxTracksPerCategory && track != selectedAudioTrack)
+                    continue;
+
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
                 var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {Escape(track.Title)}" :
@@ -312,25 +329,43 @@ public static class PlaybackStatsFormatter
                 var br = track.Bitrate is > 0 ? $" • {FormatBitrate(track.Bitrate)}" : "";
                 sb.AppendLine(
                     $"  <b>[#{track.Id}]</b> <b>{Escape(track.Codec ?? "audio")}</b>{sr}{ch}{br}{title}{def}{tag}");
+                displayedAudio++;
             }
+
+            if (audioTracks.Count > displayedAudio)
+                sb.AppendLine(
+                    $"  <span foreground=\"#9a9996\">… and {audioTracks.Count - displayedAudio} more audio tracks</span>");
         }
 
         sb.AppendLine();
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Subtitle</b></span>");
         if (subTracks.Count == 0)
+        {
             sb.AppendLine("  <span foreground=\"#9a9996\">No subtitle tracks found</span>");
+        }
         else
+        {
+            var displayedSubs = 0;
+            var selectedSubTrack = subTracks.FirstOrDefault(t => t.IsSelected);
             foreach (var track in subTracks)
             {
+                if (displayedSubs >= maxTracksPerCategory && track != selectedSubTrack)
+                    continue;
+
                 var tag = track.IsSelected ? " <span foreground=\"#33d17a\"><b>[Selected]</b></span>" : "";
                 var def = track.IsDefault ? " [Default]" : "";
                 var title = !string.IsNullOrWhiteSpace(track.Title) ? Escape(track.Title) :
                     !string.IsNullOrWhiteSpace(track.Language) ? Escape(track.Language) : "Subtitle";
                 var codec = !string.IsNullOrWhiteSpace(track.Codec) ? $" ({Escape(track.Codec)})" : "";
                 sb.AppendLine($"  <b>[#{track.Id}]</b> {title}{codec}{def}{tag}");
+                displayedSubs++;
             }
 
+            if (subTracks.Count > displayedSubs)
+                sb.AppendLine(
+                    $"  <span foreground=\"#9a9996\">… and {subTracks.Count - displayedSubs} more subtitle tracks</span>");
+        }
         return sb.ToString().TrimEnd();
     }
 
@@ -426,14 +461,23 @@ public static class PlaybackStatsFormatter
         if (stats.Tracks.Count > 0)
         {
             sb.AppendLine("[Tracks]");
+            const int maxSummaryTracks = 30;
+            var displayed = 0;
             foreach (var track in stats.Tracks)
             {
+                if (displayed >= maxSummaryTracks && !track.IsSelected)
+                    continue;
+
                 var sel = track.IsSelected ? " [Selected]" : "";
                 var def = track.IsDefault ? " [Default]" : "";
                 var title = !string.IsNullOrWhiteSpace(track.Title) ? $" - {track.Title}" :
                     !string.IsNullOrWhiteSpace(track.Language) ? $" - {track.Language}" : "";
                 sb.AppendLine($"- {track.Type} #{track.Id}: {track.Codec ?? "unknown"}{title}{def}{sel}");
+                displayed++;
             }
+
+            if (stats.Tracks.Count > displayed)
+                sb.AppendLine($"... and {stats.Tracks.Count - displayed} more tracks");
 
             sb.AppendLine();
         }

@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Adw;
 using Gtk;
 using Serilog;
@@ -8,27 +10,40 @@ namespace SilverScreen.Player.Controllers;
 
 internal interface IPlayerStatsProvider
 {
-    PlaybackStats? GetPlaybackStats();
+    PlaybackStats? GetPlaybackStats(bool includeTracks = false);
 }
 
-internal sealed class PlayerStatsController(
-    Func<PlaybackStats?> statsProvider,
-    Revealer revealer,
-    Label label)
-    : IDisposable
+internal sealed class PlayerStatsController : IDisposable
 {
     private const uint RefreshIntervalMilliseconds = 350;
     private static readonly ILogger Logger = Log.ForContext<PlayerStatsController>();
 
-    private readonly Label _label = label ?? throw new ArgumentNullException(nameof(label));
-
+    private readonly Label _label;
     private readonly DisposeScope _lifetime = new();
-    private readonly Revealer _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
-
-    private readonly Func<PlaybackStats?> _statsProvider =
-        statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
+    private readonly Revealer _revealer;
+    private readonly Func<bool, PlaybackStats?> _statsProvider;
 
     private uint _refreshTimerSource;
+    private int _isRefreshing;
+    private bool _pendingRefresh;
+
+    public PlayerStatsController(
+        Func<bool, PlaybackStats?> statsProvider,
+        Revealer revealer,
+        Label label)
+    {
+        _statsProvider = statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
+        _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
+        _label = label ?? throw new ArgumentNullException(nameof(label));
+    }
+
+    public PlayerStatsController(
+        Func<PlaybackStats?> statsProvider,
+        Revealer revealer,
+        Label label)
+        : this(_ => (statsProvider ?? throw new ArgumentNullException(nameof(statsProvider)))(), revealer, label)
+    {
+    }
 
     public PlayerStatsController(
         IPlayerStatsProvider statsProvider,
@@ -38,7 +53,6 @@ internal sealed class PlayerStatsController(
             label)
     {
     }
-
     public bool IsOpen { get; private set; }
 
     private int CurrentPage { get; set; } = 1;
@@ -46,8 +60,10 @@ internal sealed class PlayerStatsController(
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
-        _lifetime.Dispose();
+        IsOpen = false;
+        _pendingRefresh = false;
         StopTimer();
+        _lifetime.Dispose();
     }
 
     private static string GetAccentColorHex()
@@ -82,6 +98,7 @@ internal sealed class PlayerStatsController(
         if (_lifetime.IsDisposed || !IsOpen) return;
 
         IsOpen = false;
+        _pendingRefresh = false;
         _revealer.RevealChild = false;
         StopTimer();
     }
@@ -158,31 +175,71 @@ internal sealed class PlayerStatsController(
     {
         if (_lifetime.IsDisposed || !IsOpen) return;
 
-        try
+        if (Interlocked.CompareExchange(ref _isRefreshing, 1, 0) != 0)
         {
-            var stats = _statsProvider();
-            if (stats is null)
+            _pendingRefresh = true;
+            return;
+        }
+
+        var currentPage = CurrentPage;
+        var accent = GetAccentColorHex();
+
+        Task.Run(() =>
+        {
+            try
             {
-                _label.SetMarkup("<span foreground=\"#9a9996\">No media loaded or playback inactive.</span>");
-                return;
+                var stats = _statsProvider(currentPage == 3);
+                if (_lifetime.IsDisposed || !IsOpen)
+                {
+                    Interlocked.Exchange(ref _isRefreshing, 0);
+                    return;
+                }
+
+                string markup;
+                if (stats is null)
+                {
+                    markup = "<span foreground=\"#9a9996\">No media loaded or playback inactive.</span>";
+                }
+                else
+                {
+                    markup = currentPage switch
+                    {
+                        1 => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent),
+                        2 => PlaybackStatsFormatter.FormatPerformancePageMarkup(stats, accent),
+                        3 => PlaybackStatsFormatter.FormatTracksPageMarkup(stats, accent),
+                        4 => PlaybackStatsFormatter.FormatEnginePageMarkup(stats, accent),
+                        _ => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent)
+                    };
+                }
+
+                GLib.Functions.IdleAdd(0, () =>
+                {
+                    try
+                    {
+                        if (!_lifetime.IsDisposed && IsOpen && CurrentPage == currentPage)
+                        {
+                            _label.SetMarkup(markup);
+                        }
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref _isRefreshing, 0);
+                        if (_pendingRefresh && IsOpen && !_lifetime.IsDisposed)
+                        {
+                            _pendingRefresh = false;
+                            RefreshContent();
+                        }
+                    }
+
+                    return false;
+                });
             }
-
-            var accent = GetAccentColorHex();
-            var markup = CurrentPage switch
+            catch (Exception ex)
             {
-                1 => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent),
-                2 => PlaybackStatsFormatter.FormatPerformancePageMarkup(stats, accent),
-                3 => PlaybackStatsFormatter.FormatTracksPageMarkup(stats, accent),
-                4 => PlaybackStatsFormatter.FormatEnginePageMarkup(stats, accent),
-                _ => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent)
-            };
-
-            _label.SetMarkup(markup);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Failed to refresh playback stats markup");
-        }
+                Logger.Warning(ex, "Failed to refresh playback stats markup");
+                Interlocked.Exchange(ref _isRefreshing, 0);
+            }
+        });
     }
 
     private void StartTimer()

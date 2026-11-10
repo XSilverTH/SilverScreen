@@ -1062,9 +1062,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private sealed class PlayerStatsProvider(LibMpvPlayer player) : IPlayerStatsProvider
     {
-        public PlaybackStats? GetPlaybackStats()
+        public PlaybackStats? GetPlaybackStats(bool includeTracks = false)
         {
-            return player.GetPlaybackStats();
+            return player.GetPlaybackStats(includeTracks);
         }
     }
 }

@@ -434,6 +434,99 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void GetPlaybackStats_WithJsonTrackList_ParsesTracksFastAndAccurately()
+    {
+        var native = new RecordingNative();
+        native.ReadProperties["track-list"] = """
+            [
+                {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "demux-fps": 60.0, "selected": true, "default": true},
+                {"id": 2, "type": "audio", "codec": "opus", "title": "English", "lang": "eng", "demux-samplerate": 48000, "demux-channels": "stereo", "demux-bitrate": 160000.0, "selected": true, "default": false},
+                {"id": 3, "type": "sub", "codec": "webvtt", "title": "French", "lang": "fra", "selected": false, "default": false}
+            ]
+            """;
+
+        using var player = new LibMpvPlayer(native, action => action());
+        player.HandleFileLoaded();
+
+        var stats = player.GetPlaybackStats(includeTracks: true);
+        Assert.NotNull(stats);
+        Assert.Equal(3, stats.Tracks.Count);
+
+        var videoTrack = stats.Tracks[0];
+        Assert.Equal(1, videoTrack.Id);
+        Assert.Equal("video", videoTrack.Type);
+        Assert.Equal("av1", videoTrack.Codec);
+        Assert.Equal(1920, videoTrack.Width);
+        Assert.Equal(1080, videoTrack.Height);
+        Assert.Equal(60.0, videoTrack.Fps);
+        Assert.True(videoTrack.IsSelected);
+        Assert.True(videoTrack.IsDefault);
+
+        var audioTrack = stats.Tracks[1];
+        Assert.Equal(2, audioTrack.Id);
+        Assert.Equal("audio", audioTrack.Type);
+        Assert.Equal("opus", audioTrack.Codec);
+        Assert.Equal("English", audioTrack.Title);
+        Assert.Equal("eng", audioTrack.Language);
+        Assert.Equal(48000, audioTrack.SampleRate);
+        Assert.Equal("stereo", audioTrack.Channels);
+        Assert.Equal(160000.0, audioTrack.Bitrate);
+        Assert.True(audioTrack.IsSelected);
+
+        var subTrack = stats.Tracks[2];
+        Assert.Equal(3, subTrack.Id);
+        Assert.Equal("sub", subTrack.Type);
+        Assert.Equal("webvtt", subTrack.Codec);
+        Assert.Equal("French", subTrack.Title);
+        Assert.Equal("fra", subTrack.Language);
+        Assert.False(subTrack.IsSelected);
+    }
+
+    [Fact]
+    public void GetPlaybackStats_WithIncludeTracksFalse_OmitsTracks()
+    {
+        var native = new RecordingNative();
+        native.ReadProperties["track-list"] = """
+            [
+                {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "selected": true}
+            ]
+            """;
+
+        using var player = new LibMpvPlayer(native, action => action());
+        player.HandleFileLoaded();
+
+        var stats = player.GetPlaybackStats(includeTracks: false);
+        Assert.NotNull(stats);
+        Assert.Empty(stats.Tracks);
+    }
+
+    [Fact]
+    public void HandleFileLoaded_WithJsonTrackList_PopulatesSubtitleTracks()
+    {
+        var native = new RecordingNative();
+        native.ReadProperties["sid"] = "2";
+        native.ReadProperties["track-list"] = """
+            [
+                {"id": 1, "type": "sub", "title": "English", "lang": "en", "selected": false},
+                {"id": 2, "type": "sub", "title": "Japanese", "lang": "ja", "selected": true},
+                {"id": 3, "type": "video", "codec": "av1"}
+            ]
+            """;
+
+        var states = new ConcurrentQueue<LibMpvPlaybackState>();
+        using var player = new LibMpvPlayer(native, action => action());
+        player.StateChanged += (_, state) => states.Enqueue(state);
+        player.HandleFileLoaded();
+
+        var state = Assert.Single(states);
+        Assert.Equal(2, state.SubtitleTracks.Count);
+        Assert.Equal(1, state.SubtitleTracks[0].Id);
+        Assert.False(state.SubtitleTracks[0].IsSelected);
+        Assert.Equal(2, state.SubtitleTracks[1].Id);
+        Assert.True(state.SubtitleTracks[1].IsSelected);
+    }
+
+    [Fact]
     public void UpdatePlaylistRequest_SyncsReloadSourceSoRemovedEntryDoesNotReappearOnReload()
     {
         var native = new RecordingNative();
