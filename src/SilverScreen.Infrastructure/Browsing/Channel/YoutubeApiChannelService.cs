@@ -51,7 +51,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                     ? fallbackName
                     : metadata.Summary.Title;
                 description = string.IsNullOrWhiteSpace(metadata.Description) ? null : metadata.Description;
-                avatarUrl = SelectThumbnail(metadata.Summary.Thumbnails);
+                avatarUrl = ThumbnailResolutionSelector.SelectAvatarThumbnail(metadata.Summary.Thumbnails);
                 subscriberCount = metadata.Summary.SubscriberCount;
             }
             else
@@ -162,7 +162,7 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         string channelName,
         VideoPlaybackProgress? playbackProgress)
     {
-        var thumbnailUrl = SelectThumbnail(video.Thumbnails) ?? string.Empty;
+        var thumbnailUrl = ThumbnailResolutionSelector.SelectCardThumbnail(video.Thumbnails);
         var publishedAt = video.PublishedAt;
         var approximateUploadDate = publishedAt is { } value
             ? (DateOnly?)DateOnly.FromDateTime(value.DateTime)

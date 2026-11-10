@@ -118,9 +118,14 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         if (IsSessionActive())
-            RefreshAsync().FireAndForget(Logger);
+        {
+            if (!_engine.State.IsLoading && _engine.State.Videos.Count == 0)
+                RefreshAsync().FireAndForget(Logger);
+        }
         else
+        {
             _engine.Reset(MapSignedOutStatus());
+        }
     }
 
     private VideoListStatus MapSignedOutStatus()

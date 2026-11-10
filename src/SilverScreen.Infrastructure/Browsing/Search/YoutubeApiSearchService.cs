@@ -94,9 +94,7 @@ public sealed class YoutubeApiSearchService(IYouTubeClientProvider clientProvide
         ApiVideoSummary video,
         VideoPlaybackProgress? playbackProgress)
     {
-        var thumbnailUrl = video.Thumbnails
-            .OrderBy(thumbnail => (long)thumbnail.Width * thumbnail.Height)
-            .LastOrDefault()?.Url.ToString() ?? string.Empty;
+        var thumbnailUrl = ThumbnailResolutionSelector.SelectCardThumbnail(video.Thumbnails);
         var publishedAt = video.PublishedAt;
         var approximateUploadDate = publishedAt is { } value
             ? (DateOnly?)DateOnly.FromDateTime(value.DateTime)

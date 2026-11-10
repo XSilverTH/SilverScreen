@@ -252,9 +252,7 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         YoutubeAPI.Models.Videos.VideoSummary video,
         VideoPlaybackProgress? playbackProgress)
     {
-        var thumbnail = video.Thumbnails
-            .OrderBy(item => (long)item.Width * item.Height)
-            .LastOrDefault()?.Url.ToString() ?? string.Empty;
+        var thumbnail = ThumbnailResolutionSelector.SelectCardThumbnail(video.Thumbnails);
         var channel = video.Channel;
         return new VideoSummary(
             video.Id.Value,

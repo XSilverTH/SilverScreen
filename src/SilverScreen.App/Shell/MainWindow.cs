@@ -67,7 +67,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         IPlaybackService playback,
         PlayerDependencies player,
         RuntimeDependencyDiagnostics diagnostics,
-        Action disposeApplicationServices)
+        Action disposeApplicationServices,
+        string? initialQuery = null)
     {
         Logger.Information("Initializing MainWindow");
         _account = account;
@@ -192,6 +193,14 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest,
             () => Widget.OnCloseRequest -= OnCloseRequest);
         ReportStartupDependencyWarnings();
+        if (!string.IsNullOrWhiteSpace(initialQuery))
+        {
+            Functions.IdleAdd(0, () =>
+            {
+                if (!_closed) OnSearchSubmitted(initialQuery);
+                return false;
+            });
+        }
     }
 
     private void SetupDesktopBackShortcuts()

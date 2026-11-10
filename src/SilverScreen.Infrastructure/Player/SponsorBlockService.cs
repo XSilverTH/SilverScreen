@@ -141,7 +141,13 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
     private static HttpClient CreateDefaultHttpClient()
     {
-        return new HttpClient { Timeout = DefaultTimeout };
+        var handler = new SocketsHttpHandler
+        {
+            MaxConnectionsPerServer = 4,
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+            AutomaticDecompression = DecompressionMethods.All
+        };
+        return new HttpClient(handler, disposeHandler: true) { Timeout = DefaultTimeout };
     }
 }
 

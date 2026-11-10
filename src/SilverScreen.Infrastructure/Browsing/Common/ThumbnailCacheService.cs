@@ -212,7 +212,14 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
     private static HttpClient CreateDefaultHttpClient()
     {
-        return new HttpClient
+        var handler = new SocketsHttpHandler
+        {
+            MaxConnectionsPerServer = 6,
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+            ResponseDrainTimeout = TimeSpan.FromSeconds(2),
+            AutomaticDecompression = DecompressionMethods.All
+        };
+        return new HttpClient(handler, disposeHandler: true)
         {
             Timeout = DefaultTimeout
         };
@@ -247,7 +254,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         CancellationToken cancellationToken)
     {
         // Rented per download instead of allocating; always returned below.
-        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        var buffer = ArrayPool<byte>.Shared.Rent(16384);
         try
         {
             long totalBytes = 0;

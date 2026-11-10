@@ -359,6 +359,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _presentRequested();
             _shortcutController.Attach();
             Widget.GrabFocus();
+            if (!_rendererReady)
+            {
+                player_surface.MakeCurrent();
+                if (player_surface.GetError() is null)
+                {
+                    _player.InitializeRenderer();
+                    _rendererReady = true;
+                }
+            }
             if (!_rendererReady) return false;
             _player.Load(request, preferences, _session.CookieFilePath);
             _loadedRequest = request;
@@ -758,7 +767,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnSubtitleDropdownNotify(object? sender, EventArgs args)
     {
-        if (_updatingControls) return;
+        if (_updatingControls || !_session.HasMedia) return;
         _subtitleController.OnSelectionChanged();
     }
 
@@ -923,7 +932,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _qualityLoadCancellation?.Dispose();
         _qualityLoadCancellation = null;
         _currentQualityVideoId = null;
-        if (stop) _player.Stop();
+        if (stop)
+        {
+            _player.Stop();
+            if (_rendererReady)
+            {
+                player_surface.MakeCurrent();
+                _player.ShutdownRenderer();
+                _rendererReady = false;
+            }
+        }
         _session.EndSession();
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }

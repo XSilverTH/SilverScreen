@@ -138,9 +138,14 @@ public sealed class HistoryViewModel : IVideoListSource
     private void OnSessionChanged(object? sender, EventArgs e)
     {
         if (IsSessionActive())
-            RefreshAsync().FireAndForget(Logger);
+        {
+            if (State.Videos.Count > 0)
+                RefreshAsync().FireAndForget(Logger);
+        }
         else
+        {
             GateSignedOut();
+        }
     }
 
     private void GateSignedOut()

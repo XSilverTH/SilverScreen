@@ -260,12 +260,17 @@ public sealed class LibMpvPlayerTests
         {
             native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, pProp));
             using var player = new LibMpvPlayer(native, action => action());
+            var positionUpdated = false;
+            player.StateChanged += (_, s) =>
+            {
+                if (s.Position == TimeSpan.FromSeconds(42.5d)) positionUpdated = true;
+            };
             var request = new PlaybackRequest([Video("abc123_X-yZ")]);
             player.Load(request, new AppPreferences(), null);
             player.InitializeRenderer();
             player.HandleFileLoaded();
 
-            Assert.True(SpinWait.SpinUntil(() => native.EventsToYield.IsEmpty, TimeSpan.FromSeconds(2)));
+            Assert.True(SpinWait.SpinUntil(() => positionUpdated, TimeSpan.FromSeconds(2)));
 
             // Shutdown renderer (simulates GL unrealize)
             player.ShutdownRenderer();

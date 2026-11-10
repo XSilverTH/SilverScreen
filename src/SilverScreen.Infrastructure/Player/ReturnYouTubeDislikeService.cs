@@ -147,7 +147,13 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
     private static HttpClient CreateDefaultHttpClient()
     {
-        return new HttpClient { Timeout = DefaultTimeout };
+        var handler = new SocketsHttpHandler
+        {
+            MaxConnectionsPerServer = 4,
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+            AutomaticDecompression = DecompressionMethods.All
+        };
+        return new HttpClient(handler, disposeHandler: true) { Timeout = DefaultTimeout };
     }
 }
 

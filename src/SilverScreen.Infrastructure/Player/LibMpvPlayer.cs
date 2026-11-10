@@ -33,8 +33,7 @@ public sealed record LibMpvPlaybackState(
 public sealed class LibMpvPlayer : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<LibMpvPlayer>();
-    private readonly Task? _commandPump;
-
+    private Task? _commandPump;
     private readonly Channel<Action> _commands = Channel.CreateUnbounded<Action>(new UnboundedChannelOptions
     {
         SingleReader = true,
@@ -42,9 +41,14 @@ public sealed class LibMpvPlayer : IDisposable
     });
 
     private readonly Action<Action> _dispatch;
-    private readonly Task? _eventPump;
+    private Task? _eventPump;
     private readonly Lock _gate = new();
-    private readonly ILibMpvNativeApi _native;
+    private readonly Lazy<ILibMpvNativeApi> _lazyNative;
+    private ILibMpvNativeApi _native => _lazyNative.Value;
+    private readonly Lock _initLock = new();
+    private bool _initialized;
+    private bool _isAvailable = true;
+    private string? _availabilityError;
     private readonly Lock _seekGate = new();
     private string? _cookieFilePath;
     private nint _handle;
@@ -66,59 +70,97 @@ public sealed class LibMpvPlayer : IDisposable
     private GCHandle _updateCallbackHandle;
 
 
-    public LibMpvPlayer(Action<Action> dispatch) : this(new LibMpvNative(), dispatch)
+    public LibMpvPlayer(Action<Action> dispatch) : this(new Lazy<ILibMpvNativeApi>(static () => new LibMpvNative()), dispatch, lazy: true)
     {
     }
 
-    internal LibMpvPlayer(ILibMpvNativeApi native, Action<Action> dispatch)
+    internal LibMpvPlayer(ILibMpvNativeApi native, Action<Action> dispatch) : this(new Lazy<ILibMpvNativeApi>(() => native), dispatch, lazy: false)
     {
-        _native = native ?? throw new ArgumentNullException(nameof(native));
+    }
+
+    internal LibMpvPlayer(Lazy<ILibMpvNativeApi> lazyNative, Action<Action> dispatch, bool lazy = false)
+    {
+        _lazyNative = lazyNative ?? throw new ArgumentNullException(nameof(lazyNative));
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
-        IsAvailable = native.IsAvailable;
-        AvailabilityError = native.AvailabilityError;
-        if (!IsAvailable)
+        if (!lazy)
         {
-            Logger.Warning("libmpv native library is not available: {Error}", AvailabilityError);
-            return;
-        }
-
-        try
-        {
-            _handle = native.Create();
-            if (_handle == 0) throw new LibMpvException("mpv_create returned no handle.");
-            Check(native.SetOptionString(_handle, "config", "no"));
-            Check(native.SetOptionString(_handle, "vo", "libmpv"));
-            Check(native.SetOptionString(_handle, "hwdec", "auto-safe"));
-            Check(native.Initialize(_handle));
-            Check(native.RequestLogMessages(_handle, "info"));
-            Observe("time-pos", LibMpvFormat.Double);
-            Observe("duration", LibMpvFormat.Double);
-            Observe("pause", LibMpvFormat.Flag);
-            Observe("volume", LibMpvFormat.Double);
-            Observe("mute", LibMpvFormat.Flag);
-            Observe("speed", LibMpvFormat.Double);
-            Observe("seekable", LibMpvFormat.Flag);
-            Observe("playlist-pos", LibMpvFormat.Int64);
-            Observe("path", LibMpvFormat.String);
-            Observe("sid", LibMpvFormat.Int64);
-            Observe("paused-for-cache", LibMpvFormat.Flag);
-            Observe("cache-buffering-state", LibMpvFormat.Int64);
-            _commandPump = Task.Run(PumpCommandsAsync);
-            _eventPump = Task.Run(PumpEvents);
-            Logger.Information("LibMpvPlayer initialized successfully");
-        }
-        catch (Exception exception)
-        {
-            Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
-            AvailabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
-            IsAvailable = false;
-            if (_handle != 0) native.Destroy(_handle);
-            _handle = 0;
+            EnsureInitialized();
         }
     }
 
-    public bool IsAvailable { get; }
-    public string? AvailabilityError { get; }
+    public bool IsAvailable
+    {
+        get
+        {
+            if (_initialized) return _isAvailable;
+            if (_lazyNative.IsValueCreated) return _lazyNative.Value.IsAvailable;
+            return LibMpvNative.IsAvailable();
+        }
+    }
+
+    public string? AvailabilityError
+    {
+        get
+        {
+            if (_initialized) return _availabilityError;
+            if (_lazyNative.IsValueCreated) return _lazyNative.Value.AvailabilityError;
+            return null;
+        }
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_initialized || IsDisposing) return;
+        lock (_initLock)
+        {
+            if (_initialized || IsDisposing) return;
+            _initialized = true;
+            var native = _lazyNative.Value;
+            _isAvailable = native.IsAvailable;
+            _availabilityError = native.AvailabilityError;
+            if (!_isAvailable)
+            {
+                Logger.Warning("libmpv native library is not available: {Error}", _availabilityError);
+                return;
+            }
+
+            try
+            {
+                _handle = native.Create();
+                if (_handle == 0) throw new LibMpvException("mpv_create returned no handle.");
+                Check(native.SetOptionString(_handle, "config", "no"));
+                Check(native.SetOptionString(_handle, "vo", "libmpv"));
+                Check(native.SetOptionString(_handle, "hwdec", "auto-safe"));
+                Check(native.SetOptionString(_handle, "demuxer-max-bytes", "33554432"));
+                Check(native.SetOptionString(_handle, "demuxer-max-back-bytes", "16777216"));
+                Check(native.Initialize(_handle));
+                Check(native.RequestLogMessages(_handle, "info"));
+                Observe("time-pos", LibMpvFormat.Double);
+                Observe("duration", LibMpvFormat.Double);
+                Observe("pause", LibMpvFormat.Flag);
+                Observe("volume", LibMpvFormat.Double);
+                Observe("mute", LibMpvFormat.Flag);
+                Observe("speed", LibMpvFormat.Double);
+                Observe("seekable", LibMpvFormat.Flag);
+                Observe("playlist-pos", LibMpvFormat.Int64);
+                Observe("path", LibMpvFormat.String);
+                Observe("sid", LibMpvFormat.Int64);
+                Observe("paused-for-cache", LibMpvFormat.Flag);
+                Observe("cache-buffering-state", LibMpvFormat.Int64);
+                _commandPump = Task.Run(PumpCommandsAsync);
+                _eventPump = Task.Run(PumpEvents);
+                Logger.Information("LibMpvPlayer initialized successfully");
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
+                _availabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
+                _isAvailable = false;
+                if (_handle != 0) native.Destroy(_handle);
+                _handle = 0;
+            }
+        }
+    }
 
     private bool IsDisposing { get; set; }
 
@@ -126,7 +168,7 @@ public sealed class LibMpvPlayer : IDisposable
     {
         if (IsDisposing) return;
         IsDisposing = true;
-        if (IsAvailable && _handle != 0)
+        if (_initialized && _isAvailable && _handle != 0)
             try
             {
                 _native.Command(_handle, "stop");
@@ -172,7 +214,7 @@ public sealed class LibMpvPlayer : IDisposable
         if (_updateCallbackHandle.IsAllocated) _updateCallbackHandle.Free();
         if (_handle != 0) _native.Destroy(_handle);
         _handle = 0;
-        _native.Dispose();
+        if (_lazyNative.IsValueCreated) _lazyNative.Value.Dispose();
     }
 
     public event EventHandler? RenderRequested;
@@ -181,6 +223,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     public unsafe void InitializeRenderer()
     {
+        EnsureInitialized();
         if (!IsAvailable || IsDisposing) return;
         try
         {
@@ -456,7 +499,13 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         PublishState();
-        Enqueue(() => Check(_native.Command(_handle, "stop")));
+        if (_handle != 0)
+            Enqueue(() =>
+            {
+                Check(_native.Command(_handle, "playlist-play-index", "none"));
+                Check(_native.Command(_handle, "playlist-clear"));
+                Check(_native.Command(_handle, "stop"));
+            });
     }
 
     private async Task PumpCommandsAsync()
@@ -844,8 +893,8 @@ public sealed class LibMpvPlayer : IDisposable
 
     public PlaybackStats? GetPlaybackStats(bool includeTracks = true)
     {
+        EnsureInitialized();
         if (!IsAvailable || IsDisposing || _handle == 0) return null;
-
         lock (_gate)
         {
             if (_handle == 0 || !_state.HasMedia) return null;
@@ -1232,6 +1281,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void Enqueue(Action action)
     {
+        EnsureInitialized();
         if (!IsDisposing && !_commands.Writer.TryWrite(action)) PublishFailure("The embedded player is shutting down.");
     }
 

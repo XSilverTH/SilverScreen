@@ -28,6 +28,7 @@ public partial class ChannelView : ViewBase<Box>
     private CancellationTokenSource? _avatarCancellation;
     private Picture? _boundAvatarPicture;
     private Texture? _boundAvatarTexture;
+    private readonly NativeMemoryPressure _avatarPressure = new();
     private string? _currentAvatarUrl;
 
     private bool _isHeaderCollapsed;
@@ -427,6 +428,7 @@ public partial class ChannelView : ViewBase<Box>
                     ClearAvatar();
                     channel_avatar_overlay.Child = picture;
                     _boundAvatarTexture = texture;
+                    _avatarPressure.Track((long)AvatarSize * AvatarSize * 4);
                     _boundAvatarPicture = picture;
                     texture = null;
                     picture = null;
@@ -457,6 +459,7 @@ public partial class ChannelView : ViewBase<Box>
         var texture = _boundAvatarTexture;
         _boundAvatarPicture = null;
         _boundAvatarTexture = null;
+        _avatarPressure.Release();
         channel_avatar_overlay.Child = channel_avatar_placeholder;
         if (picture is not null)
         {
@@ -475,6 +478,7 @@ public partial class ChannelView : ViewBase<Box>
             _avatarCancellation?.Dispose();
             _avatarCancellation = null;
             ClearAvatar();
+            _avatarPressure.Dispose();
             RefreshLoadingChanged = null;
         }
 

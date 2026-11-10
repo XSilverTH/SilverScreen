@@ -84,7 +84,7 @@ internal sealed class PlayerSubtitleController(
 
     public void OnSelectionChanged()
     {
-        if (_lifetime.IsDisposed || _suppressSelectionChanged) return;
+        if (_lifetime.IsDisposed || _suppressSelectionChanged || _tracks.Count == 0) return;
 
         var selected = dropdown.GetSelected();
         if (selected is 0 or > int.MaxValue || selected > _tracks.Count)

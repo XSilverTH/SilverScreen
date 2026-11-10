@@ -700,7 +700,10 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     {
         if (IsSessionActive())
         {
-            RefreshAsync(_lastRequestedCount).FireAndForget(Logger);
+            if (_loadedAtLeastOnce)
+            {
+                RefreshAsync(_lastRequestedCount).FireAndForget(Logger);
+            }
         }
         else
         {

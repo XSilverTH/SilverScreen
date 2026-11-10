@@ -28,13 +28,14 @@ public partial class VideoCardView : ViewBase<Bin>
     private const int ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
-    private readonly PopoverMenu _contextMenu;
+    private PopoverMenu? _contextMenu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
+    private readonly NativeMemoryPressure _thumbnailPressure = new();
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
     private VideoSummary? _video;
@@ -74,20 +75,6 @@ public partial class VideoCardView : ViewBase<Bin>
                 card.InsertActionGroup("video", null);
             });
 
-        _contextMenu = PopoverMenu.NewFromModel(menu.MenuModel!);
-        _contextMenu.HasArrow = false;
-        Lifetime.Track(
-            () =>
-            {
-                _contextMenu.SetParent(card);
-                _contextMenu.InsertActionGroup("video", _menuActions);
-            },
-            () =>
-            {
-                _contextMenu.Popdown();
-                _contextMenu.Unparent();
-                _contextMenu.InsertActionGroup("video", null);
-            });
 
         var click = GestureClick.New();
         click.Button = 0;
@@ -164,7 +151,7 @@ public partial class VideoCardView : ViewBase<Bin>
         title.SetText(string.Empty);
         title.TooltipText = string.Empty;
         card.TooltipText = string.Empty;
-        _contextMenu.Popdown();
+        _contextMenu?.Popdown();
         channel.SetText(string.Empty);
         duration.SetText(string.Empty);
         upload_date.SetText(string.Empty);
@@ -221,34 +208,41 @@ public partial class VideoCardView : ViewBase<Bin>
                     return false;
 
                 Texture? texture = null;
-                Picture? picture = null;
-                try
-                {
-                    var pixbufForTexture = decodedPixbuf ??
-                                           throw new InvalidOperationException(
-                                               "Thumbnail decode was released before texture creation.");
-                    texture = Texture.NewForPixbuf(pixbufForTexture);
-                    pixbufForTexture.Dispose();
-                    decodedPixbuf = null;
-                    picture = Picture.NewForPaintable(texture);
-                    picture.AlternativeText = _thumbnailAlternativeText;
-                    picture.ContentFit = ContentFit.Cover;
-                    picture.HeightRequest = ThumbnailHeight;
-                    picture.Hexpand = true;
-                    picture.Vexpand = true;
+                    try
+                    {
+                        var pixbufForTexture = decodedPixbuf ??
+                                               throw new InvalidOperationException(
+                                                   "Thumbnail decode was released before texture creation.");
+                        texture = Texture.NewForPixbuf(pixbufForTexture);
+                        pixbufForTexture.Dispose();
+                        decodedPixbuf = null;
 
-                    ClearThumbnail();
-                    thumbnail.Child = picture;
-                    _boundTexture = texture;
-                    _boundPicture = picture;
-                    texture = null;
-                    picture = null;
-                }
-                finally
-                {
-                    picture?.Dispose();
-                    texture?.Dispose();
-                }
+                        if (_boundPicture is null)
+                        {
+                            var picture = Picture.NewForPaintable(texture);
+                            picture.AlternativeText = _thumbnailAlternativeText;
+                            picture.ContentFit = ContentFit.Cover;
+                            picture.HeightRequest = ThumbnailHeight;
+                            picture.Hexpand = true;
+                            picture.Vexpand = true;
+                            _boundPicture = picture;
+                        }
+                        else
+                        {
+                            _boundPicture.Paintable = texture;
+                            _boundPicture.AlternativeText = _thumbnailAlternativeText;
+                        }
+
+                        thumbnail.Child = _boundPicture;
+                        _boundTexture?.Dispose();
+                        _boundTexture = texture;
+                        _thumbnailPressure.Track((long)CardWidth * ThumbnailHeight * 4);
+                        texture = null;
+                    }
+                    finally
+                    {
+                        texture?.Dispose();
+                    }
             }
             catch (Exception exception)
             {
@@ -266,18 +260,13 @@ public partial class VideoCardView : ViewBase<Bin>
 
     private void ClearThumbnail()
     {
-        // A Picture owns a reference to its paintable.  Clear that reference before
-        // replacing the child so the previous texture is released on every rebind,
-        // rather than waiting for GTK to eventually dispose the detached widget.
-        var picture = _boundPicture;
         var texture = _boundTexture;
-        _boundPicture = null;
         _boundTexture = null;
+        _thumbnailPressure.Release();
         thumbnail.Child = placeholder;
-        if (picture is not null)
+        if (_boundPicture is not null)
         {
-            picture.Paintable = null!;
-            picture.Dispose();
+            _boundPicture.Paintable = null!;
         }
 
         texture?.Dispose();
@@ -298,6 +287,14 @@ public partial class VideoCardView : ViewBase<Bin>
     {
         if (IsDisposed || _video is null)
             return;
+
+        if (_contextMenu is null)
+        {
+            _contextMenu = PopoverMenu.NewFromModel(menu.MenuModel!);
+            _contextMenu.HasArrow = false;
+            _contextMenu.SetParent(card);
+            _contextMenu.InsertActionGroup("video", _menuActions);
+        }
 
         var rect = new Rectangle
         {
@@ -523,10 +520,23 @@ public partial class VideoCardView : ViewBase<Bin>
         return string.IsNullOrWhiteSpace(publishedText) ? string.Empty : $"Published: {publishedText}";
     }
 
-
     protected override void Dispose(bool disposing)
     {
-        if (disposing) Unbind();
+        if (disposing)
+        {
+            Unbind();
+            if (_contextMenu is not null)
+            {
+                _contextMenu.Popdown();
+                _contextMenu.Unparent();
+                _contextMenu.InsertActionGroup("video", null);
+                _contextMenu.Dispose();
+                _contextMenu = null;
+            }
+            _boundPicture?.Dispose();
+            _boundPicture = null;
+            _thumbnailPressure.Dispose();
+        }
 
         base.Dispose(disposing);
     }

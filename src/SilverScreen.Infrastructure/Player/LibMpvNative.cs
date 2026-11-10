@@ -448,9 +448,47 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 
     public static bool IsAvailable()
     {
+        if (ProbeLibraryFileExists(MpvLibraryNames)) return true;
         if (!TryLoad(MpvLibraryNames, out var library)) return false;
         NativeLibrary.Free(library);
         return true;
+    }
+
+    private static readonly string[] StandardSearchDirs =
+    [
+        "/usr/lib",
+        "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/local/lib",
+        "/app/lib"
+    ];
+
+    private static bool ProbeLibraryFileExists(string[] names)
+    {
+        if (!OperatingSystem.IsLinux()) return false;
+        foreach (var dir in StandardSearchDirs)
+        {
+            foreach (var name in names)
+            {
+                if (File.Exists(Path.Combine(dir, name)))
+                    return true;
+            }
+        }
+
+        var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+        if (!string.IsNullOrWhiteSpace(ldPath))
+        {
+            foreach (var dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries))
+            {
+                foreach (var name in names)
+                {
+                    if (File.Exists(Path.Combine(dir, name)))
+                        return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

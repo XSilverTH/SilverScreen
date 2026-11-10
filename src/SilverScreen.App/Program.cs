@@ -4,6 +4,7 @@ using Adw;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
@@ -59,6 +60,9 @@ try
 
     var app = App.NewWithProperties([]);
     app.UseServices(serviceProvider);
+    var initialQuery = args.FirstOrDefault(static a => !a.StartsWith('-'));
+    if (!string.IsNullOrWhiteSpace(initialQuery))
+        app.SetInitialQuery(initialQuery);
     servicesHandedToApplication = true;
     return app.RunWithSynchronizationContext(args);
 }

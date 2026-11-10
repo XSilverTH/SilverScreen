@@ -86,6 +86,7 @@ public partial class QueueItemRowView : ViewBase<Box>
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
+    private readonly NativeMemoryPressure _thumbnailPressure = new();
     private CancellationTokenSource? _thumbnailCancellation;
 
     public QueueItemRowView(
@@ -366,6 +367,7 @@ public partial class QueueItemRowView : ViewBase<Box>
                         ClearThumbnail();
                         thumbnail.Child = picture;
                         _boundTexture = texture;
+                        _thumbnailPressure.Track((long)ThumbnailWidth * ThumbnailHeight * 4);
                         _boundPicture = picture;
                         texture = null;
                         picture = null;
@@ -403,6 +405,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         var texture = _boundTexture;
         _boundPicture = null;
         _boundTexture = null;
+        _thumbnailPressure.Release();
         thumbnail.Child = placeholder;
         if (picture is not null)
         {
@@ -431,7 +434,11 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) Unbind();
+        if (disposing)
+        {
+            Unbind();
+            _thumbnailPressure.Dispose();
+        }
 
         base.Dispose(disposing);
     }

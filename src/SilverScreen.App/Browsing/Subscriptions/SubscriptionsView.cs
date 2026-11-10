@@ -27,6 +27,7 @@ public partial class SubscriptionsView : ViewBase<Box>
     private readonly IThumbnailService _thumbnails;
     private readonly VideoListView _videoList;
     private readonly SubscriptionsViewModel _viewModel;
+    private readonly SemaphoreSlim _avatarSemaphore = new(4, 4);
     private CancellationTokenSource? _avatarsCancellation;
     private IReadOnlyList<SubscribedChannel> _renderedChannels = [];
 
@@ -310,28 +311,30 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private async Task LoadAvatarAsync(ChannelItemHolder holder, string avatarUrl, CancellationToken cancellationToken)
     {
-        Pixbuf? pixbuf;
+        await _avatarSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var result = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
-            if (result is null) return;
+            Pixbuf? pixbuf;
+            try
+            {
+                var result = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
+                if (result is null) return;
 
-            pixbuf = await Task.Run(
-                () => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to load channel avatar from {AvatarUrl}", avatarUrl);
-            return;
-        }
+                pixbuf = await Task.Run(
+                    () => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "Failed to load channel avatar from {AvatarUrl}", avatarUrl);
+                return;
+            }
 
-        var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
-
+            var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
         Functions.IdleAdd(0, () =>
         {
             try
@@ -361,6 +364,7 @@ public partial class SubscriptionsView : ViewBase<Box>
                     holder.BoundTexture?.Dispose();
                     holder.BoundPicture?.Dispose();
                     holder.BoundTexture = texture;
+                    holder.MemoryPressure.Track(AvatarSize * AvatarSize * 4);
                     holder.BoundPicture = picture;
                     texture = null;
                     picture = null;
@@ -382,6 +386,11 @@ public partial class SubscriptionsView : ViewBase<Box>
 
             return false;
         });
+        }
+        finally
+        {
+            _avatarSemaphore.Release();
+        }
     }
 
     private void ClearChannelItems()
@@ -420,6 +429,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             _avatarsCancellation = null;
 
             ClearChannelItems();
+            _avatarSemaphore.Dispose();
             RefreshLoadingChanged = null;
         }
 
@@ -470,7 +480,7 @@ public partial class SubscriptionsView : ViewBase<Box>
 
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }
-
+        public NativeMemoryPressure MemoryPressure { get; } = new();
         public void Dispose()
         {
             if (_disposed) return;
@@ -480,6 +490,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             BoundPicture = null;
             BoundTexture?.Dispose();
             BoundTexture = null;
+            MemoryPressure.Dispose();
 
             Lifetime.Dispose();
         }

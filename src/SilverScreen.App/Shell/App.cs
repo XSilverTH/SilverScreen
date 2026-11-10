@@ -24,7 +24,12 @@ public partial class App
     private EventHandler<AppPreferences>? _preferencesChangedHandler;
     private ApplicationServiceLifetime? _serviceLifetime;
     private IServiceProvider? _serviceProvider;
+    private string? _initialQuery;
 
+    public void SetInitialQuery(string? query)
+    {
+        _initialQuery = query;
+    }
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;
@@ -96,7 +101,9 @@ public partial class App
                 if (createdWindow is not null)
                     _windowGuard.Clear(createdWindow);
                 _serviceLifetime!.WindowClosed();
-            });
+            },
+            _initialQuery);
+        _initialQuery = null;
         var mainWindow = createdWindow = mainWindowWrapper.Widget;
         _windowGuard.Set(mainWindow);
         _serviceLifetime!.WindowOpened();

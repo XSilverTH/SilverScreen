@@ -24,7 +24,8 @@
         <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
         <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-
+        <ServerGarbageCollection>false</ServerGarbageCollection>
+        <GCDynamicAdaptationMode>1</GCDynamicAdaptationMode>
     </PropertyGroup>
 
     <ItemGroup>

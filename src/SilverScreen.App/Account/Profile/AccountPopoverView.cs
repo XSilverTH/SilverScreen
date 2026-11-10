@@ -18,6 +18,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
+    private readonly NativeMemoryPressure _avatarPressure = new();
     private string? _avatarUrl;
     private bool _editing;
 
@@ -160,6 +161,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
                     signed_in_avatar.CustomImage = texture;
                     _avatarTexture?.Dispose();
                     _avatarTexture = texture;
+                    _avatarPressure.Track(48 * 48 * 4);
                     _sessionAppearanceChanged(
                         _viewModel.ProfileStatus,
                         _viewModel.HasManualSession,
@@ -271,6 +273,7 @@ public partial class AccountPopoverView : ViewBase<Bin>
             signed_in_avatar.CustomImage = null!;
             _avatarTexture?.Dispose();
             _avatarTexture = null;
+            _avatarPressure.Dispose();
             _viewModel.Dispose();
         }
 
