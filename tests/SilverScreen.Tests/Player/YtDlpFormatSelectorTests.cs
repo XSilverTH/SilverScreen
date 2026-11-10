@@ -1,3 +1,4 @@
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Tests.Player;
@@ -222,17 +223,80 @@ public sealed class YtDlpFormatSelectorTests
 
     [Theory]
     [InlineData("Best", null)]
+    [InlineData("4320p", "bestvideo[height<=4320]+bestaudio/best[height<=4320]")]
+    [InlineData("2160p", "bestvideo[height<=2160]+bestaudio/best[height<=2160]")]
+    [InlineData("1440p", "bestvideo[height<=1440]+bestaudio/best[height<=1440]")]
     [InlineData("1080p", "bestvideo[height<=1080]+bestaudio/best[height<=1080]")]
+    [InlineData("864p", "bestvideo[height<=864]+bestaudio/best[height<=864]")]
     [InlineData("720p", "bestvideo[height<=720]+bestaudio/best[height<=720]")]
     [InlineData("480p", "bestvideo[height<=480]+bestaudio/best[height<=480]")]
     [InlineData("360p", "bestvideo[height<=360]+bestaudio/best[height<=360]")]
+    [InlineData("240p", "bestvideo[height<=240]+bestaudio/best[height<=240]")]
+    [InlineData("144p", "bestvideo[height<=144]+bestaudio/best[height<=144]")]
+    [InlineData("4K", "bestvideo[height<=2160]+bestaudio/best[height<=2160]")]
+    [InlineData("2K", "bestvideo[height<=1440]+bestaudio/best[height<=1440]")]
+    [InlineData("8K", "bestvideo[height<=4320]+bestaudio/best[height<=4320]")]
+    [InlineData("1080p60", "bestvideo[height<=1080]+bestaudio/best[height<=1080]")]
+    [InlineData("2160p (4K)", "bestvideo[height<=2160]+bestaudio/best[height<=2160]")]
     [InlineData("", null)]
-    [InlineData("4K", null)]
     [InlineData("auto", null)]
     public void ToMpvFormat_MapsExpectedQualityStrings(string quality, string? expected)
     {
         var actual = YtDlpFormatSelector.ToMpvFormat(quality);
         Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ToMpvFormat_WithPreferredCodec_GeneratesFallbackChain()
+    {
+        var av1_1080 = YtDlpFormatSelector.ToMpvFormat("1080p", PreferredVideoCodec.Av1);
+        Assert.Equal("bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", av1_1080);
+
+        var av1_best = YtDlpFormatSelector.ToMpvFormat("Best", PreferredVideoCodec.Av1);
+        Assert.Equal("bestvideo[vcodec^=av01]+bestaudio/bestvideo+bestaudio/best", av1_best);
+
+        var vp9_1080 = YtDlpFormatSelector.ToMpvFormat("1080p", PreferredVideoCodec.Vp9);
+        Assert.Equal("bestvideo[vcodec^=vp09][height<=1080]+bestaudio/bestvideo[vcodec^=vp9][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", vp9_1080);
+
+        var h264_720 = YtDlpFormatSelector.ToMpvFormat("720p", PreferredVideoCodec.H264);
+        Assert.Equal("bestvideo[vcodec^=avc1][height<=720]+bestaudio/bestvideo[vcodec^=h264][height<=720]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=720]", h264_720);
+    }
+
+    [Fact]
+    public void GetAvailableQualityTracks_FromAdaptiveJson_ReturnsOrderedTracks()
+    {
+        var tracks = YtDlpFormatSelector.GetAvailableQualityTracks(SampleAdaptiveJson);
+        Assert.Equal(["1080p60", "720p", "480p", "360p"], tracks);
+    }
+
+    [Fact]
+    public void GetAvailableQualityTracks_WithWeirdResolution_DoesNotMaskWeirdResolution()
+    {
+        var json = """
+        {
+            "id": "weird-res",
+            "formats": [
+                { "format_id": "8k", "height": 4320, "fps": 60, "vcodec": "av01" },
+                { "format_id": "4k", "height": 2160, "fps": 60, "vcodec": "vp9" },
+                { "format_id": "2k", "height": 1440, "fps": 30, "vcodec": "vp9" },
+                { "format_id": "weird", "height": 864, "fps": 30, "vcodec": "avc1" },
+                { "format_id": "720", "height": 720, "fps": 30, "vcodec": "avc1" }
+            ]
+        }
+        """;
+
+        var tracks = YtDlpFormatSelector.GetAvailableQualityTracks(json);
+        Assert.Equal(["4320p60", "2160p60", "1440p", "864p", "720p"], tracks);
+    }
+
+    [Fact]
+    public void SelectMedia_AdaptiveStreams_WithVp9Preferred_SelectsVp9Stream()
+    {
+        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "1080p", preferredCodec: PreferredVideoCodec.Vp9);
+
+        Assert.NotNull(media);
+        Assert.Contains("itag=248", media.VideoUrl);
+        Assert.Contains("itag=251", media.AudioUrl);
     }
 
     [Fact]

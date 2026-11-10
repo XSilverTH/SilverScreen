@@ -16,6 +16,7 @@ namespace SilverScreen.Infrastructure.Preferences;
 [JsonSerializable(typeof(AppPreferences))]
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(VideoQuality))]
+[JsonSerializable(typeof(PreferredVideoCodec))]
 [JsonSerializable(typeof(PlaybackBackendKind))]
 [JsonSerializable(typeof(PlayerShortcutBindings))]
 [JsonSerializable(typeof(EquatableArray<string>))]

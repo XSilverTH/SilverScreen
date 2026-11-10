@@ -115,6 +115,23 @@ public sealed class PreferencesViewModelTests
         Assert.Null(service.Saved);
     }
 
+    [Fact]
+    public void Save_WithVideoQualityAndPreferredCodec_PersistsCorrectly()
+    {
+        var service = new FakePreferencesService(new AppPreferences());
+        var viewModel = new PreferencesViewModel(service);
+
+        var result = viewModel.Save(viewModel.EditorState with
+        {
+            VideoQuality = VideoQuality.P2160,
+            PreferredCodec = PreferredVideoCodec.Av1
+        });
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(VideoQuality.P2160, service.Saved!.Quality);
+        Assert.Equal(PreferredVideoCodec.Av1, service.Saved.PreferredCodec);
+    }
+
     private sealed class FakePreferencesService(AppPreferences initial) : IPreferencesService
     {
         private AppPreferences _current = initial;

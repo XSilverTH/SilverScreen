@@ -1,3 +1,4 @@
+using SilverScreen.Core.Preferences;
 using System.Collections.Immutable;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
@@ -95,10 +96,15 @@ public sealed class MpvCommandBuilderTests
     }
 
     [Theory]
+    [InlineData("4320p", "--ytdl-format=bestvideo[height<=4320]+bestaudio/best[height<=4320]")]
+    [InlineData("2160p", "--ytdl-format=bestvideo[height<=2160]+bestaudio/best[height<=2160]")]
+    [InlineData("1440p", "--ytdl-format=bestvideo[height<=1440]+bestaudio/best[height<=1440]")]
     [InlineData("1080p", "--ytdl-format=bestvideo[height<=1080]+bestaudio/best[height<=1080]")]
     [InlineData("720p", "--ytdl-format=bestvideo[height<=720]+bestaudio/best[height<=720]")]
     [InlineData("480p", "--ytdl-format=bestvideo[height<=480]+bestaudio/best[height<=480]")]
     [InlineData("360p", "--ytdl-format=bestvideo[height<=360]+bestaudio/best[height<=360]")]
+    [InlineData("240p", "--ytdl-format=bestvideo[height<=240]+bestaudio/best[height<=240]")]
+    [InlineData("144p", "--ytdl-format=bestvideo[height<=144]+bestaudio/best[height<=144]")]
     [InlineData("Best", null)]
     public void Build_VideoQuality_SetsExpectedFormatArgument(string quality, string? expectedArg)
     {
@@ -111,6 +117,17 @@ public sealed class MpvCommandBuilderTests
             Assert.Contains(expectedArg, command.Arguments);
         else
             Assert.DoesNotContain(command.Arguments, a => a.StartsWith("--ytdl-format="));
+    }
+
+    [Fact]
+    public void Build_WithPreferredCodec_SetsExpectedCodecFormatArgument()
+    {
+        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
+        var options = new PlaybackOptions { VideoQuality = "1080p", PreferredCodec = PreferredVideoCodec.Av1 };
+
+        var command = MpvCommandBuilder.Build(request, options);
+
+        Assert.Contains("--ytdl-format=bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", command.Arguments);
     }
 
     [Theory]

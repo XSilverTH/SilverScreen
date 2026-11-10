@@ -22,6 +22,10 @@ public sealed record AppPreferences
     [JsonConverter(typeof(VideoQualityConverter))]
     public VideoQualityEnum Quality { get; set; } = VideoQualityEnum.Best;
 
+    [JsonPropertyName("PreferredCodec")]
+    [JsonConverter(typeof(PreferredVideoCodecConverter))]
+    public PreferredVideoCodec PreferredCodec { get; set; } = PreferredVideoCodec.Any;
+
     public string PreferredSubtitleLanguage { get; set; } = string.Empty;
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public bool MarkWatchedVideos { get; set; }

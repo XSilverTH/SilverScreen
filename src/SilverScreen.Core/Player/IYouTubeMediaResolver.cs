@@ -14,4 +14,8 @@ public interface IYouTubeMediaResolver
         string videoId,
         bool forceRefresh = false,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<string>> GetQualityTracksAsync(
+        string videoId,
+        CancellationToken cancellationToken = default);
 }

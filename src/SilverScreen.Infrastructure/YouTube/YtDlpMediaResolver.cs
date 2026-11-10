@@ -203,6 +203,56 @@ public sealed class YtDlpMediaResolver(
         }
     }
 
+    public async Task<IReadOnlyList<string>> GetQualityTracksAsync(
+        string videoId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
+            return [];
+
+        var cached = TryGetValidEntry(videoId, false, true);
+        if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
+            return YtDlpFormatSelector.GetAvailableQualityTracks(cached.RawJsonOutput);
+
+        var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
+        await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cached = TryGetValidEntry(videoId, false, true);
+            if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
+                return YtDlpFormatSelector.GetAvailableQualityTracks(cached.RawJsonOutput);
+
+            var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
+            if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
+                return [];
+
+            var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
+            var quality = _preferencesService.GetPreferences().Quality.ToPersistedString();
+            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
+
+            var newEntry = new CachedVideoEntry(
+                fetchResult.RawJsonOutput,
+                details,
+                _timeProvider.GetUtcNow(),
+                resolvedMedia?.ExpiresAt,
+                new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
+            if (resolvedMedia is not null)
+                newEntry.FormatsByQuality[quality] = resolvedMedia;
+
+            _cache[videoId] = newEntry;
+            return YtDlpFormatSelector.GetAvailableQualityTracks(fetchResult.RawJsonOutput);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.Warning(ex, "Failed to load quality tracks for {VideoId}", videoId);
+            return [];
+        }
+        finally
+        {
+            fetchLock.Release();
+        }
+    }
+
     /// <summary>
     ///     Fallback entry for mpv ytdl_hook failures: accepts a bare video id or watch/shorts/share URL,
     ///     then delegates to <see cref="ResolveMediaAsync" /> (cache/timeout reuse). Never throws.
@@ -267,7 +317,7 @@ public sealed class YtDlpMediaResolver(
 
     // Missing/unparseable media fields are a miss, never a throw: log and let the caller
     // fall through to a fresh fetch (cached path) or return a miss status (fresh path).
-    private static ResolvedMedia? TrySelectMedia(
+    private ResolvedMedia? TrySelectMedia(
         string rawJson,
         string quality,
         YouTubeVideoDetails? details,
@@ -276,7 +326,8 @@ public sealed class YtDlpMediaResolver(
         if (string.IsNullOrWhiteSpace(rawJson)) return null;
         try
         {
-            return YtDlpFormatSelector.SelectMedia(rawJson, quality, details);
+            var preferredCodec = _preferencesService.GetPreferences().PreferredCodec;
+            return YtDlpFormatSelector.SelectMedia(rawJson, quality, details, preferredCodec);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

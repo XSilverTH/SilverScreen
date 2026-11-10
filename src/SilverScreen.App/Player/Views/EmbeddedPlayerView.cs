@@ -9,6 +9,7 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
 using SilverScreen.Infrastructure.Player;
+using SilverScreen.Infrastructure.YouTube;
 using SilverScreen.Player.Comments;
 using SilverScreen.Player.Controllers;
 using SilverScreen.Player.RichText;
@@ -62,6 +63,24 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
     private readonly Action<VideoSummary> _videoRequested;
+    private readonly IYouTubeMediaResolver _mediaResolver;
+    private readonly List<string> _availableQualities = ["Best"];
+    private string _currentQuality = "Best";
+    private string? _currentQualityVideoId;
+    private CancellationTokenSource? _qualityLoadCancellation;
+    private int _qualityLoadGeneration;
+    private static readonly string[] DefaultQualityPresets =
+    [
+        "4320p",
+        "2160p",
+        "1440p",
+        "1080p",
+        "720p",
+        "480p",
+        "360p",
+        "240p",
+        "144p"
+    ];
 
     private string? _commentsVideoId;
     private PlayerErrorInfo? _currentErrorInfo;
@@ -93,6 +112,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             tag => _searchRequested("#" + tag),
             OpenExternalLink);
         _preferences = dependencies.Preferences;
+        _mediaResolver = dependencies.MediaResolver;
         _commentsView = Lifetime.Own(new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
             OnRichLinkActivated));
         comments_sidebar_host.Append(_commentsView.Widget);
@@ -148,6 +168,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Lifetime.Track(() => _player.StateChanged += OnStateChanged, () => _player.StateChanged -= OnStateChanged);
         Lifetime.Track(() => _player.PlaybackFailed += OnPlaybackFailed,
             () => _player.PlaybackFailed -= OnPlaybackFailed);
+        ResetQualityDropdownToDefaults();
         SetControls(100, 1, "Best");
         _osdController =
             Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
@@ -330,6 +351,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _chapterOverlay.Update([], TimeSpan.Zero);
 
             SetControls(100, 1, NormalizeQuality(preferences.Quality.ToPersistedString()));
+            LoadQualityTracks(firstVideo.Id);
             SetLoading(true);
             player_queue_controls.SetVisible(request.Videos.Length > 1);
             player_previous_queue_button.Sensitive = false;
@@ -358,6 +380,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     protected override void Dispose(bool disposing)
     {
+        _qualityLoadCancellation?.Cancel();
+        _qualityLoadCancellation?.Dispose();
+        _qualityLoadCancellation = null;
         if (disposing)
             if (_rendererReady)
             {
@@ -372,6 +397,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
         _shortcutController.UpdateBindings(preferences.Shortcuts);
+        _player.UpdatePreferences(preferences);
     }
 
     /// <summary>
@@ -698,7 +724,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnQualityDropdownNotify(object? sender, EventArgs args)
     {
-        if (!_updatingControls) _player.SetQuality(QualityAt(player_quality_dropdown.GetSelected()));
+        if (_updatingControls) return;
+        var selected = player_quality_dropdown.GetSelected();
+        if (selected < (uint)_availableQualities.Count)
+        {
+            var quality = _availableQualities[(int)selected];
+            _currentQuality = quality;
+            _player.SetQuality(quality);
+        }
     }
 
     private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
@@ -800,8 +833,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar)
             _commentsView.EnsureLoaded();
-    }
 
+        LoadQualityTracks(video.Id);
+    }
     private void OnPlaybackFailed(object? sender, string detail)
     {
         _session.Fail(detail);
@@ -885,6 +919,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void EndSession(bool stop)
     {
+        _qualityLoadCancellation?.Cancel();
+        _qualityLoadCancellation?.Dispose();
+        _qualityLoadCancellation = null;
+        _currentQualityVideoId = null;
         if (stop) _player.Stop();
         _session.EndSession();
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
@@ -945,6 +983,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _volume = volume;
         _speed = speed;
         _isMuted = false;
+        _currentQuality = quality;
         try
         {
             player_volume_scale.SetValue(volume);
@@ -952,8 +991,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             var normalizedSpeed = SnapPlaybackSpeed(speed);
             player_speed_scale.SetValue(normalizedSpeed);
             SetSpeedLabel(normalizedSpeed);
-            player_quality_dropdown.SetSelected(
-                (uint)Array.IndexOf(["Best", "1080p", "720p", "480p", "360p"], quality));
+            SelectQualityInDropdown(quality);
         }
         finally
         {
@@ -961,15 +999,146 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
     }
 
+    private void SelectQualityInDropdown(string quality)
+    {
+        var targetHeight = YtDlpFormatSelector.ParseTargetHeight(quality);
+        var index = -1;
+
+        if (string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(quality, "Auto", StringComparison.OrdinalIgnoreCase) ||
+            !targetHeight.HasValue)
+        {
+            index = 0;
+        }
+        else
+        {
+            index = _availableQualities.FindIndex(q =>
+                string.Equals(q, quality, StringComparison.OrdinalIgnoreCase));
+
+            if (index < 0)
+            {
+                index = _availableQualities.FindIndex(q =>
+                    YtDlpFormatSelector.ParseTargetHeight(q) == targetHeight.Value);
+            }
+
+            if (index < 0)
+            {
+                index = _availableQualities.FindIndex(q =>
+                    YtDlpFormatSelector.ParseTargetHeight(q) is { } h && h <= targetHeight.Value);
+            }
+
+            if (index < 0)
+                index = 0;
+        }
+
+        player_quality_dropdown.SetSelected((uint)index);
+    }
+
+    private void LoadQualityTracks(string videoId)
+    {
+        if (string.Equals(_currentQualityVideoId, videoId, StringComparison.Ordinal))
+            return;
+
+        _currentQualityVideoId = videoId;
+        _qualityLoadCancellation?.Cancel();
+        _qualityLoadCancellation?.Dispose();
+        _qualityLoadCancellation = null;
+
+        if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
+        {
+            ResetQualityDropdownToDefaults();
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        _qualityLoadCancellation = cancellation;
+        var generation = ++_qualityLoadGeneration;
+
+        LoadQualityTracksAsync(videoId, generation, cancellation).FireAndForget(Logger);
+    }
+
+    private async Task LoadQualityTracksAsync(string videoId, int generation, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            var tracks = await _mediaResolver.GetQualityTracksAsync(videoId, cancellation.Token).ConfigureAwait(false);
+            if (cancellation.IsCancellationRequested || generation != _qualityLoadGeneration)
+                return;
+
+            Functions.IdleAdd(0, () =>
+            {
+                if (cancellation.IsCancellationRequested || generation != _qualityLoadGeneration || IsDisposed)
+                    return false;
+                UpdateQualityTracks(tracks);
+                return false;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to load quality tracks for video {VideoId}", videoId);
+        }
+    }
+
+    private void UpdateQualityTracks(IReadOnlyList<string> tracks)
+    {
+        _updatingControls = true;
+        try
+        {
+            var selectedQuality = _currentQuality;
+            _availableQualities.Clear();
+            _availableQualities.Add("Best");
+
+            if (tracks.Count > 0)
+            {
+                foreach (var track in tracks)
+                {
+                    if (!_availableQualities.Contains(track, StringComparer.OrdinalIgnoreCase))
+                        _availableQualities.Add(track);
+                }
+            }
+            else
+            {
+                foreach (var preset in DefaultQualityPresets)
+                {
+                    if (!_availableQualities.Contains(preset, StringComparer.OrdinalIgnoreCase))
+                        _availableQualities.Add(preset);
+                }
+            }
+
+            player_quality_model.Splice(0, player_quality_model.GetNItems(), _availableQualities.ToArray());
+            SelectQualityInDropdown(selectedQuality);
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    private void ResetQualityDropdownToDefaults()
+    {
+        _updatingControls = true;
+        try
+        {
+            _availableQualities.Clear();
+            _availableQualities.Add("Best");
+            foreach (var preset in DefaultQualityPresets)
+                _availableQualities.Add(preset);
+
+            player_quality_model.Splice(0, player_quality_model.GetNItems(), _availableQualities.ToArray());
+            SelectQualityInDropdown(_currentQuality);
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
 
     private static string NormalizeQuality(string quality)
     {
-        return MpvCommandBuilder.BuildYtdlFormat(quality) is null && quality != "Best" ? "Best" : quality;
-    }
-
-    private static string QualityAt(uint selected)
-    {
-        return new[] { "Best", "1080p", "720p", "480p", "360p" }[(int)Math.Min(selected, 4)];
+        return MpvCommandBuilder.BuildYtdlFormat(quality) is null && !string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase) ? "Best" : quality;
     }
 
     private static double SnapPlaybackSpeed(double speed)

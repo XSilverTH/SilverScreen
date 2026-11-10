@@ -179,6 +179,7 @@ public sealed class ExternalMpvPlaybackService(
             MpvExecutablePath = prefs.MpvExecutablePath,
             YtDlpExecutablePath = prefs.YtDlpExecutablePath,
             VideoQuality = prefs.Quality.ToPersistedString(),
+            PreferredCodec = prefs.PreferredCodec,
             MarkWatchedVideos = prefs is { MarkWatchedVideos: true, YouTubePlaybackTelemetryEnabled: false },
             Fullscreen = prefs.OpenInFullscreen,
             AutoAdvanceNextVideo = prefs.AutoAdvanceNextVideo,

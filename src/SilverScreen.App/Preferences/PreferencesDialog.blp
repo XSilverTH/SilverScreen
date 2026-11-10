@@ -142,10 +142,29 @@ Adw.PreferencesDialog PreferencesDialog {
         model: Gtk.StringList quality_model {
           strings: [
             "Best",
+            "4320p",
+            "2160p",
+            "1440p",
             "1080p",
             "720p",
             "480p",
             "360p",
+            "240p",
+            "144p",
+          ];
+        };
+      }
+
+      Adw.ComboRow preferred_codec_row {
+        notify => $OnRowNotify();
+        title: "Preferred video codec";
+
+        model: Gtk.StringList preferred_codec_model {
+          strings: [
+            "No preference",
+            "AV1",
+            "VP9",
+            "H.264",
           ];
         };
       }

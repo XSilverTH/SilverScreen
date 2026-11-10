@@ -594,6 +594,27 @@ public sealed class LibMpvPlayerTests
     }
 
     [Fact]
+    public void SetQuality_WithWeirdResolutionAndPreferredCodec_SetsYtdlFormat()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var video = Video("vid1_123456");
+        var request = new PlaybackRequest([video]);
+        var prefs = new AppPreferences { PreferredCodec = PreferredVideoCodec.Vp9 };
+        player.Load(request, prefs, null);
+        player.HandleFileLoaded();
+
+        player.SetQuality("864p");
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Any(p => p.Name == "ytdl-format" && p.Value.Contains("864")),
+            TimeSpan.FromSeconds(2)));
+
+        var ytdlFormatProp = native.StringProperties.Last(p => p.Name == "ytdl-format");
+        Assert.Contains("bestvideo[vcodec^=vp09][height<=864]", ytdlFormatProp.Value);
+    }
+
+    [Fact]
     public void ConstructorObservesBufferingProperties()
     {
         var native = new RecordingNative();

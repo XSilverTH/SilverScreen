@@ -535,13 +535,9 @@ Adw.OverlaySplitView EmbeddedPlayerView {
                     Gtk.DropDown player_quality_dropdown {
                       notify => $OnQualityDropdownNotify();
 
-                      model: Gtk.StringList {
+                      model: Gtk.StringList player_quality_model {
                         strings: [
                           "Best",
-                          "1080p",
-                          "720p",
-                          "480p",
-                          "360p",
                         ];
                       };
                     }

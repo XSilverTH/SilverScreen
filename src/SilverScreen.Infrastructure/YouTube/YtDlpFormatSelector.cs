@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using SilverScreen.Core.Preferences;
 using System.Globalization;
 using System.Text.Json;
 using SilverScreen.Core.Browsing.Common;
@@ -38,21 +40,38 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///         </list>
 ///     </para>
 /// </remarks>
-internal static class YtDlpFormatSelector
+public static class YtDlpFormatSelector
 {
     /// <summary>
     ///     Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
     ///     Null means "Best" (leave the player default in place). Pure: no I/O.
     /// </summary>
-    public static string? ToMpvFormat(string preferredQuality)
+    public static string? ToMpvFormat(string preferredQuality, PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
-        return preferredQuality switch
+        var targetHeight = ParseTargetHeight(preferredQuality);
+        var codecPrefix = BuildCodecTargetFormat(preferredCodec, targetHeight);
+
+        if (targetHeight is null)
         {
-            "Best" => null,
-            "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "480p" => "bestvideo[height<=480]+bestaudio/best[height<=480]",
-            "360p" => "bestvideo[height<=360]+bestaudio/best[height<=360]",
+            if (codecPrefix is null)
+                return null;
+
+            return $"{codecPrefix}bestvideo+bestaudio/best";
+        }
+
+        var baseFormat = $"bestvideo[height<={targetHeight.Value}]+bestaudio/best[height<={targetHeight.Value}]";
+        return codecPrefix is not null ? $"{codecPrefix}{baseFormat}" : baseFormat;
+    }
+
+    private static string? BuildCodecTargetFormat(PreferredVideoCodec codec, int? targetHeight)
+    {
+        var heightCondition = targetHeight.HasValue ? $"[height<={targetHeight.Value}]" : string.Empty;
+
+        return codec switch
+        {
+            PreferredVideoCodec.Av1 => $"bestvideo[vcodec^=av01]{heightCondition}+bestaudio/",
+            PreferredVideoCodec.Vp9 => $"bestvideo[vcodec^=vp09]{heightCondition}+bestaudio/bestvideo[vcodec^=vp9]{heightCondition}+bestaudio/",
+            PreferredVideoCodec.H264 => $"bestvideo[vcodec^=avc1]{heightCondition}+bestaudio/bestvideo[vcodec^=h264]{heightCondition}+bestaudio/",
             _ => null
         };
     }
@@ -60,7 +79,8 @@ internal static class YtDlpFormatSelector
     public static ResolvedMedia? SelectMedia(
         string output,
         string preferredQuality,
-        YouTubeVideoDetails? details = null)
+        YouTubeVideoDetails? details = null,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
         if (string.IsNullOrWhiteSpace(output)) return null;
 
@@ -92,14 +112,14 @@ internal static class YtDlpFormatSelector
             var maxTargetHeight = ParseTargetHeight(preferredQuality);
 
             // Separate formats into muxed, video-only, audio-only
-            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true }).ToList();
-            var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false }).ToList();
-            var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true }).ToList();
+            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
+            var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
+            var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
 
             // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
             // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
             ResolvedMediaStream? selectedVideo = null;
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false);
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false, preferredCodec);
 
             ResolvedMediaStream? selectedAudio = null;
             if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
@@ -120,7 +140,7 @@ internal static class YtDlpFormatSelector
 
             // A compliant muxed stream is preferable to relaxing the adaptive video selection.
             var selectedMuxed = muxed.Count > 0
-                ? SelectBestVideoStream(muxed, maxTargetHeight, false)
+                ? SelectBestVideoStream(muxed, maxTargetHeight, false, preferredCodec)
                 : null;
             if (selectedMuxed is not null)
             {
@@ -134,7 +154,7 @@ internal static class YtDlpFormatSelector
             }
 
             // No compliant stream is available, so relax the cap for the existing fallback behavior.
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight);
+            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, true, preferredCodec);
 
             if (selectedVideo is not null && selectedAudio is not null)
             {
@@ -152,7 +172,7 @@ internal static class YtDlpFormatSelector
 
             if (muxed.Count > 0)
             {
-                selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight);
+                selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight, true, preferredCodec);
                 if (selectedMuxed is not null)
                 {
                     var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(selectedMuxed.Url);
@@ -180,22 +200,105 @@ internal static class YtDlpFormatSelector
         }
     }
 
-    private static int? ParseTargetHeight(string quality)
+    public static int? ParseTargetHeight(string? quality)
     {
-        return quality switch
+        if (string.IsNullOrWhiteSpace(quality))
+            return null;
+
+        var trimmed = quality.Trim();
+        if (string.Equals(trimmed, "Best", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "Auto", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (string.Equals(trimmed, "8k", StringComparison.OrdinalIgnoreCase)) return 4320;
+        if (string.Equals(trimmed, "4k", StringComparison.OrdinalIgnoreCase)) return 2160;
+        if (string.Equals(trimmed, "2k", StringComparison.OrdinalIgnoreCase)) return 1440;
+
+        var match = Regex.Match(trimmed, @"(?<height>\d{2,4})p", RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups["height"].ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var h))
+            return h;
+
+        var bareNumberMatch = Regex.Match(trimmed, @"^\d{2,4}$");
+        if (bareNumberMatch.Success && int.TryParse(bareNumberMatch.ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bareH))
+            return bareH;
+
+        if (trimmed.Contains("8K", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("4320")) return 4320;
+        if (trimmed.Contains("4K", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("2160")) return 2160;
+        if (trimmed.Contains("2K", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("1440")) return 1440;
+
+        return null;
+    }
+
+    public static IReadOnlyList<string> GetAvailableQualityTracks(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return [];
+
+        JsonDocument document;
+        try
         {
-            "1080p" => 1080,
-            "720p" => 720,
-            "480p" => 480,
-            "360p" => 360,
-            _ => null // Best
+            document = JsonDocument.Parse(output);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return [];
+
+            var formats = ParseFormats(root);
+            if (formats.Count == 0) return [];
+
+            var videoStreams = formats
+                .Where(f => f.HasVideo && f.Height is > 0)
+                .ToList();
+
+            if (videoStreams.Count == 0) return [];
+
+            var tracks = new List<string>();
+            var groupedByHeight = videoStreams
+                .GroupBy(v => v.Height!.Value)
+                .OrderByDescending(g => g.Key);
+
+            foreach (var group in groupedByHeight)
+            {
+                var height = group.Key;
+                var maxFps = group.Max(v => v.Fps) ?? 0;
+                var fpsSuffix = maxFps > 30 ? $"{maxFps}" : string.Empty;
+
+                var label = $"{height}p{fpsSuffix}";
+
+                tracks.Add(label);
+            }
+
+            return tracks;
+        }
+    }
+
+    private static bool MatchesCodec(string? videoCodec, PreferredVideoCodec preferred)
+    {
+        if (string.IsNullOrWhiteSpace(videoCodec) || preferred == PreferredVideoCodec.Any)
+            return false;
+
+        return preferred switch
+        {
+            PreferredVideoCodec.Av1 => videoCodec.StartsWith("av01", StringComparison.OrdinalIgnoreCase) ||
+                                       videoCodec.StartsWith("av1", StringComparison.OrdinalIgnoreCase),
+            PreferredVideoCodec.Vp9 => videoCodec.StartsWith("vp9", StringComparison.OrdinalIgnoreCase) ||
+                                       videoCodec.StartsWith("vp09", StringComparison.OrdinalIgnoreCase),
+            PreferredVideoCodec.H264 => videoCodec.StartsWith("avc1", StringComparison.OrdinalIgnoreCase) ||
+                                        videoCodec.StartsWith("h264", StringComparison.OrdinalIgnoreCase),
+            _ => false
         };
     }
 
     private static ResolvedMediaStream? SelectBestVideoStream(
         List<ResolvedMediaStream> videoStreams,
         int? maxHeight,
-        bool allowRelaxation = true)
+        bool allowRelaxation = true,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
         var eligible = maxHeight.HasValue
             ? [.. videoStreams.Where(v => v.Height.HasValue && v.Height.Value <= maxHeight.Value)]
@@ -209,7 +312,8 @@ internal static class YtDlpFormatSelector
         }
 
         return eligible
-            .OrderByDescending(v => v.Height ?? 0)
+            .OrderByDescending(v => MatchesCodec(v.VideoCodec, preferredCodec) ? 1 : 0)
+            .ThenByDescending(v => v.Height ?? 0)
             .ThenByDescending(v => v.Fps ?? 0)
             .ThenByDescending(v => v.Bitrate ?? 0)
             .FirstOrDefault();
@@ -232,8 +336,7 @@ internal static class YtDlpFormatSelector
         {
             if (format.ValueKind != JsonValueKind.Object) continue;
 
-            var url = GetString(format, "url");
-            if (string.IsNullOrWhiteSpace(url)) continue;
+            var url = GetString(format, "url") ?? GetString(format, "manifest_url") ?? string.Empty;
 
             // Skip DRM or storyboards (mhtml, etc.)
             if (format.TryGetProperty("has_drm", out var hasDrm) && hasDrm.ValueKind == JsonValueKind.True &&

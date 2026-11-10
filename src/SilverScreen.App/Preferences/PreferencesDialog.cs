@@ -86,7 +86,8 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         try
         {
             theme_row.Selected = (uint)state.Theme;
-            quality_row.Selected = (uint)state.VideoQuality;
+            quality_row.Selected = QualityToRowIndex(state.VideoQuality);
+            preferred_codec_row.Selected = (uint)state.PreferredCodec;
             playback_backend_row.Selected =
                 state.PlaybackBackend == PlaybackBackendKind.Embedded ? 1u : 0u;
             fullscreen_row.Active = state.OpenInFullscreen;
@@ -213,9 +214,45 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         return selected <= (uint)ThemeMode.Dark ? (ThemeMode)selected : ThemeMode.System;
     }
 
+    private static uint QualityToRowIndex(VideoQuality quality)
+    {
+        return quality switch
+        {
+            VideoQuality.P4320 => 1,
+            VideoQuality.P2160 => 2,
+            VideoQuality.P1440 => 3,
+            VideoQuality.P1080 => 4,
+            VideoQuality.P720 => 5,
+            VideoQuality.P480 => 6,
+            VideoQuality.P360 => 7,
+            VideoQuality.P240 => 8,
+            VideoQuality.P144 => 9,
+            _ => 0
+        };
+    }
+
     private static VideoQuality GetSelectedQuality(uint selected)
     {
-        return selected <= (uint)VideoQuality.P360 ? (VideoQuality)selected : VideoQuality.Best;
+        return selected switch
+        {
+            1 => VideoQuality.P4320,
+            2 => VideoQuality.P2160,
+            3 => VideoQuality.P1440,
+            4 => VideoQuality.P1080,
+            5 => VideoQuality.P720,
+            6 => VideoQuality.P480,
+            7 => VideoQuality.P360,
+            8 => VideoQuality.P240,
+            9 => VideoQuality.P144,
+            _ => VideoQuality.Best
+        };
+    }
+
+    private static PreferredVideoCodec GetSelectedCodec(uint selected)
+    {
+        return selected <= (uint)PreferredVideoCodec.H264
+            ? (PreferredVideoCodec)selected
+            : PreferredVideoCodec.Any;
     }
 
     private void OnRowNotify(object? sender, EventArgs e)
@@ -307,6 +344,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
         {
             Theme = GetSelectedTheme(theme_row.Selected),
             VideoQuality = GetSelectedQuality(quality_row.Selected),
+            PreferredCodec = GetSelectedCodec(preferred_codec_row.Selected),
             YtDlpExecutablePath = ((Editable)ytdlp_path_row).GetText(),
             MpvExecutablePath = ((Editable)mpv_path_row).GetText(),
             PlaybackBackend = playback_backend_row.Selected == 1

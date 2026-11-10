@@ -9,6 +9,7 @@ public sealed record PreferencesEditorState
 {
     public ThemeMode Theme { get; init; } = ThemeMode.System;
     public VideoQuality VideoQuality { get; init; } = VideoQuality.Best;
+    public PreferredVideoCodec PreferredCodec { get; init; } = PreferredVideoCodec.Any;
     public string YtDlpExecutablePath { get; init; } = "yt-dlp";
     public string MpvExecutablePath { get; init; } = "mpv";
     public PlaybackBackendKind PlaybackBackend { get; init; } = PlaybackBackendKind.Embedded;
@@ -117,6 +118,7 @@ public sealed class PreferencesViewModel
         {
             Theme = preferences.ThemeMode,
             VideoQuality = preferences.Quality,
+            PreferredCodec = preferences.PreferredCodec,
             YtDlpExecutablePath = preferences.YtDlpExecutablePath,
             MpvExecutablePath = preferences.MpvExecutablePath,
             PlaybackBackend = preferences.PlaybackBackendKind,
@@ -146,6 +148,7 @@ public sealed class PreferencesViewModel
         {
             ThemeMode = state.Theme,
             Quality = state.VideoQuality,
+            PreferredCodec = state.PreferredCodec,
             YtDlpExecutablePath = state.YtDlpExecutablePath,
             MpvExecutablePath = state.MpvExecutablePath,
             PlaybackBackendKind = state.PlaybackBackend,

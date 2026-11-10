@@ -363,9 +363,8 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void SetQuality(string quality)
     {
-        if (quality is not ("Best" or "1080p" or "720p" or "480p" or "360p"))
-            throw new ArgumentOutOfRangeException(nameof(quality));
-
+        if (string.IsNullOrWhiteSpace(quality))
+            throw new ArgumentException("Quality cannot be null or whitespace.", nameof(quality));
         lock (_gate)
         {
             if (IsDisposing || !IsAvailable) return;
@@ -376,6 +375,15 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         Enqueue(LoadCurrentRequest);
+    }
+
+    public void UpdatePreferences(AppPreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+        lock (_gate)
+        {
+            _preferences = preferences;
+        }
     }
 
     public void Render(int width, int height)
@@ -700,7 +708,7 @@ public sealed class LibMpvPlayer : IDisposable
         Check(_native.SetPropertyString(_handle, "keep-open",
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
         Check(_native.SetPropertyString(_handle, "ytdl-format",
-            MpvCommandBuilder.BuildYtdlFormat(quality) ?? string.Empty));
+            MpvCommandBuilder.BuildYtdlFormat(quality, preferences.PreferredCodec) ?? string.Empty));
         if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
             Check(_native.SetPropertyString(_handle, "script-opts",
                 $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));

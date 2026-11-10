@@ -1,3 +1,4 @@
+using SilverScreen.Core.Preferences;
 using System.Diagnostics;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
@@ -46,7 +47,7 @@ public static class MpvCommandBuilder
         if (options.MarkWatchedVideos)
             arguments.Add("--ytdl-raw-options=mark-watched=");
 
-        var ytdlFormat = BuildYtdlFormat(options.VideoQuality);
+        var ytdlFormat = BuildYtdlFormat(options.VideoQuality, options.PreferredCodec);
         if (ytdlFormat is not null)
             arguments.Add($"--ytdl-format={ytdlFormat}");
 
@@ -89,9 +90,9 @@ public static class MpvCommandBuilder
         return playbackUrls;
     }
 
-    public static string? BuildYtdlFormat(string videoQuality)
+    public static string? BuildYtdlFormat(string videoQuality, PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
-        return YtDlpFormatSelector.ToMpvFormat(videoQuality);
+        return YtDlpFormatSelector.ToMpvFormat(videoQuality, preferredCodec);
     }
 
     public static ProcessStartInfo BuildStartInfo(MpvPlaybackCommand command)

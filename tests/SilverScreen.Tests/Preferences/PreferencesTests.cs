@@ -239,4 +239,54 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(ThemeMode.Light, currentAgain.ThemeMode);
         Assert.Equal(["space"], currentAgain.Shortcuts.TogglePause);
     }
+
+    [Theory]
+    [InlineData("4320p", VideoQuality.P4320)]
+    [InlineData("2160p", VideoQuality.P2160)]
+    [InlineData("1440p", VideoQuality.P1440)]
+    [InlineData("1080p", VideoQuality.P1080)]
+    [InlineData("720p", VideoQuality.P720)]
+    [InlineData("480p", VideoQuality.P480)]
+    [InlineData("360p", VideoQuality.P360)]
+    [InlineData("240p", VideoQuality.P240)]
+    [InlineData("144p", VideoQuality.P144)]
+    [InlineData("Best", VideoQuality.Best)]
+    [InlineData("4K", VideoQuality.P2160)]
+    [InlineData("2K", VideoQuality.P1440)]
+    [InlineData("8K", VideoQuality.P4320)]
+    public void VideoQualities_Parse_MapsExpectedValues(string input, VideoQuality expected)
+    {
+        Assert.Equal(expected, VideoQualities.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("Any", PreferredVideoCodec.Any)]
+    [InlineData("AV1", PreferredVideoCodec.Av1)]
+    [InlineData("VP9", PreferredVideoCodec.Vp9)]
+    [InlineData("H.264", PreferredVideoCodec.H264)]
+    [InlineData("av01", PreferredVideoCodec.Av1)]
+    [InlineData("vp09", PreferredVideoCodec.Vp9)]
+    [InlineData("h264", PreferredVideoCodec.H264)]
+    [InlineData("AVC", PreferredVideoCodec.H264)]
+    public void PreferredVideoCodecs_Parse_MapsExpectedValues(string input, PreferredVideoCodec expected)
+    {
+        Assert.Equal(expected, PreferredVideoCodecs.Parse(input));
+    }
+
+    [Fact]
+    public void SavePreferences_WithNewResolutionsAndPreferredCodec_PersistsAndLoadsCorrectly()
+    {
+        var service = new FilePreferencesService(_tempFilePath);
+        var prefs = new AppPreferences
+        {
+            Quality = VideoQuality.P2160,
+            PreferredCodec = PreferredVideoCodec.Vp9
+        };
+
+        service.SavePreferences(prefs);
+
+        var loaded = new FilePreferencesService(_tempFilePath).GetPreferences();
+        Assert.Equal(VideoQuality.P2160, loaded.Quality);
+        Assert.Equal(PreferredVideoCodec.Vp9, loaded.PreferredCodec);
+    }
 }
