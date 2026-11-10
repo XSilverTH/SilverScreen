@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using Adw;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -91,15 +89,9 @@ static LogEventLevel ResolveLogLevel(string? logLevelOverride)
 
 static void LogExternalDependencyVersions(AppPreferences preferences)
 {
-    // Floors mirror what Arch Linux x86-64 ships at release time (yt-dlp 2026.08.19-1,
-    // mpv 0.41.0 as of 2026-09-06). Bump the yt-dlp floor — and the calendar User-Agent
-    // override used for yt-dlp requests — with each release.
-    const string ytDlpFloorVersion = "2026.08.19";
-    const string mpvFloorVersion = "0.41.0";
-
-    LogToolVersion("yt-dlp", preferences.YtDlpExecutablePath, "yt-dlp", "--version", ytDlpFloorVersion,
+    LogToolVersion("yt-dlp", preferences.YtDlpExecutablePath, "yt-dlp", "--version",
         static output => output.Trim());
-    LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version", mpvFloorVersion,
+    LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version",
         static output =>
         {
             var firstLine = output.Split('\n', 2)[0].Trim();
@@ -116,44 +108,17 @@ static void LogToolVersion(
     string configuredPath,
     string fallbackFileName,
     string arguments,
-    string floorVersion,
     Func<string, string> extractVersion)
 {
     var executablePath = string.IsNullOrWhiteSpace(configuredPath) ? fallbackFileName : configuredPath.Trim();
     var version = ProbeToolVersion(executablePath, arguments, TimeSpan.FromSeconds(5), extractVersion);
     if (version is null)
     {
-        Log.Warning(
-            "{Tool} not found or failed to report a version (need >= {FloorVersion})",
-            displayName,
-            floorVersion);
+        Log.Warning("{Tool} not found or failed to report a version", displayName);
         return;
     }
 
     Log.Information("{Tool} version {Version}", displayName, version);
-
-    if (TryParseToolVersion(version, out var actual)
-        && TryParseToolVersion(floorVersion, out var floor)
-        && actual < floor)
-        Log.Warning(
-            "{Tool} {ActualVersion} is older than the supported floor {FloorVersion}; please upgrade",
-            displayName,
-            version,
-            floorVersion);
-}
-
-static bool TryParseToolVersion(string? raw, [NotNullWhen(true)] out Version? parsedVersion)
-{
-    parsedVersion = null;
-    if (string.IsNullOrWhiteSpace(raw))
-        return false;
-
-    var trimmed = raw.Trim().TrimStart('v', 'V');
-    if (Version.TryParse(trimmed, out parsedVersion))
-        return true;
-
-    var match = Regex.Match(trimmed, @"^(\d+(?:\.\d+){1,3})");
-    return match.Success && Version.TryParse(match.Groups[1].Value, out parsedVersion);
 }
 
 static string? ProbeToolVersion(
