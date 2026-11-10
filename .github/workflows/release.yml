@@ -12,45 +12,45 @@ jobs:
   build:
     name: Build & Release Linux x86_64
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
 
     steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git \
+            dotnet-sdk \
+            clang \
+            pkgconf \
+            glib2 \
+            blueprint-compiler \
+            gtk4 \
+            libadwaita \
+            webkitgtk-6.0 \
+            libsoup3 \
+            zstd
+          git config --global --add safe.directory '*'
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build and Package in Arch Linux container
+      - name: Publish Native AOT
         run: |
-          docker run --rm \
-            -v "${{ github.workspace }}":/workspace \
-            -w /workspace \
-            archlinux:latest \
-            bash -c "
-              set -euo pipefail
-              pacman -Syu --noconfirm --needed \
-                git \
-                dotnet-sdk \
-                clang \
-                pkgconf \
-                glib2 \
-                blueprint-compiler \
-                gtk4 \
-                libadwaita \
-                webkitgtk-6.0 \
-                libsoup3 \
-                zstd
-              git config --global --add safe.directory '*'
-              dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
-                -c Release \
-                -r linux-x64 \
-                --self-contained \
-                /p:DebugType=None \
-                /p:DebugSymbols=false \
-                -o ./publish
-              objcopy --remove-section .note.gnu.property ./publish/SilverScreen 2>/dev/null || true
-              zstd -19 -T0 ./publish/SilverScreen -o ./SilverScreen.zst
-              chmod 644 ./SilverScreen.zst
-            "
+          dotnet publish src/SilverScreen.App/SilverScreen.App.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained \
+            /p:DebugType=None \
+            /p:DebugSymbols=false \
+            -o ./publish
+          objcopy --remove-section .note.gnu.property ./publish/SilverScreen 2>/dev/null || true
+
+      - name: Compress binary with zstd
+        run: |
+          zstd -19 -T0 ./publish/SilverScreen -o ./SilverScreen.zst
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
