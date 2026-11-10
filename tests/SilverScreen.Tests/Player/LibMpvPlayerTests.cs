@@ -67,6 +67,28 @@ public sealed class LibMpvPlayerTests
         Assert.DoesNotContain(native.StringProperties, p => p.Name == "script-opts");
     }
 
+    [Fact]
+    public void LoadSetsYtdlRawOptionsWithoutAutoSubsToPreventLogSpamAndMemoryLeak()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences { MarkWatchedVideos = true, YouTubePlaybackTelemetryEnabled = false };
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), preferences, "/tmp/cookies.txt");
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Any(p => p.Name == "ytdl-raw-options"),
+            TimeSpan.FromSeconds(2)));
+
+        var rawOptions = native.StringProperties.First(p => p.Name == "ytdl-raw-options").Value;
+        Assert.Contains("write-subs=", rawOptions);
+        Assert.Contains("sub-langs=all", rawOptions);
+        Assert.Contains("sub-format=vtt", rawOptions);
+        Assert.Contains("cookies=/tmp/cookies.txt", rawOptions);
+        Assert.Contains("mark-watched=", rawOptions);
+        Assert.DoesNotContain("write-auto-subs", rawOptions);
+    }
+
 
     [Fact]
     public void SubtitleSelectionUsesMpvSubtitleIdsAndSupportsTurningSubtitlesOff()

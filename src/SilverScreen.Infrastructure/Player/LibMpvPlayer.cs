@@ -547,7 +547,24 @@ public sealed class LibMpvPlayer : IDisposable
     {
         var property = Marshal.PtrToStructure<LibMpvEventProperty>(data);
         var name = Marshal.PtrToStringUTF8(property.Name);
-        if (name is null || property.Format == LibMpvFormat.None || property.Data == 0) return;
+        if (name is null) return;
+        if (property.Format == LibMpvFormat.None || property.Data == 0)
+        {
+            if (name == "sid")
+            {
+                lock (_gate)
+                {
+                    _state = _state with
+                    {
+                        SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, 0)
+                    };
+                }
+
+                PublishState();
+            }
+
+            return;
+        }
 
         lock (_gate)
         {
@@ -1193,7 +1210,7 @@ public sealed class LibMpvPlayer : IDisposable
     {
         var options = new List<string>
         {
-            "write-subs=", "write-auto-subs=", "sub-langs=all", "sub-format=vtt"
+            "write-subs=", "sub-langs=all", "sub-format=vtt"
         };
         if (!string.IsNullOrWhiteSpace(cookieFilePath)) options.Insert(0, $"cookies={cookieFilePath}");
         if (markWatchedVideos) options.Add("mark-watched=");

@@ -33,29 +33,53 @@ internal sealed class PlayerSubtitleController(
             UpdateButton();
             return;
         }
-
+        var trackItemsChanged = !HaveSameTrackLabels(_tracks, tracks);
         _tracks = tracks;
-        while (model.GetNItems() > 0) model.Remove(0);
-        model.Append("Off");
+
+        if (trackItemsChanged)
+        {
+            var labels = new string[tracks.Count + 1];
+            labels[0] = "Off";
+            for (var index = 0; index < tracks.Count; index++)
+                labels[index + 1] = tracks[index].Label;
+            model.Splice(0, model.GetNItems(), labels);
+        }
+
         uint selected = 0;
         for (var index = 0; index < tracks.Count; index++)
         {
-            var track = tracks[index];
-            model.Append(track.Label);
-            if (track.IsSelected) selected = (uint)index + 1;
+            if (tracks[index].IsSelected)
+            {
+                selected = (uint)index + 1;
+                break;
+            }
         }
 
-        _suppressSelectionChanged = suppressSelectionChanged;
-        try
+        if (dropdown.GetSelected() != selected)
         {
-            dropdown.SetSelected(selected);
-        }
-        finally
-        {
-            _suppressSelectionChanged = false;
+            _suppressSelectionChanged = suppressSelectionChanged;
+            try
+            {
+                dropdown.SetSelected(selected);
+            }
+            finally
+            {
+                _suppressSelectionChanged = false;
+            }
         }
 
         UpdateButton();
+    }
+
+    private static bool HaveSameTrackLabels(IReadOnlyList<LibMpvSubtitleTrack> a, IReadOnlyList<LibMpvSubtitleTrack> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (a[i].Id != b[i].Id || !string.Equals(a[i].Label, b[i].Label, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
     }
 
     public void OnSelectionChanged()
