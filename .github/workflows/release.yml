@@ -96,9 +96,6 @@ jobs:
           ssh-add - <<< "${AUR_SSH_PRIVATE_KEY}"
 
           git clone ssh://aur@aur.archlinux.org/silverscreen-bin.git aur-repo
-          if [ ! -f aur-repo/PKGBUILD ]; then
-            cp packaging/silverscreen-bin/PKGBUILD aur-repo/PKGBUILD
-          fi
 
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur-repo/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur-repo/PKGBUILD

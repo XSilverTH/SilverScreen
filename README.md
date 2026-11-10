@@ -27,22 +27,32 @@ It also has a basic queue, SponsorBlock support, comments, dislikes/likes (via R
   </tbody>
 </table>
 
-## Install
+## Installation
 
-The install script pulls dependencies, clones the repo, and builds the app. On Arch it uses makepkg and pacman; on other distros it installs to /usr/local (or ~/.local if you pass --user).
+### Arch Linux (AUR)
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/packaging/install.sh | sh
-
-```
-
-To uninstall:
+Install the precompiled binary package using your AUR helper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/packaging/install.sh | sh -s -- --uninstall
-
+yay -S silverscreen-bin
+# or
+paru -S silverscreen-bin
 ```
 
+Or build the latest git version from source:
+
+```sh
+yay -S silverscreen-git
+```
+
+### Other Linux Distributions (AppImage)
+
+Grab the latest standalone **AppImage** from the [GitHub Releases](https://github.com/XSilverTH/SilverScreen/releases):
+
+```sh
+chmod +x SilverScreen-x86_64.AppImage
+./SilverScreen-x86_64.AppImage
+```
 ## Building manually
 
 you'll need .NET 10 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, mpv, and yt-dlp.
