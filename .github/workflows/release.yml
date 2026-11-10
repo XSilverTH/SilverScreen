@@ -63,28 +63,19 @@ jobs:
           cp lib/Hi3Helper.SharpDiscordRPC/LICENSE ./archive/DiscordRPC.LICENSE
           cp lib/YoutubeAPI/LICENSE ./archive/YoutubeAPI.LICENSE
           tar --zstd -cf "silverscreen-v${VERSION}-x86_64.tar.zst" -C ./archive .
-          sha256sum "silverscreen-v${VERSION}-x86_64.tar.zst" > "silverscreen-v${VERSION}-x86_64.tar.zst.sha256"
-
-      - name: Compress standalone binary with zstd
-        run: |
-          zstd -19 -T0 ./publish/SilverScreen -o ./SilverScreen.zst
 
       - name: Build AppImage
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           packaging/build-appimage.sh ./AppDir ./SilverScreen-x86_64.AppImage ./publish
-          sha256sum SilverScreen-x86_64.AppImage > SilverScreen-x86_64.AppImage.sha256
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            SilverScreen.zst
             SilverScreen-x86_64.AppImage
-            SilverScreen-x86_64.AppImage.sha256
             silverscreen-v*-x86_64.tar.zst
-            silverscreen-v*-x86_64.tar.zst.sha256
 
       - name: Update AUR silverscreen-bin package
         env:
