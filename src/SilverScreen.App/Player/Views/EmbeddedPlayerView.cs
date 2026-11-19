@@ -174,6 +174,22 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
         _statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player),
             player_stats_revealer, player_stats_label));
+
+        player_comments_cue_revealer.SetVisible(false);
+        Lifetime.Track(
+            () => player_comments_cue_revealer.OnNotify += OnCommentsCueRevealerNotify,
+            () => player_comments_cue_revealer.OnNotify -= OnCommentsCueRevealerNotify);
+
+        SyncPromptStackVisibility();
+        Lifetime.Track(
+            () => player_sponsorblock_revealer.OnNotify += OnPromptRevealerVisibleNotify,
+            () => player_sponsorblock_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
+        Lifetime.Track(
+            () => player_resume_revealer.OnNotify += OnPromptRevealerVisibleNotify,
+            () => player_resume_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
+        Lifetime.Track(
+            () => player_restart_revealer.OnNotify += OnPromptRevealerVisibleNotify,
+            () => player_restart_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
         _chromeController = Lifetime.Own(new PlayerChromeController(
             Widget,
             player_header_bar,
@@ -409,6 +425,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _player.UpdatePreferences(preferences);
     }
 
+    private int _surfacePixelWidth;
+    private int _surfacePixelHeight;
+
+    private void OnPlayerSurfaceResize(GLArea sender, GLArea.ResizeSignalArgs args)
+    {
+        _surfacePixelWidth = args.Width;
+        _surfacePixelHeight = args.Height;
+    }
+
     /// <summary>
     ///     Re-realizes the OpenGL surface when navigating back to the player view,
     ///     allowing the player engine to resume playback seamlessly at the captured reload position and state.
@@ -440,13 +465,20 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_surface.MakeCurrent();
         _player.ShutdownRenderer();
         _rendererReady = false;
+        _surfacePixelWidth = 0;
+        _surfacePixelHeight = 0;
     }
 
     private bool OnPlayerSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
     {
         if (IsDisposed || !_rendererReady) return false;
-        _player.Render(player_surface.GetAllocatedWidth() * player_surface.GetScaleFactor(),
-            player_surface.GetAllocatedHeight() * player_surface.GetScaleFactor());
+        var width = _surfacePixelWidth > 0
+            ? _surfacePixelWidth
+            : player_surface.GetAllocatedWidth() * player_surface.GetScaleFactor();
+        var height = _surfacePixelHeight > 0
+            ? _surfacePixelHeight
+            : player_surface.GetAllocatedHeight() * player_surface.GetScaleFactor();
+        _player.Render(width, height);
         return true;
     }
 
@@ -705,7 +737,34 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var isVisible = player_comments_cue_revealer.RevealChild;
         var inZone = PlayerCueGeometry.IsCommentsCueActive(x, y, width, height, isVisible);
         if (isVisible != inZone)
+        {
+            if (inZone) player_comments_cue_revealer.SetVisible(true);
             player_comments_cue_revealer.RevealChild = inZone;
+        }
+    }
+
+    private void OnCommentsCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !player_comments_cue_revealer.ChildRevealed && !player_comments_cue_revealer.RevealChild)
+        {
+            player_comments_cue_revealer.SetVisible(false);
+        }
+    }
+
+    private void OnPromptRevealerVisibleNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "visible")
+        {
+            SyncPromptStackVisibility();
+        }
+    }
+
+    private void SyncPromptStackVisibility()
+    {
+        var anyVisible = player_sponsorblock_revealer.GetVisible() ||
+                         player_resume_revealer.GetVisible() ||
+                         player_restart_revealer.GetVisible();
+        player_prompt_stack.SetVisible(anyVisible);
     }
 
     private void OnCommentsCueButtonClicked(object? sender, EventArgs args)
@@ -718,6 +777,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (!_session.HasMedia) return;
         Widget.ShowSidebar = true;
         player_comments_cue_revealer.RevealChild = false;
+        player_comments_cue_revealer.SetVisible(false);
         _commentsView.EnsureLoaded();
     }
 

@@ -67,6 +67,20 @@ internal sealed class VideoInfoPanelController : IDisposable
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _closeButton = closeButton;
         _closed = closed;
+
+        _backdrop.SetVisible(false);
+        _revealer.SetVisible(false);
+        _revealer.RevealChild = false;
+        _cueRevealer.SetVisible(false);
+        _cueRevealer.RevealChild = false;
+
+        _lifetime.Track(
+            () => _revealer.OnNotify += OnRevealerNotify,
+            () => _revealer.OnNotify -= OnRevealerNotify);
+        _lifetime.Track(
+            () => _cueRevealer.OnNotify += OnCueRevealerNotify,
+            () => _cueRevealer.OnNotify -= OnCueRevealerNotify);
+
         _lifetime.Track(
             () => _description.OnActivateLink += OnDescriptionLinkActivated,
             () => _description.OnActivateLink -= OnDescriptionLinkActivated);
@@ -74,11 +88,32 @@ internal sealed class VideoInfoPanelController : IDisposable
         SetInfoContent(null);
     }
 
+    private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_revealer.ChildRevealed && !_revealer.RevealChild)
+        {
+            _revealer.SetVisible(false);
+        }
+    }
+
+    private void OnCueRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_cueRevealer.ChildRevealed && !_cueRevealer.RevealChild)
+        {
+            _cueRevealer.SetVisible(false);
+        }
+    }
+
     public bool IsOpen { get; private set; }
 
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
+        _revealer.RevealChild = false;
+        _revealer.SetVisible(false);
+        _cueRevealer.RevealChild = false;
+        _cueRevealer.SetVisible(false);
+        _backdrop.SetVisible(false);
         _lifetime.Dispose();
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
@@ -98,7 +133,9 @@ internal sealed class VideoInfoPanelController : IDisposable
         IsOpen = true;
         _bottomEdgeActive = false;
         _cueRevealer.RevealChild = false;
+        _cueRevealer.SetVisible(false);
         _backdrop.SetVisible(true);
+        _revealer.SetVisible(true);
         _revealer.RevealChild = true;
         _titleLabel.SetText(video.Title);
         _channelLabel.SetText(video.ChannelName);
@@ -133,8 +170,10 @@ internal sealed class VideoInfoPanelController : IDisposable
         if (!IsOpen && !_revealer.RevealChild) return;
         IsOpen = false;
         _revealer.RevealChild = false;
+        if (!_revealer.ChildRevealed) _revealer.SetVisible(false);
         _backdrop.SetVisible(false);
         _cueRevealer.RevealChild = false;
+        if (!_cueRevealer.ChildRevealed) _cueRevealer.SetVisible(false);
         _bottomEdgeActive = false;
         SetInfoContent(null);
         _closed?.Invoke();
@@ -184,6 +223,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         var inZone = PlayerCueGeometry.IsInfoCueActive(x, y, width, height, _bottomEdgeActive);
         if (_bottomEdgeActive == inZone) return;
         _bottomEdgeActive = inZone;
+        if (inZone) _cueRevealer.SetVisible(true);
         _cueRevealer.RevealChild = inZone;
     }
 

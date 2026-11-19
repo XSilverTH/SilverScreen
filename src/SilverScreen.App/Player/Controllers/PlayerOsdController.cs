@@ -229,9 +229,22 @@ internal sealed class PlayerOsdController : IDisposable
         _holdDurationMilliseconds = holdDurationMilliseconds;
 
         _enabled = _preferences.GetPreferences().ShortcutOsdEnabled;
+        _osdRevealer.SetVisible(false);
+        _osdRevealer.RevealChild = false;
+        _lifetime.Track(
+            () => _osdRevealer.OnNotify += OnOsdRevealerNotify,
+            () => _osdRevealer.OnNotify -= OnOsdRevealerNotify);
         _lifetime.Track(
             () => _preferences.PreferencesChanged += OnPreferencesChanged,
             () => _preferences.PreferencesChanged -= OnPreferencesChanged);
+    }
+
+    private void OnOsdRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_osdRevealer.ChildRevealed && !_osdRevealer.RevealChild)
+        {
+            _osdRevealer.SetVisible(false);
+        }
     }
 
     public void Dispose()
@@ -351,6 +364,7 @@ internal sealed class PlayerOsdController : IDisposable
         }
 
         _osdRevealer.RevealChild = false;
+        _osdRevealer.SetVisible(false);
         _state.Reset();
     }
 
@@ -358,6 +372,7 @@ internal sealed class PlayerOsdController : IDisposable
     {
         _osdIcon.SetFromIconName(model.IconName);
         _osdLabel.SetText(model.Text);
+        _osdRevealer.SetVisible(true);
         _osdRevealer.RevealChild = true;
 
         if (_hideTimeoutSource != 0)

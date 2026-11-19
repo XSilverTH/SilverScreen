@@ -35,6 +35,20 @@ internal sealed class PlayerStatsController : IDisposable
         _statsProvider = statsProvider ?? throw new ArgumentNullException(nameof(statsProvider));
         _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
         _label = label ?? throw new ArgumentNullException(nameof(label));
+
+        _revealer.SetVisible(false);
+        _revealer.RevealChild = false;
+        _lifetime.Track(
+            () => _revealer.OnNotify += OnRevealerNotify,
+            () => _revealer.OnNotify -= OnRevealerNotify);
+    }
+
+    private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_revealer.ChildRevealed && !_revealer.RevealChild)
+        {
+            _revealer.SetVisible(false);
+        }
     }
 
     public PlayerStatsController(
@@ -63,6 +77,8 @@ internal sealed class PlayerStatsController : IDisposable
         IsOpen = false;
         _pendingRefresh = false;
         StopTimer();
+        _revealer.RevealChild = false;
+        _revealer.SetVisible(false);
         _lifetime.Dispose();
     }
 
@@ -88,6 +104,7 @@ internal sealed class PlayerStatsController : IDisposable
         if (_lifetime.IsDisposed || IsOpen) return;
 
         IsOpen = true;
+        _revealer.SetVisible(true);
         _revealer.RevealChild = true;
         RefreshContent();
         StartTimer();
@@ -100,6 +117,7 @@ internal sealed class PlayerStatsController : IDisposable
         IsOpen = false;
         _pendingRefresh = false;
         _revealer.RevealChild = false;
+        if (!_revealer.ChildRevealed) _revealer.SetVisible(false);
         StopTimer();
     }
 

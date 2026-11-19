@@ -643,6 +643,115 @@ public sealed class LibMpvPlayerTests
         Assert.Equal(65, bufferingState.BufferingPercent);
     }
 
+    [Fact]
+    public void ConstructorObservesHardwareDecodingCurrentProperty()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        Assert.Contains(native.ObservedProperties,
+            p => p.Name == "hwdec-current" && p.Format == LibMpvFormat.String);
+    }
+
+    [Fact]
+    public void FileLoadedEventQueriesHardwareDecodingStatus()
+    {
+        var native = new RecordingNative();
+        native.ReadProperties["hwdec-current"] = "vaapi";
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.HandleFileLoaded();
+
+        Assert.Contains("hwdec-current", native.QueriedProperties);
+    }
+
+    [Fact]
+    public void VideoReconfigEventQueriesHardwareDecodingStatus()
+    {
+        var native = new RecordingNative { KeepEventLoopAlive = true };
+        native.ReadProperties["hwdec-current"] = "vaapi";
+        using var player = new LibMpvPlayer(native, action => action());
+
+        native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.VideoReconfig, 0, 0, 0));
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.QueriedProperties.Contains("hwdec-current"),
+            TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void ResolveNativeDisplayParamRunsSafely()
+    {
+        var (paramType, handle) = LibMpvNative.ResolveNativeDisplayParam();
+        Assert.True(paramType is 0 or 8 or 9);
+        if (paramType == 0)
+        {
+            Assert.Equal(0, handle);
+        }
+        else
+        {
+            Assert.NotEqual(0, handle);
+        }
+    }
+
+    [Fact]
+    public void NativeDisplayResolverOverrideAllowsMockingWaylandOrX11()
+    {
+        try
+        {
+            LibMpvNative.NativeDisplayResolverOverride = () => (9, 0x12345);
+            var (paramType, handle) = LibMpvNative.NativeDisplayResolverOverride();
+            Assert.Equal(9, paramType);
+            Assert.Equal(0x12345, handle);
+
+            LibMpvNative.NativeDisplayResolverOverride = () => (8, 0x67890);
+            (paramType, handle) = LibMpvNative.NativeDisplayResolverOverride();
+            Assert.Equal(8, paramType);
+            Assert.Equal(0x67890, handle);
+        }
+        finally
+        {
+            LibMpvNative.NativeDisplayResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void PropertyChangeEventForHwdecCurrentQueriesHardwareDecodingStatus()
+    {
+        var native = new RecordingNative { KeepEventLoopAlive = true };
+        native.ReadProperties["hwdec-current"] = "nvdec";
+        using var player = new LibMpvPlayer(native, action => action());
+
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes("hwdec-current\0");
+        var valueBytes = System.Text.Encoding.UTF8.GetBytes("nvdec\0");
+        var nameHandle = GCHandle.Alloc(nameBytes, GCHandleType.Pinned);
+        var valueHandle = GCHandle.Alloc(valueBytes, GCHandleType.Pinned);
+        var propertyStruct = new LibMpvEventProperty(
+            nameHandle.AddrOfPinnedObject(),
+            LibMpvFormat.String,
+            valueHandle.AddrOfPinnedObject());
+        var structHandle = GCHandle.Alloc(propertyStruct, GCHandleType.Pinned);
+
+        try
+        {
+            native.EventsToYield.Enqueue(new LibMpvEvent(
+                (int)LibMpvEventId.PropertyChange,
+                0,
+                0,
+                structHandle.AddrOfPinnedObject()));
+
+            Assert.True(SpinWait.SpinUntil(
+                () => native.QueriedProperties.Contains("hwdec-current"),
+                TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            structHandle.Free();
+            valueHandle.Free();
+            nameHandle.Free();
+        }
+    }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);
@@ -654,6 +763,7 @@ public sealed class LibMpvPlayerTests
         public ConcurrentQueue<(string Name, string Value)> StringProperties { get; } = [];
         public ConcurrentQueue<(string Name, bool Value)> FlagProperties { get; } = [];
         public ConcurrentQueue<(string Name, LibMpvFormat Format)> ObservedProperties { get; } = [];
+        public ConcurrentQueue<string> QueriedProperties { get; } = [];
         public ManualResetEventSlim? BlockCommandEvent { get; set; }
         public ManualResetEventSlim? CommandStartedEvent { get; set; }
         public Dictionary<string, string> ReadProperties { get; } = [];
@@ -722,6 +832,7 @@ public sealed class LibMpvPlayerTests
 
         public string? GetPropertyString(nint handle, string name)
         {
+            QueriedProperties.Enqueue(name);
             return ReadProperties.GetValueOrDefault(name);
         }
 

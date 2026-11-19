@@ -70,10 +70,16 @@ internal sealed class PlayerChromeController : IDisposable
     }
 
     private bool ControlsVisible { get; set; } = true;
+    private uint _hideControlsTimeoutSource;
 
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
+        if (_hideControlsTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideControlsTimeoutSource);
+            _hideControlsTimeoutSource = 0;
+        }
         _lifetime.Dispose();
     }
 
@@ -99,20 +105,55 @@ internal sealed class PlayerChromeController : IDisposable
     {
         if (ControlsVisible == visible) return;
         ControlsVisible = visible;
-        SetControlVisible(_headerBar, visible);
-        SetControlVisible(_centerControls, visible);
-        SetControlVisible(_playerControls, visible);
+
+        if (_hideControlsTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideControlsTimeoutSource);
+            _hideControlsTimeoutSource = 0;
+        }
+
+        if (visible)
+        {
+            SetControlVisibleImmediate(_headerBar, true);
+            SetControlVisibleImmediate(_centerControls, true);
+            SetControlVisibleImmediate(_playerControls, true);
+        }
+        else
+        {
+            SetControlFadingOut(_headerBar);
+            SetControlFadingOut(_centerControls);
+            SetControlFadingOut(_playerControls);
+
+            _hideControlsTimeoutSource = _lifetime.Timeout(250, () =>
+            {
+                _hideControlsTimeoutSource = 0;
+                if (_lifetime.IsDisposed || ControlsVisible) return false;
+
+                _headerBar.SetVisible(false);
+                _centerControls.SetVisible(false);
+                _playerControls.SetVisible(false);
+                return false;
+            });
+        }
+
         _onControlsVisibilityChanged?.Invoke(visible);
         if (!visible) _viewWidget.GrabFocus();
     }
 
-    private static void SetControlVisible(Widget control, bool visible)
+    private static void SetControlVisibleImmediate(Widget control, bool visible)
     {
+        control.SetVisible(visible);
         control.SetSensitive(visible);
         if (visible)
             control.RemoveCssClass("player-chrome-hidden");
         else
             control.AddCssClass("player-chrome-hidden");
+    }
+
+    private static void SetControlFadingOut(Widget control)
+    {
+        control.SetSensitive(false);
+        control.AddCssClass("player-chrome-hidden");
     }
 
     private void OnMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)

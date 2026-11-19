@@ -40,10 +40,38 @@ internal sealed class PlayerResumeController : IDisposable
         _restartButton = restartButton;
         _restartLabel = restartLabel;
 
+        _resumeRevealer.SetVisible(false);
+        _resumeRevealer.RevealChild = false;
+        _restartRevealer.SetVisible(false);
+        _restartRevealer.RevealChild = false;
+
+        _lifetime.Track(
+            () => _resumeRevealer.OnNotify += OnResumeRevealerNotify,
+            () => _resumeRevealer.OnNotify -= OnResumeRevealerNotify);
+        _lifetime.Track(
+            () => _restartRevealer.OnNotify += OnRestartRevealerNotify,
+            () => _restartRevealer.OnNotify -= OnRestartRevealerNotify);
+
         _lifetime.Track(() => _session.ResumePromptChanged += OnResumePromptChanged,
             () => _session.ResumePromptChanged -= OnResumePromptChanged);
         _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
+    }
+
+    private void OnResumeRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_resumeRevealer.ChildRevealed && !_resumeRevealer.RevealChild)
+        {
+            _resumeRevealer.SetVisible(false);
+        }
+    }
+
+    private void OnRestartRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_restartRevealer.ChildRevealed && !_restartRevealer.RevealChild)
+        {
+            _restartRevealer.SetVisible(false);
+        }
     }
 
     public void Dispose()
@@ -110,6 +138,7 @@ internal sealed class PlayerResumeController : IDisposable
             _seekPromptPosition = returnPosition;
             _resumeLabel.SetText($"Back to {PlayerTimelineState.FormatTime(returnPosition)}");
             _resumeButton.SetTooltipText($"Return to {PlayerTimelineState.FormatTime(returnPosition)} (Enter)");
+            _resumeRevealer.SetVisible(true);
             _resumeRevealer.RevealChild = true;
             _restartRevealer.RevealChild = false;
             SchedulePromptHide(false);
@@ -152,6 +181,7 @@ internal sealed class PlayerResumeController : IDisposable
         _seekPromptPosition = null;
         _resumeLabel.SetText($"Resume from {PlayerTimelineState.FormatTime(resumePosition)}");
         _resumeButton.SetTooltipText($"Resume playback at {PlayerTimelineState.FormatTime(resumePosition)} (Enter)");
+        _resumeRevealer.SetVisible(true);
         _resumeRevealer.RevealChild = true;
         _restartRevealer.RevealChild = false;
         SchedulePromptHide();
@@ -162,6 +192,7 @@ internal sealed class PlayerResumeController : IDisposable
         _seekPromptPosition = null;
         _restartLabel.SetText("Restart from beginning");
         _restartButton.SetTooltipText("Seek back to 0:00");
+        _restartRevealer.SetVisible(true);
         _restartRevealer.RevealChild = true;
         _resumeRevealer.RevealChild = false;
         SchedulePromptHide();
@@ -175,6 +206,8 @@ internal sealed class PlayerResumeController : IDisposable
         _seekPromptPosition = null;
         _resumeRevealer.RevealChild = false;
         _restartRevealer.RevealChild = false;
+        if (!_resumeRevealer.ChildRevealed) _resumeRevealer.SetVisible(false);
+        if (!_restartRevealer.ChildRevealed) _restartRevealer.SetVisible(false);
     }
 
     private void ClearPromptTimeout()

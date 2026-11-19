@@ -147,6 +147,7 @@ public sealed class LibMpvPlayer : IDisposable
                 Observe("sid", LibMpvFormat.Int64);
                 Observe("paused-for-cache", LibMpvFormat.Flag);
                 Observe("cache-buffering-state", LibMpvFormat.Int64);
+                Observe("hwdec-current", LibMpvFormat.String);
                 _commandPump = Task.Run(PumpCommandsAsync);
                 _eventPump = Task.Run(PumpEvents);
                 Logger.Information("LibMpvPlayer initialized successfully");
@@ -563,6 +564,10 @@ public sealed class LibMpvPlayer : IDisposable
                 break;
             case LibMpvEventId.FileLoaded:
                 HandleFileLoaded();
+                LogHardwareDecodingStatus();
+                break;
+            case LibMpvEventId.VideoReconfig:
+                LogHardwareDecodingStatus();
                 break;
             case LibMpvEventId.EndFile:
                 HandleEndFile(Marshal.PtrToStructure<LibMpvEventEndFile>(mpvEvent.Data));
@@ -600,11 +605,30 @@ public sealed class LibMpvPlayer : IDisposable
     }
 
 
+    private string? _lastReportedHwdec;
+
+    private void LogHardwareDecodingStatus()
+    {
+        if (_handle == 0) return;
+        var hwdec = _native.GetPropertyString(_handle, "hwdec-current") ?? "no";
+        if (!string.Equals(hwdec, _lastReportedHwdec, StringComparison.Ordinal))
+        {
+            _lastReportedHwdec = hwdec;
+            Logger.Information("Hardware decoding active: {Hwdec}", hwdec);
+        }
+    }
+
     private void HandlePropertyChange(nint data)
     {
         var property = Marshal.PtrToStructure<LibMpvEventProperty>(data);
         var name = Marshal.PtrToStringUTF8(property.Name);
         if (name is null) return;
+        if (name == "hwdec-current")
+        {
+            LogHardwareDecodingStatus();
+            return;
+        }
+
         if (property.Format == LibMpvFormat.None || property.Data == 0)
         {
             if (name == "sid")
@@ -683,6 +707,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     internal void HandleFileLoaded()
     {
+        _lastReportedHwdec = null;
         var subtitleTracks = ReadSubtitleTracks();
         var chapters = ReadChapters();
         ReloadSnapshot? reload;
@@ -720,6 +745,7 @@ public sealed class LibMpvPlayer : IDisposable
             });
 
         PublishState();
+        LogHardwareDecodingStatus();
     }
 
     private void HandleEndFile(LibMpvEventEndFile endFile)

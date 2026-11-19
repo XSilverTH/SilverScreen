@@ -43,6 +43,12 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _skipButton = skipButton;
         _skipLabel = skipLabel;
 
+        _skipRevealer.SetVisible(false);
+        _skipRevealer.RevealChild = false;
+        _lifetime.Track(
+            () => _skipRevealer.OnNotify += OnSkipRevealerNotify,
+            () => _skipRevealer.OnNotify -= OnSkipRevealerNotify);
+
         _timelineDrawingArea = DrawingArea.New();
         _timelineDrawingArea.SetCanTarget(false);
         _timelineDrawingArea.Halign = Align.Fill;
@@ -149,12 +155,21 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         }
     }
 
+    private void OnSkipRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && !_skipRevealer.ChildRevealed && !_skipRevealer.RevealChild)
+        {
+            _skipRevealer.SetVisible(false);
+        }
+    }
+
     private void ShowManualPrompt(SponsorBlockSegment segment)
     {
         var category = PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(segment.Category);
         _skipLabel.SetText($"Skip {category}");
         _skipButton.SetTooltipText($"Skip {category} (Enter)");
         SetSkipButtonColor(segment.Category);
+        _skipRevealer.SetVisible(true);
         _skipRevealer.RevealChild = true;
         ClearPromptTimeout();
         _promptHideSource = _lifetime.Timeout(SkipPromptDurationMilliseconds, () =>
@@ -174,6 +189,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
         if (_lifetime.IsDisposed) return;
         _skipRevealer.RevealChild = false;
+        if (!_skipRevealer.ChildRevealed) _skipRevealer.SetVisible(false);
         ClearSkipButtonColor();
     }
 
