@@ -43,6 +43,18 @@
     <url type="homepage">https://github.com/XSilverTH/SilverScreen</url>
     <url type="bugtracker">https://github.com/XSilverTH/SilverScreen/issues</url>
     <releases>
+        <release version="0.2.0" date="2026-11-20">
+            <description>
+                <ul>
+                    <li>Player: enable zero-copy hardware decoding via native Wayland/X11 display handles for libmpv.</li>
+                    <li>Player: fix GLArea fractional scaling calculations using native framebuffer dimensions.</li>
+                    <li>Player: add direct scanout support via GtkGraphicsOffload and handle overlay widget occlusion.</li>
+                    <li>App: optimize memory usage across feeds, thumbnails, and playback.</li>
+                    <li>App: add GC native memory pressure tracking and widget recycling.</li>
+                    <li>Packaging: update AppStream metainfo screenshots.</li>
+                </ul>
+            </description>
+        </release>
         <release version="0.1.0" date="2026-09-06">
             <description>
                 <p>Initial release.</p>
