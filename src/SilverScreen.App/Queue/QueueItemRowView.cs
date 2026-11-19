@@ -87,6 +87,7 @@ public partial class QueueItemRowView : ViewBase<Box>
     private Picture? _boundPicture;
     private Texture? _boundTexture;
     private readonly NativeMemoryPressure _thumbnailPressure = new();
+    private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
 
     public QueueItemRowView(
@@ -195,6 +196,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             channel.SetText(item.Video.ChannelName);
             duration_pill.SetText(FormatDuration(item.Video.Duration));
             SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
+            _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
 
             var generation = ++_bindingGeneration;
             _thumbnailCancellation = new CancellationTokenSource();
@@ -207,6 +209,11 @@ public partial class QueueItemRowView : ViewBase<Box>
             channel.SetText(item.Video.ChannelName);
             duration_pill.SetText(FormatDuration(item.Video.Duration));
             SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
+            _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
+            if (_boundPicture is not null)
+            {
+                _boundPicture.AlternativeText = _thumbnailAlternativeText;
+            }
         }
 
         position.SetText((index + 1).ToString());
@@ -251,6 +258,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _playNowAction.Enabled = false;
         _moveUpAction.Enabled = false;
         _moveDownAction.Enabled = false;
+        _thumbnailAlternativeText = string.Empty;
         _thumbnailCancellation?.Cancel();
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;
@@ -346,35 +354,44 @@ public partial class QueueItemRowView : ViewBase<Box>
             {
                 try
                 {
-                    if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation ||
-                        thumbnail.GetRoot() is null)
+                    if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
                         return false;
 
                     Texture? texture = null;
-                    Picture? picture = null;
                     try
                     {
-                        texture = Texture.NewForPixbuf(decodedPixbuf);
-                        decodedPixbuf.Dispose();
+                        var pixbufForTexture = decodedPixbuf ??
+                                               throw new InvalidOperationException(
+                                                   "Thumbnail decode was released before texture creation.");
+                        texture = Texture.NewForPixbuf(pixbufForTexture);
+                        pixbufForTexture.Dispose();
                         decodedPixbuf = null;
-                        picture = Picture.NewForPaintable(texture);
-                        picture.AlternativeText = $"{video.Title} thumbnail";
-                        picture.ContentFit = ContentFit.Cover;
-                        picture.WidthRequest = ThumbnailWidth;
-                        picture.HeightRequest = ThumbnailHeight;
-                        picture.Hexpand = true;
-                        picture.Vexpand = true;
-                        ClearThumbnail();
-                        thumbnail.Child = picture;
+
+                        if (_boundPicture is null)
+                        {
+                            var picture = Picture.NewForPaintable(texture);
+                            picture.AlternativeText = _thumbnailAlternativeText;
+                            picture.ContentFit = ContentFit.Cover;
+                            picture.WidthRequest = ThumbnailWidth;
+                            picture.HeightRequest = ThumbnailHeight;
+                            picture.Hexpand = true;
+                            picture.Vexpand = true;
+                            _boundPicture = picture;
+                        }
+                        else
+                        {
+                            _boundPicture.Paintable = texture;
+                            _boundPicture.AlternativeText = _thumbnailAlternativeText;
+                        }
+
+                        thumbnail.Child = _boundPicture;
+                        _boundTexture?.Dispose();
                         _boundTexture = texture;
                         _thumbnailPressure.Track((long)ThumbnailWidth * ThumbnailHeight * 4);
-                        _boundPicture = picture;
                         texture = null;
-                        picture = null;
                     }
                     finally
                     {
-                        picture?.Dispose();
                         texture?.Dispose();
                     }
                 }
@@ -398,19 +415,13 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private void ClearThumbnail()
     {
-        // Release the paintable before detaching the widget.  This prevents a
-        // replaced thumbnail texture from remaining alive until GTK later collects
-        // the detached Picture.
-        var picture = _boundPicture;
         var texture = _boundTexture;
-        _boundPicture = null;
         _boundTexture = null;
         _thumbnailPressure.Release();
         thumbnail.Child = placeholder;
-        if (picture is not null)
+        if (_boundPicture is not null)
         {
-            picture.Paintable = null!;
-            picture.Dispose();
+            _boundPicture.Paintable = null!;
         }
 
         texture?.Dispose();
@@ -437,6 +448,8 @@ public partial class QueueItemRowView : ViewBase<Box>
         if (disposing)
         {
             Unbind();
+            _boundPicture?.Dispose();
+            _boundPicture = null;
             _thumbnailPressure.Dispose();
         }
 

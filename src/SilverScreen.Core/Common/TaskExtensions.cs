@@ -44,6 +44,10 @@ public static class TaskExtensions
         {
             // Intentional cancellation of fire-and-forget tasks is normal lifecycle behavior.
         }
+        catch (ObjectDisposedException)
+        {
+            // Object disposal during fire-and-forget tasks is normal lifecycle teardown behavior.
+        }
         catch (Exception exception)
         {
             if (string.IsNullOrWhiteSpace(message))

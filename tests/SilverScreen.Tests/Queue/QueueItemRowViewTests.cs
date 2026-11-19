@@ -29,6 +29,27 @@ public sealed class QueueItemRowViewTests
         Assert.Equal(3, binding.ResolveDropIndex(true));
     }
 
+    [Fact]
+    public void Unbind_ResetsItemAndIndex_AndTargetsFail()
+    {
+        var item = CreateItem(Guid.NewGuid(), "first");
+        var binding = new QueueRowBinding();
+        binding.Bind(item, 2);
+
+        Assert.NotNull(binding.Item);
+        Assert.Equal(2, binding.Index);
+
+        binding.Unbind();
+
+        Assert.Null(binding.Item);
+        Assert.Equal(-1, binding.Index);
+        Assert.False(binding.TryGetPlayTarget(out _, out _));
+        Assert.False(binding.TryGetMoveTarget(1, out _, out _));
+        Assert.False(binding.TryGetMoveTarget(-1, out _, out _));
+        Assert.Equal(0, binding.ResolveDropIndex(false));
+        Assert.Equal(0, binding.ResolveDropIndex(true));
+    }
+
     private static QueueItem CreateItem(Guid id, string title)
     {
         var video = new VideoSummary(

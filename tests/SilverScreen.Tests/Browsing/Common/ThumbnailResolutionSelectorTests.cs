@@ -6,7 +6,7 @@ namespace SilverScreen.Tests.Browsing.Common;
 public sealed class ThumbnailResolutionSelectorTests
 {
     [Fact]
-    public void SelectCardThumbnail_PrefersResolutionMatchingCardSize_OverMassive1080p()
+    public void SelectCardThumbnail_PrefersCrisp480p_WhenFullRangeAvailable()
     {
         var thumbnails = new List<Thumbnail>
         {
@@ -19,8 +19,52 @@ public sealed class ThumbnailResolutionSelectorTests
 
         var selected = ThumbnailResolutionSelector.SelectCardThumbnail(thumbnails);
 
-        // It should pick a matching thumbnail within [320..640], choosing the smallest fitting variant (320 or 480) rather than 1080p
+        // Prefers crisp 480p (hqdefault) for HiDPI displays over 320p and massive 1080p
+        Assert.Equal("https://i.ytimg.com/vi/test/hqdefault.jpg", selected);
+    }
+
+    [Fact]
+    public void SelectCardThumbnail_Prefers640p_WhenInPreferredRangeAnd480pNotAvailable()
+    {
+        var thumbnails = new List<Thumbnail>
+        {
+            new(new Uri("https://i.ytimg.com/vi/test/default.jpg"), 120, 90),
+            new(new Uri("https://i.ytimg.com/vi/test/mqdefault.jpg"), 320, 180),
+            new(new Uri("https://i.ytimg.com/vi/test/sddefault.jpg"), 640, 480),
+            new(new Uri("https://i.ytimg.com/vi/test/maxresdefault.jpg"), 1920, 1080)
+        };
+
+        var selected = ThumbnailResolutionSelector.SelectCardThumbnail(thumbnails);
+
+        Assert.Equal("https://i.ytimg.com/vi/test/sddefault.jpg", selected);
+    }
+
+    [Fact]
+    public void SelectCardThumbnail_FallsBackTo320p_WhenNoPreferredVariantsAvailable()
+    {
+        var thumbnails = new List<Thumbnail>
+        {
+            new(new Uri("https://i.ytimg.com/vi/test/default.jpg"), 120, 90),
+            new(new Uri("https://i.ytimg.com/vi/test/mqdefault.jpg"), 320, 180)
+        };
+
+        var selected = ThumbnailResolutionSelector.SelectCardThumbnail(thumbnails);
+
         Assert.Equal("https://i.ytimg.com/vi/test/mqdefault.jpg", selected);
+    }
+
+    [Fact]
+    public void SelectCardThumbnail_FallsBackTo720p_WhenOnlyLargerVariantsAvailable()
+    {
+        var thumbnails = new List<Thumbnail>
+        {
+            new(new Uri("https://i.ytimg.com/vi/test/720p.jpg"), 1280, 720),
+            new(new Uri("https://i.ytimg.com/vi/test/1080p.jpg"), 1920, 1080)
+        };
+
+        var selected = ThumbnailResolutionSelector.SelectCardThumbnail(thumbnails);
+
+        Assert.Equal("https://i.ytimg.com/vi/test/720p.jpg", selected);
     }
 
     [Fact]
@@ -38,6 +82,31 @@ public sealed class ThumbnailResolutionSelectorTests
     }
 
     [Fact]
+    public void SelectCardThumbnail_ReturnsEmpty_WhenNullOrEmpty()
+    {
+        Assert.Equal(string.Empty, ThumbnailResolutionSelector.SelectCardThumbnail(null!));
+        Assert.Equal(string.Empty, ThumbnailResolutionSelector.SelectCardThumbnail(new List<Thumbnail>()));
+    }
+
+    [Theory]
+    [InlineData(120, 90, "https://i.ytimg.com/vi/test/120.jpg")]
+    [InlineData(320, 180, "https://i.ytimg.com/vi/test/320.jpg")]
+    [InlineData(480, 360, "https://i.ytimg.com/vi/test/480.jpg")]
+    [InlineData(640, 480, "https://i.ytimg.com/vi/test/640.jpg")]
+    [InlineData(1920, 1080, "https://i.ytimg.com/vi/test/1080.jpg")]
+    public void SelectCardThumbnail_HandlesSingleItem_RegardlessOfResolution(int width, int height, string url)
+    {
+        var thumbnails = new List<Thumbnail>
+        {
+            new(new Uri(url), width, height)
+        };
+
+        var selected = ThumbnailResolutionSelector.SelectCardThumbnail(thumbnails);
+
+        Assert.Equal(url, selected);
+    }
+
+    [Fact]
     public void SelectAvatarThumbnail_PrefersSmallResolution_OverHighRes()
     {
         var thumbnails = new List<Thumbnail>
@@ -50,5 +119,12 @@ public sealed class ThumbnailResolutionSelectorTests
         var selected = ThumbnailResolutionSelector.SelectAvatarThumbnail(thumbnails);
 
         Assert.Equal("https://yt3.ggpht.com/avatar_small.jpg", selected);
+    }
+
+    [Fact]
+    public void SelectAvatarThumbnail_ReturnsNull_WhenNullOrEmpty()
+    {
+        Assert.Null(ThumbnailResolutionSelector.SelectAvatarThumbnail(null!));
+        Assert.Null(ThumbnailResolutionSelector.SelectAvatarThumbnail(new List<Thumbnail>()));
     }
 }

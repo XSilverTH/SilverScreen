@@ -44,6 +44,21 @@ public sealed class TaskExtensionsTests
         Assert.Empty(sink.Events);
     }
 
+    [Fact]
+    public async Task FireAndForget_DisposedTask_DoesNotLogError()
+    {
+        var sink = new CapturingSink();
+        var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var tcs = new TaskCompletionSource();
+        var expectedException = new ObjectDisposedException("TestObject", "Object was disposed");
+
+        tcs.Task.FireAndForget(logger);
+        tcs.SetException(expectedException);
+
+        await Task.Delay(50, CancellationToken.None);
+        Assert.Empty(sink.Events);
+    }
+
     private sealed class CapturingSink : ILogEventSink
     {
         public List<LogEvent> Events { get; } = [];

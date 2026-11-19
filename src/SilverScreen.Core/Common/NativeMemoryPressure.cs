@@ -10,14 +10,25 @@ public sealed class NativeMemoryPressure : IDisposable
     private long _trackedBytes;
 
     /// <summary>
+    /// Gets the number of unmanaged bytes currently tracked by this instance.
+    /// </summary>
+    public long TrackedBytes => Interlocked.Read(ref _trackedBytes);
+
+    /// <summary>
     /// Informs the GC that unmanaged memory of the given size has been allocated.
     /// Releases any previously tracked bytes on this instance first.
+    /// If <paramref name="bytes"/> is zero or negative, any previously tracked memory is released and nothing new is tracked.
     /// </summary>
     public void Track(long bytes)
     {
-        if (bytes <= 0) return;
         Release();
-        _trackedBytes = bytes;
+
+        if (bytes <= 0)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _trackedBytes, bytes);
         GC.AddMemoryPressure(bytes);
     }
 

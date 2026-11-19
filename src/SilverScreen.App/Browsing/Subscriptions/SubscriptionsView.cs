@@ -150,7 +150,17 @@ public partial class SubscriptionsView : ViewBase<Box>
     {
         ClearChannelItems();
 
-        _avatarsCancellation?.Cancel();
+        try
+        {
+            _avatarsCancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (AggregateException)
+        {
+        }
+
         _avatarsCancellation?.Dispose();
         _avatarsCancellation = new CancellationTokenSource();
         var cancellationToken = _avatarsCancellation.Token;
@@ -311,14 +321,35 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private async Task LoadAvatarAsync(ChannelItemHolder holder, string avatarUrl, CancellationToken cancellationToken)
     {
-        await _avatarSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (IsDisposed || cancellationToken.IsCancellationRequested)
+            return;
+
+        var semaphoreAcquired = false;
         try
         {
+            try
+            {
+                await _avatarSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                semaphoreAcquired = true;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
+            if (IsDisposed || cancellationToken.IsCancellationRequested)
+                return;
+
             Pixbuf? pixbuf;
             try
             {
                 var result = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
-                if (result is null) return;
+                if (result is null || IsDisposed || cancellationToken.IsCancellationRequested)
+                    return;
 
                 pixbuf = await Task.Run(
                     () => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true),
@@ -328,68 +359,110 @@ public partial class SubscriptionsView : ViewBase<Box>
             {
                 return;
             }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
             catch (Exception exception)
             {
                 Logger.Warning(exception, "Failed to load channel avatar from {AvatarUrl}", avatarUrl);
                 return;
             }
 
+            if (IsDisposed || cancellationToken.IsCancellationRequested)
+            {
+                pixbuf?.Dispose();
+                return;
+            }
+
             var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
-        Functions.IdleAdd(0, () =>
-        {
+
             try
             {
-                if (IsDisposed || cancellationToken.IsCancellationRequested)
+                Functions.IdleAdd(0, () =>
+                {
+                    try
+                    {
+                        if (IsDisposed || cancellationToken.IsCancellationRequested)
+                            return false;
+
+                        Texture? texture = null;
+                        Picture? picture = null;
+                        try
+                        {
+                            var pixbufForTexture = decodedPixbuf ??
+                                                   throw new InvalidOperationException(
+                                                       "Avatar decode was released before texture creation.");
+                            texture = Texture.NewForPixbuf(pixbufForTexture);
+                            pixbufForTexture.Dispose();
+                            decodedPixbuf = null;
+
+                            picture = Picture.NewForPaintable(texture);
+                            picture.AlternativeText = $"{holder.Channel.Title} avatar";
+                            picture.ContentFit = ContentFit.Cover;
+                            picture.WidthRequest = AvatarSize;
+                            picture.HeightRequest = AvatarSize;
+                            picture.CanShrink = true;
+
+                            holder.Overlay.Child = picture;
+                            holder.BoundTexture?.Dispose();
+                            holder.BoundPicture?.Dispose();
+                            holder.BoundTexture = texture;
+                            holder.MemoryPressure.Track(AvatarSize * AvatarSize * 4);
+                            holder.BoundPicture = picture;
+                            texture = null;
+                            picture = null;
+                        }
+                        finally
+                        {
+                            picture?.Dispose();
+                            texture?.Dispose();
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                    catch (Exception exception)
+                    {
+                        Logger.Warning(exception, "Failed to render channel avatar texture from {AvatarUrl}", avatarUrl);
+                    }
+                    finally
+                    {
+                        decodedPixbuf?.Dispose();
+                    }
+
                     return false;
-
-                Texture? texture = null;
-                Picture? picture = null;
-                try
-                {
-                    var pixbufForTexture = decodedPixbuf ??
-                                           throw new InvalidOperationException(
-                                               "Avatar decode was released before texture creation.");
-                    texture = Texture.NewForPixbuf(pixbufForTexture);
-                    pixbufForTexture.Dispose();
-                    decodedPixbuf = null;
-
-                    picture = Picture.NewForPaintable(texture);
-                    picture.AlternativeText = $"{holder.Channel.Title} avatar";
-                    picture.ContentFit = ContentFit.Cover;
-                    picture.WidthRequest = AvatarSize;
-                    picture.HeightRequest = AvatarSize;
-                    picture.CanShrink = true;
-
-                    holder.Overlay.Child = picture;
-                    holder.BoundTexture?.Dispose();
-                    holder.BoundPicture?.Dispose();
-                    holder.BoundTexture = texture;
-                    holder.MemoryPressure.Track(AvatarSize * AvatarSize * 4);
-                    holder.BoundPicture = picture;
-                    texture = null;
-                    picture = null;
-                }
-                finally
-                {
-                    picture?.Dispose();
-                    texture?.Dispose();
-                }
+                });
             }
-            catch (Exception exception)
-            {
-                Logger.Warning(exception, "Failed to render channel avatar texture from {AvatarUrl}", avatarUrl);
-            }
-            finally
+            catch (ObjectDisposedException)
             {
                 decodedPixbuf?.Dispose();
             }
-
-            return false;
-        });
+        }
+        catch (OperationCanceledException)
+        {
+            // Clean teardown
+        }
+        catch (ObjectDisposedException)
+        {
+            // Clean teardown
         }
         finally
         {
-            _avatarSemaphore.Release();
+            if (semaphoreAcquired)
+            {
+                try
+                {
+                    _avatarSemaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // View or semaphore was disposed concurrently while decoding
+                }
+            }
         }
     }
 
@@ -397,7 +470,17 @@ public partial class SubscriptionsView : ViewBase<Box>
     {
         foreach (var holder in _channelItems)
         {
-            channel_bar_box.Remove(holder.ItemBox);
+            try
+            {
+                channel_bar_box.Remove(holder.ItemBox);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+
             holder.Dispose();
         }
 
@@ -424,12 +507,30 @@ public partial class SubscriptionsView : ViewBase<Box>
     {
         if (disposing)
         {
-            _avatarsCancellation?.Cancel();
+            try
+            {
+                _avatarsCancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (AggregateException)
+            {
+            }
+
             _avatarsCancellation?.Dispose();
             _avatarsCancellation = null;
 
             ClearChannelItems();
-            _avatarSemaphore.Dispose();
+
+            try
+            {
+                _avatarSemaphore.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
             RefreshLoadingChanged = null;
         }
 
