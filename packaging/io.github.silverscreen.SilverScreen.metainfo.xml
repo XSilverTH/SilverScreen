@@ -22,9 +22,21 @@
     <launchable type="desktop-id">io.github.silverscreen.SilverScreen.desktop</launchable>
     <screenshots>
         <screenshot type="default">
-            <caption>SilverScreen playing video and browsing YouTube</caption>
+            <caption>Player view</caption>
             <image>
-                https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/src/SilverScreen.App/Assets/silverscreen.svg
+                https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/screenshots/Player.webp
+            </image>
+        </screenshot>
+        <screenshot>
+            <caption>Subscriptions feed</caption>
+            <image>
+                https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/screenshots/Subscriptions.webp
+            </image>
+        </screenshot>
+        <screenshot>
+            <caption>Comments section</caption>
+            <image>
+                https://raw.githubusercontent.com/XSilverTH/SilverScreen/master/screenshots/Comments.webp
             </image>
         </screenshot>
     </screenshots>
