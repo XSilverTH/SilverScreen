@@ -41,11 +41,10 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         int count = VideoFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var pageSize = Math.Max(count, 1);
         if (IsSessionActive())
         {
             var generation = BeginRequest();
-            return await FetchFeedPageAsync(null, pageSize, true, generation, cancellationToken).ConfigureAwait(false);
+            return await FetchFeedPageAsync(null, true, generation, cancellationToken).ConfigureAwait(false);
         }
 
         InvalidateAndClearCachedResults();
@@ -59,7 +58,6 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
         int count = VideoFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var pageSize = Math.Max(count, 1);
         if (!IsSessionActive())
         {
             InvalidateAndClearCachedResults();
@@ -97,7 +95,7 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
                 InvalidContinuationMessage);
         }
 
-        return await FetchFeedPageAsync(continuation, pageSize, false, generation, cancellationToken)
+        return await FetchFeedPageAsync(continuation, false, generation, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -166,7 +164,6 @@ public sealed class YoutubeApiSubscriptionsService : IAuthenticatedSubscriptions
 
     private async Task<AuthenticatedSubscriptionsFeedResult> FetchFeedPageAsync(
         SubscriptionsContinuation? continuation,
-        int pageSize,
         bool isFirstPage,
         long generation,
         CancellationToken cancellationToken)

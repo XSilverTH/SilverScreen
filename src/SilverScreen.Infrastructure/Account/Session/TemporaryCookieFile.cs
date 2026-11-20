@@ -160,6 +160,7 @@ public static partial class TemporaryCookieFile
         }
     }
 
+    /// <summary>
     /// Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
     /// leases must match the exact process-id/GUID directory pattern and contain only the
     /// expected regular, non-symlink cookies.txt file. Unexpected entries are never
@@ -213,17 +214,15 @@ public static partial class TemporaryCookieFile
                     {
                         // Cookie directories have a deliberately strict name shape. A prefix
                         // alone is not proof that the application created the entry.
-                        if (prefix == DirectoryPrefix && !TryExtractCookieLeasePid(directory.Name, out _))
+                        if (prefix == DirectoryPrefix && !IsCookieLeaseDirectoryName(directory.Name))
                             continue;
                         if (!IsSafeDirectory(directory) ||
                             !IsDirectoryOrphanedOrStale(directory, prefix, age, now))
                             continue;
 
-                        if (TryRemoveOwnedDirectory(directory, prefix))
-                        {
-                            removed++;
-                            Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
-                        }
+                        if (!TryRemoveOwnedDirectory(directory, prefix)) continue;
+                        removed++;
+                        Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
                     }
                     catch (Exception ex)
                     {
@@ -257,7 +256,7 @@ public static partial class TemporaryCookieFile
                 if (entry is FileInfo file && IsOwnedCookieFile(file))
                     TryWipeAndDeleteFile(file.FullName);
             }
-            else if (entry is FileInfo ipcFile && ipcFile.Name == "mpv.sock" && IsOwnedIpcSocket(ipcFile))
+            else if (entry is FileInfo { Name: "mpv.sock" } ipcFile && IsOwnedIpcSocket(ipcFile))
             {
                 // mpv's endpoint is not a cookie and is not wiped, but it is still constrained
                 // to the exact application-owned entry name.
@@ -344,9 +343,8 @@ public static partial class TemporaryCookieFile
         }
     }
 
-    private static bool TryExtractCookieLeasePid(string name, out int pid)
+    private static bool IsCookieLeaseDirectoryName(string name)
     {
-        pid = 0;
         if (!name.StartsWith(DirectoryPrefix, StringComparison.Ordinal))
             return false;
 
@@ -354,7 +352,7 @@ public static partial class TemporaryCookieFile
         var dashIndex = suffix.IndexOf('-');
         if (dashIndex <= 0 || dashIndex == suffix.Length - 1 ||
             suffix.IndexOf('-', dashIndex + 1) >= 0 ||
-            !int.TryParse(suffix.AsSpan(0, dashIndex), out pid) || pid <= 0)
+            !int.TryParse(suffix.AsSpan(0, dashIndex), out var pid) || pid <= 0)
             return false;
 
         return Guid.TryParseExact(suffix[(dashIndex + 1)..], "N", out _);
@@ -367,7 +365,7 @@ public static partial class TemporaryCookieFile
             return false;
 
         var directory = file.Directory;
-        return directory is not null && TryExtractCookieLeasePid(directory.Name, out _);
+        return directory is not null && IsCookieLeaseDirectoryName(directory.Name);
     }
 
     private static bool IsDirectoryOrphanedOrStale(DirectoryInfo directory, string prefix, TimeSpan maxAge,
@@ -472,19 +470,16 @@ public static partial class TemporaryCookieFile
             if (info.Length > 0)
             {
                 using var stream = OpenCookieFileForWipe(path);
-                if (stream is not null)
+                var zeros = new byte[4096];
+                var remaining = info.Length;
+                while (remaining > 0)
                 {
-                    var zeros = new byte[4096];
-                    var remaining = info.Length;
-                    while (remaining > 0)
-                    {
-                        var chunk = (int)Math.Min(zeros.Length, remaining);
-                        stream.Write(zeros, 0, chunk);
-                        remaining -= chunk;
-                    }
-
-                    stream.Flush(true);
+                    var chunk = (int)Math.Min(zeros.Length, remaining);
+                    stream.Write(zeros, 0, chunk);
+                    remaining -= chunk;
                 }
+
+                stream.Flush(true);
             }
         }
         catch (Exception ex)
@@ -505,7 +500,7 @@ public static partial class TemporaryCookieFile
         }
     }
 
-    private static FileStream? OpenCookieFileForWipe(string path)
+    private static FileStream OpenCookieFileForWipe(string path)
     {
         if (!OperatingSystem.IsLinux())
             return new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);

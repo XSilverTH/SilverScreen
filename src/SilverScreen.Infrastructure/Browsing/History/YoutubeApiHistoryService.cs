@@ -38,7 +38,6 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         int count = VideoFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var pageSize = Math.Max(count, 1);
         if (IsSessionActive())
         {
             var generation = BeginRequest();
@@ -56,7 +55,6 @@ public sealed class YoutubeApiHistoryService : IAuthenticatedHistoryService, IDi
         int count = VideoFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var pageSize = Math.Max(count, 1);
         if (!IsSessionActive())
         {
             InvalidateAndClearCachedResults();

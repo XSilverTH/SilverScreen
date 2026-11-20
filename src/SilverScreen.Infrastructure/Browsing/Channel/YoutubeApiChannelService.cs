@@ -2,7 +2,6 @@ using Serilog;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
-using YoutubeAPI.Models.Common;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.ValueTypes;
 using YoutubeAPI.Models.Videos;
@@ -180,12 +179,5 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             publishedAt,
             video.Channel.Url.ToString(),
             YouTubePlaybackProgressMapper.Map(playbackProgress));
-    }
-
-    private static string? SelectThumbnail(IReadOnlyList<Thumbnail> thumbnails)
-    {
-        return thumbnails
-            .OrderBy(thumbnail => (long)thumbnail.Width * thumbnail.Height)
-            .LastOrDefault()?.Url.ToString();
     }
 }

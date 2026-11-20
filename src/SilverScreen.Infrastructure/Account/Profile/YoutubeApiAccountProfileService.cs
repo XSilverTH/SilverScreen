@@ -12,10 +12,8 @@ namespace SilverScreen.Infrastructure.Account.Profile;
 public sealed class YoutubeApiAccountProfileService : IAccountProfileService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiAccountProfileService>();
-    private readonly Lock _cacheGate = new();
     private readonly IYouTubeClientProvider _clientProvider;
     private readonly ISessionService _sessionService;
-    private AccountProfile? _cachedProfile;
     private bool _disposed;
 
     public YoutubeApiAccountProfileService(
@@ -54,10 +52,6 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             }
 
             var accountProfile = new AccountProfile(profile.DisplayName, profile.Avatar?.Url.ToString());
-            lock (_cacheGate)
-            {
-                _cachedProfile = accountProfile;
-            }
             Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)", Stopwatch.GetElapsedTime(startTime).Milliseconds);
             return new AccountProfileResult(AccountProfileLoadStatus.Success, accountProfile);
         }
@@ -139,11 +133,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
-    private void OnSessionChanged(object? sender, EventArgs eventArgs)
+    private static void OnSessionChanged(object? sender, EventArgs eventArgs)
     {
-        lock (_cacheGate)
-        {
-            _cachedProfile = null;
-        }
     }
 }

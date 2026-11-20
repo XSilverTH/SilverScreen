@@ -331,7 +331,7 @@ public sealed class YtDlpMediaResolver(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.Warning(exception, "Ignoring unparseable media payload");
+            Logger.Warning(exception, "Ignoring unparseable media payload for {VideoId}", videoId);
             return null;
         }
     }
@@ -424,7 +424,7 @@ public sealed class YtDlpMediaResolver(
         }
     }
 
-    internal static YouTubeVideoDetails? TryParseVideoDetailsFromRawJson(string rawJson)
+    private static YouTubeVideoDetails? TryParseVideoDetailsFromRawJson(string rawJson)
     {
         if (string.IsNullOrWhiteSpace(rawJson)) return null;
 
@@ -464,11 +464,12 @@ public sealed class YtDlpMediaResolver(
             long? viewCount = null;
             if (root.TryGetProperty("view_count", out var viewProp))
             {
-                if (viewProp.ValueKind == JsonValueKind.Number && viewProp.TryGetInt64(out var vc))
-                    viewCount = vc;
-                else if (viewProp.ValueKind == JsonValueKind.String &&
-                         long.TryParse(viewProp.GetString(), out var parsedVc))
-                    viewCount = parsedVc;
+                viewCount = viewProp.ValueKind switch
+                {
+                    JsonValueKind.Number when viewProp.TryGetInt64(out var vc) => vc,
+                    JsonValueKind.String when long.TryParse(viewProp.GetString(), out var parsedVc) => parsedVc,
+                    _ => viewCount
+                };
             }
 
             DateTimeOffset? publishedAt = null;

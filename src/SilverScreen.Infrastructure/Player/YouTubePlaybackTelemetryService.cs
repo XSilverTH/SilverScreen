@@ -151,24 +151,17 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         }
     }
 
-    private sealed class TelemetrySession : IYouTubePlaybackTelemetrySession
+    private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request) : IYouTubePlaybackTelemetrySession
     {
         // Video identity, rather than playlist index, is the stable key across queue
         // reorders and removals. The active queue snapshot is replaced atomically
         // with the current entry so a later state update cannot address another video.
         private const int MaxVideosPerSession = 200;
         private readonly Lock _lock = new();
-        private readonly YouTubePlaybackTelemetryService _owner;
         private readonly Dictionary<string, VideoTelemetrySession> _videos = new(StringComparer.Ordinal);
         private string? _currentVideoId;
         private bool _disposed;
-        private PlaybackRequest _request;
-
-        public TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
-        {
-            _owner = owner;
-            _request = request;
-        }
+        private PlaybackRequest _request = request;
 
         public void UpdateQueue(PlaybackRequest request, int currentIndex)
         {
@@ -193,13 +186,12 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
         public void UpdateState(PlaybackPresenceState state)
         {
-            if (!_owner.IsEnabled()) return;
+            if (!owner.IsEnabled()) return;
 
             VideoTelemetrySession? previous = null;
-            VideoTelemetrySession? video;
             lock (_lock)
             {
-                if (!_owner.IsEnabled() || _disposed || state.PlaylistIndex < 0 ||
+                if (!owner.IsEnabled() || _disposed || state.PlaylistIndex < 0 ||
                     state.PlaylistIndex >= _request.Videos.Length) return;
 
                 var videoId = _request.Videos[state.PlaylistIndex].Id;
@@ -210,7 +202,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                     _currentVideoId = videoId;
                 }
 
-                if (!_videos.TryGetValue(videoId, out video))
+                if (!_videos.TryGetValue(videoId, out var video))
                 {
                     if (_videos.Count >= MaxVideosPerSession)
                     {
@@ -220,7 +212,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                         _videos.Remove(entries.Current.Key);
                     }
 
-                    video = new VideoTelemetrySession(_owner, videoId);
+                    video = new VideoTelemetrySession(owner, videoId);
                     _videos.Add(videoId, video);
                 }
 
@@ -242,7 +234,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
 
             foreach (var video in videos) video.Dispose();
-            _owner.Remove(this);
+            owner.Remove(this);
         }
 
         public void DisableConsent()
@@ -271,7 +263,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
 
             foreach (var video in videos) video.Retire();
-            _owner.Remove(this);
+            owner.Remove(this);
         }
     }
 
@@ -342,16 +334,14 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             if (!_playing || position < _lastPosition) return true;
 
             var elapsed = observedAt - _lastObservedAt;
-            if (elapsed >= MinimumObservedInterval)
-            {
-                var expectedDeltaTicks = elapsed.Ticks * _lastSpeed;
-                if (expectedDeltaTicks < long.MaxValue)
-                {
-                    var expectedDelta = TimeSpan.FromTicks((long)expectedDeltaTicks);
-                    if (position - _lastPosition - expectedDelta >= TimeSpan.FromSeconds(2))
-                        return true;
-                }
-            }
+            if (elapsed < MinimumObservedInterval)
+                return position - _lastPosition > HeartbeatInterval + TimeSpan.FromSeconds(2);
+            var expectedDeltaTicks = elapsed.Ticks * _lastSpeed;
+            if (!(expectedDeltaTicks < long.MaxValue))
+                return position - _lastPosition > HeartbeatInterval + TimeSpan.FromSeconds(2);
+            var expectedDelta = TimeSpan.FromTicks((long)expectedDeltaTicks);
+            if (position - _lastPosition - expectedDelta >= TimeSpan.FromSeconds(2))
+                return true;
 
             // If observations do not carry a meaningful time delta, retain
             // heartbeat-sized updates while treating larger jumps as seeks.

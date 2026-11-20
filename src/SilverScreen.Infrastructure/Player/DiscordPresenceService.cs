@@ -159,7 +159,7 @@ public sealed class DiscordPresenceService : IPlaybackPresenceService
         if (!ulong.TryParse(_applicationId, out _))
         {
             Logger.Warning(
-                "Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid.");
+                "Discord Rich Presence is enabled but SILVERSCREEN_DISCORD_APPLICATION_ID is missing or invalid");
             return;
         }
 

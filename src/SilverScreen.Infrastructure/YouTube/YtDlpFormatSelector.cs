@@ -18,7 +18,7 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///         <list type="bullet">
 ///             <item>
 ///                 <description>
-///                     <b>Active:</b> <see cref="ToMpvFormat(string)" /> provides the single source of truth mapping
+///                     <b>Active:</b> <see cref="ToMpvFormat(string, PreferredVideoCodec)" /> provides the single source of truth mapping
 ///                     user-configured
 ///                     video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command
 ///                     builders.
@@ -27,7 +27,7 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///             <item>
 ///                 <description>
 ///                     <b>Dormant Fallback Extraction:</b>
-///                     <see cref="SelectMedia(string, string, YouTubeVideoDetails?)" /> contains
+///                     <see cref="SelectMedia(string, string, YouTubeVideoDetails?, PreferredVideoCodec)" /> contains
 ///                     the format selection engine that parses adaptive video/audio streams, muxed streams, and live HLS
 ///                     manifests,
 ///                     pairing streams and extracting expiration timestamps. Although standard playback uses mpv's
@@ -40,7 +40,7 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///         </list>
 ///     </para>
 /// </remarks>
-public static class YtDlpFormatSelector
+public static partial class YtDlpFormatSelector
 {
     /// <summary>
     ///     Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
@@ -53,10 +53,9 @@ public static class YtDlpFormatSelector
 
         if (targetHeight is null)
         {
-            if (codecPrefix is null)
-                return null;
-
-            return $"{codecPrefix}bestvideo+bestaudio/best";
+            return codecPrefix is null 
+                ? null 
+                : $"{codecPrefix}bestvideo+bestaudio/best";
         }
 
         var baseFormat = $"bestvideo[height<={targetHeight.Value}]+bestaudio/best[height<={targetHeight.Value}]";
@@ -214,11 +213,11 @@ public static class YtDlpFormatSelector
         if (string.Equals(trimmed, "4k", StringComparison.OrdinalIgnoreCase)) return 2160;
         if (string.Equals(trimmed, "2k", StringComparison.OrdinalIgnoreCase)) return 1440;
 
-        var match = Regex.Match(trimmed, @"(?<height>\d{2,4})p", RegexOptions.IgnoreCase);
+        var match = HeightRegex().Match(trimmed);
         if (match.Success && int.TryParse(match.Groups["height"].ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var h))
             return h;
 
-        var bareNumberMatch = Regex.Match(trimmed, @"^\d{2,4}$");
+        var bareNumberMatch = BareNumberRegex().Match(trimmed);
         if (bareNumberMatch.Success && int.TryParse(bareNumberMatch.ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bareH))
             return bareH;
 
@@ -252,28 +251,26 @@ public static class YtDlpFormatSelector
             if (formats.Count == 0) return [];
 
             var videoStreams = formats
-                .Where(f => f.HasVideo && f.Height is > 0)
+                .Where(f => f is { HasVideo: true, Height: > 0 })
                 .ToList();
 
             if (videoStreams.Count == 0) return [];
 
-            var tracks = new List<string>();
             var groupedByHeight = videoStreams
                 .GroupBy(v => v.Height!.Value)
                 .OrderByDescending(g => g.Key);
 
-            foreach (var group in groupedByHeight)
-            {
-                var height = group.Key;
-                var maxFps = group.Max(v => v.Fps) ?? 0;
-                var fpsSuffix = maxFps > 30 ? $"{maxFps}" : string.Empty;
-
-                var label = $"{height}p{fpsSuffix}";
-
-                tracks.Add(label);
-            }
-
-            return tracks;
+            return
+            [
+                .. 
+                from @group in groupedByHeight
+                let height = @group.Key
+                let maxFps = @group.Max(v => v.Fps) ?? 0
+                let fpsSuffix = maxFps > 30
+                    ? $"{maxFps}"
+                    : string.Empty
+                select $"{height}p{fpsSuffix}"
+            ];
         }
     }
 
@@ -432,4 +429,9 @@ public static class YtDlpFormatSelector
         if (b is null) return a;
         return a < b ? a : b;
     }
+
+    [GeneratedRegex(@"(?<height>\d{2,4})p", RegexOptions.IgnoreCase, "en-US")]
+    private static partial Regex HeightRegex();
+    [GeneratedRegex(@"^\d{2,4}$")]
+    private static partial Regex BareNumberRegex();
 }

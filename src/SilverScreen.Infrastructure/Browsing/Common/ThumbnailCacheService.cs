@@ -111,7 +111,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
 
         if (initException is not null)
-            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk");
 
         var cachePath = GetCachePath(uri);
         if (File.Exists(cachePath))
@@ -373,7 +373,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
 
         if (initException is not null)
-            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk");
 
         if (filesToDelete is null) return;
         foreach (var file in filesToDelete)
@@ -411,7 +411,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         }
 
         if (initException is not null)
-            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk.");
+            Logger.Warning(initException, "Failed to initialize thumbnail cache index from disk");
 
         if (filesToDelete is null) return;
         foreach (var file in filesToDelete)

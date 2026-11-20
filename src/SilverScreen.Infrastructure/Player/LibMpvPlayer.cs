@@ -88,25 +88,15 @@ public sealed class LibMpvPlayer : IDisposable
         }
     }
 
-    public bool IsAvailable
-    {
-        get
-        {
-            if (_initialized) return _isAvailable;
-            if (_lazyNative.IsValueCreated) return _lazyNative.Value.IsAvailable;
-            return LibMpvNative.IsAvailable();
-        }
-    }
+    public bool IsAvailable =>
+        _initialized ? _isAvailable :
+        _lazyNative.IsValueCreated ? _lazyNative.Value.IsAvailable :
+        LibMpvNative.IsAvailable();
 
-    public string? AvailabilityError
-    {
-        get
-        {
-            if (_initialized) return _availabilityError;
-            if (_lazyNative.IsValueCreated) return _lazyNative.Value.AvailabilityError;
-            return null;
-        }
-    }
+    public string? AvailabilityError =>
+        _initialized ? _availabilityError :
+        _lazyNative.IsValueCreated ? _lazyNative.Value.AvailabilityError :
+        null;
 
     private void EnsureInitialized()
     {
@@ -269,7 +259,6 @@ public sealed class LibMpvPlayer : IDisposable
             };
         }
 
-        var primaryVideo = request.Videos.FirstOrDefault();
         Logger.Information(
             "Loading playback request for with {Count} item(s) at quality {Quality}", request.Videos.Length, _quality);
         PublishState();
@@ -747,13 +736,11 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void HandleEndFile(LibMpvEventEndFile endFile)
     {
-        if (endFile.Reason == LibMpvEndFileReason.Error)
-        {
-            var detail = !string.IsNullOrWhiteSpace(_lastErrorMessage)
-                ? _lastErrorMessage
-                : Native.ErrorString(endFile.Error);
-            PublishFailure(detail);
-        }
+        if (endFile.Reason != LibMpvEndFileReason.Error) return;
+        var detail = !string.IsNullOrWhiteSpace(_lastErrorMessage)
+            ? _lastErrorMessage
+            : Native.ErrorString(endFile.Error);
+        PublishFailure(detail);
     }
 
     private void LoadCurrentRequest()
@@ -793,62 +780,60 @@ public sealed class LibMpvPlayer : IDisposable
     private List<LibMpvSubtitleTrack> ReadSubtitleTracks()
     {
         var trackListJson = Native.GetPropertyString(_handle, "track-list");
-        if (!string.IsNullOrWhiteSpace(trackListJson))
+        if (string.IsNullOrWhiteSpace(trackListJson)) return ReadSubtitleTracksLegacy();
+        try
         {
-            try
+            using var doc = JsonDocument.Parse(trackListJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
-                using var doc = JsonDocument.Parse(trackListJson);
-                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                var selectedTrackId = long.TryParse(Native.GetPropertyString(_handle, "sid"),
+                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                    ? value
+                    : 0;
+
+                var subtitleTracks = new List<LibMpvSubtitleTrack>();
+                foreach (var element in doc.RootElement.EnumerateArray())
                 {
-                    var selectedTrackId = long.TryParse(Native.GetPropertyString(_handle, "sid"),
-                        NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-                        ? value
-                        : 0;
+                    var type = element.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+                    if (!string.Equals(type, "sub", StringComparison.Ordinal) ||
+                        !element.TryGetProperty("id", out var idProp) ||
+                        !idProp.TryGetInt64(out var trackId))
+                        continue;
 
-                    var subtitleTracks = new List<LibMpvSubtitleTrack>();
-                    foreach (var element in doc.RootElement.EnumerateArray())
-                    {
-                        var type = element.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
-                        if (!string.Equals(type, "sub", StringComparison.Ordinal) ||
-                            !element.TryGetProperty("id", out var idProp) ||
-                            !idProp.TryGetInt64(out var trackId))
-                            continue;
+                    var title = element.TryGetProperty("title", out var titleProp)
+                        ? titleProp.GetString()
+                        : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
+                            ? metaTitle.GetString()
+                            : null;
 
-                        var title = element.TryGetProperty("title", out var titleProp)
-                            ? titleProp.GetString()
-                            : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
-                                ? metaTitle.GetString()
-                                : null;
+                    var language = element.TryGetProperty("lang", out var langProp)
+                        ? langProp.GetString()
+                        : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
+                            ? metaLang.GetString()
+                            : null;
 
-                        var language = element.TryGetProperty("lang", out var langProp)
-                            ? langProp.GetString()
-                            : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
-                                ? metaLang.GetString()
-                                : null;
+                    var isSelected = (element.TryGetProperty("selected", out var selProp) &&
+                                      (selProp.ValueKind == JsonValueKind.True ||
+                                       (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)))) ||
+                                     trackId == selectedTrackId;
 
-                        var isSelected = (element.TryGetProperty("selected", out var selProp) &&
-                            (selProp.ValueKind == JsonValueKind.True ||
-                             (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)))) ||
-                            trackId == selectedTrackId;
+                    var label = string.IsNullOrWhiteSpace(title)
+                        ? language
+                        : string.IsNullOrWhiteSpace(language) ||
+                          string.Equals(title, language, StringComparison.OrdinalIgnoreCase)
+                            ? title
+                            : $"{title} ({language})";
 
-                        var label = string.IsNullOrWhiteSpace(title)
-                            ? language
-                            : string.IsNullOrWhiteSpace(language) ||
-                              string.Equals(title, language, StringComparison.OrdinalIgnoreCase)
-                                ? title
-                                : $"{title} ({language})";
-
-                        subtitleTracks.Add(new LibMpvSubtitleTrack(trackId, language ?? label ?? $"Subtitle {trackId}",
-                            label ?? $"Subtitle {trackId}", isSelected));
-                    }
-
-                    return subtitleTracks;
+                    subtitleTracks.Add(new LibMpvSubtitleTrack(trackId, language ?? label ?? $"Subtitle {trackId}",
+                        label ?? $"Subtitle {trackId}", isSelected));
                 }
+
+                return subtitleTracks;
             }
-            catch (Exception ex)
-            {
-                Logger.Warning(ex, "Failed to parse subtitle track-list JSON from libmpv");
-            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to parse subtitle track-list JSON from libmpv");
         }
 
         return ReadSubtitleTracksLegacy();
@@ -1154,73 +1139,71 @@ public sealed class LibMpvPlayer : IDisposable
     private List<PlaybackStatsTrack> ReadAllTracks()
     {
         var trackListJson = Native.GetPropertyString(_handle, "track-list");
-        if (!string.IsNullOrWhiteSpace(trackListJson))
+        if (string.IsNullOrWhiteSpace(trackListJson)) return ReadAllTracksLegacy();
+        try
         {
-            try
+            using var doc = JsonDocument.Parse(trackListJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
-                using var doc = JsonDocument.Parse(trackListJson);
-                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                var tracks = new List<PlaybackStatsTrack>(doc.RootElement.GetArrayLength());
+                foreach (var element in doc.RootElement.EnumerateArray())
                 {
-                    var tracks = new List<PlaybackStatsTrack>(doc.RootElement.GetArrayLength());
-                    foreach (var element in doc.RootElement.EnumerateArray())
-                    {
-                        if (!element.TryGetProperty("id", out var idProp) || !idProp.TryGetInt64(out var id))
-                            continue;
+                    if (!element.TryGetProperty("id", out var idProp) || !idProp.TryGetInt64(out var id))
+                        continue;
 
-                        var type = element.TryGetProperty("type", out var typeProp)
-                            ? typeProp.GetString() ?? "unknown"
-                            : "unknown";
+                    var type = element.TryGetProperty("type", out var typeProp)
+                        ? typeProp.GetString() ?? "unknown"
+                        : "unknown";
 
-                        var title = element.TryGetProperty("title", out var titleProp)
-                            ? titleProp.GetString()
-                            : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
-                                ? metaTitle.GetString()
-                                : null;
-
-                        var lang = element.TryGetProperty("lang", out var langProp)
-                            ? langProp.GetString()
-                            : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
-                                ? metaLang.GetString()
-                                : null;
-
-                        var codec = element.TryGetProperty("codec", out var codecProp) ? codecProp.GetString() : null;
-
-                        int? w = element.TryGetProperty("demux-w", out var wProp) && wProp.TryGetInt32(out var tw)
-                            ? tw
-                            : null;
-                        int? h = element.TryGetProperty("demux-h", out var hProp) && hProp.TryGetInt32(out var th)
-                            ? th
-                            : null;
-                        double? fps = element.TryGetProperty("demux-fps", out var fpsProp) && fpsProp.TryGetDouble(out var tfps)
-                            ? tfps
-                            : null;
-                        int? sr = element.TryGetProperty("demux-samplerate", out var srProp) && srProp.TryGetInt32(out var tsr)
-                            ? tsr
-                            : null;
-                        var ch = element.TryGetProperty("demux-channels", out var chProp) ? chProp.GetString() : null;
-                        double? br = element.TryGetProperty("demux-bitrate", out var brProp) && brProp.TryGetDouble(out var tbr)
-                            ? tbr
+                    var title = element.TryGetProperty("title", out var titleProp)
+                        ? titleProp.GetString()
+                        : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
+                            ? metaTitle.GetString()
                             : null;
 
-                        var isSelected = element.TryGetProperty("selected", out var selProp) &&
-                            (selProp.ValueKind == JsonValueKind.True ||
-                             (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+                    var lang = element.TryGetProperty("lang", out var langProp)
+                        ? langProp.GetString()
+                        : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
+                            ? metaLang.GetString()
+                            : null;
 
-                        var isDefault = element.TryGetProperty("default", out var defProp) &&
-                            (defProp.ValueKind == JsonValueKind.True ||
-                             (defProp.ValueKind == JsonValueKind.String && string.Equals(defProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+                    var codec = element.TryGetProperty("codec", out var codecProp) ? codecProp.GetString() : null;
 
-                        tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br,
-                            isSelected, isDefault));
-                    }
+                    int? w = element.TryGetProperty("demux-w", out var wProp) && wProp.TryGetInt32(out var tw)
+                        ? tw
+                        : null;
+                    int? h = element.TryGetProperty("demux-h", out var hProp) && hProp.TryGetInt32(out var th)
+                        ? th
+                        : null;
+                    double? fps = element.TryGetProperty("demux-fps", out var fpsProp) && fpsProp.TryGetDouble(out var tfps)
+                        ? tfps
+                        : null;
+                    int? sr = element.TryGetProperty("demux-samplerate", out var srProp) && srProp.TryGetInt32(out var tsr)
+                        ? tsr
+                        : null;
+                    var ch = element.TryGetProperty("demux-channels", out var chProp) ? chProp.GetString() : null;
+                    double? br = element.TryGetProperty("demux-bitrate", out var brProp) && brProp.TryGetDouble(out var tbr)
+                        ? tbr
+                        : null;
 
-                    return tracks;
+                    var isSelected = element.TryGetProperty("selected", out var selProp) &&
+                                     (selProp.ValueKind == JsonValueKind.True ||
+                                      (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+
+                    var isDefault = element.TryGetProperty("default", out var defProp) &&
+                                    (defProp.ValueKind == JsonValueKind.True ||
+                                     (defProp.ValueKind == JsonValueKind.String && string.Equals(defProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+
+                    tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br,
+                        isSelected, isDefault));
                 }
+
+                return tracks;
             }
-            catch (Exception ex)
-            {
-                Logger.Warning(ex, "Failed to parse track-list JSON from libmpv");
-            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to parse track-list JSON from libmpv");
         }
 
         return ReadAllTracksLegacy();

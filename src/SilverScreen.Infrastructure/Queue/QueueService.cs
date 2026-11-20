@@ -31,7 +31,7 @@ public sealed class QueueService : IQueueService
         {
             lock (_lock)
             {
-                return _items.ToArray();
+                return [.. _items];
             }
         }
     }

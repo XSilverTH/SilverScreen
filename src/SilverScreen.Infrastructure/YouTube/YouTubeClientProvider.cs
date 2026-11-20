@@ -261,7 +261,7 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             {
                 Logger.Debug(
                     "Imported YouTube cookie metadata: {CookieName}, raw count {RawCount}, retained count {RetainedCount}, expiry unavailable, session {IsSessionCookie}, expired unavailable, retained at import {RetainedAtImport}",
-                    row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), false, false, retained);
+                    row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), false, retained);
             }
         }
 

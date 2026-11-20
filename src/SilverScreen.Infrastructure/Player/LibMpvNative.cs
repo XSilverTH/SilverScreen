@@ -398,10 +398,7 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 
     internal static (int ParamType, nint DisplayHandle) ResolveNativeDisplayParam()
     {
-        if (!OperatingSystem.IsLinux()) return (0, 0);
-
-        if (!NativeLibrary.TryLoad("libgtk-4.so.1", out var gtkLibrary))
-            return (0, 0);
+        if (!OperatingSystem.IsLinux() || !NativeLibrary.TryLoad("libgtk-4.so.1", out var gtkLibrary)) return (0, 0);
 
         try
         {
@@ -441,22 +438,18 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
                 }
 
                 // X11 check: MPV_RENDER_PARAM_X11_DISPLAY = 8
-                if (NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_type", out var x11TypeExport) &&
-                    NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_xdisplay", out var x11GetExport))
-                {
-                    var gdkX11DisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)x11TypeExport;
-                    var gdkX11DisplayGetXDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)x11GetExport;
+                if (!NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_type", out var x11TypeExport) ||
+                    !NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_xdisplay", out var x11GetExport))
+                    return (0, 0);
+                
+                var gdkX11DisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)x11TypeExport;
+                var gdkX11DisplayGetXDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)x11GetExport;
 
-                    var x11Type = gdkX11DisplayGetType();
-                    if (gTypeCheckInstanceIsA(display, x11Type) != 0)
-                    {
-                        var x11Display = gdkX11DisplayGetXDisplay(display);
-                        if (x11Display != 0)
-                        {
-                            return (8, x11Display);
-                        }
-                    }
-                }
+                var x11Type = gdkX11DisplayGetType();
+                if (gTypeCheckInstanceIsA(display, x11Type) == 0) return (0, 0);
+                var x11Display = gdkX11DisplayGetXDisplay(display);
+                if (x11Display != 0)
+                    return (8, x11Display);
 
                 return (0, 0);
             }
@@ -552,29 +545,22 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private static bool ProbeLibraryFileExists(string[] names)
     {
         if (!OperatingSystem.IsLinux()) return false;
-        foreach (var dir in StandardSearchDirs)
-        {
-            foreach (var name in names)
-            {
-                if (File.Exists(Path.Combine(dir, name)))
-                    return true;
-            }
-        }
+        if ((
+                from dir in StandardSearchDirs
+                from name in names
+                where File.Exists(Path.Combine(dir, name)) 
+                select dir)
+            .Any()) 
+            return true;
 
         var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
-        if (!string.IsNullOrWhiteSpace(ldPath))
-        {
-            foreach (var dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries))
-            {
-                foreach (var name in names)
-                {
-                    if (File.Exists(Path.Combine(dir, name)))
-                        return true;
-                }
-            }
-        }
-
-        return false;
+        if (string.IsNullOrWhiteSpace(ldPath)) return false;
+        return (
+                from dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries) 
+                from name in names 
+                where File.Exists(Path.Combine(dir, name)) 
+                select dir)
+            .Any();
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

@@ -23,7 +23,6 @@ public sealed class ExternalMpvPlaybackService(
     private readonly PlaybackCoordinator _coordinator =
         playbackCoordinator ?? throw new ArgumentNullException(nameof(playbackCoordinator));
 
-    private readonly YtDlpMediaResolver? _mediaResolver = mediaResolver;
     private readonly bool _ownsCoordinator;
 
     private readonly IPreferencesService _preferencesService =
@@ -72,10 +71,7 @@ public sealed class ExternalMpvPlaybackService(
     public Task<string> PlayAsync(PlaybackRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.Videos.IsDefaultOrEmpty)
-            return Task.FromResult(PlaybackRequest.EmptyQueueMessage);
-
-        return LaunchMpvAsync(request, false);
+        return request.Videos.IsDefaultOrEmpty ? Task.FromResult(PlaybackRequest.EmptyQueueMessage) : LaunchMpvAsync(request, false);
     }
 
     private async Task<string> LaunchMpvAsync(
@@ -309,7 +305,7 @@ public sealed class ExternalMpvPlaybackService(
             return;
         if (DateTimeOffset.UtcNow - launchTimestamp > YtdlHookFailureWindow)
             return;
-        if (_mediaResolver is null)
+        if (mediaResolver is null)
         {
             Logger.Debug("Skipping MPV fallback retry: no media resolver configured");
             return;
@@ -321,7 +317,7 @@ public sealed class ExternalMpvPlaybackService(
         var video = request.Videos[request.EffectiveStartIndex];
         Logger.Warning("MPV exited quickly with code {ExitCode}; attempting yt-dlp fallback", exitCode);
 
-        var fallback = await _mediaResolver.TryResolveAsFallbackAsync(video.Id).ConfigureAwait(false);
+        var fallback = await mediaResolver.TryResolveAsFallbackAsync(video.Id).ConfigureAwait(false);
         var media = fallback.IsSuccess ? fallback.Media : null;
         if (string.IsNullOrWhiteSpace(media?.VideoUrl))
         {

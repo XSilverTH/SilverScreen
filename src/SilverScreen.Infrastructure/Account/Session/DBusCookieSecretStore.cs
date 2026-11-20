@@ -190,23 +190,18 @@ internal sealed class DBusCookieSecretStore : ICookieSecretStore
             }
         }
 
-        if (collection is null)
-        {
-            collection = await secretService.CreateCollectionAsync("Default", DefaultCollectionAlias).ConfigureAwait(false);
-        }
+        collection ??= await secretService.CreateCollectionAsync("Default", DefaultCollectionAlias).ConfigureAwait(false);
 
         if (collection is null)
         {
             throw new SessionPersistenceException("No Secret Service collection is available and default collection could not be created.");
         }
 
+        if (!await collection.IsLockedAsync().ConfigureAwait(false)) return collection;
+        await collection.UnlockAsync().ConfigureAwait(false);
         if (await collection.IsLockedAsync().ConfigureAwait(false))
         {
-            await collection.UnlockAsync().ConfigureAwait(false);
-            if (await collection.IsLockedAsync().ConfigureAwait(false))
-            {
-                throw new SessionPersistenceException("The Secret Service collection is locked and could not be unlocked.");
-            }
+            throw new SessionPersistenceException("The Secret Service collection is locked and could not be unlocked.");
         }
 
         return collection;
@@ -235,11 +230,9 @@ internal sealed class DBusCookieSecretStore : ICookieSecretStore
             try
             {
                 var mod = await items[i].GetModifiedAsync().ConfigureAwait(false);
-                if (mod > newestTime)
-                {
-                    newest = items[i];
-                    newestTime = mod;
-                }
+                if (mod <= newestTime) continue;
+                newest = items[i];
+                newestTime = mod;
             }
             catch
             {

@@ -17,7 +17,7 @@ public static class ThumbnailResolutionSelector
     /// Selects a thumbnail that matches the video card display size rather than blindly picking the 1080p/4k variant.
     /// Prefers crisp variants in the ~480px-640px range for HiDPI sharpness, falling back gracefully to 320p or higher resolutions.
     /// </summary>
-    public static string SelectCardThumbnail(IReadOnlyList<Thumbnail> thumbnails)
+    public static string SelectCardThumbnail(IReadOnlyList<Thumbnail>? thumbnails)
     {
         if (thumbnails == null || thumbnails.Count == 0) return string.Empty;
 
@@ -26,11 +26,9 @@ public static class ThumbnailResolutionSelector
         Thumbnail? best = null;
         foreach (var t in thumbnails)
         {
-            if (t.Width >= PreferredMinCardWidth && t.Width <= PreferredMaxCardWidth)
-            {
-                if (best is null || t.Width < best.Width)
-                    best = t;
-            }
+            if (t.Width is < PreferredMinCardWidth or > PreferredMaxCardWidth) continue;
+            if (best is null || t.Width < best.Width)
+                best = t;
         }
 
         if (best is not null) return best.Url.ToString();
@@ -39,11 +37,9 @@ public static class ThumbnailResolutionSelector
         // Prefer the highest resolution within this lower range to get as close to preferred sharpness as possible.
         foreach (var t in thumbnails)
         {
-            if (t.Width >= AcceptableMinCardWidth && t.Width < PreferredMinCardWidth)
-            {
-                if (best is null || t.Width > best.Width)
-                    best = t;
-            }
+            if (t.Width is < AcceptableMinCardWidth or >= PreferredMinCardWidth) continue;
+            if (best is null || t.Width > best.Width)
+                best = t;
         }
 
         if (best is not null) return best.Url.ToString();
@@ -51,11 +47,9 @@ public static class ThumbnailResolutionSelector
         // 3. If none in [320..640], find the closest thumbnail with width >= 320 (e.g. 720p instead of 1080p).
         foreach (var t in thumbnails)
         {
-            if (t.Width >= AcceptableMinCardWidth)
-            {
-                if (best is null || t.Width < best.Width)
-                    best = t;
-            }
+            if (t.Width < AcceptableMinCardWidth) continue;
+            if (best is null || t.Width < best.Width)
+                best = t;
         }
 
         if (best is not null) return best.Url.ToString();
@@ -67,33 +61,31 @@ public static class ThumbnailResolutionSelector
     /// <summary>
     /// Selects an avatar thumbnail appropriate for small circular badges (56-80px).
     /// </summary>
-    public static string? SelectAvatarThumbnail(IReadOnlyList<Thumbnail> thumbnails)
+    public static string? SelectAvatarThumbnail(IReadOnlyList<Thumbnail>? thumbnails)
     {
         if (thumbnails == null || thumbnails.Count == 0) return null;
 
         Thumbnail? best = null;
         foreach (var t in thumbnails)
         {
-            if (t.Width >= 80 && t.Width <= 200)
-            {
-                if (best is null || t.Width < best.Width)
-                    best = t;
-            }
+            if (t.Width is < 80 or > 200) continue;
+            if (best is null || t.Width < best.Width)
+                best = t;
         }
 
         if (best is not null) return best.Url.ToString();
 
         foreach (var t in thumbnails)
         {
-            if (t.Width >= 80)
-            {
-                if (best is null || t.Width < best.Width)
-                    best = t;
-            }
+            if (t.Width < 80) continue;
+            if (best is null || t.Width < best.Width)
+                best = t;
         }
 
         if (best is not null) return best.Url.ToString();
-
-        return thumbnails.FirstOrDefault()?.Url.ToString();
+        
+        return thumbnails.Count > 0
+            ? thumbnails[0].Url.ToString() 
+            : null;
     }
 }
