@@ -71,17 +71,11 @@ public static class ThemeModes
         };
     }
 
-    public static ThemeMode Parse(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return ThemeMode.System;
-
-        foreach (var mode in Enum.GetValues<ThemeMode>())
-            if (string.Equals(value.Trim(), mode.ToPersistedString(), StringComparison.OrdinalIgnoreCase))
-                return mode;
-
-        return ThemeMode.System;
-    }
+    public static ThemeMode Parse(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? ThemeMode.System : 
+        Enum.GetValues<ThemeMode>()
+            .FirstOrDefault(mode => 
+                string.Equals(value.Trim(), mode.ToPersistedString(), StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -113,36 +107,21 @@ public static class VideoQualities
             return VideoQuality.Best;
 
         var trimmed = value.Trim();
-        if (string.Equals(trimmed, "8k", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "4320", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P4320;
-        if (string.Equals(trimmed, "4k", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "2160", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P2160;
-        if (string.Equals(trimmed, "2k", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "1440", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "qhd", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P1440;
-        if (string.Equals(trimmed, "1080", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "fhd", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P1080;
-        if (string.Equals(trimmed, "720", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "hd", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P720;
-        if (string.Equals(trimmed, "480", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P480;
-        if (string.Equals(trimmed, "360", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P360;
-        if (string.Equals(trimmed, "240", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P240;
-        if (string.Equals(trimmed, "144", StringComparison.OrdinalIgnoreCase))
-            return VideoQuality.P144;
 
-        foreach (var quality in Enum.GetValues<VideoQuality>())
-            if (string.Equals(trimmed, quality.ToPersistedString(), StringComparison.OrdinalIgnoreCase))
-                return quality;
-
-        return VideoQuality.Best;
+        return trimmed.ToUpperInvariant() switch
+        {
+            "8K" or "4320" => VideoQuality.P4320,
+            "4K" or "2160" => VideoQuality.P2160,
+            "2K" or "1440" or "QHD" => VideoQuality.P1440,
+            "1080" or "FHD" => VideoQuality.P1080,
+            "720" or "HD" => VideoQuality.P720,
+            "480" => VideoQuality.P480,
+            "360" => VideoQuality.P360,
+            "240" => VideoQuality.P240,
+            "144" => VideoQuality.P144,
+            _ => Enum.GetValues<VideoQuality>().FirstOrDefault(quality =>
+                string.Equals(trimmed, quality.ToPersistedString(), StringComparison.OrdinalIgnoreCase))
+        };
     }
 }
 
@@ -152,26 +131,29 @@ public static class VideoQualities
 /// </summary>
 public static class PreferredVideoCodecs
 {
-    public static string ToPersistedString(this PreferredVideoCodec codec)
+    extension(PreferredVideoCodec codec)
     {
-        return codec switch
+        public string ToPersistedString()
         {
-            PreferredVideoCodec.Av1 => "AV1",
-            PreferredVideoCodec.Vp9 => "VP9",
-            PreferredVideoCodec.H264 => "H.264",
-            _ => "Any"
-        };
-    }
+            return codec switch
+            {
+                PreferredVideoCodec.Av1 => "AV1",
+                PreferredVideoCodec.Vp9 => "VP9",
+                PreferredVideoCodec.H264 => "H.264",
+                _ => "Any"
+            };
+        }
 
-    public static string ToDisplayString(this PreferredVideoCodec codec)
-    {
-        return codec switch
+        public string ToDisplayString()
         {
-            PreferredVideoCodec.Av1 => "AV1",
-            PreferredVideoCodec.Vp9 => "VP9",
-            PreferredVideoCodec.H264 => "H.264 / AVC",
-            _ => "No preference"
-        };
+            return codec switch
+            {
+                PreferredVideoCodec.Av1 => "AV1",
+                PreferredVideoCodec.Vp9 => "VP9",
+                PreferredVideoCodec.H264 => "H.264 / AVC",
+                _ => "No preference"
+            };
+        }
     }
 
     public static PreferredVideoCodec Parse(string? value)
@@ -179,25 +161,13 @@ public static class PreferredVideoCodecs
         if (string.IsNullOrWhiteSpace(value))
             return PreferredVideoCodec.Any;
 
-        var trimmed = value.Trim();
-        if (string.Equals(trimmed, "AV1", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "av01", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "av1", StringComparison.OrdinalIgnoreCase))
-            return PreferredVideoCodec.Av1;
-        if (string.Equals(trimmed, "VP9", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "vp09", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "vp9", StringComparison.OrdinalIgnoreCase))
-            return PreferredVideoCodec.Vp9;
-        if (string.Equals(trimmed, "H.264", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "H264", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "h.264", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "h264", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "AVC", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "avc", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, "avc1", StringComparison.OrdinalIgnoreCase))
-            return PreferredVideoCodec.H264;
-
-        return PreferredVideoCodec.Any;
+        return value.Trim().ToUpperInvariant() switch
+        {
+            "AV1" or "AV01" => PreferredVideoCodec.Av1,
+            "VP9" or "VP09" => PreferredVideoCodec.Vp9,
+            "H.264" or "H264" or "AVC" or "AVC1" => PreferredVideoCodec.H264,
+            _ => PreferredVideoCodec.Any
+        };
     }
 }
 

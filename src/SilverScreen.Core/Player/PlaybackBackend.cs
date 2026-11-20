@@ -5,15 +5,15 @@ namespace SilverScreen.Core.Player;
 public static class PlaybackBackends
 {
     // Persisted values. Stored in preferences JSON — NEVER change these strings.
-    public const string ExternalMpv = "External MPV";
-    public const string EmbeddedPlayer = "Embedded Player";
+    private const string ExternalMpv = "External MPV";
+    private const string EmbeddedPlayer = "Embedded Player";
 
     // Canonical chooser labels for the Preferences dialog. Display-only; never persisted.
-    public const string ExternalMpvDisplayName = "External MPV (separate window)";
+    private const string ExternalMpvDisplayName = "External MPV (separate window)";
     private const string EmbeddedDisplayName = "Built-in player";
 
     // Short labels for tooltips, logs, and other compact surfaces.
-    public const string ExternalMpvShortName = "External MPV";
+    private const string ExternalMpvShortName = "External MPV";
     private const string EmbeddedShortName = "Built-in";
 
     public static bool IsEmbedded(PlaybackBackendKind kind)
@@ -21,19 +21,22 @@ public static class PlaybackBackends
         return kind == PlaybackBackendKind.Embedded;
     }
 
-    public static string ToPersistedString(this PlaybackBackendKind kind)
+    extension(PlaybackBackendKind kind)
     {
-        return kind == PlaybackBackendKind.Embedded ? EmbeddedPlayer : ExternalMpv;
-    }
+        public string ToPersistedString()
+        {
+            return kind == PlaybackBackendKind.Embedded ? EmbeddedPlayer : ExternalMpv;
+        }
 
-    public static string ToDisplayName(this PlaybackBackendKind kind)
-    {
-        return kind == PlaybackBackendKind.Embedded ? EmbeddedDisplayName : ExternalMpvDisplayName;
-    }
+        public string ToDisplayName()
+        {
+            return kind == PlaybackBackendKind.Embedded ? EmbeddedDisplayName : ExternalMpvDisplayName;
+        }
 
-    public static string ToShortName(this PlaybackBackendKind kind)
-    {
-        return kind == PlaybackBackendKind.Embedded ? EmbeddedShortName : ExternalMpvShortName;
+        public string ToShortName()
+        {
+            return kind == PlaybackBackendKind.Embedded ? EmbeddedShortName : ExternalMpvShortName;
+        }
     }
 
     /// <summary>

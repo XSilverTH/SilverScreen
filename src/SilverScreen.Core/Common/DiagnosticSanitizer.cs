@@ -43,12 +43,12 @@ public static partial class DiagnosticSanitizer
     private static partial Regex QuerySecretRegex();
 
     [GeneratedRegex(
-        @"(""(?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)""\s*:\s*"")[^""]*("")",
+        """("(?:access_token|refresh_token|id_token|token|poToken|continuation|params|key|api_key|apikey)"\s*:\s*")[^"]*(")""",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex JsonSecretRegex();
 
     [GeneratedRegex(
-        @"(--(?:password|client-secret|access-token|refresh-token|token|api-key|cookies(?:-from-browser)?)(?:=|\s+))(?:""[^""]*""|'[^']*'|\S+)",
+        """(--(?:password|client-secret|access-token|refresh-token|token|api-key|cookies(?:-from-browser)?)(?:=|\s+))(?:"[^"]*"|'[^']*'|\S+)""",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ArgumentSecretRegex();
 }

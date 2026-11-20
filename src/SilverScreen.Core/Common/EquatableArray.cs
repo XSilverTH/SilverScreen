@@ -13,7 +13,7 @@ namespace SilverScreen.Core.Common;
 ///     <para>
 ///         Standard C# arrays (<c>T[]</c>) exhibit reference equality when used inside record types or compared
 ///         with equality operators. <see cref="EquatableArray{T}" /> provides value-based equality semantics by
-///         comparing elements sequentially via <see cref="ReadOnlySpan{T}.SequenceEqual" />.
+///         comparing elements sequentially via <see cref="MemoryExtensions.SequenceEqual{T}(ReadOnlySpan{T}, ReadOnlySpan{T})" />.
 ///     </para>
 ///     <para>
 ///         Designed for Native AOT friendliness: avoids runtime code generation when serialized with System.Text.Json
@@ -114,7 +114,7 @@ public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<Equatabl
 
     public static implicit operator EquatableArray<T>(T[]? array)
     {
-        return new EquatableArray<T>(array);
+        return [.. array!];
     }
 
     public static implicit operator EquatableArray<T>(List<T>? list)
@@ -142,26 +142,18 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
-        if (elementType == typeof(string))
-            return new EquatableArrayJsonConverter<string>();
-        if (elementType == typeof(int))
-            return new EquatableArrayJsonConverter<int>();
-        if (elementType == typeof(long))
-            return new EquatableArrayJsonConverter<long>();
-        if (elementType == typeof(double))
-            return new EquatableArrayJsonConverter<double>();
-        if (elementType == typeof(float))
-            return new EquatableArrayJsonConverter<float>();
-        if (elementType == typeof(bool))
-            return new EquatableArrayJsonConverter<bool>();
-        if (elementType == typeof(short))
-            return new EquatableArrayJsonConverter<short>();
-        if (elementType == typeof(byte))
-            return new EquatableArrayJsonConverter<byte>();
-        if (elementType == typeof(decimal))
-            return new EquatableArrayJsonConverter<decimal>();
-
-        return null;
+        
+        return 
+            elementType == typeof(string) ? new EquatableArrayJsonConverter<string>():
+            elementType == typeof(int) ? new EquatableArrayJsonConverter<int>() :
+            elementType == typeof(long) ? new EquatableArrayJsonConverter<long>() :
+            elementType == typeof(double) ? new EquatableArrayJsonConverter<double>() :
+            elementType == typeof(float) ? new EquatableArrayJsonConverter<float>() :
+            elementType == typeof(bool) ? new EquatableArrayJsonConverter<bool>() :
+            elementType == typeof(short) ? new EquatableArrayJsonConverter<short>() :
+            elementType == typeof(byte) ? new EquatableArrayJsonConverter<byte>() :
+            elementType == typeof(decimal) ? new EquatableArrayJsonConverter<decimal>() :
+            null;
     }
 }
 
@@ -188,7 +180,7 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndArray)
-                return new EquatableArray<T>(list.ToArray());
+                return [.. list.ToArray()];
 
             var element = JsonSerializer.Deserialize(ref reader, typeInfo);
             if (element is not null)

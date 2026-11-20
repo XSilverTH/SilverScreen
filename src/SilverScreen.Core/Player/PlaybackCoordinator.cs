@@ -84,7 +84,6 @@ public sealed class PlaybackCoordinator(
 
             var coherentState = state with { PlaylistIndex = currentIndex };
             playback.State = coherentState;
-            playback.CurrentVideoId = playback.Request.Videos[currentIndex].Id;
             TryUpdateTelemetry(playback.Telemetry, coherentState, playbackId);
 
             if (playbackId == _latestPlaybackId)
@@ -107,7 +106,6 @@ public sealed class PlaybackCoordinator(
             if (currentIndex < 0 || currentIndex >= request.Videos.Length) return;
 
             playback.Request = request;
-            playback.CurrentVideoId = request.Videos[currentIndex].Id;
             TryUpdateTelemetryQueue(playback.Telemetry, request, currentIndex, playbackId);
 
             if (playback.State is not { } state) return;
@@ -121,16 +119,16 @@ public sealed class PlaybackCoordinator(
 
     private static int ResolveCurrentIndex(PlaybackRequest request, int stateIndex, string? currentVideoId)
     {
-        if (currentVideoId is not null)
-        {
-            for (var index = 0; index < request.Videos.Length; index++)
-                if (string.Equals(request.Videos[index].Id, currentVideoId, StringComparison.Ordinal))
-                    return index;
+        if (currentVideoId is null) 
+            return stateIndex >= 0 && stateIndex < request.Videos.Length 
+                ? stateIndex 
+                : -1;
+        for (var index = 0; index < request.Videos.Length; index++)
+            if (string.Equals(request.Videos[index].Id, currentVideoId, StringComparison.Ordinal))
+                return index;
 
-            return -1;
-        }
+        return -1;
 
-        return stateIndex >= 0 && stateIndex < request.Videos.Length ? stateIndex : -1;
     }
 
     public void CompleteActivePlayback(long playbackId)
@@ -200,7 +198,7 @@ public sealed class PlaybackCoordinator(
         }
     }
 
-    private void TryUpdateTelemetry(
+    private static void TryUpdateTelemetry(
         IYouTubePlaybackTelemetrySession? telemetry,
         PlaybackPresenceState state,
         long playbackId)
@@ -216,7 +214,7 @@ public sealed class PlaybackCoordinator(
         }
     }
 
-    private void TryUpdateTelemetryQueue(
+    private static void TryUpdateTelemetryQueue(
         IYouTubePlaybackTelemetrySession? telemetry,
         PlaybackRequest request,
         int currentIndex,
@@ -281,10 +279,6 @@ public sealed class PlaybackCoordinator(
     {
         public long Id { get; } = id;
         public PlaybackRequest Request { get; set; } = request;
-
-        public string? CurrentVideoId { get; set; } =
-            request.Videos.IsDefaultOrEmpty ? null : request.Videos[request.EffectiveStartIndex].Id;
-
         public IYouTubePlaybackTelemetrySession? Telemetry { get; } = telemetry;
         public PlaybackPresenceState? State { get; set; }
     }

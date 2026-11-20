@@ -194,8 +194,15 @@ public static partial class YouTubeRichText
         var openParentheses = 0;
         var closeParentheses = 0;
         for (var i = 0; i < end; i++)
-            if (url[i] == '(') openParentheses++;
-            else if (url[i] == ')') closeParentheses++;
+            switch (url[i])
+            {
+                case '(':
+                    openParentheses++;
+                    break;
+                case ')':
+                    closeParentheses++;
+                    break;
+            }
 
         while (end > 0 && url[end - 1] == ')' && closeParentheses > openParentheses)
         {

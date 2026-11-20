@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
@@ -6,7 +7,7 @@ namespace SilverScreen.Core.Player;
 
 public static class PlaybackStatsFormatter
 {
-    public static string FormatBitrate(double? bitsPerSec)
+    private static string FormatBitrate(double? bitsPerSec)
     {
         if (bitsPerSec is null or <= 0 || double.IsNaN(bitsPerSec.Value) || double.IsInfinity(bitsPerSec.Value))
             return "—";
@@ -21,7 +22,7 @@ public static class PlaybackStatsFormatter
         };
     }
 
-    public static string FormatBytes(long? bytes)
+    private static string FormatBytes(long? bytes)
     {
         if (bytes is null or <= 0) return "—";
 
@@ -35,7 +36,7 @@ public static class PlaybackStatsFormatter
         };
     }
 
-    public static string FormatFps(double? containerFps, double? estimatedFps)
+    private static string FormatFps(double? containerFps, double? estimatedFps)
     {
         var hasContainer = containerFps is > 0 and not double.NaN and not double.PositiveInfinity;
         var hasEstimated = estimatedFps is > 0 and not double.NaN and not double.PositiveInfinity;
@@ -54,7 +55,7 @@ public static class PlaybackStatsFormatter
         return "—";
     }
 
-    public static string FormatResolution(int? w, int? h, int? dw, int? dh, double? aspect)
+    private static string FormatResolution(int? w, int? h, int? dw, int? dh, double? aspect)
     {
         if (w is null or <= 0 || h is null or <= 0) return "—";
 
@@ -65,7 +66,7 @@ public static class PlaybackStatsFormatter
         return $"{w}×{h}{aspectStr}";
     }
 
-    public static string FormatAvSync(double? avsyncSeconds)
+    private static string FormatAvSync(double? avsyncSeconds)
     {
         if (avsyncSeconds is null or double.NaN or double.PositiveInfinity or double.NegativeInfinity)
             return "—";
@@ -75,7 +76,7 @@ public static class PlaybackStatsFormatter
         return $"{sign}{ms:0.00} ms";
     }
 
-    public static string FormatDroppedFrames(long? total, long? vo, long? mistimed)
+    private static string FormatDroppedFrames(long? total, long? vo, long? mistimed)
     {
         var t = total ?? 0;
         var v = vo ?? 0;
@@ -83,7 +84,7 @@ public static class PlaybackStatsFormatter
         return $"{t} (VO: {v}, Mistimed: {m})";
     }
 
-    public static string FormatCache(double? seconds, long? bytes)
+    private static string FormatCache(double? seconds, long? bytes)
     {
         var hasSec = seconds is >= 0 and not double.NaN and not double.PositiveInfinity;
         var hasBytes = bytes is > 0;
@@ -96,7 +97,7 @@ public static class PlaybackStatsFormatter
         };
     }
 
-    public static string FormatTime(TimeSpan position, TimeSpan duration, double? percent)
+    private static string FormatTime(TimeSpan position, TimeSpan duration, double? percent)
     {
         var posStr = FormatDuration(position);
         var durStr = FormatDuration(duration);
@@ -196,7 +197,7 @@ public static class PlaybackStatsFormatter
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Position:</span> <b>{FormatTime(stats.Position, stats.Duration, stats.PercentPosition)}</b>");
         var mutedStr = stats.IsMuted ? "<span foreground=\"#e01b24\"><b>Yes</b></span>" : "No";
-        sb.AppendLine(
+        sb.AppendLine(CultureInfo.InvariantCulture,
             $"  <span foreground=\"#9a9996\">Speed:</span> <b>{stats.Speed:0.00}×</b> • <span foreground=\"#9a9996\">Volume:</span> <b>{(int)stats.Volume}%</b> (Muted: {mutedStr})");
         if (!string.IsNullOrWhiteSpace(stats.SubtitleTrack))
             sb.AppendLine($"  <span foreground=\"#9a9996\">Subtitles:</span> <b>{Escape(stats.SubtitleTrack)}</b>");
@@ -216,7 +217,7 @@ public static class PlaybackStatsFormatter
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Container Frame Rate:</span> <b>{(stats.ContainerFps is > 0 ? $"{stats.ContainerFps.Value:0.00} fps" : "—")}</b>");
         if (stats.VsyncRatio is not null)
-            sb.AppendLine($"  <span foreground=\"#9a9996\">Vsync Ratio:</span> <b>{stats.VsyncRatio.Value:0.000}</b>");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  <span foreground=\"#9a9996\">Vsync Ratio:</span> <b>{stats.VsyncRatio.Value:0.000}</b>");
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Decoder Dropped Frames:</span> <b>{stats.DroppedFrames ?? 0}</b>");
         sb.AppendLine(
@@ -446,13 +447,13 @@ public static class PlaybackStatsFormatter
         sb.AppendLine(
             $"Dropped Frames: {FormatDroppedFrames(stats.DroppedFrames, stats.VoDroppedFrames, stats.MistimedFrames)}");
         if (stats.VsyncRatio is not null)
-            sb.AppendLine($"Vsync Ratio: {stats.VsyncRatio.Value:0.000}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Vsync Ratio: {stats.VsyncRatio.Value:0.000}");
         sb.AppendLine($"Demuxer Cache: {FormatCache(stats.CacheDuration, stats.CacheBytes)}");
         sb.AppendLine();
 
         sb.AppendLine("[Playback]");
         sb.AppendLine($"Position: {FormatTime(stats.Position, stats.Duration, stats.PercentPosition)}");
-        sb.AppendLine($"Speed: {stats.Speed:0.00}x");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Speed: {stats.Speed:0.00}x");
         sb.AppendLine($"Volume: {(int)stats.Volume}% (Muted: {(stats.IsMuted ? "Yes" : "No")})");
         if (!string.IsNullOrWhiteSpace(stats.SubtitleTrack))
             sb.AppendLine($"Subtitles: {stats.SubtitleTrack}");
