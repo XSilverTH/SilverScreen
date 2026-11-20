@@ -290,6 +290,8 @@ public class PlayerTimelineStateTests
             new YouTubePlaybackProgress(null, TimeSpan.Zero, false), duration, out _));
 
         var progress = new YouTubePlaybackProgress(0.5, TimeSpan.FromSeconds(73), false);
+        Assert.True(progress.HasProgress);
+        Assert.True(progress.HasResumePosition);
         Assert.True(PlayerResumeState.TryGetResumePosition(progress, duration, out var position));
         Assert.Equal(TimeSpan.FromSeconds(73), position);
 

@@ -120,4 +120,16 @@ public class PlayerOsdStateTests
         Assert.Equal(OsdActionKind.None, state.CurrentActionKind);
         Assert.Equal(0, state.AccumulatedSeekDeltaSeconds);
     }
+
+    [Fact]
+    public void ProcessStats_ReturnsExpectedModel()
+    {
+        var state = new PlayerOsdState();
+        var open = state.ProcessStats(true);
+        Assert.Equal("Playback Stats: Open", open.Text);
+        Assert.Equal("utilities-system-monitor-symbolic", open.IconName);
+
+        var closed = state.ProcessStats(false);
+        Assert.Equal("Playback Stats: Closed", closed.Text);
+    }
 }

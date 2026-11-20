@@ -289,4 +289,18 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal(VideoQuality.P2160, loaded.Quality);
         Assert.Equal(PreferredVideoCodec.Vp9, loaded.PreferredCodec);
     }
+
+    [Fact]
+    public void PlaybackBackends_AndCodecs_DisplayNames_ReturnExpectedLabels()
+    {
+        Assert.Equal("Built-in player", PlaybackBackendKind.Embedded.ToDisplayName());
+        Assert.Equal("External MPV (separate window)", PlaybackBackendKind.ExternalMpv.ToDisplayName());
+        Assert.Equal("Built-in", PlaybackBackendKind.Embedded.ToShortName());
+        Assert.Equal("External MPV", PlaybackBackendKind.ExternalMpv.ToShortName());
+
+        Assert.Equal("AV1", PreferredVideoCodec.Av1.ToDisplayString());
+        Assert.Equal("VP9", PreferredVideoCodec.Vp9.ToDisplayString());
+        Assert.Equal("H.264 / AVC", PreferredVideoCodec.H264.ToDisplayString());
+        Assert.Equal("No preference", PreferredVideoCodec.Any.ToDisplayString());
+    }
 }

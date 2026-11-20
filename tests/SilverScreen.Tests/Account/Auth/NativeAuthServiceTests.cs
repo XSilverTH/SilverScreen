@@ -33,7 +33,9 @@ public sealed class NativeAuthServiceTests
             },
             () => "/bin/sh");
 
+        Assert.False(authService.IsAuthenticating);
         var result = await authService.StartAuthAsync();
+        Assert.False(authService.IsAuthenticating);
 
         Assert.True(result);
         var cookies = sessionService.GetManualSessionCookies();
@@ -58,7 +60,9 @@ public sealed class NativeAuthServiceTests
             }),
             () => "/bin/sh");
 
+        Assert.False(authService.IsAuthenticating);
         var result = await authService.StartAuthAsync();
+        Assert.False(authService.IsAuthenticating);
 
         Assert.False(result);
         Assert.Null(sessionService.GetManualSessionCookies());
@@ -80,7 +84,9 @@ public sealed class NativeAuthServiceTests
             }),
             () => "/bin/sh");
 
+        Assert.False(authService.IsAuthenticating);
         var result = await authService.StartAuthAsync();
+        Assert.False(authService.IsAuthenticating);
 
         Assert.False(result);
         Assert.Null(sessionService.GetManualSessionCookies());

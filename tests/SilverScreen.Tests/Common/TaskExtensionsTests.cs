@@ -45,6 +45,32 @@ public sealed class TaskExtensionsTests
     }
 
     [Fact]
+    public async Task FireAndForget_ValueTask_FaultedTask_LogsError()
+    {
+        var sink = new CapturingSink();
+        var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var tcs = new TaskCompletionSource();
+        var expectedException = new InvalidOperationException("ValueTask test fault");
+
+        async ValueTask FailingValueTask()
+        {
+            await tcs.Task;
+            throw expectedException;
+        }
+
+        FailingValueTask().FireAndForget(logger, "Custom value task fault message");
+        tcs.SetResult();
+
+        for (var i = 0; i < 50 && sink.Events.Count == 0; i++)
+            await Task.Delay(10);
+
+        Assert.Single(sink.Events);
+        var logEvent = sink.Events[0];
+        Assert.Equal(LogEventLevel.Error, logEvent.Level);
+        Assert.Same(expectedException, logEvent.Exception);
+    }
+
+    [Fact]
     public async Task FireAndForget_DisposedTask_DoesNotLogError()
     {
         var sink = new CapturingSink();

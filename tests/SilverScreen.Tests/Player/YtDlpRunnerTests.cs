@@ -252,6 +252,13 @@ public sealed class YtDlpMediaResolverTests
         Assert.Empty(tracks);
     }
 
+    [Fact]
+    public void Invalidate_EvictsCachedVideoEntry()
+    {
+        using var resolver = CreateResolver(new FakeYtDlpRunner());
+        resolver.Invalidate("test_video_id");
+    }
+
     private static YtDlpMediaResolver CreateResolver(IYtDlpRunner runner)
     {
         return new YtDlpMediaResolver(

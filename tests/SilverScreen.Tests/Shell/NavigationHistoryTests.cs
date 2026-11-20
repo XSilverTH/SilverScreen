@@ -208,4 +208,43 @@ public sealed class NavigationHistoryTests
         Assert.Equal(NavigationPage.Home, nav.CurrentPage);
         Assert.False(nav.CanGoBack);
     }
+
+    [Fact]
+    public void PageQueries_AndEntries_ReturnExpectedMetadata()
+    {
+        using var nav = new NavigationService();
+        Assert.True(nav.CanNavigateTo(NavigationPage.Home));
+        Assert.True(nav.CanNavigateTo(NavigationPage.Search));
+        Assert.False(nav.CanNavigateTo((NavigationPage)999));
+
+        Assert.True(nav.TryGetPage("home", out var homePage));
+        Assert.Equal(NavigationPage.Home, homePage);
+        Assert.False(nav.TryGetPage("nonexistent", out _));
+
+        Assert.Equal("home", nav.GetStackName(NavigationPage.Home));
+        Assert.Null(nav.GetStackName((NavigationPage)999));
+
+        NavigationPageChangedEventArgs? capturedArgs = null;
+        nav.PageChanged += (_, args) => capturedArgs = args;
+        nav.Initialize();
+        nav.NavigateTo(NavigationPage.Search);
+
+        Assert.NotNull(capturedArgs);
+        Assert.NotNull(capturedArgs.CurrentEntry);
+        Assert.Equal(NavigationPage.Search, capturedArgs.CurrentEntry.Page);
+        Assert.NotNull(capturedArgs.PreviousEntry);
+        Assert.Equal(NavigationPage.Home, capturedArgs.PreviousEntry.Page);
+        Assert.NotNull(nav.PreviousEntry);
+    }
+
+    [Fact]
+    public void NavigationPageRegistration_Properties_AreSetCorrectly()
+    {
+        var registration = new NavigationPageRegistration(NavigationPage.Home, "home", true);
+        Assert.Equal(NavigationPage.Home, registration.Page);
+        Assert.Equal("home", registration.StackName);
+        Assert.True(registration.IsShellPage);
+        Assert.Null(registration.OnEnter);
+        Assert.Null(registration.OnLeave);
+    }
 }
