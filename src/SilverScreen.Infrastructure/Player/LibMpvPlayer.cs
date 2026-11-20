@@ -33,7 +33,7 @@ public sealed record LibMpvPlaybackState(
 public sealed class LibMpvPlayer : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<LibMpvPlayer>();
-    private Task? _commandPump;
+
     private readonly Channel<Action> _commands = Channel.CreateUnbounded<Action>(new UnboundedChannelOptions
     {
         SingleReader = true,
@@ -41,18 +41,23 @@ public sealed class LibMpvPlayer : IDisposable
     });
 
     private readonly Action<Action> _dispatch;
-    private Task? _eventPump;
     private readonly Lock _gate = new();
-    private readonly Lazy<ILibMpvNativeApi> _lazyNative;
-    private ILibMpvNativeApi Native => _lazyNative.Value;
     private readonly Lock _initLock = new();
+    private readonly Lazy<ILibMpvNativeApi> _lazyNative;
+    private readonly Lock _seekGate = new();
+    private string? _availabilityError;
+    private Task? _commandPump;
+    private string? _cookieFilePath;
+    private Task? _eventPump;
+    private string? _ffmpegVersion;
+    private nint _handle;
     private bool _initialized;
     private bool _isAvailable = true;
-    private string? _availabilityError;
-    private readonly Lock _seekGate = new();
-    private string? _cookieFilePath;
-    private nint _handle;
     private string? _lastErrorMessage;
+
+
+    private string? _lastReportedHwdec;
+    private string? _mpvVersion;
     private (double Seconds, bool Exact)? _pendingSeek;
     private AppPreferences? _preferences;
     private string _quality = "Best";
@@ -61,8 +66,6 @@ public sealed class LibMpvPlayer : IDisposable
     private PlaybackRequest? _request;
     private bool _resumeAfterRenderer;
     private bool _seekQueued;
-    private string? _mpvVersion;
-    private string? _ffmpegVersion;
 
     private LibMpvPlaybackState _state = new(-1, TimeSpan.Zero, TimeSpan.Zero, true, false, 100, 1, false, false,
         false, [], []);
@@ -70,11 +73,13 @@ public sealed class LibMpvPlayer : IDisposable
     private GCHandle _updateCallbackHandle;
 
 
-    public LibMpvPlayer(Action<Action> dispatch) : this(new Lazy<ILibMpvNativeApi>(static () => new LibMpvNative()), dispatch, lazy: true)
+    public LibMpvPlayer(Action<Action> dispatch) : this(new Lazy<ILibMpvNativeApi>(static () => new LibMpvNative()),
+        dispatch, true)
     {
     }
 
-    internal LibMpvPlayer(ILibMpvNativeApi native, Action<Action> dispatch) : this(new Lazy<ILibMpvNativeApi>(() => native), dispatch, lazy: false)
+    internal LibMpvPlayer(ILibMpvNativeApi native, Action<Action> dispatch) : this(
+        new Lazy<ILibMpvNativeApi>(() => native), dispatch, false)
     {
     }
 
@@ -82,11 +87,10 @@ public sealed class LibMpvPlayer : IDisposable
     {
         _lazyNative = lazyNative ?? throw new ArgumentNullException(nameof(lazyNative));
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
-        if (!lazy)
-        {
-            EnsureInitialized();
-        }
+        if (!lazy) EnsureInitialized();
     }
+
+    private ILibMpvNativeApi Native => _lazyNative.Value;
 
     public bool IsAvailable =>
         _initialized ? _isAvailable :
@@ -97,61 +101,6 @@ public sealed class LibMpvPlayer : IDisposable
         _initialized ? _availabilityError :
         _lazyNative.IsValueCreated ? _lazyNative.Value.AvailabilityError :
         null;
-
-    private void EnsureInitialized()
-    {
-        if (_initialized || IsDisposing) return;
-        lock (_initLock)
-        {
-            if (_initialized || IsDisposing) return;
-            _initialized = true;
-            var native = _lazyNative.Value;
-            _isAvailable = native.IsAvailable;
-            _availabilityError = native.AvailabilityError;
-            if (!_isAvailable)
-            {
-                Logger.Warning("libmpv native library is not available: {Error}", _availabilityError);
-                return;
-            }
-
-            try
-            {
-                _handle = native.Create();
-                if (_handle == 0) throw new LibMpvException("mpv_create returned no handle.");
-                Check(native.SetOptionString(_handle, "config", "no"));
-                Check(native.SetOptionString(_handle, "vo", "libmpv"));
-                Check(native.SetOptionString(_handle, "hwdec", "auto-safe"));
-                Check(native.SetOptionString(_handle, "demuxer-max-bytes", "33554432"));
-                Check(native.SetOptionString(_handle, "demuxer-max-back-bytes", "16777216"));
-                Check(native.Initialize(_handle));
-                Check(native.RequestLogMessages(_handle, "info"));
-                Observe("time-pos", LibMpvFormat.Double);
-                Observe("duration", LibMpvFormat.Double);
-                Observe("pause", LibMpvFormat.Flag);
-                Observe("volume", LibMpvFormat.Double);
-                Observe("mute", LibMpvFormat.Flag);
-                Observe("speed", LibMpvFormat.Double);
-                Observe("seekable", LibMpvFormat.Flag);
-                Observe("playlist-pos", LibMpvFormat.Int64);
-                Observe("path", LibMpvFormat.String);
-                Observe("sid", LibMpvFormat.Int64);
-                Observe("paused-for-cache", LibMpvFormat.Flag);
-                Observe("cache-buffering-state", LibMpvFormat.Int64);
-                Observe("hwdec-current", LibMpvFormat.String);
-                _commandPump = Task.Run(PumpCommandsAsync);
-                _eventPump = Task.Run(PumpEvents);
-                Logger.Debug("LibMpvPlayer initialized successfully");
-            }
-            catch (Exception exception)
-            {
-                Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
-                _availabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
-                _isAvailable = false;
-                if (_handle != 0) native.Destroy(_handle);
-                _handle = 0;
-            }
-        }
-    }
 
     private bool IsDisposing { get; set; }
 
@@ -206,6 +155,61 @@ public sealed class LibMpvPlayer : IDisposable
         if (_handle != 0) Native.Destroy(_handle);
         _handle = 0;
         if (_lazyNative.IsValueCreated) _lazyNative.Value.Dispose();
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_initialized || IsDisposing) return;
+        lock (_initLock)
+        {
+            if (_initialized || IsDisposing) return;
+            _initialized = true;
+            var native = _lazyNative.Value;
+            _isAvailable = native.IsAvailable;
+            _availabilityError = native.AvailabilityError;
+            if (!_isAvailable)
+            {
+                Logger.Warning("libmpv native library is not available: {Error}", _availabilityError);
+                return;
+            }
+
+            try
+            {
+                _handle = native.Create();
+                if (_handle == 0) throw new LibMpvException("mpv_create returned no handle.");
+                Check(native.SetOptionString(_handle, "config", "no"));
+                Check(native.SetOptionString(_handle, "vo", "libmpv"));
+                Check(native.SetOptionString(_handle, "hwdec", "auto-safe"));
+                Check(native.SetOptionString(_handle, "demuxer-max-bytes", "33554432"));
+                Check(native.SetOptionString(_handle, "demuxer-max-back-bytes", "16777216"));
+                Check(native.Initialize(_handle));
+                Check(native.RequestLogMessages(_handle, "info"));
+                Observe("time-pos", LibMpvFormat.Double);
+                Observe("duration", LibMpvFormat.Double);
+                Observe("pause", LibMpvFormat.Flag);
+                Observe("volume", LibMpvFormat.Double);
+                Observe("mute", LibMpvFormat.Flag);
+                Observe("speed", LibMpvFormat.Double);
+                Observe("seekable", LibMpvFormat.Flag);
+                Observe("playlist-pos", LibMpvFormat.Int64);
+                Observe("path", LibMpvFormat.String);
+                Observe("sid", LibMpvFormat.Int64);
+                Observe("paused-for-cache", LibMpvFormat.Flag);
+                Observe("cache-buffering-state", LibMpvFormat.Int64);
+                Observe("hwdec-current", LibMpvFormat.String);
+                _commandPump = Task.Run(PumpCommandsAsync);
+                _eventPump = Task.Run(PumpEvents);
+                Logger.Debug("LibMpvPlayer initialized successfully");
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to initialize LibMpvPlayer handle or options");
+                _availabilityError = DiagnosticSanitizer.Sanitize(exception.Message);
+                _isAvailable = false;
+                if (_handle != 0) native.Destroy(_handle);
+                _handle = 0;
+            }
+        }
     }
 
     public event EventHandler? RenderRequested;
@@ -592,9 +596,6 @@ public sealed class LibMpvPlayer : IDisposable
         }
     }
 
-
-    private string? _lastReportedHwdec;
-
     private void LogHardwareDecodingStatus()
     {
         if (_handle == 0) return;
@@ -802,19 +803,22 @@ public sealed class LibMpvPlayer : IDisposable
 
                     var title = element.TryGetProperty("title", out var titleProp)
                         ? titleProp.GetString()
-                        : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
+                        : element.TryGetProperty("metadata", out var meta) &&
+                          meta.TryGetProperty("title", out var metaTitle)
                             ? metaTitle.GetString()
                             : null;
 
                     var language = element.TryGetProperty("lang", out var langProp)
                         ? langProp.GetString()
-                        : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
+                        : element.TryGetProperty("metadata", out var meta2) &&
+                          meta2.TryGetProperty("language", out var metaLang)
                             ? metaLang.GetString()
                             : null;
 
                     var isSelected = (element.TryGetProperty("selected", out var selProp) &&
                                       (selProp.ValueKind == JsonValueKind.True ||
-                                       (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)))) ||
+                                       (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(),
+                                           "yes", StringComparison.OrdinalIgnoreCase)))) ||
                                      trackId == selectedTrackId;
 
                     var label = string.IsNullOrWhiteSpace(title)
@@ -1157,13 +1161,15 @@ public sealed class LibMpvPlayer : IDisposable
 
                     var title = element.TryGetProperty("title", out var titleProp)
                         ? titleProp.GetString()
-                        : element.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("title", out var metaTitle)
+                        : element.TryGetProperty("metadata", out var meta) &&
+                          meta.TryGetProperty("title", out var metaTitle)
                             ? metaTitle.GetString()
                             : null;
 
                     var lang = element.TryGetProperty("lang", out var langProp)
                         ? langProp.GetString()
-                        : element.TryGetProperty("metadata", out var meta2) && meta2.TryGetProperty("language", out var metaLang)
+                        : element.TryGetProperty("metadata", out var meta2) &&
+                          meta2.TryGetProperty("language", out var metaLang)
                             ? metaLang.GetString()
                             : null;
 
@@ -1175,24 +1181,29 @@ public sealed class LibMpvPlayer : IDisposable
                     int? h = element.TryGetProperty("demux-h", out var hProp) && hProp.TryGetInt32(out var th)
                         ? th
                         : null;
-                    double? fps = element.TryGetProperty("demux-fps", out var fpsProp) && fpsProp.TryGetDouble(out var tfps)
+                    double? fps = element.TryGetProperty("demux-fps", out var fpsProp) &&
+                                  fpsProp.TryGetDouble(out var tfps)
                         ? tfps
                         : null;
-                    int? sr = element.TryGetProperty("demux-samplerate", out var srProp) && srProp.TryGetInt32(out var tsr)
+                    int? sr = element.TryGetProperty("demux-samplerate", out var srProp) &&
+                              srProp.TryGetInt32(out var tsr)
                         ? tsr
                         : null;
                     var ch = element.TryGetProperty("demux-channels", out var chProp) ? chProp.GetString() : null;
-                    double? br = element.TryGetProperty("demux-bitrate", out var brProp) && brProp.TryGetDouble(out var tbr)
+                    double? br = element.TryGetProperty("demux-bitrate", out var brProp) &&
+                                 brProp.TryGetDouble(out var tbr)
                         ? tbr
                         : null;
 
                     var isSelected = element.TryGetProperty("selected", out var selProp) &&
                                      (selProp.ValueKind == JsonValueKind.True ||
-                                      (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+                                      (selProp.ValueKind == JsonValueKind.String && string.Equals(selProp.GetString(),
+                                          "yes", StringComparison.OrdinalIgnoreCase)));
 
                     var isDefault = element.TryGetProperty("default", out var defProp) &&
                                     (defProp.ValueKind == JsonValueKind.True ||
-                                     (defProp.ValueKind == JsonValueKind.String && string.Equals(defProp.GetString(), "yes", StringComparison.OrdinalIgnoreCase)));
+                                     (defProp.ValueKind == JsonValueKind.String && string.Equals(defProp.GetString(),
+                                         "yes", StringComparison.OrdinalIgnoreCase)));
 
                     tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br,
                         isSelected, isDefault));

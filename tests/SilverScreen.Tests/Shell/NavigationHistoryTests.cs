@@ -240,7 +240,7 @@ public sealed class NavigationHistoryTests
     [Fact]
     public void NavigationPageRegistration_Properties_AreSetCorrectly()
     {
-        var registration = new NavigationPageRegistration(NavigationPage.Home, "home", true);
+        var registration = new NavigationPageRegistration(NavigationPage.Home, "home");
         Assert.Equal(NavigationPage.Home, registration.Page);
         Assert.Equal("home", registration.StackName);
         Assert.True(registration.IsShellPage);

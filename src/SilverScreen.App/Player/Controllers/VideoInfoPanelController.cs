@@ -7,6 +7,7 @@ using SilverScreen.Core.Player;
 using SilverScreen.Player.RichText;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
+using Object = GObject.Object;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -88,22 +89,6 @@ internal sealed class VideoInfoPanelController : IDisposable
         SetInfoContent(null);
     }
 
-    private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _revealer.SetVisible(false);
-        }
-    }
-
-    private void OnCueRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _cueRevealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _cueRevealer.SetVisible(false);
-        }
-    }
-
     public bool IsOpen { get; private set; }
 
     public void Dispose()
@@ -118,6 +103,18 @@ internal sealed class VideoInfoPanelController : IDisposable
         _infoLoadCancellation?.Cancel();
         _infoLoadCancellation?.Dispose();
         _infoLoadCancellation = null;
+    }
+
+    private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
+            _revealer.SetVisible(false);
+    }
+
+    private void OnCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _cueRevealer is { ChildRevealed: false, RevealChild: false })
+            _cueRevealer.SetVisible(false);
     }
 
     public void Show()

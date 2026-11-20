@@ -36,7 +36,8 @@ internal static class QueuePlaylistMove
             expected.AddRange(current.Where((t, index) => index != candidateIndex).Select(t => t.Id));
             expected.Insert(destinationIndex, candidateId);
 
-            var matches = !next.Where((t, index) => !string.Equals(expected[index], t.Id, StringComparison.Ordinal)).Any();
+            var matches = !next.Where((t, index) => !string.Equals(expected[index], t.Id, StringComparison.Ordinal))
+                .Any();
 
             if (!matches) continue;
             fromIndex = candidateIndex;

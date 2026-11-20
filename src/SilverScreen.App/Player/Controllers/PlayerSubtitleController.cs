@@ -33,6 +33,7 @@ internal sealed class PlayerSubtitleController(
             UpdateButton();
             return;
         }
+
         var trackItemsChanged = !HaveSameTrackLabels(_tracks, tracks);
         _tracks = tracks;
 
@@ -72,7 +73,8 @@ internal sealed class PlayerSubtitleController(
     private static bool HaveSameTrackLabels(IReadOnlyList<LibMpvSubtitleTrack> a, IReadOnlyList<LibMpvSubtitleTrack> b)
     {
         if (a.Count != b.Count) return false;
-        return !a.Where((t, i) => t.Id != b[i].Id || !string.Equals(t.Label, b[i].Label, StringComparison.Ordinal)).Any();
+        return !a.Where((t, i) => t.Id != b[i].Id || !string.Equals(t.Label, b[i].Label, StringComparison.Ordinal))
+            .Any();
     }
 
     public void OnSelectionChanged()

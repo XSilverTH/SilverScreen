@@ -219,7 +219,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
             ResponseDrainTimeout = TimeSpan.FromSeconds(2),
             AutomaticDecompression = DecompressionMethods.All
         };
-        return new HttpClient(handler, disposeHandler: true)
+        return new HttpClient(handler, true)
         {
             Timeout = DefaultTimeout
         };

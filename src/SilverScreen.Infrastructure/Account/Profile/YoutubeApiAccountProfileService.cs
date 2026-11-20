@@ -40,7 +40,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         {
             Logger.Debug("Fetching YouTube account profile");
             var startTime = Stopwatch.GetTimestamp();
-            
+
             var profile = await _clientProvider.GetAuthenticatedClient().Account
                 .GetProfileAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -52,7 +52,8 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             }
 
             var accountProfile = new AccountProfile(profile.DisplayName, profile.Avatar?.Url.ToString());
-            Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)", Stopwatch.GetElapsedTime(startTime).Milliseconds);
+            Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)",
+                Stopwatch.GetElapsedTime(startTime).Milliseconds);
             return new AccountProfileResult(AccountProfileLoadStatus.Success, accountProfile);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

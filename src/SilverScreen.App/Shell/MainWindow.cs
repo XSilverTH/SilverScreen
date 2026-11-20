@@ -194,13 +194,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             () => Widget.OnCloseRequest -= OnCloseRequest);
         ReportStartupDependencyWarnings();
         if (!string.IsNullOrWhiteSpace(initialQuery))
-        {
             Functions.IdleAdd(0, () =>
             {
                 if (!_closed) OnSearchSubmitted(initialQuery);
                 return false;
             });
-        }
     }
 
     private void SetupDesktopBackShortcuts()
@@ -235,7 +233,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (!_navigationService.CanGoBack) return false;
         OnNavigationBackButtonClicked();
         return true;
-
     }
 
     private void OnMousePressed(GestureClick sender, GestureClick.PressedSignalArgs args)
@@ -330,7 +327,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnSearchSubmitted(string query)
     {
         var trimmed = query.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed) || SearchViewModel.IsDirectVideoUrl(trimmed) || SearchViewModel.IsChannelTarget(trimmed))
+        if (string.IsNullOrWhiteSpace(trimmed) || SearchViewModel.IsDirectVideoUrl(trimmed) ||
+            SearchViewModel.IsChannelTarget(trimmed))
         {
             SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
             return;

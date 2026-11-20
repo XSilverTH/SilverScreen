@@ -4,6 +4,7 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
 using static GLib.Functions;
+using Object = GObject.Object;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -155,12 +156,10 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         }
     }
 
-    private void OnSkipRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    private void OnSkipRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
         if (args.Pspec.GetName() == "child-revealed" && _skipRevealer is { ChildRevealed: false, RevealChild: false })
-        {
             _skipRevealer.SetVisible(false);
-        }
     }
 
     private void ShowManualPrompt(SponsorBlockSegment segment)

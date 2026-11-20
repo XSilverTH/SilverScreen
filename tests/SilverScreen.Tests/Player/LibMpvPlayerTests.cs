@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Text;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
@@ -465,17 +466,17 @@ public sealed class LibMpvPlayerTests
     {
         var native = new RecordingNative();
         native.ReadProperties["track-list"] = """
-            [
-                {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "demux-fps": 60.0, "selected": true, "default": true},
-                {"id": 2, "type": "audio", "codec": "opus", "title": "English", "lang": "eng", "demux-samplerate": 48000, "demux-channels": "stereo", "demux-bitrate": 160000.0, "selected": true, "default": false},
-                {"id": 3, "type": "sub", "codec": "webvtt", "title": "French", "lang": "fra", "selected": false, "default": false}
-            ]
-            """;
+                                              [
+                                                  {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "demux-fps": 60.0, "selected": true, "default": true},
+                                                  {"id": 2, "type": "audio", "codec": "opus", "title": "English", "lang": "eng", "demux-samplerate": 48000, "demux-channels": "stereo", "demux-bitrate": 160000.0, "selected": true, "default": false},
+                                                  {"id": 3, "type": "sub", "codec": "webvtt", "title": "French", "lang": "fra", "selected": false, "default": false}
+                                              ]
+                                              """;
 
         using var player = new LibMpvPlayer(native, action => action());
         player.HandleFileLoaded();
 
-        var stats = player.GetPlaybackStats(includeTracks: true);
+        var stats = player.GetPlaybackStats(true);
         Assert.NotNull(stats);
         Assert.Equal(3, stats.Tracks.Count);
 
@@ -514,15 +515,15 @@ public sealed class LibMpvPlayerTests
     {
         var native = new RecordingNative();
         native.ReadProperties["track-list"] = """
-            [
-                {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "selected": true}
-            ]
-            """;
+                                              [
+                                                  {"id": 1, "type": "video", "codec": "av1", "demux-w": 1920, "demux-h": 1080, "selected": true}
+                                              ]
+                                              """;
 
         using var player = new LibMpvPlayer(native, action => action());
         player.HandleFileLoaded();
 
-        var stats = player.GetPlaybackStats(includeTracks: false);
+        var stats = player.GetPlaybackStats(false);
         Assert.NotNull(stats);
         Assert.Empty(stats.Tracks);
     }
@@ -533,12 +534,12 @@ public sealed class LibMpvPlayerTests
         var native = new RecordingNative();
         native.ReadProperties["sid"] = "2";
         native.ReadProperties["track-list"] = """
-            [
-                {"id": 1, "type": "sub", "title": "English", "lang": "en", "selected": false},
-                {"id": 2, "type": "sub", "title": "Japanese", "lang": "ja", "selected": true},
-                {"id": 3, "type": "video", "codec": "av1"}
-            ]
-            """;
+                                              [
+                                                  {"id": 1, "type": "sub", "title": "English", "lang": "en", "selected": false},
+                                                  {"id": 2, "type": "sub", "title": "Japanese", "lang": "ja", "selected": true},
+                                                  {"id": 3, "type": "video", "codec": "av1"}
+                                              ]
+                                              """;
 
         var states = new ConcurrentQueue<LibMpvPlaybackState>();
         using var player = new LibMpvPlayer(native, action => action());
@@ -685,13 +686,9 @@ public sealed class LibMpvPlayerTests
         var (paramType, handle) = LibMpvNative.ResolveNativeDisplayParam();
         Assert.True(paramType is 0 or 8 or 9);
         if (paramType == 0)
-        {
             Assert.Equal(0, handle);
-        }
         else
-        {
             Assert.NotEqual(0, handle);
-        }
     }
 
     [Fact]
@@ -722,8 +719,8 @@ public sealed class LibMpvPlayerTests
         native.ReadProperties["hwdec-current"] = "nvdec";
         using var player = new LibMpvPlayer(native, action => action());
 
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes("hwdec-current\0");
-        var valueBytes = System.Text.Encoding.UTF8.GetBytes("nvdec\0");
+        var nameBytes = Encoding.UTF8.GetBytes("hwdec-current\0");
+        var valueBytes = Encoding.UTF8.GetBytes("nvdec\0");
         var nameHandle = GCHandle.Alloc(nameBytes, GCHandleType.Pinned);
         var valueHandle = GCHandle.Alloc(valueBytes, GCHandleType.Pinned);
         var propertyStruct = new LibMpvEventProperty(

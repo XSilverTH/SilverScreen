@@ -13,7 +13,8 @@ namespace SilverScreen.Core.Common;
 ///     <para>
 ///         Standard C# arrays (<c>T[]</c>) exhibit reference equality when used inside record types or compared
 ///         with equality operators. <see cref="EquatableArray{T}" /> provides value-based equality semantics by
-///         comparing elements sequentially via <see cref="MemoryExtensions.SequenceEqual{T}(ReadOnlySpan{T}, ReadOnlySpan{T})" />.
+///         comparing elements sequentially via
+///         <see cref="MemoryExtensions.SequenceEqual{T}(ReadOnlySpan{T}, ReadOnlySpan{T})" />.
 ///     </para>
 ///     <para>
 ///         Designed for Native AOT friendliness: avoids runtime code generation when serialized with System.Text.Json
@@ -142,9 +143,9 @@ public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
     public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
-        
-        return 
-            elementType == typeof(string) ? new EquatableArrayJsonConverter<string>():
+
+        return
+            elementType == typeof(string) ? new EquatableArrayJsonConverter<string>() :
             elementType == typeof(int) ? new EquatableArrayJsonConverter<int>() :
             elementType == typeof(long) ? new EquatableArrayJsonConverter<long>() :
             elementType == typeof(double) ? new EquatableArrayJsonConverter<double>() :

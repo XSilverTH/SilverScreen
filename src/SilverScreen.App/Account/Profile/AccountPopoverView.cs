@@ -12,13 +12,13 @@ namespace SilverScreen.Account.Profile;
 public partial class AccountPopoverView : ViewBase<Bin>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
+    private readonly NativeMemoryPressure _avatarPressure = new();
     private readonly Action _openWebLogin;
     private readonly Action<AccountProfilePresentationStatus, bool, string, Texture?> _sessionAppearanceChanged;
     private readonly IThumbnailService _thumbnails;
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
-    private readonly NativeMemoryPressure _avatarPressure = new();
     private string? _avatarUrl;
     private bool _editing;
 

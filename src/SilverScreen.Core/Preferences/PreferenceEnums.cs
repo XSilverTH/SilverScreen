@@ -17,7 +17,8 @@ public enum ThemeMode
 
 /// <summary>
 ///     Preferred video quality.
-///     Persisted as "Best", "4320p", "2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", or "144p" (see <see cref="VideoQualities" />).
+///     Persisted as "Best", "4320p", "2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", or "144p" (see
+///     <see cref="VideoQualities" />).
 /// </summary>
 public enum VideoQuality
 {
@@ -71,11 +72,14 @@ public static class ThemeModes
         };
     }
 
-    public static ThemeMode Parse(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? ThemeMode.System : 
-        Enum.GetValues<ThemeMode>()
-            .FirstOrDefault(mode => 
-                string.Equals(value.Trim(), mode.ToPersistedString(), StringComparison.OrdinalIgnoreCase));
+    public static ThemeMode Parse(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? ThemeMode.System
+            : Enum.GetValues<ThemeMode>()
+                .FirstOrDefault(mode =>
+                    string.Equals(value.Trim(), mode.ToPersistedString(), StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>

@@ -463,14 +463,12 @@ public sealed class YtDlpMediaResolver(
 
             long? viewCount = null;
             if (root.TryGetProperty("view_count", out var viewProp))
-            {
                 viewCount = viewProp.ValueKind switch
                 {
                     JsonValueKind.Number when viewProp.TryGetInt64(out var vc) => vc,
                     JsonValueKind.String when long.TryParse(viewProp.GetString(), out var parsedVc) => parsedVc,
                     _ => viewCount
                 };
-            }
 
             DateTimeOffset? publishedAt = null;
             if (root.TryGetProperty("timestamp", out var tsProp) &&

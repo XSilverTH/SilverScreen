@@ -71,7 +71,9 @@ public sealed class ExternalMpvPlaybackService(
     public Task<string> PlayAsync(PlaybackRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return request.Videos.IsDefaultOrEmpty ? Task.FromResult(PlaybackRequest.EmptyQueueMessage) : LaunchMpvAsync(request, false);
+        return request.Videos.IsDefaultOrEmpty
+            ? Task.FromResult(PlaybackRequest.EmptyQueueMessage)
+            : LaunchMpvAsync(request, false);
     }
 
     private async Task<string> LaunchMpvAsync(
@@ -343,7 +345,7 @@ public sealed class ExternalMpvPlaybackService(
                 extraArguments,
                 retryPlaybackUrls)
             .ConfigureAwait(false);
-         Logger.Information("MPV fallback relaunch finished: {Status}", status);
+        Logger.Information("MPV fallback relaunch finished: {Status}", status);
     }
 
     private static void CleanupCookieLease(IDisposable? cookieFileLease, string reason)

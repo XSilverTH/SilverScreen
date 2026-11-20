@@ -1,9 +1,9 @@
-using System.Text.RegularExpressions;
-using SilverScreen.Core.Preferences;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
@@ -18,7 +18,8 @@ namespace SilverScreen.Infrastructure.YouTube;
 ///         <list type="bullet">
 ///             <item>
 ///                 <description>
-///                     <b>Active:</b> <see cref="ToMpvFormat(string, PreferredVideoCodec)" /> provides the single source of truth mapping
+///                     <b>Active:</b> <see cref="ToMpvFormat(string, PreferredVideoCodec)" /> provides the single source
+///                     of truth mapping
 ///                     user-configured
 ///                     video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command
 ///                     builders.
@@ -46,17 +47,16 @@ public static partial class YtDlpFormatSelector
     ///     Single source of truth mapping a quality label to the yt-dlp/mpv format selector.
     ///     Null means "Best" (leave the player default in place). Pure: no I/O.
     /// </summary>
-    public static string? ToMpvFormat(string preferredQuality, PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
+    public static string? ToMpvFormat(string preferredQuality,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
         var targetHeight = ParseTargetHeight(preferredQuality);
         var codecPrefix = BuildCodecTargetFormat(preferredCodec, targetHeight);
 
         if (targetHeight is null)
-        {
-            return codecPrefix is null 
-                ? null 
+            return codecPrefix is null
+                ? null
                 : $"{codecPrefix}bestvideo+bestaudio/best";
-        }
 
         var baseFormat = $"bestvideo[height<={targetHeight.Value}]+bestaudio/best[height<={targetHeight.Value}]";
         return codecPrefix is not null ? $"{codecPrefix}{baseFormat}" : baseFormat;
@@ -69,8 +69,10 @@ public static partial class YtDlpFormatSelector
         return codec switch
         {
             PreferredVideoCodec.Av1 => $"bestvideo[vcodec^=av01]{heightCondition}+bestaudio/",
-            PreferredVideoCodec.Vp9 => $"bestvideo[vcodec^=vp09]{heightCondition}+bestaudio/bestvideo[vcodec^=vp9]{heightCondition}+bestaudio/",
-            PreferredVideoCodec.H264 => $"bestvideo[vcodec^=avc1]{heightCondition}+bestaudio/bestvideo[vcodec^=h264]{heightCondition}+bestaudio/",
+            PreferredVideoCodec.Vp9 =>
+                $"bestvideo[vcodec^=vp09]{heightCondition}+bestaudio/bestvideo[vcodec^=vp9]{heightCondition}+bestaudio/",
+            PreferredVideoCodec.H264 =>
+                $"bestvideo[vcodec^=avc1]{heightCondition}+bestaudio/bestvideo[vcodec^=h264]{heightCondition}+bestaudio/",
             _ => null
         };
     }
@@ -111,14 +113,18 @@ public static partial class YtDlpFormatSelector
             var maxTargetHeight = ParseTargetHeight(preferredQuality);
 
             // Separate formats into muxed, video-only, audio-only
-            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
-            var videoOnly = formats.Where(f => f is { HasVideo: true, HasAudio: false } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
-            var audioOnly = formats.Where(f => f is { HasVideo: false, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
+            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url))
+                .ToList();
+            var videoOnly = formats
+                .Where(f => f is { HasVideo: true, HasAudio: false } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
+            var audioOnly = formats
+                .Where(f => f is { HasVideo: false, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
 
             // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
             // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
             ResolvedMediaStream? selectedVideo = null;
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false, preferredCodec);
+            if (videoOnly.Count > 0)
+                selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false, preferredCodec);
 
             ResolvedMediaStream? selectedAudio = null;
             if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
@@ -153,7 +159,8 @@ public static partial class YtDlpFormatSelector
             }
 
             // No compliant stream is available, so relax the cap for the existing fallback behavior.
-            if (videoOnly.Count > 0) selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, true, preferredCodec);
+            if (videoOnly.Count > 0)
+                selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, true, preferredCodec);
 
             if (selectedVideo is not null && selectedAudio is not null)
             {
@@ -214,11 +221,13 @@ public static partial class YtDlpFormatSelector
         if (string.Equals(trimmed, "2k", StringComparison.OrdinalIgnoreCase)) return 1440;
 
         var match = HeightRegex().Match(trimmed);
-        if (match.Success && int.TryParse(match.Groups["height"].ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var h))
+        if (match.Success && int.TryParse(match.Groups["height"].ValueSpan, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var h))
             return h;
 
         var bareNumberMatch = BareNumberRegex().Match(trimmed);
-        if (bareNumberMatch.Success && int.TryParse(bareNumberMatch.ValueSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bareH))
+        if (bareNumberMatch.Success && int.TryParse(bareNumberMatch.ValueSpan, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var bareH))
             return bareH;
 
         if (trimmed.Contains("8K", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("4320")) return 4320;
@@ -262,7 +271,7 @@ public static partial class YtDlpFormatSelector
 
             return
             [
-                .. 
+                ..
                 from @group in groupedByHeight
                 let height = @group.Key
                 let maxFps = @group.Max(v => v.Fps) ?? 0
@@ -432,6 +441,7 @@ public static partial class YtDlpFormatSelector
 
     [GeneratedRegex(@"(?<height>\d{2,4})p", RegexOptions.IgnoreCase, "en-US")]
     private static partial Regex HeightRegex();
+
     [GeneratedRegex(@"^\d{2,4}$")]
     private static partial Regex BareNumberRegex();
 }

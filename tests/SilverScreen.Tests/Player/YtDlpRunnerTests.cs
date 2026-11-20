@@ -225,15 +225,15 @@ public sealed class YtDlpMediaResolverTests
     public async Task GetQualityTracksAsync_ReturnsParsedQualityTracks()
     {
         var json = """
-        {
-            "id": "dQw4w9WgXcQ",
-            "formats": [
-                { "format_id": "137", "height": 1080, "fps": 60, "vcodec": "avc1" },
-                { "format_id": "136", "height": 720, "fps": 30, "vcodec": "avc1" },
-                { "format_id": "weird", "height": 864, "fps": 30, "vcodec": "avc1" }
-            ]
-        }
-        """;
+                   {
+                       "id": "dQw4w9WgXcQ",
+                       "formats": [
+                           { "format_id": "137", "height": 1080, "fps": 60, "vcodec": "avc1" },
+                           { "format_id": "136", "height": 720, "fps": 30, "vcodec": "avc1" },
+                           { "format_id": "weird", "height": 864, "fps": 30, "vcodec": "avc1" }
+                       ]
+                   }
+                   """;
         var runner = new FakeYtDlpRunner { Result = new ProcessResult(0, json, "") };
         using var resolver = CreateResolver(runner);
 

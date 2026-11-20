@@ -1,7 +1,7 @@
-using SilverScreen.Core.Preferences;
 using System.Diagnostics;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.YouTube;
 
 namespace SilverScreen.Infrastructure.Player;
@@ -90,7 +90,8 @@ public static class MpvCommandBuilder
         return playbackUrls;
     }
 
-    public static string? BuildYtdlFormat(string videoQuality, PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
+    public static string? BuildYtdlFormat(string videoQuality,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
         return YtDlpFormatSelector.ToMpvFormat(videoQuality, preferredCodec);
     }

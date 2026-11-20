@@ -217,7 +217,8 @@ public static class PlaybackStatsFormatter
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Container Frame Rate:</span> <b>{(stats.ContainerFps is > 0 ? $"{stats.ContainerFps.Value:0.00} fps" : "—")}</b>");
         if (stats.VsyncRatio is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  <span foreground=\"#9a9996\">Vsync Ratio:</span> <b>{stats.VsyncRatio.Value:0.000}</b>");
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"  <span foreground=\"#9a9996\">Vsync Ratio:</span> <b>{stats.VsyncRatio.Value:0.000}</b>");
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Decoder Dropped Frames:</span> <b>{stats.DroppedFrames ?? 0}</b>");
         sb.AppendLine(
@@ -367,6 +368,7 @@ public static class PlaybackStatsFormatter
                 sb.AppendLine(
                     $"  <span foreground=\"#9a9996\">… and {subTracks.Count - displayedSubs} more subtitle tracks</span>");
         }
+
         return sb.ToString().TrimEnd();
     }
 

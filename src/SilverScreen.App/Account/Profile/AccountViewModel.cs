@@ -86,7 +86,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             SetManualSessionError("Nothing to save — paste the contents of your cookies.txt file first.");
             return false;
         }
-        
+
         var trimmed = cookieContent.Trim();
         try
         {

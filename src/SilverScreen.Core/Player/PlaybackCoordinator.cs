@@ -119,16 +119,15 @@ public sealed class PlaybackCoordinator(
 
     private static int ResolveCurrentIndex(PlaybackRequest request, int stateIndex, string? currentVideoId)
     {
-        if (currentVideoId is null) 
-            return stateIndex >= 0 && stateIndex < request.Videos.Length 
-                ? stateIndex 
+        if (currentVideoId is null)
+            return stateIndex >= 0 && stateIndex < request.Videos.Length
+                ? stateIndex
                 : -1;
         for (var index = 0; index < request.Videos.Length; index++)
             if (string.Equals(request.Videos[index].Id, currentVideoId, StringComparison.Ordinal))
                 return index;
 
         return -1;
-
     }
 
     public void CompleteActivePlayback(long playbackId)

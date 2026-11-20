@@ -2,6 +2,7 @@ using System.Globalization;
 using Gtk;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
+using Object = GObject.Object;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -239,19 +240,17 @@ internal sealed class PlayerOsdController : IDisposable
             () => _preferences.PreferencesChanged -= OnPreferencesChanged);
     }
 
-    private void OnOsdRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _osdRevealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _osdRevealer.SetVisible(false);
-        }
-    }
-
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
         _lifetime.Dispose();
         HideImmediate();
+    }
+
+    private void OnOsdRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _osdRevealer is { ChildRevealed: false, RevealChild: false })
+            _osdRevealer.SetVisible(false);
     }
 
     public void ShowSeek(int deltaSeconds)

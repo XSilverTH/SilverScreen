@@ -192,7 +192,8 @@ public sealed class YtDlpRunner : IYtDlpRunner
         for (var i = 0; i < startInfo.ArgumentList.Count; i++)
         {
             var argument = startInfo.ArgumentList[i];
-            redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument) || IsUrlOrVideoTarget(argument)
+            redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument) ||
+                          IsUrlOrVideoTarget(argument)
                 ? "[REDACTED]"
                 : argument;
         }

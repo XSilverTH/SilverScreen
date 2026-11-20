@@ -142,6 +142,16 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     private static readonly string[] MpvLibraryNames = ["libmpv.so.2", "libmpv.so.1", "libmpv.so"];
     private static readonly string[] EpoxyLibraryNames = ["libepoxy.so.0", "libepoxy.so"];
     private static LibMpvNative? _currentForOpenGl;
+
+    private static readonly string[] StandardSearchDirs =
+    [
+        "/usr/lib",
+        "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/local/lib",
+        "/app/lib"
+    ];
+
     private readonly delegate* unmanaged[Cdecl]<nint, byte**, int> _command;
     private readonly delegate* unmanaged[Cdecl]<nint> _create;
     private readonly delegate* unmanaged[Cdecl]<nint*, nint, LibMpvRenderParam*, int> _createRenderContext;
@@ -227,6 +237,8 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
     }
 
     private bool IsLoaded { get; }
+
+    internal static Func<(int ParamType, nint DisplayHandle)>? NativeDisplayResolverOverride { get; set; }
 
     bool ILibMpvNativeApi.IsAvailable => IsLoaded;
     public string? AvailabilityError { get; }
@@ -367,8 +379,6 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
         return Marshal.PtrToStringUTF8((nint)_errorString(error)) ?? $"mpv error {error}";
     }
 
-    internal static Func<(int ParamType, nint DisplayHandle)>? NativeDisplayResolverOverride { get; set; }
-
     public int CreateRenderContext(out nint context, nint handle)
     {
         var apiType = Utf8("opengl");
@@ -383,84 +393,15 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
             parameters[paramCount++] = new LibMpvRenderParam(1, (nint)apiTypePointer);
             parameters[paramCount++] = new LibMpvRenderParam(2, (nint)(&initParameters));
 
-            var (displayParamType, displayHandle) = NativeDisplayResolverOverride?.Invoke() ?? ResolveNativeDisplayParam();
+            var (displayParamType, displayHandle) =
+                NativeDisplayResolverOverride?.Invoke() ?? ResolveNativeDisplayParam();
             if (displayParamType != 0 && displayHandle != 0)
-            {
                 parameters[paramCount++] = new LibMpvRenderParam(displayParamType, displayHandle);
-            }
 
             parameters[paramCount] = new LibMpvRenderParam(0, 0);
             var result = _createRenderContext(&nativeContext, handle, parameters);
             context = nativeContext;
             return result;
-        }
-    }
-
-    internal static (int ParamType, nint DisplayHandle) ResolveNativeDisplayParam()
-    {
-        if (!OperatingSystem.IsLinux() || !NativeLibrary.TryLoad("libgtk-4.so.1", out var gtkLibrary)) return (0, 0);
-
-        try
-        {
-            if (!NativeLibrary.TryLoad("libgobject-2.0.so.0", out var gobjectLibrary))
-                return (0, 0);
-
-            try
-            {
-                if (!NativeLibrary.TryGetExport(gtkLibrary, "gdk_display_get_default", out var getDefaultExport) ||
-                    !NativeLibrary.TryGetExport(gobjectLibrary, "g_type_check_instance_is_a", out var checkTypeExport))
-                {
-                    return (0, 0);
-                }
-
-                var gdkDisplayGetDefault = (delegate* unmanaged[Cdecl]<nint>)getDefaultExport;
-                var gTypeCheckInstanceIsA = (delegate* unmanaged[Cdecl]<nint, nuint, int>)checkTypeExport;
-
-                var display = gdkDisplayGetDefault();
-                if (display == 0) return (0, 0);
-
-                // Wayland check: MPV_RENDER_PARAM_WL_DISPLAY = 9
-                if (NativeLibrary.TryGetExport(gtkLibrary, "gdk_wayland_display_get_type", out var wlTypeExport) &&
-                    NativeLibrary.TryGetExport(gtkLibrary, "gdk_wayland_display_get_wl_display", out var wlGetExport))
-                {
-                    var gdkWaylandDisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)wlTypeExport;
-                    var gdkWaylandDisplayGetWlDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)wlGetExport;
-
-                    var wlType = gdkWaylandDisplayGetType();
-                    if (gTypeCheckInstanceIsA(display, wlType) != 0)
-                    {
-                        var wlDisplay = gdkWaylandDisplayGetWlDisplay(display);
-                        if (wlDisplay != 0)
-                        {
-                            return (9, wlDisplay);
-                        }
-                    }
-                }
-
-                // X11 check: MPV_RENDER_PARAM_X11_DISPLAY = 8
-                if (!NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_type", out var x11TypeExport) ||
-                    !NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_xdisplay", out var x11GetExport))
-                    return (0, 0);
-                
-                var gdkX11DisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)x11TypeExport;
-                var gdkX11DisplayGetXDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)x11GetExport;
-
-                var x11Type = gdkX11DisplayGetType();
-                if (gTypeCheckInstanceIsA(display, x11Type) == 0) return (0, 0);
-                var x11Display = gdkX11DisplayGetXDisplay(display);
-                if (x11Display != 0)
-                    return (8, x11Display);
-
-                return (0, 0);
-            }
-            finally
-            {
-                NativeLibrary.Free(gobjectLibrary);
-            }
-        }
-        finally
-        {
-            NativeLibrary.Free(gtkLibrary);
         }
     }
 
@@ -525,6 +466,69 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
         _mpvLibrary = 0;
     }
 
+    internal static (int ParamType, nint DisplayHandle) ResolveNativeDisplayParam()
+    {
+        if (!OperatingSystem.IsLinux() || !NativeLibrary.TryLoad("libgtk-4.so.1", out var gtkLibrary)) return (0, 0);
+
+        try
+        {
+            if (!NativeLibrary.TryLoad("libgobject-2.0.so.0", out var gobjectLibrary))
+                return (0, 0);
+
+            try
+            {
+                if (!NativeLibrary.TryGetExport(gtkLibrary, "gdk_display_get_default", out var getDefaultExport) ||
+                    !NativeLibrary.TryGetExport(gobjectLibrary, "g_type_check_instance_is_a", out var checkTypeExport))
+                    return (0, 0);
+
+                var gdkDisplayGetDefault = (delegate* unmanaged[Cdecl]<nint>)getDefaultExport;
+                var gTypeCheckInstanceIsA = (delegate* unmanaged[Cdecl]<nint, nuint, int>)checkTypeExport;
+
+                var display = gdkDisplayGetDefault();
+                if (display == 0) return (0, 0);
+
+                // Wayland check: MPV_RENDER_PARAM_WL_DISPLAY = 9
+                if (NativeLibrary.TryGetExport(gtkLibrary, "gdk_wayland_display_get_type", out var wlTypeExport) &&
+                    NativeLibrary.TryGetExport(gtkLibrary, "gdk_wayland_display_get_wl_display", out var wlGetExport))
+                {
+                    var gdkWaylandDisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)wlTypeExport;
+                    var gdkWaylandDisplayGetWlDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)wlGetExport;
+
+                    var wlType = gdkWaylandDisplayGetType();
+                    if (gTypeCheckInstanceIsA(display, wlType) != 0)
+                    {
+                        var wlDisplay = gdkWaylandDisplayGetWlDisplay(display);
+                        if (wlDisplay != 0) return (9, wlDisplay);
+                    }
+                }
+
+                // X11 check: MPV_RENDER_PARAM_X11_DISPLAY = 8
+                if (!NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_type", out var x11TypeExport) ||
+                    !NativeLibrary.TryGetExport(gtkLibrary, "gdk_x11_display_get_xdisplay", out var x11GetExport))
+                    return (0, 0);
+
+                var gdkX11DisplayGetType = (delegate* unmanaged[Cdecl]<nuint>)x11TypeExport;
+                var gdkX11DisplayGetXDisplay = (delegate* unmanaged[Cdecl]<nint, nint>)x11GetExport;
+
+                var x11Type = gdkX11DisplayGetType();
+                if (gTypeCheckInstanceIsA(display, x11Type) == 0) return (0, 0);
+                var x11Display = gdkX11DisplayGetXDisplay(display);
+                if (x11Display != 0)
+                    return (8, x11Display);
+
+                return (0, 0);
+            }
+            finally
+            {
+                NativeLibrary.Free(gobjectLibrary);
+            }
+        }
+        finally
+        {
+            NativeLibrary.Free(gtkLibrary);
+        }
+    }
+
     public static bool IsAvailable()
     {
         if (ProbeLibraryFileExists(MpvLibraryNames)) return true;
@@ -533,32 +537,23 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
         return true;
     }
 
-    private static readonly string[] StandardSearchDirs =
-    [
-        "/usr/lib",
-        "/usr/lib64",
-        "/usr/lib/x86_64-linux-gnu",
-        "/usr/local/lib",
-        "/app/lib"
-    ];
-
     private static bool ProbeLibraryFileExists(string[] names)
     {
         if (!OperatingSystem.IsLinux()) return false;
         if ((
                 from dir in StandardSearchDirs
                 from name in names
-                where File.Exists(Path.Combine(dir, name)) 
+                where File.Exists(Path.Combine(dir, name))
                 select dir)
-            .Any()) 
+            .Any())
             return true;
 
         var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
         if (string.IsNullOrWhiteSpace(ldPath)) return false;
         return (
-                from dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries) 
-                from name in names 
-                where File.Exists(Path.Combine(dir, name)) 
+                from dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries)
+                from name in names
+                where File.Exists(Path.Combine(dir, name))
                 select dir)
             .Any();
     }

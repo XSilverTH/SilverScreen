@@ -61,8 +61,7 @@ public sealed class PagedFeedEngineTests
             }
 
             return Task.FromResult(new FeedPageResult(
-                [CreateVideo("2"), CreateVideo("3")],
-                null));
+                [CreateVideo("2"), CreateVideo("3")]));
         });
 
         await engine.RefreshAsync();
@@ -265,7 +264,7 @@ public sealed class PagedFeedEngineTests
                     return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
                 }
 
-                return Task.FromResult(FeedPageResult.Failed("Server error", false));
+                return Task.FromResult(FeedPageResult.Failed("Server error"));
             },
             clearOnRefresh: false);
 
@@ -317,7 +316,7 @@ public sealed class PagedFeedEngineTests
                 return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
             }
 
-            return Task.FromResult(FeedPageResult.Failed("Server error", false));
+            return Task.FromResult(FeedPageResult.Failed("Server error"));
         });
 
         await engine.RefreshAsync();
@@ -375,7 +374,7 @@ public sealed class PagedFeedEngineTests
                     return Task.FromResult(new FeedPageResult([CreateVideo("1"), CreateVideo("2")]));
                 }
 
-                return Task.FromResult(FeedPageResult.Failed("Server error", false));
+                return Task.FromResult(FeedPageResult.Failed("Server error"));
             },
             clearOnRefresh: true);
 

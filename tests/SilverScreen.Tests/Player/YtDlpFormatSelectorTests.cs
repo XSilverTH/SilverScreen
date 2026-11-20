@@ -250,16 +250,22 @@ public sealed class YtDlpFormatSelectorTests
     public void ToMpvFormat_WithPreferredCodec_GeneratesFallbackChain()
     {
         var av1_1080 = YtDlpFormatSelector.ToMpvFormat("1080p", PreferredVideoCodec.Av1);
-        Assert.Equal("bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", av1_1080);
+        Assert.Equal(
+            "bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            av1_1080);
 
         var av1_best = YtDlpFormatSelector.ToMpvFormat("Best", PreferredVideoCodec.Av1);
         Assert.Equal("bestvideo[vcodec^=av01]+bestaudio/bestvideo+bestaudio/best", av1_best);
 
         var vp9_1080 = YtDlpFormatSelector.ToMpvFormat("1080p", PreferredVideoCodec.Vp9);
-        Assert.Equal("bestvideo[vcodec^=vp09][height<=1080]+bestaudio/bestvideo[vcodec^=vp9][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", vp9_1080);
+        Assert.Equal(
+            "bestvideo[vcodec^=vp09][height<=1080]+bestaudio/bestvideo[vcodec^=vp9][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            vp9_1080);
 
         var h264_720 = YtDlpFormatSelector.ToMpvFormat("720p", PreferredVideoCodec.H264);
-        Assert.Equal("bestvideo[vcodec^=avc1][height<=720]+bestaudio/bestvideo[vcodec^=h264][height<=720]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=720]", h264_720);
+        Assert.Equal(
+            "bestvideo[vcodec^=avc1][height<=720]+bestaudio/bestvideo[vcodec^=h264][height<=720]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=720]",
+            h264_720);
     }
 
     [Fact]
@@ -273,17 +279,17 @@ public sealed class YtDlpFormatSelectorTests
     public void GetAvailableQualityTracks_WithWeirdResolution_DoesNotMaskWeirdResolution()
     {
         var json = """
-        {
-            "id": "weird-res",
-            "formats": [
-                { "format_id": "8k", "height": 4320, "fps": 60, "vcodec": "av01" },
-                { "format_id": "4k", "height": 2160, "fps": 60, "vcodec": "vp9" },
-                { "format_id": "2k", "height": 1440, "fps": 30, "vcodec": "vp9" },
-                { "format_id": "weird", "height": 864, "fps": 30, "vcodec": "avc1" },
-                { "format_id": "720", "height": 720, "fps": 30, "vcodec": "avc1" }
-            ]
-        }
-        """;
+                   {
+                       "id": "weird-res",
+                       "formats": [
+                           { "format_id": "8k", "height": 4320, "fps": 60, "vcodec": "av01" },
+                           { "format_id": "4k", "height": 2160, "fps": 60, "vcodec": "vp9" },
+                           { "format_id": "2k", "height": 1440, "fps": 30, "vcodec": "vp9" },
+                           { "format_id": "weird", "height": 864, "fps": 30, "vcodec": "avc1" },
+                           { "format_id": "720", "height": 720, "fps": 30, "vcodec": "avc1" }
+                       ]
+                   }
+                   """;
 
         var tracks = YtDlpFormatSelector.GetAvailableQualityTracks(json);
         Assert.Equal(["4320p60", "2160p60", "1440p", "864p", "720p"], tracks);
@@ -292,7 +298,8 @@ public sealed class YtDlpFormatSelectorTests
     [Fact]
     public void SelectMedia_AdaptiveStreams_WithVp9Preferred_SelectsVp9Stream()
     {
-        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "1080p", preferredCodec: PreferredVideoCodec.Vp9);
+        var media = YtDlpFormatSelector.SelectMedia(SampleAdaptiveJson, "1080p",
+            preferredCodec: PreferredVideoCodec.Vp9);
 
         Assert.NotNull(media);
         Assert.Contains("itag=248", media.VideoUrl);

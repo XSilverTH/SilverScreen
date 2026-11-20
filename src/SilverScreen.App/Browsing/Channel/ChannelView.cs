@@ -20,6 +20,7 @@ public partial class ChannelView : ViewBase<Box>
     private const double TopHoverZoneThreshold = 40.0;
     private const long LayoutStabilizationMs = 350;
     private static readonly ILogger Logger = Log.ForContext<ChannelView>();
+    private readonly NativeMemoryPressure _avatarPressure = new();
     private readonly IThumbnailService _thumbnails;
     private readonly VideoListView _videoList;
     private readonly ChannelViewModel _viewModel;
@@ -28,7 +29,6 @@ public partial class ChannelView : ViewBase<Box>
     private CancellationTokenSource? _avatarCancellation;
     private Picture? _boundAvatarPicture;
     private Texture? _boundAvatarTexture;
-    private readonly NativeMemoryPressure _avatarPressure = new();
     private string? _currentAvatarUrl;
 
     private bool _isHeaderCollapsed;

@@ -29,14 +29,14 @@ public partial class VideoCardView : ViewBase<Bin>
     private const int ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardView>();
     private readonly VideoCardActions _actions;
-    private PopoverMenu? _contextMenu;
     private readonly SimpleAction[] _menuActionItems;
     private readonly SimpleActionGroup _menuActions;
+    private readonly NativeMemoryPressure _thumbnailPressure = new();
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private readonly NativeMemoryPressure _thumbnailPressure = new();
+    private PopoverMenu? _contextMenu;
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
     private VideoSummary? _video;
@@ -119,7 +119,8 @@ public partial class VideoCardView : ViewBase<Bin>
         if (video.PublishedAt is { } publishedAt)
         {
             upload_date.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
-            upload_date.TooltipText = FormatTooltipMeta(publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture));
+            upload_date.TooltipText =
+                FormatTooltipMeta(publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture));
             upload_date.Visible = true;
         }
         else if (video.ApproximateUploadDate is { } uploadDate)
@@ -209,41 +210,41 @@ public partial class VideoCardView : ViewBase<Bin>
                     return false;
 
                 Texture? texture = null;
-                    try
-                    {
-                        var pixbufForTexture = decodedPixbuf ??
-                                               throw new InvalidOperationException(
-                                                   "Thumbnail decode was released before texture creation.");
-                        texture = Texture.NewForPixbuf(pixbufForTexture);
-                        pixbufForTexture.Dispose();
-                        decodedPixbuf = null;
+                try
+                {
+                    var pixbufForTexture = decodedPixbuf ??
+                                           throw new InvalidOperationException(
+                                               "Thumbnail decode was released before texture creation.");
+                    texture = Texture.NewForPixbuf(pixbufForTexture);
+                    pixbufForTexture.Dispose();
+                    decodedPixbuf = null;
 
-                        if (_boundPicture is null)
-                        {
-                            var picture = Picture.NewForPaintable(texture);
-                            picture.AlternativeText = _thumbnailAlternativeText;
-                            picture.ContentFit = ContentFit.Cover;
-                            picture.HeightRequest = ThumbnailHeight;
-                            picture.Hexpand = true;
-                            picture.Vexpand = true;
-                            _boundPicture = picture;
-                        }
-                        else
-                        {
-                            _boundPicture.Paintable = texture;
-                            _boundPicture.AlternativeText = _thumbnailAlternativeText;
-                        }
-
-                        thumbnail.Child = _boundPicture;
-                        _boundTexture?.Dispose();
-                        _boundTexture = texture;
-                        _thumbnailPressure.Track((long)CardWidth * ThumbnailHeight * 4);
-                        texture = null;
-                    }
-                    finally
+                    if (_boundPicture is null)
                     {
-                        texture?.Dispose();
+                        var picture = Picture.NewForPaintable(texture);
+                        picture.AlternativeText = _thumbnailAlternativeText;
+                        picture.ContentFit = ContentFit.Cover;
+                        picture.HeightRequest = ThumbnailHeight;
+                        picture.Hexpand = true;
+                        picture.Vexpand = true;
+                        _boundPicture = picture;
                     }
+                    else
+                    {
+                        _boundPicture.Paintable = texture;
+                        _boundPicture.AlternativeText = _thumbnailAlternativeText;
+                    }
+
+                    thumbnail.Child = _boundPicture;
+                    _boundTexture?.Dispose();
+                    _boundTexture = texture;
+                    _thumbnailPressure.Track((long)CardWidth * ThumbnailHeight * 4);
+                    texture = null;
+                }
+                finally
+                {
+                    texture?.Dispose();
+                }
             }
             catch (Exception exception)
             {
@@ -531,6 +532,7 @@ public partial class VideoCardView : ViewBase<Bin>
                 _contextMenu.Dispose();
                 _contextMenu = null;
             }
+
             _boundPicture?.Dispose();
             _boundPicture = null;
             _thumbnailPressure.Dispose();

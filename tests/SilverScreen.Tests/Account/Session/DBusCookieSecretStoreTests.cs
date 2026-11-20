@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using DBus.Services.Secrets;
@@ -57,10 +58,7 @@ public sealed class DBusCookieSecretStoreTests
         // Only run live check if D-Bus session bus is available
         var sessionAddress = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS");
         var userRuntimeBus = $"/run/user/{GetUid()}/bus";
-        if (string.IsNullOrEmpty(sessionAddress) && !File.Exists(userRuntimeBus))
-        {
-            return;
-        }
+        if (string.IsNullOrEmpty(sessionAddress) && !File.Exists(userRuntimeBus)) return;
 
         var store = new DBusCookieSecretStore();
         byte[]? loaded = null;
@@ -80,10 +78,7 @@ public sealed class DBusCookieSecretStoreTests
         }
         finally
         {
-            if (loaded is not null)
-            {
-                CryptographicOperations.ZeroMemory(loaded);
-            }
+            if (loaded is not null) CryptographicOperations.ZeroMemory(loaded);
         }
     }
 
@@ -91,7 +86,7 @@ public sealed class DBusCookieSecretStoreTests
     public async Task SecretServiceSessionService_DefaultConstructor_RestoresWithoutCrashing()
     {
         using var tempDir = new TemporaryDirectory();
-        var service = new SecretServiceSessionService(profileServiceFactory: null, tempRoot: tempDir.Path);
+        var service = new SecretServiceSessionService(null, tempDir.Path);
 
         await service.WaitForRestoreAsync();
 
@@ -112,7 +107,7 @@ public sealed class DBusCookieSecretStoreTests
         }
     }
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getuid")]
+    [DllImport("libc", EntryPoint = "getuid")]
     private static extern uint PInvokeGetUid();
 
     private sealed class TemporaryDirectory : IDisposable
@@ -127,10 +122,7 @@ public sealed class DBusCookieSecretStoreTests
 
         public void Dispose()
         {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, true);
-            }
+            if (Directory.Exists(Path)) Directory.Delete(Path, true);
         }
     }
 }

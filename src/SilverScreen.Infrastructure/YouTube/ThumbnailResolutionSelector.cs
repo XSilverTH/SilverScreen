@@ -3,7 +3,8 @@ using YoutubeAPI.Models.Common;
 namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
-/// Selects appropriately sized thumbnail URLs for UI presentation, avoiding excessive bandwidth and memory consumption.
+///     Selects appropriately sized thumbnail URLs for UI presentation, avoiding excessive bandwidth and memory
+///     consumption.
 /// </summary>
 public static class ThumbnailResolutionSelector
 {
@@ -14,8 +15,9 @@ public static class ThumbnailResolutionSelector
     private const int PreferredMaxCardWidth = 640;
 
     /// <summary>
-    /// Selects a thumbnail that matches the video card display size rather than blindly picking the 1080p/4k variant.
-    /// Prefers crisp variants in the ~480px-640px range for HiDPI sharpness, falling back gracefully to 320p or higher resolutions.
+    ///     Selects a thumbnail that matches the video card display size rather than blindly picking the 1080p/4k variant.
+    ///     Prefers crisp variants in the ~480px-640px range for HiDPI sharpness, falling back gracefully to 320p or higher
+    ///     resolutions.
     /// </summary>
     public static string SelectCardThumbnail(IReadOnlyList<Thumbnail>? thumbnails)
     {
@@ -59,7 +61,7 @@ public static class ThumbnailResolutionSelector
     }
 
     /// <summary>
-    /// Selects an avatar thumbnail appropriate for small circular badges (56-80px).
+    ///     Selects an avatar thumbnail appropriate for small circular badges (56-80px).
     /// </summary>
     public static string? SelectAvatarThumbnail(IReadOnlyList<Thumbnail>? thumbnails)
     {
@@ -83,9 +85,9 @@ public static class ThumbnailResolutionSelector
         }
 
         if (best is not null) return best.Url.ToString();
-        
+
         return thumbnails.Count > 0
-            ? thumbnails[0].Url.ToString() 
+            ? thumbnails[0].Url.ToString()
             : null;
     }
 }

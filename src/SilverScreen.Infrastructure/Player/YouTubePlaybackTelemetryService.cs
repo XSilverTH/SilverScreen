@@ -151,7 +151,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         }
     }
 
-    private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request) : IYouTubePlaybackTelemetrySession
+    private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
+        : IYouTubePlaybackTelemetrySession
     {
         // Video identity, rather than playlist index, is the stable key across queue
         // reorders and removals. The active queue snapshot is replaced atomically

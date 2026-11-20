@@ -86,15 +86,6 @@ public sealed class NavigationService : IDisposable
         RegisterPage(NavigationPage.Player, "player", false);
     }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _backStack.Clear();
-        _registry.Clear();
-        _viewStackNameToPage.Clear();
-    }
-
     public NavigationPage CurrentPage => CurrentEntry.Page;
     public object? CurrentParameter => CurrentEntry.Parameter;
     public NavigationEntry CurrentEntry { get; private set; } = new(NavigationPage.Home);
@@ -103,6 +94,15 @@ public sealed class NavigationService : IDisposable
     public object? PreviousParameter => _backStack.Count > 0 ? _backStack.Peek().Parameter : null;
     public NavigationEntry? PreviousEntry => _backStack.Count > 0 ? _backStack.Peek() : null;
     public bool CanGoBack => _backStack.Count > 0;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _backStack.Clear();
+        _registry.Clear();
+        _viewStackNameToPage.Clear();
+    }
 
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
 

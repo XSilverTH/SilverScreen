@@ -161,13 +161,13 @@ public static partial class TemporaryCookieFile
     }
 
     /// <summary>
-    /// Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
-    /// leases must match the exact process-id/GUID directory pattern and contain only the
-    /// expected regular, non-symlink cookies.txt file. Unexpected entries are never
-    /// traversed or deleted. Orphaned directories from dead sessions or untracked leases
-    /// are purged immediately; otherwise entries older than
-    /// <paramref name="maxAge" />
-    /// (default 1 hour) are deleted. Best-effort, never throws.
+    ///     Deletes orphaned 0700 cookie/IPC directories created by this application. Cookie
+    ///     leases must match the exact process-id/GUID directory pattern and contain only the
+    ///     expected regular, non-symlink cookies.txt file. Unexpected entries are never
+    ///     traversed or deleted. Orphaned directories from dead sessions or untracked leases
+    ///     are purged immediately; otherwise entries older than
+    ///     <paramref name="maxAge" />
+    ///     (default 1 hour) are deleted. Best-effort, never throws.
     /// </summary>
     public static void SweepStale(TimeSpan? maxAge = null, string? tempRoot = null)
     {

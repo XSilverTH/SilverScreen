@@ -115,14 +115,22 @@ public sealed class HistoryViewModel : IVideoListSource
     }
 
 
-    private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state) =>
-        state.AuthenticationStatus == FeedAuthenticationStatus.Required ? AuthenticatedHistoryStatus.AuthenticationRequired:
-        state.AuthenticationStatus == FeedAuthenticationStatus.Rejected ? AuthenticatedHistoryStatus.AuthenticationRejected:
-        !IsSessionActive() ? AuthenticatedHistoryStatus.AuthenticationRejected:
-        state.LastError != null || !state.IsSuccess ? AuthenticatedHistoryStatus.TemporaryBackendFailure:
-        state.IsLoading || state.IsLoadingMore ? AuthenticatedHistoryStatus.Success:
-        state.Videos.Count == 0 ? AuthenticatedHistoryStatus.Empty:
-        AuthenticatedHistoryStatus.Success;
+    private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state)
+    {
+        return state.AuthenticationStatus == FeedAuthenticationStatus.Required
+            ? AuthenticatedHistoryStatus.AuthenticationRequired
+            : state.AuthenticationStatus == FeedAuthenticationStatus.Rejected
+                ? AuthenticatedHistoryStatus.AuthenticationRejected
+                : !IsSessionActive()
+                    ? AuthenticatedHistoryStatus.AuthenticationRejected
+                    : state.LastError != null || !state.IsSuccess
+                        ? AuthenticatedHistoryStatus.TemporaryBackendFailure
+                        : state.IsLoading || state.IsLoadingMore
+                            ? AuthenticatedHistoryStatus.Success
+                            : state.Videos.Count == 0
+                                ? AuthenticatedHistoryStatus.Empty
+                                : AuthenticatedHistoryStatus.Success;
+    }
 
 
     private void OnSessionChanged(object? sender, EventArgs e)

@@ -144,7 +144,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
             PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
             AutomaticDecompression = DecompressionMethods.All
         };
-        return new HttpClient(handler, disposeHandler: true) { Timeout = DefaultTimeout };
+        return new HttpClient(handler, true) { Timeout = DefaultTimeout };
     }
 }
 

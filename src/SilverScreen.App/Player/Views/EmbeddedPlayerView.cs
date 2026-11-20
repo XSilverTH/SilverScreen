@@ -38,31 +38,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private const double PlaybackSpeedIncrement = 0.25;
 
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
-    private readonly Action _backRequested;
-    private readonly Action<VideoSummary> _channelRequested;
-    private readonly PlayerChapterOverlay _chapterOverlay;
-    private readonly PlayerChromeController _chromeController;
-    private readonly CommentsView _commentsView;
-    private readonly VideoInfoPanelController _infoPanel;
-    private readonly PlayerLinkRouter _linkRouter;
-    private readonly PlayerOsdController _osdController;
-    private readonly LibMpvPlayer _player;
-    private readonly IPreferencesService _preferences;
-    private readonly Action _presentRequested;
-    private readonly IQueueService _queueService;
-    private readonly QueueViewModel _queueViewModel;
-    private readonly PlayerResumeController _resumeController;
-    private readonly PlaybackSession _session;
-    private readonly PlayerShortcutController _shortcutController;
-    private readonly PlayerSponsorBlockController _sponsorBlockController;
-    private readonly PlayerSubtitleController _subtitleController;
-    private readonly PlayerTimelineController _timelineController;
-    private readonly IYouTubeMediaResolver _mediaResolver;
-    private readonly List<string> _availableQualities = ["Best"];
-    private string _currentQuality = "Best";
-    private string? _currentQualityVideoId;
-    private CancellationTokenSource? _qualityLoadCancellation;
-    private int _qualityLoadGeneration;
+
     private static readonly string[] DefaultQualityPresets =
     [
         "4320p",
@@ -76,15 +52,44 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         "144p"
     ];
 
+    private readonly List<string> _availableQualities = ["Best"];
+    private readonly Action _backRequested;
+    private readonly Action<VideoSummary> _channelRequested;
+    private readonly PlayerChapterOverlay _chapterOverlay;
+    private readonly PlayerChromeController _chromeController;
+    private readonly CommentsView _commentsView;
+    private readonly VideoInfoPanelController _infoPanel;
+    private readonly PlayerLinkRouter _linkRouter;
+    private readonly IYouTubeMediaResolver _mediaResolver;
+    private readonly PlayerOsdController _osdController;
+    private readonly LibMpvPlayer _player;
+    private readonly IPreferencesService _preferences;
+    private readonly Action _presentRequested;
+    private readonly IQueueService _queueService;
+    private readonly QueueViewModel _queueViewModel;
+    private readonly PlayerResumeController _resumeController;
+    private readonly PlaybackSession _session;
+    private readonly PlayerShortcutController _shortcutController;
+    private readonly PlayerSponsorBlockController _sponsorBlockController;
+    private readonly PlayerSubtitleController _subtitleController;
+    private readonly PlayerTimelineController _timelineController;
+
     private PlayerErrorInfo? _currentErrorInfo;
+    private string _currentQuality = "Best";
+    private string? _currentQualityVideoId;
     private VideoSummary? _failedVideo;
     private bool _hasPlaybackError;
     private bool _isLoading;
     private bool _isMuted;
     private PlaybackRequest? _lastPlaybackRequest;
     private PlaybackRequest? _loadedRequest;
+    private CancellationTokenSource? _qualityLoadCancellation;
+    private int _qualityLoadGeneration;
     private bool _rendererReady;
     private double _speed = 1;
+    private int _surfacePixelHeight;
+
+    private int _surfacePixelWidth;
     private bool _syncingQueue;
     private bool _updatingControls;
     private double _volume = 100;
@@ -146,16 +151,16 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_resume_revealer, player_resume_button, player_resume_label,
             player_restart_revealer, player_restart_button, player_restart_label));
         _infoPanel = Lifetime.Own(
-            new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, 
-                player_info_backdrop, player_info_cue_revealer, 
-                player_info_revealer, player_info_title_label, 
-                player_info_channel_label, player_info_stats_label, 
-                player_info_status_label, player_info_description_scroller, 
+            new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested,
+                player_info_backdrop, player_info_cue_revealer,
+                player_info_revealer, player_info_title_label,
+                player_info_channel_label, player_info_stats_label,
+                player_info_status_label, player_info_description_scroller,
                 player_info_description, player_info_close_button,
                 OnRichLinkActivated, () =>
-            {
-                if (_session.HasMedia) player_surface.GrabFocus();
-            }));
+                {
+                    if (_session.HasMedia) player_surface.GrabFocus();
+                }));
         _subtitleController = Lifetime.Own(new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
             player_subtitle_model,
             player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId)));
@@ -380,6 +385,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                     _rendererReady = true;
                 }
             }
+
             if (!_rendererReady) return false;
             _player.Load(request, preferences, _session.CookieFilePath);
             _loadedRequest = request;
@@ -420,9 +426,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _shortcutController.UpdateBindings(preferences.Shortcuts);
         _player.UpdatePreferences(preferences);
     }
-
-    private int _surfacePixelWidth;
-    private int _surfacePixelHeight;
 
     private void OnPlayerSurfaceResize(GLArea sender, GLArea.ResizeSignalArgs args)
     {
@@ -739,18 +742,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnCommentsCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && player_comments_cue_revealer is { ChildRevealed: false, RevealChild: false })
-        {
-            player_comments_cue_revealer.SetVisible(false);
-        }
+        if (args.Pspec.GetName() == "child-revealed" && player_comments_cue_revealer is
+                { ChildRevealed: false, RevealChild: false }) player_comments_cue_revealer.SetVisible(false);
     }
 
     private void OnPromptRevealerVisibleNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "visible")
-        {
-            SyncPromptStackVisibility();
-        }
+        if (args.Pspec.GetName() == "visible") SyncPromptStackVisibility();
     }
 
     private void SyncPromptStackVisibility()
@@ -896,6 +894,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         LoadQualityTracks(video.Id);
     }
+
     private void OnPlaybackFailed(object? sender, string detail)
     {
         _session.Fail(detail);
@@ -992,6 +991,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 _rendererReady = false;
             }
         }
+
         _session.EndSession();
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1083,16 +1083,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 string.Equals(q, quality, StringComparison.OrdinalIgnoreCase));
 
             if (index < 0)
-            {
                 index = _availableQualities.FindIndex(q =>
                     YtDlpFormatSelector.ParseTargetHeight(q) == targetHeight.Value);
-            }
 
             if (index < 0)
-            {
                 index = _availableQualities.FindIndex(q =>
                     YtDlpFormatSelector.ParseTargetHeight(q) is { } h && h <= targetHeight.Value);
-            }
 
             if (index < 0)
                 index = 0;
@@ -1161,18 +1157,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             if (tracks.Count > 0)
             {
                 foreach (var track in tracks)
-                {
                     if (!_availableQualities.Contains(track, StringComparer.OrdinalIgnoreCase))
                         _availableQualities.Add(track);
-                }
             }
             else
             {
                 foreach (var preset in DefaultQualityPresets)
-                {
                     if (!_availableQualities.Contains(preset, StringComparer.OrdinalIgnoreCase))
                         _availableQualities.Add(preset);
-                }
             }
 
             player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
@@ -1205,7 +1197,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private static string NormalizeQuality(string quality)
     {
-        return MpvCommandBuilder.BuildYtdlFormat(quality) is null && !string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase) ? "Best" : quality;
+        return MpvCommandBuilder.BuildYtdlFormat(quality) is null &&
+               !string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase)
+            ? "Best"
+            : quality;
     }
 
     private static double SnapPlaybackSpeed(double speed)

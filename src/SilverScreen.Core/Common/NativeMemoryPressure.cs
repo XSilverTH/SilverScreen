@@ -1,52 +1,47 @@
 namespace SilverScreen.Core.Common;
 
 /// <summary>
-/// Bridges unmanaged pixel buffer allocations (such as GdkPixbuf and GdkTexture)
-/// into the .NET Garbage Collector via GC.AddMemoryPressure and GC.RemoveMemoryPressure,
-/// ensuring the GC is aware of native memory weight and schedules collections appropriately.
+///     Bridges unmanaged pixel buffer allocations (such as GdkPixbuf and GdkTexture)
+///     into the .NET Garbage Collector via GC.AddMemoryPressure and GC.RemoveMemoryPressure,
+///     ensuring the GC is aware of native memory weight and schedules collections appropriately.
 /// </summary>
 public sealed class NativeMemoryPressure : IDisposable
 {
     private long _trackedBytes;
 
     /// <summary>
-    /// Gets the number of unmanaged bytes currently tracked by this instance.
+    ///     Gets the number of unmanaged bytes currently tracked by this instance.
     /// </summary>
     public long TrackedBytes => Interlocked.Read(ref _trackedBytes);
 
+    public void Dispose()
+    {
+        Release();
+    }
+
     /// <summary>
-    /// Informs the GC that unmanaged memory of the given size has been allocated.
-    /// Releases any previously tracked bytes on this instance first.
-    /// If <paramref name="bytes"/> is zero or negative, any previously tracked memory is released and nothing new is tracked.
+    ///     Informs the GC that unmanaged memory of the given size has been allocated.
+    ///     Releases any previously tracked bytes on this instance first.
+    ///     If <paramref name="bytes" /> is zero or negative, any previously tracked memory is released and nothing new is
+    ///     tracked.
     /// </summary>
     public void Track(long bytes)
     {
         Release();
 
-        if (bytes <= 0)
-        {
-            return;
-        }
+        if (bytes <= 0) return;
 
         Interlocked.Exchange(ref _trackedBytes, bytes);
         GC.AddMemoryPressure(bytes);
     }
 
     /// <summary>
-    /// Informs the GC that the tracked unmanaged memory has been freed.
-    /// Idempotent: safe to call repeatedly.
+    ///     Informs the GC that the tracked unmanaged memory has been freed.
+    ///     Idempotent: safe to call repeatedly.
     /// </summary>
     public void Release()
     {
         var bytes = Interlocked.Exchange(ref _trackedBytes, 0);
-        if (bytes > 0)
-        {
-            GC.RemoveMemoryPressure(bytes);
-        }
-    }
-
-    public void Dispose()
-    {
-        Release();
+        if (bytes > 0) GC.RemoveMemoryPressure(bytes);
     }
 }

@@ -336,8 +336,8 @@ public class PlayerTimelineStateTests
     [Fact]
     public void FormatDurationLabel_ReturnsDashesWhenNotLiveAndZeroOrNegativeDuration()
     {
-        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero, false));
-        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-5), false));
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.Zero));
+        Assert.Equal("--:--", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(-5)));
     }
 
     [Fact]
@@ -350,8 +350,8 @@ public class PlayerTimelineStateTests
     [Fact]
     public void FormatDurationLabel_FormatsTimeWhenPositiveDurationAndNotLive()
     {
-        Assert.Equal("12:34", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(754), false));
-        Assert.Equal("1:02:03", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(3723), false));
+        Assert.Equal("12:34", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(754)));
+        Assert.Equal("1:02:03", PlayerTimelineState.FormatDurationLabel(TimeSpan.FromSeconds(3723)));
     }
 
     [Fact]

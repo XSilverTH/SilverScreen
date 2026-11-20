@@ -21,13 +21,13 @@ public partial class SubscriptionsView : ViewBase<Box>
 {
     private const int AvatarSize = 56;
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsView>();
+    private readonly SemaphoreSlim _avatarSemaphore = new(4, 4);
 
     private readonly List<ChannelItemHolder> _channelItems = [];
     private readonly Action<string, string> _openChannel;
     private readonly IThumbnailService _thumbnails;
     private readonly VideoListView _videoList;
     private readonly SubscriptionsViewModel _viewModel;
-    private readonly SemaphoreSlim _avatarSemaphore = new(4, 4);
     private CancellationTokenSource? _avatarsCancellation;
     private IReadOnlyList<SubscribedChannel> _renderedChannels = [];
 
@@ -464,7 +464,6 @@ public partial class SubscriptionsView : ViewBase<Box>
         finally
         {
             if (semaphoreAcquired)
-            {
                 try
                 {
                     _avatarSemaphore.Release();
@@ -473,7 +472,6 @@ public partial class SubscriptionsView : ViewBase<Box>
                 {
                     // View or semaphore was disposed concurrently while decoding
                 }
-            }
         }
     }
 
@@ -509,7 +507,6 @@ public partial class SubscriptionsView : ViewBase<Box>
         if (args.Keyval != Constants.KEY_Right || _channelItems.Count <= 0) return false;
         _channelItems[0].ItemBox.GrabFocus();
         return true;
-
     }
 
     protected override void Dispose(bool disposing)
@@ -584,6 +581,7 @@ public partial class SubscriptionsView : ViewBase<Box>
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }
         public NativeMemoryPressure MemoryPressure { get; } = new();
+
         public void Dispose()
         {
             if (_disposed) return;

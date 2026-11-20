@@ -1,7 +1,7 @@
-using SilverScreen.Core.Preferences;
 using System.Collections.Immutable;
 using SilverScreen.Core.Browsing.Common;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 
 namespace SilverScreen.Tests.Player;
@@ -127,7 +127,9 @@ public sealed class MpvCommandBuilderTests
 
         var command = MpvCommandBuilder.Build(request, options);
 
-        Assert.Contains("--ytdl-format=bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]", command.Arguments);
+        Assert.Contains(
+            "--ytdl-format=bestvideo[vcodec^=av01][height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            command.Arguments);
     }
 
     [Theory]

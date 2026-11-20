@@ -3,6 +3,8 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
+using Object = GObject.Object;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -20,10 +22,10 @@ internal sealed class PlayerStatsController : IDisposable
     private readonly DisposeScope _lifetime = new();
     private readonly Revealer _revealer;
     private readonly Func<bool, PlaybackStats?> _statsProvider;
-
-    private uint _refreshTimerSource;
     private int _isRefreshing;
     private bool _pendingRefresh;
+
+    private uint _refreshTimerSource;
 
     private PlayerStatsController(
         Func<bool, PlaybackStats?> statsProvider,
@@ -41,14 +43,6 @@ internal sealed class PlayerStatsController : IDisposable
             () => _revealer.OnNotify -= OnRevealerNotify);
     }
 
-    private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _revealer.SetVisible(false);
-        }
-    }
-
     public PlayerStatsController(
         IPlayerStatsProvider statsProvider,
         Revealer revealer,
@@ -57,6 +51,7 @@ internal sealed class PlayerStatsController : IDisposable
             label)
     {
     }
+
     public bool IsOpen { get; private set; }
 
     private int CurrentPage { get; set; } = 1;
@@ -70,6 +65,12 @@ internal sealed class PlayerStatsController : IDisposable
         _revealer.RevealChild = false;
         _revealer.SetVisible(false);
         _lifetime.Dispose();
+    }
+
+    private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
+            _revealer.SetVisible(false);
     }
 
     private static string GetAccentColorHex()
@@ -205,11 +206,8 @@ internal sealed class PlayerStatsController : IDisposable
 
                 string markup;
                 if (stats is null)
-                {
                     markup = "<span foreground=\"#9a9996\">No media loaded or playback inactive.</span>";
-                }
                 else
-                {
                     markup = currentPage switch
                     {
                         1 => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent),
@@ -218,16 +216,12 @@ internal sealed class PlayerStatsController : IDisposable
                         4 => PlaybackStatsFormatter.FormatEnginePageMarkup(stats, accent),
                         _ => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent)
                     };
-                }
 
-                GLib.Functions.IdleAdd(0, () =>
+                Functions.IdleAdd(0, () =>
                 {
                     try
                     {
-                        if (!_lifetime.IsDisposed && IsOpen && CurrentPage == currentPage)
-                        {
-                            _label.SetMarkup(markup);
-                        }
+                        if (!_lifetime.IsDisposed && IsOpen && CurrentPage == currentPage) _label.SetMarkup(markup);
                     }
                     finally
                     {

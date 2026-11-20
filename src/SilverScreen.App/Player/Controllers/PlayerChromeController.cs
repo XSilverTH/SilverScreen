@@ -15,6 +15,7 @@ internal sealed class PlayerChromeController : IDisposable
     private readonly Action<double, double>? _onPointerMoved;
     private readonly Widget _playerControls;
     private readonly Widget _viewWidget;
+    private uint _hideControlsTimeoutSource;
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
@@ -64,7 +65,6 @@ internal sealed class PlayerChromeController : IDisposable
     }
 
     private bool ControlsVisible { get; set; } = true;
-    private uint _hideControlsTimeoutSource;
 
     public void Dispose()
     {
@@ -74,6 +74,7 @@ internal sealed class PlayerChromeController : IDisposable
             _lifetime.Cancel(_hideControlsTimeoutSource);
             _hideControlsTimeoutSource = 0;
         }
+
         _lifetime.Dispose();
     }
 

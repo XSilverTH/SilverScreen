@@ -117,7 +117,7 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
             Logger.Warning("Cannot open channel with dummy placeholder ID");
             return;
         }
-        
+
         await LoadAsync(channelUrl, fallbackName, ChannelVideoSort.Newest, count).ConfigureAwait(false);
     }
 

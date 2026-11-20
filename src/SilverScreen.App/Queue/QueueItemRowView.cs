@@ -78,11 +78,11 @@ public partial class QueueItemRowView : ViewBase<Box>
     private readonly SimpleAction _playNowAction;
     private readonly Action<Guid, int>? _playRequested;
     private readonly Action<Guid> _removeRequested;
+    private readonly NativeMemoryPressure _thumbnailPressure = new();
     private readonly IThumbnailService _thumbnails;
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private readonly NativeMemoryPressure _thumbnailPressure = new();
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
 

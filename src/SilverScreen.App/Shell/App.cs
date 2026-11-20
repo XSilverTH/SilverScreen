@@ -21,15 +21,16 @@ public partial class App
     private static CssProvider? _styles;
     private readonly ActivationWindowGuard<Window> _windowGuard = new();
     private AccountServices? _accountServices;
+    private string? _initialQuery;
     private EventHandler<AppPreferences>? _preferencesChangedHandler;
     private ApplicationServiceLifetime? _serviceLifetime;
     private IServiceProvider? _serviceProvider;
-    private string? _initialQuery;
 
     public void SetInitialQuery(string? query)
     {
         _initialQuery = query;
     }
+
     partial void Initialize()
     {
         ApplicationId = ApplicationMetadata.ApplicationId;

@@ -271,10 +271,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
             return false;
 
         var trackChanged = !Equals(previous.TrackId, current.TrackId);
-        if (trackChanged)
-        {
-            return previous.HasMedia || current.PositionMicroseconds > 0;
-        }
+        if (trackChanged) return previous.HasMedia || current.PositionMicroseconds > 0;
 
         if (!previous.HasMedia)
             return false;

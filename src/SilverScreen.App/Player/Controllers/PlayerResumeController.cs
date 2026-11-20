@@ -2,6 +2,7 @@ using Gtk;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
 using static GLib.Functions;
+using Object = GObject.Object;
 
 namespace SilverScreen.Player.Controllers;
 
@@ -58,27 +59,23 @@ internal sealed class PlayerResumeController : IDisposable
         _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
     }
 
-    private void OnResumeRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _resumeRevealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _resumeRevealer.SetVisible(false);
-        }
-    }
-
-    private void OnRestartRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && _restartRevealer is { ChildRevealed: false, RevealChild: false })
-        {
-            _restartRevealer.SetVisible(false);
-        }
-    }
-
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
         _lifetime.Dispose();
         HidePrompt();
+    }
+
+    private void OnResumeRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _resumeRevealer is { ChildRevealed: false, RevealChild: false })
+            _resumeRevealer.SetVisible(false);
+    }
+
+    private void OnRestartRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" &&
+            _restartRevealer is { ChildRevealed: false, RevealChild: false }) _restartRevealer.SetVisible(false);
     }
 
     private void OnResumePromptChanged(ResumePromptMode mode, TimeSpan position)
