@@ -127,8 +127,8 @@ public sealed class YtDlpMediaResolver(
                 if (apiDetailsResult.IsSuccess)
                     details = apiDetailsResult.Details;
                 else
-                    Logger.Debug("Continuing media resolution without optional details for {VideoId}: {Message}",
-                        videoId, DiagnosticSanitizer.Sanitize(apiDetailsResult.ErrorMessage));
+                    Logger.Debug("Continuing media resolution without optional details: {Message}",
+                        DiagnosticSanitizer.Sanitize(apiDetailsResult.ErrorMessage));
             }
 
             var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
@@ -244,7 +244,7 @@ public sealed class YtDlpMediaResolver(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Logger.Warning(ex, "Failed to load quality tracks for {VideoId}", videoId);
+            Logger.Warning(ex, "Failed to load quality tracks");
             return [];
         }
         finally
@@ -274,7 +274,7 @@ public sealed class YtDlpMediaResolver(
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Fallback media resolution failed for {Input}", videoIdOrUrl);
+            Logger.Warning(exception, "Fallback media resolution failed");
             return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
         }
     }
@@ -331,7 +331,7 @@ public sealed class YtDlpMediaResolver(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.Warning(exception, "Ignoring unparseable media payload for {VideoId}", videoId);
+            Logger.Warning(exception, "Ignoring unparseable media payload");
             return null;
         }
     }
@@ -349,7 +349,7 @@ public sealed class YtDlpMediaResolver(
         CancellationToken cancellationToken)
     {
         var executablePath = _preferencesService.GetPreferences().YtDlpExecutablePath;
-        Logger.Information("Extracting media formats for video {VideoId}", videoId);
+        Logger.Information("Extracting media formats for video");
 
         using var cookieFile = _cookieFileProvider.CreateCookieFile();
         var cookieFilePath = string.IsNullOrWhiteSpace(cookieFile?.Path) ? null : cookieFile.Path;
@@ -369,12 +369,12 @@ public sealed class YtDlpMediaResolver(
         }
         catch (TimeoutException ex)
         {
-            Logger.Warning(ex, "Timeout extracting media for {VideoId}", videoId);
+            Logger.Warning(ex, "Timeout extracting media");
             return (false, null, RuntimeDependencyGuidance.YtDlpTimedOut);
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Failed to execute yt-dlp to extract media for {VideoId}", videoId);
+            Logger.Warning(ex, "Failed to execute yt-dlp to extract media");
             return (false, null, RuntimeDependencyGuidance.YtDlpUnavailable(executablePath));
         }
 
@@ -382,8 +382,8 @@ public sealed class YtDlpMediaResolver(
         {
             var stderr = DiagnosticSanitizer.Sanitize(processResult.StandardError.Trim());
             if (!string.IsNullOrWhiteSpace(stderr))
-                Logger.Warning("yt-dlp extraction failed for {VideoId} with exit code {ExitCode}. Stderr: {StdErr}",
-                    videoId, processResult.ExitCode, stderr);
+                Logger.Warning("yt-dlp extraction failed with exit code {ExitCode}. Stderr: {StdErr}",
+                    processResult.ExitCode, stderr);
 
             var errorDetail = !string.IsNullOrWhiteSpace(stderr)
                 ? $"the process exited with error code {processResult.ExitCode}: {stderr}"
@@ -394,8 +394,8 @@ public sealed class YtDlpMediaResolver(
 
         if (!string.IsNullOrWhiteSpace(processResult.StandardOutput)) return (true, processResult.StandardOutput, null);
         if (!string.IsNullOrWhiteSpace(processResult.StandardError))
-            Logger.Warning("yt-dlp extraction returned empty output for {VideoId}. Stderr: {StdErr}",
-                videoId, DiagnosticSanitizer.Sanitize(processResult.StandardError.Trim()));
+            Logger.Warning("yt-dlp extraction returned empty output. Stderr: {StdErr}",
+                DiagnosticSanitizer.Sanitize(processResult.StandardError.Trim()));
 
         return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
     }
@@ -418,7 +418,7 @@ public sealed class YtDlpMediaResolver(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.Warning(exception, "YoutubeAPI failed to load details for {VideoId}", videoId);
+            Logger.Warning(exception, "YoutubeAPI failed to load details");
             return (false, null,
                 $"YoutubeAPI could not load video details: {DiagnosticSanitizer.Sanitize(exception.Message)}");
         }

@@ -337,7 +337,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load thumbnail for queue item {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to load thumbnail for queue item");
             return;
         }
 
@@ -397,7 +397,7 @@ public partial class QueueItemRowView : ViewBase<Box>
                 }
                 catch (Exception exception)
                 {
-                    Logger.Warning(exception, "Failed to render thumbnail texture for queue item {VideoId}", video.Id);
+                    Logger.Warning(exception, "Failed to render thumbnail texture for queue item");
                 }
                 finally
                 {

@@ -393,7 +393,7 @@ public partial class ChannelView : ViewBase<Box>
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load avatar from {AvatarUrl}", avatarUrl);
+            Logger.Warning(exception, "Failed to load channel avatar");
             return;
         }
 
@@ -441,7 +441,7 @@ public partial class ChannelView : ViewBase<Box>
             }
             catch (Exception exception)
             {
-                Logger.Warning(exception, "Failed to render channel avatar texture from {AvatarUrl}", avatarUrl);
+                Logger.Warning(exception, "Failed to render channel avatar texture");
                 // Leave placeholder intact on decode error
             }
             finally

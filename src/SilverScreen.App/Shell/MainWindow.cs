@@ -70,7 +70,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Action disposeApplicationServices,
         string? initialQuery = null)
     {
-        Logger.Information("Initializing MainWindow");
+        Logger.Debug("Initializing MainWindow");
         _account = account;
         _diagnostics = diagnostics;
         _disposeApplicationServices = disposeApplicationServices;
@@ -284,13 +284,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             var result = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
             if (!PlaybackResult.IsSuccessStatus(result))
             {
-                Logger.Warning("Playback reported failure for video {VideoId}: {Result}", video.Id, result);
+                Logger.Warning("Playback reported failure for video: {Result}", result);
                 ShowToast(result);
             }
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to start playback for video {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to start playback for video");
             ShowToast($"Could not start playback for “{video.Title}”.");
         }
     }
@@ -302,13 +302,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             var result = await _playback.PlayAlternateAsync(new PlaybackRequest([video])).ConfigureAwait(false);
             if (!PlaybackResult.IsSuccessStatus(result))
             {
-                Logger.Warning("Alternate playback reported failure for video {VideoId}: {Result}", video.Id, result);
+                Logger.Warning("Alternate playback reported failure for video: {Result}", result);
                 ShowToast(result);
             }
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to start alternate playback for video {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to start alternate playback for video");
             ShowToast($"Could not play “{video.Title}” in the alternate player.");
         }
     }
@@ -318,8 +318,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (string.IsNullOrWhiteSpace(video.ChannelUrl) ||
             video.ChannelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
         {
-            Logger.Warning("Cannot open channel with missing or placeholder URL for video {VideoId} ({ChannelName})",
-                video.Id, video.ChannelName);
+            Logger.Warning("Cannot open channel with missing or placeholder URL for video");
             return;
         }
 

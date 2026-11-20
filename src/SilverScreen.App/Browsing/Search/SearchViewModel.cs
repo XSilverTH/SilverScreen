@@ -173,7 +173,7 @@ public sealed class SearchViewModel : IVideoListSource
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to fetch search suggestions for query {Query}", query);
+            Logger.Warning(exception, "Failed to fetch search suggestions");
             return [];
         }
     }
@@ -186,7 +186,7 @@ public sealed class SearchViewModel : IVideoListSource
     /// </summary>
     public async Task<string?> SubmitAsync(string text, int count = VideoFeedConstants.DefaultPageSize)
     {
-        Logger.Information("Search submitted: {Text}", text);
+        Logger.Debug("Search submitted");
         var query = text.Trim();
         if (string.IsNullOrWhiteSpace(query)) return EmptyQueryMessage;
 
@@ -229,7 +229,7 @@ public sealed class SearchViewModel : IVideoListSource
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to submit search or play URL for query {Query}", query);
+            Logger.Warning(exception, "Failed to submit search or play URL");
             return "Could not complete search. Check your network connection and try again.";
         }
     }
@@ -291,12 +291,12 @@ public sealed class SearchViewModel : IVideoListSource
         {
             var result = await _playbackService.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
             if (PlaybackResult.IsSuccessStatus(result)) return null;
-            Logger.Warning("Playback failed for pasted URL {VideoId}: {Result}", parsedUrl.VideoId, result);
+            Logger.Warning("Playback failed for pasted URL: {Result}", result);
             return result;
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to start playback for pasted URL {VideoId}", parsedUrl.VideoId);
+            Logger.Warning(exception, "Failed to start playback for pasted URL");
             return "Could not start playback. Check your network connection and try again.";
         }
     }

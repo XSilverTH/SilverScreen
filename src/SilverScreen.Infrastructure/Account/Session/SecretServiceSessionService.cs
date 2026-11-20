@@ -351,7 +351,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                     _isAvailable = true;
                 }
 
-                Logger.Information("Skipping YouTube session restoration because a pending sign-out intent exists");
+                Logger.Debug("Skipping YouTube session restoration because a pending sign-out intent exists");
                 SessionChanged?.Invoke(this, EventArgs.Empty);
                 return;
             }
@@ -363,7 +363,7 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                 _isAvailable = true;
             }
 
-            Logger.Information("YouTube session state in Secret Service: {SessionState}",
+            Logger.Information("YouTube session {SessionState}",
                 restoredCookies is not null ? "Restored" : "Not found");
         }
         catch (Exception exception)

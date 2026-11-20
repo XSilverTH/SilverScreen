@@ -468,7 +468,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load background channel uploads for {ChannelTitle}", channel.Title);
+            Logger.Warning(exception, "Failed to load background channel uploads");
             if (_disposed || channelToken.IsCancellationRequested ||
                 !IsChannelGenerationCurrent(channelGeneration) || _selectedChannel != channel)
                 return;

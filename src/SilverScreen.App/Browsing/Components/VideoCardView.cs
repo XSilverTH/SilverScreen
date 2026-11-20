@@ -193,7 +193,7 @@ public partial class VideoCardView : ViewBase<Bin>
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load thumbnail for video {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to load thumbnail for video");
             // A corrupt or unsupported cached image leaves the placeholder intact.
             return;
         }
@@ -246,7 +246,7 @@ public partial class VideoCardView : ViewBase<Bin>
             }
             catch (Exception exception)
             {
-                Logger.Warning(exception, "Failed to render thumbnail texture for video {VideoId}", video.Id);
+                Logger.Warning(exception, "Failed to render thumbnail texture for video");
                 // A corrupt or unsupported cached image leaves the placeholder intact.
             }
             finally
@@ -401,7 +401,7 @@ public partial class VideoCardView : ViewBase<Bin>
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to start alternate playback for video {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to start alternate playback for video");
         }
     }
 
@@ -433,7 +433,7 @@ public partial class VideoCardView : ViewBase<Bin>
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to start playback for video {VideoId}", video.Id);
+            Logger.Warning(exception, "Failed to start playback for video");
         }
     }
 

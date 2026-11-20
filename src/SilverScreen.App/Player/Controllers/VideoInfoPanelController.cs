@@ -248,7 +248,7 @@ internal sealed class VideoInfoPanelController : IDisposable
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load video details for {VideoId}", videoId);
+            Logger.Warning(exception, "Failed to load video details");
             result = new YouTubeVideoDetailsResult(null, false, "Video details could not be loaded.");
         }
 

@@ -80,13 +80,13 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<bool> SaveManualSessionAsync(string cookieContent)
     {
-        Logger.Information("SaveManualSessionAsync called");
+        Logger.Debug("SaveManualSessionAsync called");
         if (string.IsNullOrWhiteSpace(cookieContent))
         {
             SetManualSessionError("Nothing to save — paste the contents of your cookies.txt file first.");
             return false;
         }
-
+        
         var trimmed = cookieContent.Trim();
         try
         {
@@ -111,15 +111,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         return succeeded;
     }
 
-
-    public async Task<bool> SaveWebSessionAsync(string cookieContent)
-    {
-        if (string.IsNullOrWhiteSpace(cookieContent))
-            return false;
-
-        var (succeeded, _) = await PersistSessionAsync(cookieContent.Trim()).ConfigureAwait(false);
-        return succeeded;
-    }
 
     private async Task<(bool Succeeded, string? Error)> PersistSessionAsync(string cookieContent)
     {
@@ -154,7 +145,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ClearSessionAsync()
     {
-        Logger.Information("Clearing active YouTube session asynchronously");
+        Logger.Debug("Clearing active YouTube session");
         try
         {
             await _sessionService.ClearSessionAsync().ConfigureAwait(false);
@@ -162,21 +153,6 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         catch (Exception exception)
         {
             Logger.Error(exception, "Failed to clear YouTube session");
-        }
-    }
-
-    public async Task ValidateAsync()
-    {
-        if (_disposed)
-            return;
-
-        try
-        {
-            await _sessionService.ValidateSessionAsync().ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to validate YouTube session");
         }
     }
 

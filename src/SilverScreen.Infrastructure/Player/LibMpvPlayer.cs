@@ -44,7 +44,7 @@ public sealed class LibMpvPlayer : IDisposable
     private Task? _eventPump;
     private readonly Lock _gate = new();
     private readonly Lazy<ILibMpvNativeApi> _lazyNative;
-    private ILibMpvNativeApi _native => _lazyNative.Value;
+    private ILibMpvNativeApi Native => _lazyNative.Value;
     private readonly Lock _initLock = new();
     private bool _initialized;
     private bool _isAvailable = true;
@@ -78,7 +78,7 @@ public sealed class LibMpvPlayer : IDisposable
     {
     }
 
-    internal LibMpvPlayer(Lazy<ILibMpvNativeApi> lazyNative, Action<Action> dispatch, bool lazy = false)
+    private LibMpvPlayer(Lazy<ILibMpvNativeApi> lazyNative, Action<Action> dispatch, bool lazy = false)
     {
         _lazyNative = lazyNative ?? throw new ArgumentNullException(nameof(lazyNative));
         _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
@@ -150,7 +150,7 @@ public sealed class LibMpvPlayer : IDisposable
                 Observe("hwdec-current", LibMpvFormat.String);
                 _commandPump = Task.Run(PumpCommandsAsync);
                 _eventPump = Task.Run(PumpEvents);
-                Logger.Information("LibMpvPlayer initialized successfully");
+                Logger.Debug("LibMpvPlayer initialized successfully");
             }
             catch (Exception exception)
             {
@@ -172,7 +172,7 @@ public sealed class LibMpvPlayer : IDisposable
         if (_initialized && _isAvailable && _handle != 0)
             try
             {
-                _native.Command(_handle, "stop");
+                Native.Command(_handle, "stop");
             }
             catch
             {
@@ -189,7 +189,7 @@ public sealed class LibMpvPlayer : IDisposable
             // ignored
         }
 
-        if (_handle != 0) _native.Wakeup(_handle);
+        if (_handle != 0) Native.Wakeup(_handle);
         try
         {
             _eventPump?.GetAwaiter().GetResult();
@@ -208,12 +208,12 @@ public sealed class LibMpvPlayer : IDisposable
 
         if (renderContext != 0)
         {
-            _native.SetRenderUpdateCallback(renderContext, 0, 0);
-            _native.FreeRenderContext(renderContext);
+            Native.SetRenderUpdateCallback(renderContext, 0, 0);
+            Native.FreeRenderContext(renderContext);
         }
 
         if (_updateCallbackHandle.IsAllocated) _updateCallbackHandle.Free();
-        if (_handle != 0) _native.Destroy(_handle);
+        if (_handle != 0) Native.Destroy(_handle);
         _handle = 0;
         if (_lazyNative.IsValueCreated) _lazyNative.Value.Dispose();
     }
@@ -231,9 +231,9 @@ public sealed class LibMpvPlayer : IDisposable
             lock (_gate)
             {
                 if (_renderContext != 0) return;
-                Check(_native.CreateRenderContext(out _renderContext, _handle));
+                Check(Native.CreateRenderContext(out _renderContext, _handle));
                 _updateCallbackHandle = GCHandle.Alloc(this);
-                _native.SetRenderUpdateCallback(_renderContext,
+                Native.SetRenderUpdateCallback(_renderContext,
                     (nint)(delegate* unmanaged[Cdecl]<nint, void>)&RenderUpdateCallback,
                     GCHandle.ToIntPtr(_updateCallbackHandle));
             }
@@ -271,8 +271,7 @@ public sealed class LibMpvPlayer : IDisposable
 
         var primaryVideo = request.Videos.FirstOrDefault();
         Logger.Information(
-            "Loading playback request for video {VideoId} ({Title}) with {Count} item(s) at quality {Quality}",
-            primaryVideo?.Id, primaryVideo?.Title, request.Videos.Length, _quality);
+            "Loading playback request for with {Count} item(s) at quality {Quality}", request.Videos.Length, _quality);
         PublishState();
 
         Enqueue(LoadCurrentRequest);
@@ -280,59 +279,59 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void SetPaused(bool paused)
     {
-        Enqueue(() => Check(_native.SetPropertyFlag(_handle, "pause", paused)));
+        Enqueue(() => Check(Native.SetPropertyFlag(_handle, "pause", paused)));
     }
 
     public void TogglePause()
     {
-        Enqueue(() => Check(_native.Command(_handle, "cycle", "pause")));
+        Enqueue(() => Check(Native.Command(_handle, "cycle", "pause")));
     }
 
     public void ToggleMute()
     {
-        Enqueue(() => Check(_native.Command(_handle, "cycle", "mute")));
+        Enqueue(() => Check(Native.Command(_handle, "cycle", "mute")));
     }
 
     public void StepFrame(bool forward)
     {
-        Enqueue(() => Check(_native.Command(_handle, forward ? "frame-step" : "frame-back-step")));
+        Enqueue(() => Check(Native.Command(_handle, forward ? "frame-step" : "frame-back-step")));
     }
 
     public void AdjustVolume(double amount)
     {
-        Enqueue(() => Check(_native.Command(_handle, "add", "volume",
+        Enqueue(() => Check(Native.Command(_handle, "add", "volume",
             amount.ToString(CultureInfo.InvariantCulture))));
     }
 
     public void MovePlaylist(bool forward)
     {
-        Enqueue(() => Check(_native.Command(_handle, forward ? "playlist-next" : "playlist-prev")));
+        Enqueue(() => Check(Native.Command(_handle, forward ? "playlist-next" : "playlist-prev")));
     }
 
     public void PlayPlaylistIndex(int index)
     {
         Enqueue(() =>
-            Check(_native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
+            Check(Native.Command(_handle, "playlist-play-index", index.ToString(CultureInfo.InvariantCulture))));
     }
 
 
     public void RemovePlaylistItem(int index)
     {
-        Enqueue(() => Check(_native.Command(_handle, "playlist-remove", index.ToString(CultureInfo.InvariantCulture))));
+        Enqueue(() => Check(Native.Command(_handle, "playlist-remove", index.ToString(CultureInfo.InvariantCulture))));
     }
 
     public void MovePlaylistItem(int fromIndex, int toIndex)
     {
         if (fromIndex == toIndex) return;
         var mpvTarget = toIndex > fromIndex ? toIndex + 1 : toIndex;
-        Enqueue(() => Check(_native.Command(_handle, "playlist-move",
+        Enqueue(() => Check(Native.Command(_handle, "playlist-move",
             fromIndex.ToString(CultureInfo.InvariantCulture),
             mpvTarget.ToString(CultureInfo.InvariantCulture))));
     }
 
     public void AppendPlaylistItem(string url)
     {
-        Enqueue(() => Check(_native.Command(_handle, "loadfile", url, "append-play")));
+        Enqueue(() => Check(Native.Command(_handle, "loadfile", url, "append-play")));
     }
 
     /// <summary>
@@ -353,7 +352,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     public void SeekRelative(double seconds)
     {
-        Enqueue(() => Check(_native.Command(_handle, "seek",
+        Enqueue(() => Check(Native.Command(_handle, "seek",
             seconds.ToString(CultureInfo.InvariantCulture), "relative+exact")));
     }
 
@@ -384,24 +383,24 @@ public sealed class LibMpvPlayer : IDisposable
             _seekQueued = false;
         }
 
-        Check(_native.Command(_handle, "seek",
+        Check(Native.Command(_handle, "seek",
             target.Seconds.ToString(CultureInfo.InvariantCulture),
             target.Exact ? "absolute+exact" : "absolute+keyframes"));
     }
 
     public void SetVolume(double volume)
     {
-        Enqueue(() => Check(_native.SetPropertyDouble(_handle, "volume", Math.Clamp(volume, 0, 100))));
+        Enqueue(() => Check(Native.SetPropertyDouble(_handle, "volume", Math.Clamp(volume, 0, 100))));
     }
 
     public void SetSpeed(double speed)
     {
-        Enqueue(() => Check(_native.SetPropertyDouble(_handle, "speed", speed)));
+        Enqueue(() => Check(Native.SetPropertyDouble(_handle, "speed", speed)));
     }
 
     public void SelectSubtitleTrack(long trackId)
     {
-        Enqueue(() => Check(_native.SetPropertyString(_handle, "sid",
+        Enqueue(() => Check(Native.SetPropertyString(_handle, "sid",
             trackId <= 0 ? "no" : trackId.ToString(CultureInfo.InvariantCulture))));
     }
 
@@ -443,7 +442,7 @@ public sealed class LibMpvPlayer : IDisposable
 
         try
         {
-            Check(_native.Render(renderContext, _native.GetFramebufferBinding(), width, height));
+            Check(Native.Render(renderContext, Native.GetFramebufferBinding(), width, height));
         }
         catch (Exception exception)
         {
@@ -466,9 +465,9 @@ public sealed class LibMpvPlayer : IDisposable
         }
 
         SetPaused(true);
-        _native.SetRenderUpdateCallback(renderContext, 0, 0);
+        Native.SetRenderUpdateCallback(renderContext, 0, 0);
         if (_updateCallbackHandle.IsAllocated) _updateCallbackHandle.Free();
-        _native.FreeRenderContext(renderContext);
+        Native.FreeRenderContext(renderContext);
     }
 
     public void Stop()
@@ -503,9 +502,9 @@ public sealed class LibMpvPlayer : IDisposable
         if (_handle != 0)
             Enqueue(() =>
             {
-                Check(_native.Command(_handle, "playlist-play-index", "none"));
-                Check(_native.Command(_handle, "playlist-clear"));
-                Check(_native.Command(_handle, "stop"));
+                Check(Native.Command(_handle, "playlist-play-index", "none"));
+                Check(Native.Command(_handle, "playlist-clear"));
+                Check(Native.Command(_handle, "stop"));
             });
     }
 
@@ -529,7 +528,7 @@ public sealed class LibMpvPlayer : IDisposable
     {
         while (!IsDisposing && _handle != 0)
         {
-            var mpvEvent = _native.WaitEvent(_handle, -1);
+            var mpvEvent = Native.WaitEvent(_handle, -1);
             switch (mpvEvent.EventId)
             {
                 case (int)LibMpvEventId.None:
@@ -610,39 +609,37 @@ public sealed class LibMpvPlayer : IDisposable
     private void LogHardwareDecodingStatus()
     {
         if (_handle == 0) return;
-        var hwdec = _native.GetPropertyString(_handle, "hwdec-current") ?? "no";
-        if (!string.Equals(hwdec, _lastReportedHwdec, StringComparison.Ordinal))
-        {
-            _lastReportedHwdec = hwdec;
-            Logger.Information("Hardware decoding active: {Hwdec}", hwdec);
-        }
+        var hwdec = Native.GetPropertyString(_handle, "hwdec-current") ?? "no";
+        if (string.Equals(hwdec, _lastReportedHwdec, StringComparison.Ordinal)) return;
+        _lastReportedHwdec = hwdec;
+        Logger.Information("Hardware decoding active: {Hwdec}", hwdec);
     }
 
     private void HandlePropertyChange(nint data)
     {
         var property = Marshal.PtrToStructure<LibMpvEventProperty>(data);
         var name = Marshal.PtrToStringUTF8(property.Name);
-        if (name is null) return;
-        if (name == "hwdec-current")
+        switch (name)
         {
-            LogHardwareDecodingStatus();
-            return;
+            case null:
+                return;
+            case "hwdec-current":
+                LogHardwareDecodingStatus();
+                return;
         }
 
         if (property.Format == LibMpvFormat.None || property.Data == 0)
         {
-            if (name == "sid")
+            if (name != "sid") return;
+            lock (_gate)
             {
-                lock (_gate)
+                _state = _state with
                 {
-                    _state = _state with
-                    {
-                        SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, 0)
-                    };
-                }
-
-                PublishState();
+                    SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, 0)
+                };
             }
+
+            PublishState();
 
             return;
         }
@@ -737,11 +734,11 @@ public sealed class LibMpvPlayer : IDisposable
         if (reload is not null)
             Enqueue(() =>
             {
-                Check(_native.SetPropertyDouble(_handle, "volume", reload.Volume));
-                Check(_native.SetPropertyDouble(_handle, "speed", reload.Speed));
-                Check(_native.Command(_handle, "seek",
+                Check(Native.SetPropertyDouble(_handle, "volume", reload.Volume));
+                Check(Native.SetPropertyDouble(_handle, "speed", reload.Speed));
+                Check(Native.Command(_handle, "seek",
                     reload.Position.TotalSeconds.ToString(CultureInfo.InvariantCulture), "absolute+exact"));
-                Check(_native.SetPropertyFlag(_handle, "pause", reload.IsPaused));
+                Check(Native.SetPropertyFlag(_handle, "pause", reload.IsPaused));
             });
 
         PublishState();
@@ -754,7 +751,7 @@ public sealed class LibMpvPlayer : IDisposable
         {
             var detail = !string.IsNullOrWhiteSpace(_lastErrorMessage)
                 ? _lastErrorMessage
-                : _native.ErrorString(endFile.Error);
+                : Native.ErrorString(endFile.Error);
             PublishFailure(detail);
         }
     }
@@ -779,23 +776,23 @@ public sealed class LibMpvPlayer : IDisposable
         var urls = MpvCommandBuilder.GetPlaybackUrls(request);
         var rawOptions = BuildYtdlRawOptions(cookieFilePath,
             preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled);
-        Check(_native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
-        Check(_native.SetPropertyString(_handle, "keep-open",
+        Check(Native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
+        Check(Native.SetPropertyString(_handle, "keep-open",
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
-        Check(_native.SetPropertyString(_handle, "ytdl-format",
+        Check(Native.SetPropertyString(_handle, "ytdl-format",
             MpvCommandBuilder.BuildYtdlFormat(quality, preferences.PreferredCodec) ?? string.Empty));
         if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
-            Check(_native.SetPropertyString(_handle, "script-opts",
+            Check(Native.SetPropertyString(_handle, "script-opts",
                 $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));
-        Check(_native.SetPropertyFlag(_handle, "pause", false));
-        Check(_native.Command(_handle, "loadfile", urls[0], "replace"));
-        foreach (var url in urls.Skip(1)) Check(_native.Command(_handle, "loadfile", url, "append-play"));
-        if (reload is not null) Check(_native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));
+        Check(Native.SetPropertyFlag(_handle, "pause", false));
+        Check(Native.Command(_handle, "loadfile", urls[0], "replace"));
+        foreach (var url in urls.Skip(1)) Check(Native.Command(_handle, "loadfile", url, "append-play"));
+        if (reload is not null) Check(Native.SetPropertyInt64(_handle, "playlist-pos", reload.PlaylistIndex));
     }
 
     private List<LibMpvSubtitleTrack> ReadSubtitleTracks()
     {
-        var trackListJson = _native.GetPropertyString(_handle, "track-list");
+        var trackListJson = Native.GetPropertyString(_handle, "track-list");
         if (!string.IsNullOrWhiteSpace(trackListJson))
         {
             try
@@ -803,7 +800,7 @@ public sealed class LibMpvPlayer : IDisposable
                 using var doc = JsonDocument.Parse(trackListJson);
                 if (doc.RootElement.ValueKind == JsonValueKind.Array)
                 {
-                    var selectedTrackId = long.TryParse(_native.GetPropertyString(_handle, "sid"),
+                    var selectedTrackId = long.TryParse(Native.GetPropertyString(_handle, "sid"),
                         NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
                         ? value
                         : 0;
@@ -859,12 +856,12 @@ public sealed class LibMpvPlayer : IDisposable
 
     private List<LibMpvSubtitleTrack> ReadSubtitleTracksLegacy()
     {
-        if (!int.TryParse(_native.GetPropertyString(_handle, "track-list/count"),
+        if (!int.TryParse(Native.GetPropertyString(_handle, "track-list/count"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackCount) ||
             trackCount <= 0)
             return [];
 
-        var selectedTrackId = long.TryParse(_native.GetPropertyString(_handle, "sid"),
+        var selectedTrackId = long.TryParse(Native.GetPropertyString(_handle, "sid"),
             NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : 0;
@@ -872,14 +869,14 @@ public sealed class LibMpvPlayer : IDisposable
         for (var index = 0; index < trackCount; index++)
         {
             var propertyPrefix = $"track-list/{index}";
-            if (!string.Equals(_native.GetPropertyString(_handle, $"{propertyPrefix}/type"), "sub",
+            if (!string.Equals(Native.GetPropertyString(_handle, $"{propertyPrefix}/type"), "sub",
                     StringComparison.Ordinal) ||
-                !long.TryParse(_native.GetPropertyString(_handle, $"{propertyPrefix}/id"),
+                !long.TryParse(Native.GetPropertyString(_handle, $"{propertyPrefix}/id"),
                     NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackId))
                 continue;
 
-            var title = _native.GetPropertyString(_handle, $"{propertyPrefix}/title");
-            var language = _native.GetPropertyString(_handle, $"{propertyPrefix}/lang");
+            var title = Native.GetPropertyString(_handle, $"{propertyPrefix}/title");
+            var language = Native.GetPropertyString(_handle, $"{propertyPrefix}/lang");
             var label = string.IsNullOrWhiteSpace(title)
                 ? language
                 : string.IsNullOrWhiteSpace(language) ||
@@ -895,7 +892,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private List<LibMpvChapter> ReadChapters()
     {
-        if (!int.TryParse(_native.GetPropertyString(_handle, "chapter-list/count"),
+        if (!int.TryParse(Native.GetPropertyString(_handle, "chapter-list/count"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapterCount) ||
             chapterCount <= 0)
             return [];
@@ -904,12 +901,12 @@ public sealed class LibMpvPlayer : IDisposable
         for (var index = 0; index < chapterCount; index++)
         {
             var propertyPrefix = $"chapter-list/{index}";
-            if (!double.TryParse(_native.GetPropertyString(_handle, $"{propertyPrefix}/time"),
+            if (!double.TryParse(Native.GetPropertyString(_handle, $"{propertyPrefix}/time"),
                     NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) ||
                 seconds < 0 || double.IsNaN(seconds) || double.IsInfinity(seconds))
                 continue;
 
-            var title = _native.GetPropertyString(_handle, $"{propertyPrefix}/title");
+            var title = Native.GetPropertyString(_handle, $"{propertyPrefix}/title");
             chapters.Add(new LibMpvChapter(TimeSpan.FromSeconds(seconds),
                 string.IsNullOrWhiteSpace(title) ? $"Chapter {index + 1}" : title));
         }
@@ -929,27 +926,27 @@ public sealed class LibMpvPlayer : IDisposable
         try
         {
             // 1. File / Stream
-            var mediaTitle = _native.GetPropertyString(_handle, "media-title") ??
+            var mediaTitle = Native.GetPropertyString(_handle, "media-title") ??
                              _request?.Videos.FirstOrDefault()?.Title;
-            var fileFormat = _native.GetPropertyString(_handle, "file-format");
-            var demuxer = _native.GetPropertyString(_handle, "demuxer");
-            var path = _native.GetPropertyString(_handle, "path") ??
-                       _native.GetPropertyString(_handle, "stream-open-filename");
-            var fileSizeStr = _native.GetPropertyString(_handle, "file-size");
+            var fileFormat = Native.GetPropertyString(_handle, "file-format");
+            var demuxer = Native.GetPropertyString(_handle, "demuxer");
+            var path = Native.GetPropertyString(_handle, "path") ??
+                       Native.GetPropertyString(_handle, "stream-open-filename");
+            var fileSizeStr = Native.GetPropertyString(_handle, "file-size");
             long? fileSize = long.TryParse(fileSizeStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs)
                 ? fs
                 : null;
 
             // 2. Video
-            var videoCodec = _native.GetPropertyString(_handle, "video-codec") ??
-                             _native.GetPropertyString(_handle, "video-format");
-            var videoDecoder = _native.GetPropertyString(_handle, "video-decoder-name") ??
-                               _native.GetPropertyString(_handle, "video-codec");
-            var hwdec = _native.GetPropertyString(_handle, "hwdec-current") ??
-                        _native.GetPropertyString(_handle, "hwdec-active");
+            var videoCodec = Native.GetPropertyString(_handle, "video-codec") ??
+                             Native.GetPropertyString(_handle, "video-format");
+            var videoDecoder = Native.GetPropertyString(_handle, "video-decoder-name") ??
+                               Native.GetPropertyString(_handle, "video-codec");
+            var hwdec = Native.GetPropertyString(_handle, "hwdec-current") ??
+                        Native.GetPropertyString(_handle, "hwdec-active");
 
-            var vwStr = _native.GetPropertyString(_handle, "video-params/w");
-            var vhStr = _native.GetPropertyString(_handle, "video-params/h");
+            var vwStr = Native.GetPropertyString(_handle, "video-params/w");
+            var vhStr = Native.GetPropertyString(_handle, "video-params/h");
             int? videoWidth = int.TryParse(vwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vw)
                 ? vw
                 : null;
@@ -957,10 +954,10 @@ public sealed class LibMpvPlayer : IDisposable
                 ? vh
                 : null;
 
-            var dwStr = _native.GetPropertyString(_handle, "dwidth") ??
-                        _native.GetPropertyString(_handle, "video-params/dw");
-            var dhStr = _native.GetPropertyString(_handle, "dheight") ??
-                        _native.GetPropertyString(_handle, "video-params/dh");
+            var dwStr = Native.GetPropertyString(_handle, "dwidth") ??
+                        Native.GetPropertyString(_handle, "video-params/dw");
+            var dhStr = Native.GetPropertyString(_handle, "dheight") ??
+                        Native.GetPropertyString(_handle, "video-params/dh");
             int? displayWidth = int.TryParse(dwStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dw)
                 ? dw
                 : null;
@@ -968,60 +965,60 @@ public sealed class LibMpvPlayer : IDisposable
                 ? dh
                 : null;
 
-            var aspectStr = _native.GetPropertyString(_handle, "video-params/aspect");
+            var aspectStr = Native.GetPropertyString(_handle, "video-params/aspect");
             double? aspect =
                 double.TryParse(aspectStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var asp) &&
                 !double.IsNaN(asp)
                     ? asp
                     : null;
 
-            var contFpsStr = _native.GetPropertyString(_handle, "container-fps");
+            var contFpsStr = Native.GetPropertyString(_handle, "container-fps");
             double? containerFps =
                 double.TryParse(contFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cfps) &&
                 !double.IsNaN(cfps)
                     ? cfps
                     : null;
 
-            var estFpsStr = _native.GetPropertyString(_handle, "estimated-vf-fps");
+            var estFpsStr = Native.GetPropertyString(_handle, "estimated-vf-fps");
             double? estimatedFps =
                 double.TryParse(estFpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var efps) &&
                 !double.IsNaN(efps)
                     ? efps
                     : null;
 
-            var vBitrateStr = _native.GetPropertyString(_handle, "video-bitrate");
+            var vBitrateStr = Native.GetPropertyString(_handle, "video-bitrate");
             double? videoBitrate =
                 double.TryParse(vBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vbr) &&
                 !double.IsNaN(vbr)
                     ? vbr
                     : null;
 
-            var pixelFormat = _native.GetPropertyString(_handle, "video-params/pixelformat");
-            var colorMatrix = _native.GetPropertyString(_handle, "video-params/colormatrix");
-            var colorLevels = _native.GetPropertyString(_handle, "video-params/colorlevels");
-            var primaries = _native.GetPropertyString(_handle, "video-params/primaries");
-            var gamma = _native.GetPropertyString(_handle, "video-params/gamma");
+            var pixelFormat = Native.GetPropertyString(_handle, "video-params/pixelformat");
+            var colorMatrix = Native.GetPropertyString(_handle, "video-params/colormatrix");
+            var colorLevels = Native.GetPropertyString(_handle, "video-params/colorlevels");
+            var primaries = Native.GetPropertyString(_handle, "video-params/primaries");
+            var gamma = Native.GetPropertyString(_handle, "video-params/gamma");
 
             // 3. Audio
-            var audioCodec = _native.GetPropertyString(_handle, "audio-codec-name") ??
-                             _native.GetPropertyString(_handle, "audio-codec") ??
-                             _native.GetPropertyString(_handle, "audio-format");
-            var audioDecoder = _native.GetPropertyString(_handle, "audio-decoder-name") ?? audioCodec;
+            var audioCodec = Native.GetPropertyString(_handle, "audio-codec-name") ??
+                             Native.GetPropertyString(_handle, "audio-codec") ??
+                             Native.GetPropertyString(_handle, "audio-format");
+            var audioDecoder = Native.GetPropertyString(_handle, "audio-decoder-name") ?? audioCodec;
 
-            var sampleRateStr = _native.GetPropertyString(_handle, "audio-params/samplerate");
+            var sampleRateStr = Native.GetPropertyString(_handle, "audio-params/samplerate");
             int? sampleRate =
                 int.TryParse(sampleRateStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sr) ? sr : null;
 
-            var channelCountStr = _native.GetPropertyString(_handle, "audio-params/channel-count");
+            var channelCountStr = Native.GetPropertyString(_handle, "audio-params/channel-count");
             int? channelCount =
                 int.TryParse(channelCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cc)
                     ? cc
                     : null;
 
-            var channels = _native.GetPropertyString(_handle, "audio-params/channels");
-            var audioFormat = _native.GetPropertyString(_handle, "audio-params/format");
+            var channels = Native.GetPropertyString(_handle, "audio-params/channels");
+            var audioFormat = Native.GetPropertyString(_handle, "audio-params/format");
 
-            var aBitrateStr = _native.GetPropertyString(_handle, "audio-bitrate");
+            var aBitrateStr = Native.GetPropertyString(_handle, "audio-bitrate");
             double? audioBitrate =
                 double.TryParse(aBitrateStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var abr) &&
                 !double.IsNaN(abr)
@@ -1029,51 +1026,51 @@ public sealed class LibMpvPlayer : IDisposable
                     : null;
 
             // 4. Performance & Sync
-            var dropCountStr = _native.GetPropertyString(_handle, "frame-drop-count") ??
-                               _native.GetPropertyString(_handle, "decoder-frame-drop-count");
+            var dropCountStr = Native.GetPropertyString(_handle, "frame-drop-count") ??
+                               Native.GetPropertyString(_handle, "decoder-frame-drop-count");
             long? dropCount =
                 long.TryParse(dropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dc) ? dc : null;
 
-            var voDropCountStr = _native.GetPropertyString(_handle, "vo-drop-frame-count");
+            var voDropCountStr = Native.GetPropertyString(_handle, "vo-drop-frame-count");
             long? voDropCount =
                 long.TryParse(voDropCountStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vdc)
                     ? vdc
                     : null;
 
-            var mistimedStr = _native.GetPropertyString(_handle, "mistimed-frame-count");
+            var mistimedStr = Native.GetPropertyString(_handle, "mistimed-frame-count");
             long? mistimed = long.TryParse(mistimedStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mt)
                 ? mt
                 : null;
 
-            var vsyncRatioStr = _native.GetPropertyString(_handle, "vsync-ratio");
+            var vsyncRatioStr = Native.GetPropertyString(_handle, "vsync-ratio");
             double? vsyncRatio =
                 double.TryParse(vsyncRatioStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vr) &&
                 !double.IsNaN(vr)
                     ? vr
                     : null;
 
-            var avsyncStr = _native.GetPropertyString(_handle, "avsync");
+            var avsyncStr = Native.GetPropertyString(_handle, "avsync");
             double? avsync =
                 double.TryParse(avsyncStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var avs) &&
                 !double.IsNaN(avs)
                     ? avs
                     : null;
 
-            var cacheDurStr = _native.GetPropertyString(_handle, "demuxer-cache-duration");
+            var cacheDurStr = Native.GetPropertyString(_handle, "demuxer-cache-duration");
             double? cacheDuration =
                 double.TryParse(cacheDurStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cd) &&
                 !double.IsNaN(cd)
                     ? cd
                     : null;
 
-            var cacheBytesStr = _native.GetPropertyString(_handle, "demuxer-cache-state/bytes");
+            var cacheBytesStr = Native.GetPropertyString(_handle, "demuxer-cache-state/bytes");
             long? cacheBytes =
                 long.TryParse(cacheBytesStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cb)
                     ? cb
                     : null;
 
             // 5. Playback
-            var percentStr = _native.GetPropertyString(_handle, "percent-pos");
+            var percentStr = Native.GetPropertyString(_handle, "percent-pos");
             double? percent =
                 double.TryParse(percentStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pp) &&
                 !double.IsNaN(pp)
@@ -1087,15 +1084,15 @@ public sealed class LibMpvPlayer : IDisposable
             }
 
             var selectedSub = stateSnapshot.SubtitleTracks.FirstOrDefault(t => t.IsSelected)?.Label;
-            var selectedAudio = _native.GetPropertyString(_handle, "current-tracks/audio/title") ??
-                                _native.GetPropertyString(_handle, "current-tracks/audio/lang");
+            var selectedAudio = Native.GetPropertyString(_handle, "current-tracks/audio/title") ??
+                                Native.GetPropertyString(_handle, "current-tracks/audio/lang");
 
             // 6. Tracks
             var tracks = includeTracks ? ReadAllTracks() : [];
 
             // 7. Engine
-            var mpvVersion = _mpvVersion ??= _native.GetPropertyString(_handle, "mpv-version");
-            var ffmpegVersion = _ffmpegVersion ??= _native.GetPropertyString(_handle, "ffmpeg-version");
+            var mpvVersion = _mpvVersion ??= Native.GetPropertyString(_handle, "mpv-version");
+            var ffmpegVersion = _ffmpegVersion ??= Native.GetPropertyString(_handle, "ffmpeg-version");
 
             return new PlaybackStats(
                 mediaTitle,
@@ -1156,7 +1153,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private List<PlaybackStatsTrack> ReadAllTracks()
     {
-        var trackListJson = _native.GetPropertyString(_handle, "track-list");
+        var trackListJson = Native.GetPropertyString(_handle, "track-list");
         if (!string.IsNullOrWhiteSpace(trackListJson))
         {
             try
@@ -1231,7 +1228,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private List<PlaybackStatsTrack> ReadAllTracksLegacy()
     {
-        if (!int.TryParse(_native.GetPropertyString(_handle, "track-list/count"),
+        if (!int.TryParse(Native.GetPropertyString(_handle, "track-list/count"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var trackCount) ||
             trackCount <= 0)
             return [];
@@ -1240,40 +1237,40 @@ public sealed class LibMpvPlayer : IDisposable
         for (var i = 0; i < trackCount; i++)
         {
             var prefix = $"track-list/{i}";
-            var type = _native.GetPropertyString(_handle, $"{prefix}/type") ?? "unknown";
-            if (!long.TryParse(_native.GetPropertyString(_handle, $"{prefix}/id"), NumberStyles.Integer,
+            var type = Native.GetPropertyString(_handle, $"{prefix}/type") ?? "unknown";
+            if (!long.TryParse(Native.GetPropertyString(_handle, $"{prefix}/id"), NumberStyles.Integer,
                     CultureInfo.InvariantCulture, out var id))
                 continue;
 
-            var title = _native.GetPropertyString(_handle, $"{prefix}/title");
-            var lang = _native.GetPropertyString(_handle, $"{prefix}/lang");
-            var codec = _native.GetPropertyString(_handle, $"{prefix}/codec");
+            var title = Native.GetPropertyString(_handle, $"{prefix}/title");
+            var lang = Native.GetPropertyString(_handle, $"{prefix}/lang");
+            var codec = Native.GetPropertyString(_handle, $"{prefix}/codec");
 
-            int? w = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-w"), NumberStyles.Integer,
+            int? w = int.TryParse(Native.GetPropertyString(_handle, $"{prefix}/demux-w"), NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out var tw)
                 ? tw
                 : null;
-            int? h = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-h"), NumberStyles.Integer,
+            int? h = int.TryParse(Native.GetPropertyString(_handle, $"{prefix}/demux-h"), NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out var th)
                 ? th
                 : null;
-            double? fps = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-fps"), NumberStyles.Float,
+            double? fps = double.TryParse(Native.GetPropertyString(_handle, $"{prefix}/demux-fps"), NumberStyles.Float,
                 CultureInfo.InvariantCulture, out var tfps)
                 ? tfps
                 : null;
-            int? sr = int.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-samplerate"),
+            int? sr = int.TryParse(Native.GetPropertyString(_handle, $"{prefix}/demux-samplerate"),
                 NumberStyles.Integer, CultureInfo.InvariantCulture, out var tsr)
                 ? tsr
                 : null;
-            var ch = _native.GetPropertyString(_handle, $"{prefix}/demux-channels");
-            double? br = double.TryParse(_native.GetPropertyString(_handle, $"{prefix}/demux-bitrate"),
+            var ch = Native.GetPropertyString(_handle, $"{prefix}/demux-channels");
+            double? br = double.TryParse(Native.GetPropertyString(_handle, $"{prefix}/demux-bitrate"),
                 NumberStyles.Float, CultureInfo.InvariantCulture, out var tbr)
                 ? tbr
                 : null;
 
-            var isSelected = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/selected"), "yes",
+            var isSelected = string.Equals(Native.GetPropertyString(_handle, $"{prefix}/selected"), "yes",
                 StringComparison.OrdinalIgnoreCase);
-            var isDefault = string.Equals(_native.GetPropertyString(_handle, $"{prefix}/default"), "yes",
+            var isDefault = string.Equals(Native.GetPropertyString(_handle, $"{prefix}/default"), "yes",
                 StringComparison.OrdinalIgnoreCase);
 
             tracks.Add(new PlaybackStatsTrack(id, type, title, lang, codec, w, h, fps, sr, ch, br, isSelected,
@@ -1302,7 +1299,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void Observe(string name, LibMpvFormat format)
     {
-        Check(_native.ObserveProperty(_handle, 0, name, format));
+        Check(Native.ObserveProperty(_handle, 0, name, format));
     }
 
     private void Enqueue(Action action)
@@ -1340,7 +1337,7 @@ public sealed class LibMpvPlayer : IDisposable
 
     private void Check(int result)
     {
-        if (result < 0) throw new LibMpvException(_native.ErrorString(result));
+        if (result < 0) throw new LibMpvException(Native.ErrorString(result));
     }
 
     private static TimeSpan ToTimeSpan(double seconds)

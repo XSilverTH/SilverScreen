@@ -118,7 +118,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         {
             RecordHit(cachePath);
             TouchCacheFile(cachePath);
-            Logger.Debug("Thumbnail cache hit for {Url}", thumbnailUrl);
+            Logger.Debug("Thumbnail cache hit");
             return new ThumbnailResult(cachePath, true);
         }
 
@@ -154,7 +154,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException
                                        or InvalidOperationException)
         {
-            Logger.Warning(ex, "Failed to download thumbnail from {DownloadUri}", uri);
+            Logger.Warning(ex, "Failed to download thumbnail");
             return null;
         }
         finally
@@ -187,7 +187,7 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                 return new ThumbnailResult(cachePath, true);
             }
 
-            Logger.Warning(ex, "Failed to cache thumbnail for {CachePath}", cachePath);
+            Logger.Warning(ex, "Failed to cache thumbnail");
             return null;
         }
     }

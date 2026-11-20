@@ -143,17 +143,17 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         }
         catch (CommentsUnavailableException exception)
         {
-            Logger.Warning(exception, "YoutubeAPI reports comments unavailable for video {VideoId}", videoId.Value);
+            Logger.Warning(exception, "YoutubeAPI reports comments unavailable for video");
             return Failure("Comments are unavailable for this video.");
         }
         catch (YouTubeException exception)
         {
-            Logger.Warning(exception, "YoutubeAPI failed to fetch comment threads for video {VideoId}", videoId.Value);
+            Logger.Warning(exception, "YoutubeAPI failed to fetch comment threads for video");
             return Failure("Could not load comments.");
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Unexpected failure fetching comment threads for video {VideoId}", videoId.Value);
+            Logger.Warning(exception, "Unexpected failure fetching comment threads for video");
             return Failure("Could not load comments.");
         }
     }

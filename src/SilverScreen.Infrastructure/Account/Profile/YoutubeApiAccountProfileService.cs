@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
@@ -39,7 +40,9 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
 
         try
         {
-            Logger.Information("Fetching YouTube account profile");
+            Logger.Debug("Fetching YouTube account profile");
+            var startTime = Stopwatch.GetTimestamp();
+            
             var profile = await _clientProvider.GetAuthenticatedClient().Account
                 .GetProfileAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -55,8 +58,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             {
                 _cachedProfile = accountProfile;
             }
-
-            Logger.Information("YouTube account profile fetched successfully");
+            Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)", Stopwatch.GetElapsedTime(startTime).Milliseconds);
             return new AccountProfileResult(AccountProfileLoadStatus.Success, accountProfile);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

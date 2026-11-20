@@ -116,13 +116,12 @@ public sealed class YtDlpRunner : IYtDlpRunner
         }
         else
         {
-            if (!string.IsNullOrWhiteSpace(standardError))
-            {
-                var redactedStderr = RedactFreeform(standardError.Trim());
-                Logger.Information(
-                    "yt-dlp process exited successfully (ExitCode 0) with stderr diagnostics: {StdErr}",
-                    redactedStderr);
-            }
+            if (string.IsNullOrWhiteSpace(standardError))
+                return new ProcessResult(process.ExitCode, standardOutput, DiagnosticSanitizer.Sanitize(standardError));
+            var redactedStderr = RedactFreeform(standardError.Trim());
+            Logger.Information(
+                "yt-dlp process exited successfully (ExitCode 0) with stderr diagnostics: {StdErr}",
+                redactedStderr);
         }
 
         return new ProcessResult(process.ExitCode, standardOutput, DiagnosticSanitizer.Sanitize(standardError));
@@ -193,12 +192,19 @@ public sealed class YtDlpRunner : IYtDlpRunner
         for (var i = 0; i < startInfo.ArgumentList.Count; i++)
         {
             var argument = startInfo.ArgumentList[i];
-            redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument)
+            redacted[i] = IsSecretValue(i, startInfo.ArgumentList) || IsSecretAssignment(argument) || IsUrlOrVideoTarget(argument)
                 ? "[REDACTED]"
                 : argument;
         }
 
         return RedactFreeform(string.Join(" ", redacted));
+    }
+
+    private static bool IsUrlOrVideoTarget(string argument)
+    {
+        return argument.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+               || argument.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+               || argument.StartsWith("ytdl://", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSecretValue(int index, Collection<string> arguments)

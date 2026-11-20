@@ -38,12 +38,12 @@ public sealed class YoutubeApiPlaybackProgressService(IYouTubeClientProvider cli
         catch (YouTubeException ex) when (
             ex is AuthenticationRequiredException or AuthenticationExpiredException or PermissionDeniedException)
         {
-            Logger.Debug(ex, "YouTube playback progress is unavailable for {VideoId}", videoId);
+            Logger.Debug(ex, "YouTube playback progress is unavailable");
             return null;
         }
         catch (YouTubeException ex)
         {
-            Logger.Debug(ex, "Unable to load YouTube playback progress for {VideoId}", videoId);
+            Logger.Debug(ex, "Unable to load YouTube playback progress");
             return null;
         }
     }

@@ -75,7 +75,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
         if (_engagementByVideoId.TryGetValue(videoId, out var cached))
         {
-            Logger.Debug("ReturnYouTubeDislike cache hit for video {VideoId}", videoId);
+            Logger.Debug("ReturnYouTubeDislike cache hit for video");
             return cached;
         }
 
@@ -91,8 +91,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
-                Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode} for video {VideoId}",
-                    response.StatusCode, videoId);
+                Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode}", response.StatusCode);
                 return null;
             }
 
@@ -107,8 +106,6 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
             var engagement = new VideoEngagement(payload.Likes, payload.Dislikes);
             AddBounded(videoId, engagement);
-            Logger.Information("Fetched engagement stats for video {VideoId}: {Likes} likes, {Dislikes} dislikes",
-                videoId, payload.Likes, payload.Dislikes);
             return engagement;
         }
         catch (OperationCanceledException)
@@ -117,7 +114,7 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or NotSupportedException)
         {
-            Logger.Warning(exception, "Failed to fetch dislike counts for video {VideoId}", videoId);
+            Logger.Warning(exception, "Failed to fetch dislike counts for video");
             return null;
         }
     }

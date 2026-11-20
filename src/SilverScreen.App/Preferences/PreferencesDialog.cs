@@ -21,7 +21,6 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     public PreferencesDialog(IPreferencesService preferencesService)
     {
-        Logger.Information("Opening PreferencesDialog");
         _viewModel = new PreferencesViewModel(preferencesService);
         _sponsorBlockCategoryRows = new Dictionary<string, SwitchRow>
         {

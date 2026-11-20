@@ -664,19 +664,19 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             if (Widget.GetRoot() is not Window parent)
             {
-                Logger.Warning("Cannot open link {Url} without a parent window", url);
+                Logger.Warning("Cannot open link without a parent window");
                 return;
             }
 
             UriLauncher.New(url).LaunchAsync(parent).ContinueWith(task =>
             {
                 if (task.IsFaulted)
-                    Logger.Warning(task.Exception, "Failed to open link {Url} in browser", url);
+                    Logger.Warning(task.Exception, "Failed to open link in browser");
             }, TaskScheduler.Default);
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to open link {Url} in browser", url);
+            Logger.Warning(exception, "Failed to open link in browser");
         }
     }
 
@@ -1156,7 +1156,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Failed to load quality tracks for video {VideoId}", videoId);
+            Logger.Warning(ex, "Failed to load quality tracks for video");
         }
     }
 

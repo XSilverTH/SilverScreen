@@ -57,7 +57,7 @@ public sealed class NativeAuthService : INativeAuthService
             var binaryPath = _processPathResolver();
             if (string.IsNullOrEmpty(binaryPath) || !File.Exists(binaryPath)) binaryPath = "/proc/self/exe";
 
-            Logger.Information("Starting native auth worker: {BinaryPath} --auth", binaryPath);
+            Logger.Debug("Starting native auth worker: {BinaryPath} --auth", binaryPath);
 
             var startInfo = new ProcessStartInfo
             {

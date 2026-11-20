@@ -80,7 +80,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         var trimmed = query.Trim();
         if (SearchViewModel.IsDirectVideoUrl(trimmed)) search_entry.SetText(string.Empty);
 
-        Logger.Information("Search submitted from popover: {Query}", trimmed);
+        Logger.Debug("Search submitted from popover");
         _submitCallback(trimmed);
     }
 

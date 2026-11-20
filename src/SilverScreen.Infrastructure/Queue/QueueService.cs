@@ -56,7 +56,7 @@ public sealed class QueueService : IQueueService
             _items.Add(item);
         }
 
-        Logger.Information("Added video {VideoId} ({Title}) to playback queue", video.Id, video.Title);
+        Logger.Debug("Added video to playback queue");
         Changed?.Invoke(this, EventArgs.Empty);
         return item;
     }
@@ -82,17 +82,15 @@ public sealed class QueueService : IQueueService
 
     public void Remove(Guid itemId)
     {
-        string? videoId = null;
         lock (_lock)
         {
             var index = _items.FindIndex(item => item.Id == itemId);
             if (index < 0)
                 return;
-            videoId = _items[index].Video.Id;
             _items.RemoveAt(index);
         }
 
-        Logger.Information("Removed video {VideoId} (QueueItemId: {QueueItemId}) from queue", videoId, itemId);
+        Logger.Debug("Removed video from queue");
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -108,7 +106,7 @@ public sealed class QueueService : IQueueService
             _items.Clear();
         }
 
-        Logger.Information("Clearing all {Count} items from playback queue", count);
+        Logger.Debug("Clearing all {Count} items from playback queue", count);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -123,7 +121,7 @@ public sealed class QueueService : IQueueService
             count = _items.Count;
         }
 
-        Logger.Information("Replaced playback queue with {Count} items", count);
+        Logger.Debug("Replaced playback queue with {Count} items", count);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }

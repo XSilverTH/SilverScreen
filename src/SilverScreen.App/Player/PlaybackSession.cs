@@ -355,7 +355,7 @@ internal sealed class PlaybackSession : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Failed to submit vote {Vote} for {VideoId}", vote, video.Id);
+            Logger.Warning(ex, "Failed to submit vote {Vote}", vote);
             return false;
         }
 
@@ -452,7 +452,7 @@ internal sealed class PlaybackSession : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Unable to load YouTube playback progress for {VideoId}", videoId);
+            Logger.Debug(ex, "Unable to load YouTube playback progress");
             progress = null;
         }
 
@@ -541,10 +541,6 @@ internal sealed class PlaybackSession : IDisposable
                 _autoSkippedSegmentIds,
                 out var skipSegment))
         {
-            Logger.Information(
-                "Auto-skipping SponsorBlock segment {SegmentId} ({Category}) for video {VideoId} to position {EndSeconds}s",
-                skipSegment.Id, skipSegment.Category, CurrentVideo.Id, skipSegment.End.TotalSeconds);
-
             Seek(skipSegment.End.TotalSeconds);
             SponsorBlockAutoSkipped?.Invoke(skipSegment);
         }
@@ -604,7 +600,7 @@ internal sealed class PlaybackSession : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warning(ex, "Failed to load SponsorBlock segments for {VideoId}", videoId);
+            Logger.Warning(ex, "Failed to load SponsorBlock segments");
             return;
         }
 
@@ -632,7 +628,7 @@ internal sealed class PlaybackSession : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Unable to load engagement for {VideoId}", videoId);
+            Logger.Debug(ex, "Unable to load engagement");
             return;
         }
 
@@ -657,7 +653,7 @@ internal sealed class PlaybackSession : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Unable to load rating for {VideoId}", videoId);
+            Logger.Debug(ex, "Unable to load rating");
             return;
         }
 

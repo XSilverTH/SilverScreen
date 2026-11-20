@@ -240,7 +240,7 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             {
                 var counts = expiryCounts.GetValueOrDefault(row.Name);
                 expiryCounts[row.Name] = (counts.Sessions + 1, counts.Expired);
-                Logger.Information(
+                Logger.Debug(
                     "Imported YouTube cookie metadata: {CookieName}, raw count {RawCount}, retained count {RetainedCount}, expiry UTC session, session {IsSessionCookie}, expired {IsExpired}, retained at import {RetainedAtImport}",
                     row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), true, false, retained);
                 continue;
@@ -252,25 +252,25 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                 var isExpired = row.ExpiryUnix < nowUnix;
                 var counts = expiryCounts.GetValueOrDefault(row.Name);
                 expiryCounts[row.Name] = (counts.Sessions, counts.Expired + (isExpired ? 1 : 0));
-                Logger.Information(
+                Logger.Debug(
                     "Imported YouTube cookie metadata: {CookieName}, raw count {RawCount}, retained count {RetainedCount}, expiry UTC {ExpiryUtc}, session {IsSessionCookie}, expired {IsExpired}, retained at import {RetainedAtImport}",
                     row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), expiresUtc, false, isExpired,
                     retained);
             }
             catch (ArgumentOutOfRangeException)
             {
-                Logger.Information(
+                Logger.Debug(
                     "Imported YouTube cookie metadata: {CookieName}, raw count {RawCount}, retained count {RetainedCount}, expiry unavailable, session {IsSessionCookie}, expired unavailable, retained at import {RetainedAtImport}",
                     row.Name, rawCount, retainedNameCounts.GetValueOrDefault(row.Name), false, false, retained);
             }
         }
 
         foreach (var (name, counts) in expiryCounts)
-            Logger.Information(
+            Logger.Debug(
                 "Imported YouTube cookie expiry summary: {CookieName}, session count {SessionCount}, expired count {ExpiredCount}",
                 name, counts.Sessions, counts.Expired);
 
-        Logger.Information(
+        Logger.Debug(
             "Imported YouTube unknown-cookie metadata: raw count {RawCount}, retained count {RetainedCount}",
             unknownCount, Math.Max(0, parsedCookies.Count - retainedAllowlistedCount));
     }

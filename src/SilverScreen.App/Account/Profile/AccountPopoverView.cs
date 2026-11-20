@@ -192,7 +192,6 @@ public partial class AccountPopoverView : ViewBase<Bin>
 
     private void OnWebLoginClicked(object? sender, EventArgs args)
     {
-        Logger.Information("AccountPopoverView web login button clicked");
         _openWebLogin();
     }
 
@@ -209,9 +208,15 @@ public partial class AccountPopoverView : ViewBase<Bin>
 
     private async void OnClearButtonClicked(object? sender, EventArgs args)
     {
-        Logger.Information("AccountPopoverView clear session button clicked");
-        ClearBuffer(manual_editor);
-        await _viewModel.ClearSessionAsync();
+        try
+        {
+            ClearBuffer(manual_editor);
+            await _viewModel.ClearSessionAsync();
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e, "Failed to clear session");
+        }
     }
 
     private void OnWidgetUnmap(Widget sender, EventArgs args)
@@ -233,17 +238,24 @@ public partial class AccountPopoverView : ViewBase<Bin>
 
     private async void OnManualSaveButtonClicked(object? sender, EventArgs args)
     {
-        if (!await _viewModel.SaveManualSessionAsync(GetText(manual_editor)))
+        try
         {
-            manual_error_label.SetText(_viewModel.ManualSessionError ?? "Could not save the session. Try again.");
-            manual_error_label.SetVisible(true);
-            return;
-        }
+            if (!await _viewModel.SaveManualSessionAsync(GetText(manual_editor)))
+            {
+                manual_error_label.SetText(_viewModel.ManualSessionError ?? "Could not save the session. Try again.");
+                manual_error_label.SetVisible(true);
+                return;
+            }
 
-        ClearBuffer(manual_editor);
-        manual_error_label.SetVisible(false);
-        _editing = false;
-        Render();
+            ClearBuffer(manual_editor);
+            manual_error_label.SetVisible(false);
+            _editing = false;
+            Render();
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e, "Failed to save manual session");
+        }
     }
 
     private static string GetText(TextView textView)

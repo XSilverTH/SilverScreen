@@ -27,7 +27,7 @@ public sealed class YoutubeApiSearchSuggestionService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Logger.Debug(exception, "YoutubeAPI suggestions failed for {Query}", query);
+            Logger.Debug(exception, "YoutubeAPI suggestions failed");
             return [];
         }
     }

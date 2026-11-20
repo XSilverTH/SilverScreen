@@ -170,7 +170,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load more comments for video {VideoId}", videoId);
+            Logger.Warning(exception, "Failed to load more comments for video");
             result = new YouTubeCommentsResult([], false, "Could not load more comments.");
         }
 
@@ -231,7 +231,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to load comments for video {VideoId}", videoId);
+            Logger.Warning(exception, "Failed to load comments for video");
             result = new YouTubeCommentsResult([], false, DefaultErrorMessage);
         }
 

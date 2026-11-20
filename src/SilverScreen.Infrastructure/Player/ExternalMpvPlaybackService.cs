@@ -100,7 +100,7 @@ public sealed class ExternalMpvPlaybackService(
                 MpvCommandBuilder.Build(request, activeOptions, cookieFile?.Path, ipcEndpoint, playbackUrls);
             if (extraArguments is { Count: > 0 })
                 command = command with { Arguments = [.. command.Arguments, .. extraArguments] };
-            Logger.Information(
+            Logger.Debug(
                 "Launching MPV. ExecutablePath: {ExecutablePath}; TempCookiesProvided: {TempCookiesProvided}; CookiesOption: {CookiesOption}; VideoCount: {VideoCount}; StartIndex: {StartIndex}",
                 command.ExecutablePath,
                 cookieFile is not null,
@@ -113,9 +113,7 @@ public sealed class ExternalMpvPlaybackService(
             {
                 lock (_activeObserversLock)
                 {
-                    if (_disposed)
-                        return null;
-                    return Process.Start(startInfo);
+                    return _disposed ? null : Process.Start(startInfo);
                 }
             }).ConfigureAwait(false);
             if (started is null)
@@ -127,7 +125,7 @@ public sealed class ExternalMpvPlaybackService(
             }
 
             _ = DrainProcessOutputAsync(started);
-            Logger.Information("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
+            Logger.Debug("MPV process started. ProcessId: {ProcessId}", TryGetProcessId(started));
             var playbackId = RegisterActivePlayback(request);
             var observer = new MpvIpcPlaybackObserver(started, ipcEndpoint, ipcDirectory,
                 state => UpdateActivePlayback(playbackId, state));
@@ -321,8 +319,7 @@ public sealed class ExternalMpvPlaybackService(
             return;
 
         var video = request.Videos[request.EffectiveStartIndex];
-        Logger.Warning("MPV exited quickly with code {ExitCode}; attempting yt-dlp fallback for {VideoId}",
-            exitCode, video.Id);
+        Logger.Warning("MPV exited quickly with code {ExitCode}; attempting yt-dlp fallback", exitCode);
 
         var fallback = await _mediaResolver.TryResolveAsFallbackAsync(video.Id).ConfigureAwait(false);
         var media = fallback.IsSuccess ? fallback.Media : null;
@@ -332,7 +329,7 @@ public sealed class ExternalMpvPlaybackService(
             return;
         }
 
-        Logger.Information("MPV fallback resolved direct media for {VideoId}; relaunching once", video.Id);
+        Logger.Information("MPV fallback resolved direct media; relaunching once");
         var retryPlaybackUrls = MpvCommandBuilder.GetPlaybackUrls(request).ToArray();
         retryPlaybackUrls[request.EffectiveStartIndex] = media.VideoUrl;
         IReadOnlyList<string>? extraArguments = string.IsNullOrWhiteSpace(media.AudioUrl)
@@ -350,7 +347,7 @@ public sealed class ExternalMpvPlaybackService(
                 extraArguments,
                 retryPlaybackUrls)
             .ConfigureAwait(false);
-        Logger.Information("MPV fallback relaunch finished: {Status}", status);
+         Logger.Information("MPV fallback relaunch finished: {Status}", status);
     }
 
     private static void CleanupCookieLease(IDisposable? cookieFileLease, string reason)
@@ -359,7 +356,7 @@ public sealed class ExternalMpvPlaybackService(
         try
         {
             cookieFileLease.Dispose();
-            Logger.Information("Cleaned up temporary MPV cookie lease ({Reason})", reason);
+            Logger.Debug("Cleaned up temporary MPV cookie lease ({Reason})", reason);
         }
         catch (Exception ex)
         {

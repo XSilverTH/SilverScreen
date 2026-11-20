@@ -97,7 +97,7 @@ public sealed class HistoryViewModel : IVideoListSource
             return Task.CompletedTask;
         }
 
-        Logger.Information("HistoryViewModel refreshing watch history");
+        Logger.Debug("Refreshing watch history");
         return _engine.RefreshAsync(count);
     }
 

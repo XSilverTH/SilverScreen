@@ -59,7 +59,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
         var cacheKey = $"{videoId}\n{string.Join(',', selectedCategories)}";
         if (_segmentsByRequest.TryGetValue(cacheKey, out var cached))
         {
-            Logger.Debug("SponsorBlock cache hit for video {VideoId}", videoId);
+            Logger.Debug("SponsorBlock cache hit for video");
             return cached;
         }
 
@@ -73,17 +73,14 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
 
         try
         {
-            Logger.Information("Fetching SponsorBlock segments for video {VideoId} with categories {Categories}",
-                videoId, selectedCategories);
+            Logger.Information("Fetching SponsorBlock segments with categories {Categories}", selectedCategories);
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
                 if (response.StatusCode != HttpStatusCode.NotFound)
-                    Logger.Warning(
-                        "SponsorBlock request for video {VideoId} (prefix {HashPrefix}) returned HTTP status {StatusCode}",
-                        videoId, hashPrefix, response.StatusCode);
+                    Logger.Warning("SponsorBlock request returned HTTP status {StatusCode}", response.StatusCode);
                 return [];
             }
 
@@ -111,7 +108,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
                 .ToArray();
 
             AddBounded(cacheKey, segments);
-            Logger.Information("Fetched {Count} SponsorBlock segments for video {VideoId}", segments.Length, videoId);
+            Logger.Debug("Fetched {Count} SponsorBlock segments", segments.Length);
             return segments;
         }
         catch (OperationCanceledException)
@@ -120,7 +117,7 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or NotSupportedException)
         {
-            Logger.Warning(exception, "Failed to fetch SponsorBlock segments for video {VideoId}", videoId);
+            Logger.Warning(exception, "Failed to fetch SponsorBlock segments for video");
             return [];
         }
     }

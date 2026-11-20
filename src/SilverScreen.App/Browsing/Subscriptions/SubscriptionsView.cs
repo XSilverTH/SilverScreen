@@ -365,7 +365,7 @@ public partial class SubscriptionsView : ViewBase<Box>
             }
             catch (Exception exception)
             {
-                Logger.Warning(exception, "Failed to load channel avatar from {AvatarUrl}", avatarUrl);
+                Logger.Warning(exception, "Failed to load channel avatar");
                 return;
             }
 
@@ -427,7 +427,7 @@ public partial class SubscriptionsView : ViewBase<Box>
                     }
                     catch (Exception exception)
                     {
-                        Logger.Warning(exception, "Failed to render channel avatar texture from {AvatarUrl}", avatarUrl);
+                        Logger.Warning(exception, "Failed to render channel avatar texture");
                     }
                     finally
                     {

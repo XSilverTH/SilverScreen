@@ -98,7 +98,7 @@ public sealed class RuntimeDependencyDiagnostics
             warnings.Add(secretMsg);
         }
 
-        if (warnings.Count == 0) Logger.Information("All runtime dependencies are verified and available");
+        if (warnings.Count == 0) Logger.Debug("No runtime dependency warnings");
 
         return warnings;
     }

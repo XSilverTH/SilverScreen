@@ -85,7 +85,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
 
     public Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
-        Logger.Information("HomeFeedCoordinator refreshing home feed");
+        Logger.Debug("Refreshing home feed");
         if (IsSessionActive()) return _engine.RefreshAsync(count);
         _engine.Reset(MapSignedOutStatus());
         return Task.CompletedTask;
@@ -96,7 +96,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         if (!IsSessionActive() || _engine.IsLoading || _engine.IsLoadingMore || !_engine.HasMore)
             return Task.CompletedTask;
 
-        Logger.Information("HomeFeedCoordinator loading more home feed items");
+        Logger.Debug("Loading more home feed items");
         return _engine.LoadMoreAsync(count);
     }
 

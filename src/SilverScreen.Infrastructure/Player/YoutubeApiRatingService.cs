@@ -49,12 +49,12 @@ public sealed class YoutubeApiRatingService(
         }
         catch (YouTubeException exception)
         {
-            Logger.Debug(exception, "YoutubeAPI failed to read rating for video {VideoId}", videoId);
+            Logger.Debug(exception, "YoutubeAPI failed to read rating for video");
             return YouTubeRatingState.None;
         }
         catch (Exception exception)
         {
-            Logger.Debug(exception, "Unexpected failure reading rating for video {VideoId}", videoId);
+            Logger.Debug(exception, "Unexpected failure reading rating for video");
             return YouTubeRatingState.None;
         }
     }
@@ -106,13 +106,12 @@ public sealed class YoutubeApiRatingService(
         }
         catch (YouTubeException exception)
         {
-            Logger.Warning(exception, "YoutubeAPI failed to set rating {Rating} for video {VideoId}", rating, videoId);
+            Logger.Warning(exception, "YoutubeAPI failed to set rating {Rating} for video", rating);
             return false;
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Unexpected failure setting rating {Rating} for video {VideoId}", rating,
-                videoId);
+            Logger.Warning(exception, "Unexpected failure setting rating {Rating} for video", rating);
             return false;
         }
     }

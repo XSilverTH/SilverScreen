@@ -91,7 +91,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         var address = DBusAddress.Session;
         if (address is null)
         {
-            Logger.Information("Desktop media integration is unavailable because there is no D-Bus session bus.");
+            Logger.Warning("Desktop media integration is unavailable because there is no D-Bus session bus");
             return;
         }
 
