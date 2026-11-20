@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Adw;
 using Gtk;
 using Serilog;
@@ -27,7 +25,7 @@ internal sealed class PlayerStatsController : IDisposable
     private int _isRefreshing;
     private bool _pendingRefresh;
 
-    public PlayerStatsController(
+    private PlayerStatsController(
         Func<bool, PlaybackStats?> statsProvider,
         Revealer revealer,
         Label label)
@@ -45,18 +43,10 @@ internal sealed class PlayerStatsController : IDisposable
 
     private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_revealer.ChildRevealed && !_revealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
         {
             _revealer.SetVisible(false);
         }
-    }
-
-    public PlayerStatsController(
-        Func<PlaybackStats?> statsProvider,
-        Revealer revealer,
-        Label label)
-        : this(_ => (statsProvider ?? throw new ArgumentNullException(nameof(statsProvider)))(), revealer, label)
-    {
     }
 
     public PlayerStatsController(

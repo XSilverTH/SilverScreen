@@ -54,7 +54,7 @@ public static class PlayerSponsorBlockState
             preferences.SponsorBlockAutoSkipEnabled);
     }
 
-    public static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
+    private static bool ManualSponsorBlockSkipEnabled(bool segmentDisplayEnabled, bool autoSkipEnabled)
     {
         return segmentDisplayEnabled && !autoSkipEnabled;
     }
@@ -89,7 +89,7 @@ public static class PlayerSponsorBlockState
             preferences.SponsorBlockCategories);
     }
 
-    public static string GetSponsorBlockConfigurationKey(
+    private static string GetSponsorBlockConfigurationKey(
         bool autoSkipEnabled,
         bool segmentDisplayEnabled,
         IEnumerable<string> categories)

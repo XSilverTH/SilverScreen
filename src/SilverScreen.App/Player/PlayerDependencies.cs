@@ -32,12 +32,10 @@ namespace SilverScreen.Player;
 ///         </list>
 ///     </para>
 /// </summary>
+// ReSharper disable once ClassNeverInstantiated.Global
 public sealed record PlayerDependencies(
     IPreferencesService Preferences,
     PlaybackCoordinator PlaybackCoordinator,
-    ICookieFileProvider CookieFiles,
-    IPlaybackPresenceService PlaybackPresence,
-    IYouTubePlaybackTelemetryService PlaybackTelemetry,
     IYouTubePlaybackProgressService PlaybackProgress,
     IVideoEngagementService VideoEngagement,
     IYouTubeRatingService YouTubeRating,

@@ -142,6 +142,8 @@ public partial class AccountPopoverView : ViewBase<Bin>
             return;
         }
 
+        var pixbufForIdle = decodedPixbuf;
+        var scheduled = false;
         try
         {
             Lifetime.Idle(() =>
@@ -152,12 +154,12 @@ public partial class AccountPopoverView : ViewBase<Bin>
                             StringComparison.Ordinal))
                         return false;
 
-                    var pixbufForTexture = decodedPixbuf ??
+                    var pixbufForTexture = pixbufForIdle ??
                                            throw new InvalidOperationException(
                                                "Avatar image decode returned no pixbuf.");
                     var texture = Texture.NewForPixbuf(pixbufForTexture);
                     pixbufForTexture.Dispose();
-                    decodedPixbuf = null;
+                    pixbufForIdle = null;
                     signed_in_avatar.CustomImage = texture;
                     _avatarTexture?.Dispose();
                     _avatarTexture = texture;
@@ -170,15 +172,17 @@ public partial class AccountPopoverView : ViewBase<Bin>
                 }
                 finally
                 {
-                    decodedPixbuf?.Dispose();
+                    pixbufForIdle?.Dispose();
                 }
 
                 return false;
             });
+            scheduled = true;
         }
         catch (ObjectDisposedException)
         {
-            decodedPixbuf?.Dispose();
+            if (!scheduled)
+                decodedPixbuf?.Dispose();
         }
     }
 

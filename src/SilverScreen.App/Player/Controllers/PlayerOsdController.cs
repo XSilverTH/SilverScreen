@@ -34,7 +34,7 @@ public class PlayerOsdState(
     uint aggregationWindowMilliseconds = PlayerOsdState.DefaultAggregationWindowMilliseconds,
     Func<long>? tickCountProvider = null)
 {
-    internal const uint DefaultAggregationWindowMilliseconds = 600;
+    private const uint DefaultAggregationWindowMilliseconds = 600;
     public const uint DefaultHoldDurationMilliseconds = 700;
 
     private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
@@ -169,7 +169,7 @@ public class PlayerOsdState(
         IsActive = true;
     }
 
-    public static string FormatSeekDelta(int totalSeconds)
+    private static string FormatSeekDelta(int totalSeconds)
     {
         if (totalSeconds == 0)
             return "0s";
@@ -184,12 +184,12 @@ public class PlayerOsdState(
         return seconds == 0 ? $"{sign}{minutes}m" : $"{sign}{minutes}m {seconds}s";
     }
 
-    public static string FormatSpeed(double speed)
+    private static string FormatSpeed(double speed)
     {
         return $"{speed.ToString("0.##", CultureInfo.InvariantCulture)}×";
     }
 
-    public static string GetVolumeIcon(double volume, bool isMuted)
+    private static string GetVolumeIcon(double volume, bool isMuted)
     {
         if (isMuted || volume <= 0) return "audio-volume-muted-symbolic";
         return volume switch
@@ -241,7 +241,7 @@ internal sealed class PlayerOsdController : IDisposable
 
     private void OnOsdRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_osdRevealer.ChildRevealed && !_osdRevealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _osdRevealer is { ChildRevealed: false, RevealChild: false })
         {
             _osdRevealer.SetVisible(false);
         }

@@ -48,11 +48,9 @@ internal sealed class PlayerSubtitleController(
         uint selected = 0;
         for (var index = 0; index < tracks.Count; index++)
         {
-            if (tracks[index].IsSelected)
-            {
-                selected = (uint)index + 1;
-                break;
-            }
+            if (!tracks[index].IsSelected) continue;
+            selected = (uint)index + 1;
+            break;
         }
 
         if (dropdown.GetSelected() != selected)
@@ -74,12 +72,7 @@ internal sealed class PlayerSubtitleController(
     private static bool HaveSameTrackLabels(IReadOnlyList<LibMpvSubtitleTrack> a, IReadOnlyList<LibMpvSubtitleTrack> b)
     {
         if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (a[i].Id != b[i].Id || !string.Equals(a[i].Label, b[i].Label, StringComparison.Ordinal))
-                return false;
-        }
-        return true;
+        return !a.Where((t, i) => t.Id != b[i].Id || !string.Equals(t.Label, b[i].Label, StringComparison.Ordinal)).Any();
     }
 
     public void OnSelectionChanged()

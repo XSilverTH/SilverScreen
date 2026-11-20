@@ -16,15 +16,9 @@ public class PlayerTimelineState(
     double seekToleranceSeconds = PlayerTimelineState.DefaultSeekReconciliationToleranceSeconds,
     Func<long>? tickCountProvider = null)
 {
-    internal const uint DefaultSeekThrottleIntervalMilliseconds = 120;
-    internal const long DefaultReconciliationLatchMilliseconds = 400;
-    internal const double DefaultSeekReconciliationToleranceSeconds = 1.5;
-
-    public const uint DefaultSkipPromptDurationMilliseconds =
-        PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
-
-    public const uint DefaultResumePromptDurationMilliseconds =
-        PlayerResumeState.DefaultResumePromptDurationMilliseconds;
+    private const uint DefaultSeekThrottleIntervalMilliseconds = 120;
+    private const long DefaultReconciliationLatchMilliseconds = 400;
+    private const double DefaultSeekReconciliationToleranceSeconds = 1.5;
 
     private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
 
@@ -270,8 +264,6 @@ internal sealed class PlayerTimelineController : IDisposable
     private readonly Action<double, bool> _seekAbsolute;
 
     private readonly Scale _timeline;
-    private readonly GestureDrag _timelineDragGesture;
-    private readonly EventControllerMotion _timelineMotionController;
     private readonly Overlay _timelineOverlay;
     private uint _throttledSeekSource;
     private bool _updatingControls;
@@ -301,8 +293,8 @@ internal sealed class PlayerTimelineController : IDisposable
         _registerActivity = registerActivity;
         State = state ?? new PlayerTimelineState();
 
-        _timelineMotionController = EventControllerMotion.New();
-        _lifetime.Attach(_timelineOverlay, _timelineMotionController,
+        var timelineMotionController = EventControllerMotion.New();
+        _lifetime.Attach(_timelineOverlay, timelineMotionController,
             c =>
             {
                 c.OnMotion += OnTimelineMotion;
@@ -314,10 +306,10 @@ internal sealed class PlayerTimelineController : IDisposable
                 c.OnLeave -= OnTimelineLeave;
             });
 
-        _timelineDragGesture = GestureDrag.New();
-        _timelineDragGesture.Button = 1;
-        _timelineDragGesture.SetPropagationPhase(PropagationPhase.Capture);
-        _lifetime.Attach(_timeline, _timelineDragGesture,
+        var timelineDragGesture = GestureDrag.New();
+        timelineDragGesture.Button = 1;
+        timelineDragGesture.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_timeline, timelineDragGesture,
             c =>
             {
                 c.OnDragBegin += OnTimelineDragBegin;
@@ -360,7 +352,7 @@ internal sealed class PlayerTimelineController : IDisposable
             {
                 _durationLabel.SetText(PlayerTimelineState.FormatTime(state.Duration));
                 _timeline.SetRange(0, state.Duration.TotalSeconds);
-                _timeline.SetSensitive(state.IsSeekable && !state.IsLoading);
+                _timeline.SetSensitive(state is { IsSeekable: true, IsLoading: false });
             }
             else if (State.IsLive)
             {
@@ -461,36 +453,27 @@ internal sealed class PlayerTimelineController : IDisposable
                 _durationLabel.SetText("Live");
                 _positionLabel.SetText("Live");
                 _timeline.SetRange(0, 0);
-                _timeline.SetValue(0);
-                _timeline.SetSensitive(false);
             }
             else if (expectedDuration is { } duration && duration > TimeSpan.Zero)
             {
                 _durationLabel.SetText(PlayerTimelineState.FormatTime(duration));
                 _positionLabel.SetText("--:--");
                 _timeline.SetRange(0, duration.TotalSeconds);
-                _timeline.SetValue(0);
-                _timeline.SetSensitive(false);
             }
             else
             {
                 _durationLabel.SetText("--:--");
                 _positionLabel.SetText("--:--");
                 _timeline.SetRange(0, 0);
-                _timeline.SetValue(0);
-                _timeline.SetSensitive(false);
             }
+
+            _timeline.SetValue(0);
+            _timeline.SetSensitive(false);
         }
         finally
         {
             _updatingControls = false;
         }
-    }
-
-    public void SetDuration(TimeSpan duration)
-    {
-        State.SetDuration(duration);
-        _durationLabel.SetText(PlayerTimelineState.FormatDurationLabel(duration, State.IsLive));
     }
 
     private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)

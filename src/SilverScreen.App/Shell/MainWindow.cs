@@ -148,7 +148,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
 
         var startupPrefs = account.Preferences.GetPreferences();
-        if (startupPrefs.WindowWidth > 0 && startupPrefs.WindowHeight > 0)
+        if (startupPrefs is { WindowWidth: > 0, WindowHeight: > 0 })
             Widget.SetDefaultSize(startupPrefs.WindowWidth, startupPrefs.WindowHeight);
         if (startupPrefs.WindowMaximized)
             Widget.Maximize();
@@ -230,24 +230,20 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
                 return true;
             }
 
-        if (args.Keyval == Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)
-            if (_navigationService.CanGoBack)
-            {
-                OnNavigationBackButtonClicked();
-                return true;
-            }
+        if (args.Keyval != Constants.KEY_Escape || _navigationService.CurrentPage == NavigationPage.Player)
+            return false;
+        if (!_navigationService.CanGoBack) return false;
+        OnNavigationBackButtonClicked();
+        return true;
 
-        return false;
     }
 
     private void OnMousePressed(GestureClick sender, GestureClick.PressedSignalArgs args)
     {
-        if (sender.GetCurrentButton() == 8)
-            if (_navigationService.CanGoBack)
-            {
-                OnNavigationBackButtonClicked();
-                sender.SetState(EventSequenceState.Claimed);
-            }
+        if (sender.GetCurrentButton() != 8) return;
+        if (!_navigationService.CanGoBack) return;
+        OnNavigationBackButtonClicked();
+        sender.SetState(EventSequenceState.Claimed);
     }
 
     private void OnSearchPopoverClosed(Popover sender, EventArgs args)
@@ -331,22 +327,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             .ConfigureAwait(false);
     }
 
-    private void CloseChannel()
-    {
-        _channelViewModel.Clear();
-        _navigationService.NavigateTo(NavigationPage.Home);
-    }
-
     private void OnSearchSubmitted(string query)
     {
         var trimmed = query.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-        {
-            SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
-            return;
-        }
-
-        if (SearchViewModel.IsDirectVideoUrl(trimmed) || SearchViewModel.IsChannelTarget(trimmed))
+        if (string.IsNullOrWhiteSpace(trimmed) || SearchViewModel.IsDirectVideoUrl(trimmed) || SearchViewModel.IsChannelTarget(trimmed))
         {
             SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
             return;
@@ -361,12 +345,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var notice = await _searchViewModel.SubmitAsync(query, batchSize).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(notice))
             ShowToast(notice);
-    }
-
-    private void CloseSearch()
-    {
-        _searchViewModel.Reset();
-        _navigationService.NavigateTo(NavigationPage.Home);
     }
 
     private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
@@ -659,7 +637,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     ///     Kept as a plain shell method so a future notification bus can take over without touching callers.
     ///     Safe to call from any thread.
     /// </summary>
-    public void ShowToast(string message)
+    private void ShowToast(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
             return;
@@ -741,14 +719,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var show = hasMedia && notInPlayer;
 
         now_playing_box.Visible = show;
-        if (show)
-        {
-            var isPaused = _playback.IsPaused;
-            now_playing_toggle.IconName = isPaused
-                ? "media-playback-start-symbolic"
-                : "media-playback-pause-symbolic";
-            now_playing_toggle.TooltipText = isPaused ? "Play" : "Pause";
-        }
+        if (!show) return;
+        var isPaused = _playback.IsPaused;
+        now_playing_toggle.IconName = isPaused
+            ? "media-playback-start-symbolic"
+            : "media-playback-pause-symbolic";
+        now_playing_toggle.TooltipText = isPaused ? "Play" : "Pause";
     }
 
 

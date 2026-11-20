@@ -14,7 +14,7 @@ public enum ResumePromptState
 /// </summary>
 public static class PlayerResumeState
 {
-    public const double MinimumResumeSeconds = 5;
+    private const double MinimumResumeSeconds = 5;
     public const uint DefaultResumePromptDurationMilliseconds = 15_000;
 
     public static bool TryGetResumePosition(

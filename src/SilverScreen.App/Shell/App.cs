@@ -104,7 +104,7 @@ public partial class App
             },
             _initialQuery);
         _initialQuery = null;
-        var mainWindow = createdWindow = mainWindowWrapper.Widget;
+        var mainWindow = mainWindowWrapper.Widget;
         _windowGuard.Set(mainWindow);
         _serviceLifetime!.WindowOpened();
         mainWindow.Application = this;

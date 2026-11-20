@@ -22,12 +22,10 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly VideoCardActions _videoActions;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
-    private readonly NoSelection _videoSelection;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
     private Label? _paginationErrorLabel;
-    private Button? _paginationErrorRetryButton;
     private Revealer? _paginationErrorRevealer;
     private long _refreshGeneration;
     private int _refreshScrollPass;
@@ -50,7 +48,7 @@ public partial class VideoListView : ViewBase<Bin>
                 () => Vadjustment.OnValueChanged -= OnScrollValueChanged);
 
         _videoIds = Lifetime.Own(StringList.New([]));
-        _videoSelection = Lifetime.Own(NoSelection.New(_videoIds));
+        var videoSelection = Lifetime.Own(NoSelection.New(_videoIds));
         _videoFactory = Lifetime.Own(SignalListItemFactory.New());
         Lifetime.Track(
             () =>
@@ -67,7 +65,7 @@ public partial class VideoListView : ViewBase<Bin>
                 _videoFactory.OnUnbind -= OnVideoCardUnbind;
                 _videoFactory.OnTeardown -= OnVideoCardTeardown;
             });
-        video_list_grid.Model = _videoSelection;
+        video_list_grid.Model = videoSelection;
         Lifetime.Track(
             () => video_list_grid.Factory = _videoFactory,
             () => video_list_grid.Factory = null);
@@ -241,7 +239,6 @@ public partial class VideoListView : ViewBase<Bin>
             () => video_list_content_overlay.RemoveOverlay(revealer));
         _paginationErrorRevealer = revealer;
         _paginationErrorLabel = label;
-        _paginationErrorRetryButton = retry;
     }
 
     private void UpdatePaginationErrorFooter(VideoListPresentationState state)

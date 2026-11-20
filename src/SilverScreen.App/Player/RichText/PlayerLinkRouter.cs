@@ -33,36 +33,32 @@ internal sealed class PlayerLinkRouter(
             return true;
         }
 
-        if (IsWebUrl(uri))
+        if (!IsWebUrl(uri)) return true;
+        var parsed = YouTubeUrlParser.Parse(uri);
+        switch (parsed)
         {
-            var parsed = YouTubeUrlParser.Parse(uri);
-            switch (parsed)
-            {
-                case { Kind: YouTubeUrlKind.Video or YouTubeUrlKind.Shorts, VideoId: not null }:
-                    videoRequested(new VideoSummary(
-                        parsed.VideoId,
-                        $"YouTube video {parsed.VideoId}",
-                        "YouTube",
-                        TimeSpan.Zero,
-                        string.Empty,
-                        false,
-                        parsed.CanonicalWatchUrl));
-                    return true;
-                case { Kind: YouTubeUrlKind.Channel, ChannelPath: not null }:
-                    channelRequested(
-                        $"https://www.youtube.com/{parsed.ChannelPath.Trim('/')}",
-                        parsed.ChannelPath.Trim('/'));
-                    return true;
-                default:
-                    externalRequested(uri);
-                    return true;
-            }
+            case { Kind: YouTubeUrlKind.Video or YouTubeUrlKind.Shorts, VideoId: not null }:
+                videoRequested(new VideoSummary(
+                    parsed.VideoId,
+                    $"YouTube video {parsed.VideoId}",
+                    "YouTube",
+                    TimeSpan.Zero,
+                    string.Empty,
+                    false,
+                    parsed.CanonicalWatchUrl));
+                return true;
+            case { Kind: YouTubeUrlKind.Channel, ChannelPath: not null }:
+                channelRequested(
+                    $"https://www.youtube.com/{parsed.ChannelPath.Trim('/')}",
+                    parsed.ChannelPath.Trim('/'));
+                return true;
+            default:
+                externalRequested(uri);
+                return true;
         }
-
-        return true;
     }
 
-    public static bool TryParseSeekUri(string uri, out double seconds)
+    private static bool TryParseSeekUri(string uri, out double seconds)
     {
         seconds = 0;
         return uri.StartsWith(RichLabelMarkup.SeekScheme, StringComparison.Ordinal) &&
@@ -73,7 +69,7 @@ internal sealed class PlayerLinkRouter(
                seconds >= 0;
     }
 
-    public static bool TryParseHashtagUri(string uri, out string tag)
+    private static bool TryParseHashtagUri(string uri, out string tag)
     {
         tag = string.Empty;
         if (!uri.StartsWith(RichLabelMarkup.HashtagScheme, StringComparison.Ordinal))

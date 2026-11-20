@@ -225,10 +225,10 @@ internal sealed class PlaybackSession : IDisposable
         LastPlaybackState = coherentPlaybackState;
     }
 
-    public string UpdateQueue(ImmutableArray<VideoSummary> newVideos)
+    public void UpdateQueue(ImmutableArray<VideoSummary> newVideos)
     {
-        if (_disposed || Request is null) return "Playback is not active, ignoring the queue update.";
-        if (newVideos.IsDefaultOrEmpty) return "Queue is empty, keeping the current playback queue.";
+        if (_disposed || Request is null) return;
+        if (newVideos.IsDefaultOrEmpty) return;
 
         var currentId = CurrentVideo?.Id;
         var newIndex = -1;
@@ -255,7 +255,6 @@ internal sealed class PlaybackSession : IDisposable
 
         _coordinator.UpdateActivePlaybackQueue(_playbackId, Request, CurrentPlaylistIndex);
         QueueUpdated?.Invoke(Request);
-        return newVideos.Length == 1 ? "Queue updated (1 video)." : $"Queue updated ({newVideos.Length} videos).";
     }
 
     public void EndSession()

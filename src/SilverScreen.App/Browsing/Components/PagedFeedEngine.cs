@@ -65,7 +65,6 @@ public sealed record FeedEngineSnapshot(
 public class PagedFeedEngine : IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<PagedFeedEngine>();
-    private readonly bool _clearOnRefresh;
     private readonly string _defaultEmptyDescription;
     private readonly string _defaultEmptyIcon;
     private readonly string _defaultEmptyTitle;
@@ -105,8 +104,10 @@ public class PagedFeedEngine : IVideoListSource
         string defaultEmptyDescription = "No videos are available right now.",
         string defaultEmptyIcon = "applications-internet-symbolic",
         string defaultIcon = "video-x-generic-symbolic",
+        // ReSharper disable once UnusedParameter.Local
         bool clearOnRefresh = false)
     {
+        _ = clearOnRefresh;
         _fetcher = fetcher;
         _statusMapper = statusMapper;
         _loadingMessage = loadingMessage;
@@ -117,7 +118,6 @@ public class PagedFeedEngine : IVideoListSource
         _defaultEmptyDescription = defaultEmptyDescription;
         _defaultEmptyIcon = defaultEmptyIcon;
         _defaultIcon = defaultIcon;
-        _clearOnRefresh = clearOnRefresh;
 
         UpdateStateUnsafe();
     }

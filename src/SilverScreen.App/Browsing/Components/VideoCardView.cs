@@ -1,3 +1,4 @@
+using System.Globalization;
 using Adw;
 using Gdk;
 using GdkPixbuf;
@@ -118,13 +119,13 @@ public partial class VideoCardView : ViewBase<Bin>
         if (video.PublishedAt is { } publishedAt)
         {
             upload_date.SetText(FormatUploadAge(publishedAt, DateTimeOffset.Now));
-            upload_date.TooltipText = FormatTooltipMeta(publishedAt.ToLocalTime().ToString("MMM d, yyyy"));
+            upload_date.TooltipText = FormatTooltipMeta(publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture));
             upload_date.Visible = true;
         }
         else if (video.ApproximateUploadDate is { } uploadDate)
         {
             upload_date.SetText(FormatUploadAge(uploadDate, DateOnly.FromDateTime(DateTime.Now)));
-            upload_date.TooltipText = FormatTooltipMeta(uploadDate.ToString("MMM d, yyyy"));
+            upload_date.TooltipText = FormatTooltipMeta(uploadDate.ToString("MMM d, yyyy", CultureInfo.CurrentCulture));
             upload_date.Visible = true;
         }
         else
@@ -264,10 +265,7 @@ public partial class VideoCardView : ViewBase<Bin>
         _boundTexture = null;
         _thumbnailPressure.Release();
         thumbnail.Child = placeholder;
-        if (_boundPicture is not null)
-        {
-            _boundPicture.Paintable = null!;
-        }
+        _boundPicture?.Paintable = null!;
 
         texture?.Dispose();
     }
@@ -505,9 +503,9 @@ public partial class VideoCardView : ViewBase<Bin>
     private static string FormatCardTooltip(VideoSummary video)
     {
         var publishedText = video.PublishedAt is { } publishedAt
-            ? publishedAt.ToLocalTime().ToString("MMM d, yyyy")
+            ? publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture)
             : video.ApproximateUploadDate is { } uploadDate
-                ? uploadDate.ToString("MMM d, yyyy")
+                ? uploadDate.ToString("MMM d, yyyy", CultureInfo.CurrentCulture)
                 : null;
 
         return string.IsNullOrWhiteSpace(publishedText)

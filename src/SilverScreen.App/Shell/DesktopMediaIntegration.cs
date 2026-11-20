@@ -61,7 +61,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Failed to close the desktop D-Bus connection.");
+            Logger.Warning(exception, "Failed to close the desktop D-Bus connection");
         }
     }
 
@@ -121,11 +121,11 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
             var disconnectReason = await connection.DisconnectedAsync().ConfigureAwait(false);
             if (disconnectReason is not null)
-                Logger.Warning(disconnectReason, "Desktop media D-Bus connection was disconnected.");
+                Logger.Warning(disconnectReason, "Desktop media D-Bus connection was disconnected");
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Desktop media integration is unavailable; continuing without D-Bus support.");
+            Logger.Warning(exception, "Desktop media integration is unavailable; continuing without D-Bus support");
         }
         finally
         {
@@ -219,7 +219,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
                         _portalAvailable = false;
                     }
 
-                    Logger.Warning(exception, "Could not inhibit desktop idle lock through the portal.");
+                    Logger.Warning(exception, "Could not inhibit desktop idle lock through the portal");
                 }
             }
             else if (request is { } handle)
@@ -247,11 +247,11 @@ internal sealed class DesktopMediaIntegration : IDisposable
         }
         catch (DBusErrorReplyException exception) when (IsObjectNotFound(exception))
         {
-            Logger.Debug("Portal idle-inhibit request at {Path} was already released or removed.", request);
+            Logger.Debug("Portal idle-inhibit request at {Path} was already released or removed", request);
         }
         catch (Exception exception)
         {
-            Logger.Warning(exception, "Could not release the portal idle-inhibit request.");
+            Logger.Warning(exception, "Could not release the portal idle-inhibit request");
         }
     }
 
@@ -260,7 +260,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         return string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownMethod", StringComparison.Ordinal)
                || string.Equals(exception.ErrorName, "org.freedesktop.DBus.Error.UnknownObject",
                    StringComparison.Ordinal)
-               || (exception.Message?.Contains("Object does not exist", StringComparison.OrdinalIgnoreCase) ?? false);
+               || exception.Message.Contains("Object does not exist", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool TryGetSeekedPosition(DesktopPlaybackSnapshot previous, DesktopPlaybackSnapshot current,
@@ -273,10 +273,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
         var trackChanged = !Equals(previous.TrackId, current.TrackId);
         if (trackChanged)
         {
-            if (previous.HasMedia || current.PositionMicroseconds > 0)
-                return true;
-
-            return false;
+            return previous.HasMedia || current.PositionMicroseconds > 0;
         }
 
         if (!previous.HasMedia)
@@ -483,7 +480,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
             }
             catch (Exception exception)
             {
-                Logger.Warning(exception, "Failed to publish an MPRIS state update.");
+                Logger.Warning(exception, "Failed to publish an MPRIS state update");
             }
         }
     }

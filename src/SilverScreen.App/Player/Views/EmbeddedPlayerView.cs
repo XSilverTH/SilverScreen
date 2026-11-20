@@ -43,8 +43,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlayerChapterOverlay _chapterOverlay;
     private readonly PlayerChromeController _chromeController;
     private readonly CommentsView _commentsView;
-    private readonly DesktopMediaIntegration _desktopMedia;
-    private readonly PlayerEngagementController _engagement;
     private readonly VideoInfoPanelController _infoPanel;
     private readonly PlayerLinkRouter _linkRouter;
     private readonly PlayerOsdController _osdController;
@@ -52,17 +50,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly IPreferencesService _preferences;
     private readonly Action _presentRequested;
     private readonly IQueueService _queueService;
-    private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly PlayerResumeController _resumeController;
-    private readonly Action<string> _searchRequested;
     private readonly PlaybackSession _session;
     private readonly PlayerShortcutController _shortcutController;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
-    private readonly PlayerStatsController _statsController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
-    private readonly Action<VideoSummary> _videoRequested;
     private readonly IYouTubeMediaResolver _mediaResolver;
     private readonly List<string> _availableQualities = ["Best"];
     private string _currentQuality = "Best";
@@ -82,7 +76,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         "144p"
     ];
 
-    private string? _commentsVideoId;
     private PlayerErrorInfo? _currentErrorInfo;
     private VideoSummary? _failedVideo;
     private bool _hasPlaybackError;
@@ -103,13 +96,13 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _presentRequested = presentRequested;
         _backRequested = backRequested;
         _channelRequested = channelRequested;
-        _videoRequested = videoRequested ?? throw new ArgumentNullException(nameof(videoRequested));
-        _searchRequested = searchRequested ?? throw new ArgumentNullException(nameof(searchRequested));
+        var videoRequested1 = videoRequested ?? throw new ArgumentNullException(nameof(videoRequested));
+        var searchRequested1 = searchRequested ?? throw new ArgumentNullException(nameof(searchRequested));
         _linkRouter = new PlayerLinkRouter(
             SeekToTimestamp,
-            video => _videoRequested(video),
-            (channelUrl, displayName) => OpenLinkedChannel(channelUrl, displayName),
-            tag => _searchRequested("#" + tag),
+            videoRequested1,
+            OpenLinkedChannel,
+            tag => searchRequested1("#" + tag),
             OpenExternalLink);
         _preferences = dependencies.Preferences;
         _mediaResolver = dependencies.MediaResolver;
@@ -118,9 +111,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         comments_sidebar_host.Append(_commentsView.Widget);
         _queueService = dependencies.Queue;
         _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this)));
-        _queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
+        var queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
             OnTrackJumpRequested));
-        player_queue_sidebar_host.Append(_queueView.Widget);
+        player_queue_sidebar_host.Append(queueView.Widget);
         player_queue_button.BindProperty("active", player_queue_split_view, "show-sidebar",
             BindingFlags.Bidirectional | BindingFlags.SyncCreate);
         Lifetime.Track(() => _queueService.Changed += OnQueueChanged, () => _queueService.Changed -= OnQueueChanged);
@@ -134,14 +127,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             player_scrub_time_label, player_scrub_delta_label, player_scrub_chapter_label, player_position_label,
             player_duration_label,
             (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity));
-        _desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, presentRequested));
-        _session = Lifetime.Own(new PlaybackSession(dependencies, _desktopMedia));
+        var desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, presentRequested));
+        _session = Lifetime.Own(new PlaybackSession(dependencies, desktopMedia));
         Lifetime.Track(() => _session.SeekRequested += SeekAbsolute, () => _session.SeekRequested -= SeekAbsolute);
         Lifetime.Track(() => _session.VideoChanged += OnSessionVideoChanged,
             () => _session.VideoChanged -= OnSessionVideoChanged);
         Lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         Lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
-        _engagement = Lifetime.Own(new PlayerEngagementController(_session, player_like_button, player_like_image,
+        Lifetime.Own(new PlayerEngagementController(_session, player_like_button, player_like_image,
             player_likes_label, player_dislike_button, player_dislike_image, player_dislikes_label));
         _chapterOverlay = Lifetime.Own(new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
             () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity));
@@ -152,11 +145,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _resumeController = Lifetime.Own(new PlayerResumeController(_session,
             player_resume_revealer, player_resume_button, player_resume_label,
             player_restart_revealer, player_restart_button, player_restart_label));
-        _infoPanel = Lifetime.Own(new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested,
-            player_info_backdrop,
-            player_info_cue_revealer, player_info_revealer, player_info_title_label, player_info_channel_label,
-            player_info_stats_label, player_info_status_label, player_info_description_scroller,
-            player_info_description, player_info_close_button, OnRichLinkActivated, () =>
+        _infoPanel = Lifetime.Own(
+            new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested, 
+                player_info_backdrop, player_info_cue_revealer, 
+                player_info_revealer, player_info_title_label, 
+                player_info_channel_label, player_info_stats_label, 
+                player_info_status_label, player_info_description_scroller, 
+                player_info_description, player_info_close_button,
+                OnRichLinkActivated, () =>
             {
                 if (_session.HasMedia) player_surface.GrabFocus();
             }));
@@ -172,7 +168,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetControls(100, 1, "Best");
         _osdController =
             Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
-        _statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player),
+        var statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player),
             player_stats_revealer, player_stats_label));
 
         player_comments_cue_revealer.SetVisible(false);
@@ -201,7 +197,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             visible => _osdController.SetChromeVisible(visible)));
         _osdController.SetChromeVisible(true);
         _shortcutController = Lifetime.Own(new PlayerShortcutController(Widget));
-        _shortcutController.KeyInterceptor = keyval => _statsController.HandleKeyPress(keyval);
+        _shortcutController.KeyInterceptor = statsController.HandleKeyPress;
         _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
         {
             IsPaused = !IsPaused;
@@ -247,7 +243,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         });
         _shortcutController.RegisterAction(PlayerShortcutActions.ReturnToShell, () =>
         {
-            if (_statsController.IsOpen) _statsController.Close();
+            if (statsController.IsOpen) statsController.Close();
             else if (_timelineController.IsScrubbing) _timelineController.CancelScrubbing();
             else if (player_queue_button.Active) player_queue_button.Active = false;
             else if (Widget.ShowSidebar) CloseComments();
@@ -264,7 +260,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _infoPanel.Toggle(_session.CurrentVideo);
             _osdController.ShowVideoInfo(_infoPanel.IsOpen);
         });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleStats, () => { _statsController.Toggle(); });
+        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleStats, statsController.Toggle);
         _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () =>
         {
             var speed = AdjustSpeed(-1);
@@ -736,16 +732,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         var isVisible = player_comments_cue_revealer.RevealChild;
         var inZone = PlayerCueGeometry.IsCommentsCueActive(x, y, width, height, isVisible);
-        if (isVisible != inZone)
-        {
-            if (inZone) player_comments_cue_revealer.SetVisible(true);
-            player_comments_cue_revealer.RevealChild = inZone;
-        }
+        if (isVisible == inZone) return;
+        if (inZone) player_comments_cue_revealer.SetVisible(true);
+        player_comments_cue_revealer.RevealChild = inZone;
     }
 
     private void OnCommentsCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !player_comments_cue_revealer.ChildRevealed && !player_comments_cue_revealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && player_comments_cue_revealer is { ChildRevealed: false, RevealChild: false })
         {
             player_comments_cue_revealer.SetVisible(false);
         }
@@ -795,12 +789,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         if (_updatingControls) return;
         var selected = player_quality_dropdown.GetSelected();
-        if (selected < (uint)_availableQualities.Count)
-        {
-            var quality = _availableQualities[(int)selected];
-            _currentQuality = quality;
-            _player.SetQuality(quality);
-        }
+        if (selected >= (uint)_availableQualities.Count) return;
+        var quality = _availableQualities[(int)selected];
+        _currentQuality = quality;
+        _player.SetQuality(quality);
     }
 
     private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
@@ -851,7 +843,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         if (_isLoading)
         {
-            if (state.HasMedia && !state.IsLoading)
+            if (state is { HasMedia: true, IsLoading: false })
                 SetLoading(false);
         }
         else if (state.IsLoading)
@@ -859,7 +851,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             SetLoading(true);
         }
 
-        SetBuffering(state.IsBuffering && !state.IsLoading, state.BufferingPercent);
+        SetBuffering(state is { IsBuffering: true, IsLoading: false }, state.BufferingPercent);
         _updatingControls = true;
         _subtitleController.UpdateTracks(state.SubtitleTracks, _updatingControls);
         try
@@ -898,7 +890,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         player_channel_label.SetText(video.ChannelName);
         _timelineController.SetExpectedMedia(video.Duration, video.Duration <= TimeSpan.Zero);
 
-        _commentsVideoId = video.Id;
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar)
             _commentsView.EnsureLoaded();
@@ -928,7 +919,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
-        _commentsVideoId = null;
         CloseComments();
         player_comments_cue_revealer.RevealChild = false;
         player_queue_controls.SetVisible(false);
@@ -1023,7 +1013,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
-        _commentsVideoId = null;
         CloseComments();
         player_comments_cue_revealer.RevealChild = false;
         SetLoading(false);
@@ -1080,7 +1069,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void SelectQualityInDropdown(string quality)
     {
         var targetHeight = YtDlpFormatSelector.ParseTargetHeight(quality);
-        var index = -1;
+        int index;
 
         if (string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(quality, "Auto", StringComparison.OrdinalIgnoreCase) ||
@@ -1186,7 +1175,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 }
             }
 
-            player_quality_model.Splice(0, player_quality_model.GetNItems(), _availableQualities.ToArray());
+            player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
             SelectQualityInDropdown(selectedQuality);
         }
         finally
@@ -1205,7 +1194,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             foreach (var preset in DefaultQualityPresets)
                 _availableQualities.Add(preset);
 
-            player_quality_model.Splice(0, player_quality_model.GetNItems(), _availableQualities.ToArray());
+            player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
             SelectQualityInDropdown(_currentQuality);
         }
         finally

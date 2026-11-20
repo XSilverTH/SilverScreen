@@ -4,7 +4,6 @@ using Adw;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;

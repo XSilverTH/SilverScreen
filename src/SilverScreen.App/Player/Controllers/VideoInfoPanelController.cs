@@ -90,7 +90,7 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private void OnRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_revealer.ChildRevealed && !_revealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
         {
             _revealer.SetVisible(false);
         }
@@ -98,7 +98,7 @@ internal sealed class VideoInfoPanelController : IDisposable
 
     private void OnCueRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_cueRevealer.ChildRevealed && !_cueRevealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _cueRevealer is { ChildRevealed: false, RevealChild: false })
         {
             _cueRevealer.SetVisible(false);
         }

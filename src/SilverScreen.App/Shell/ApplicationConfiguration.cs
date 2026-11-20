@@ -6,13 +6,13 @@ public sealed class ApplicationConfiguration
     private const string DefaultDiscordApplicationId = "1528325550475579522";
 
     /// <summary>The Discord application identifier used for Rich Presence.</summary>
-    public string? DiscordApplicationId { get; init; } = DefaultDiscordApplicationId;
+    public string? DiscordApplicationId { get; private init; } = DefaultDiscordApplicationId;
 
     /// <summary>
     ///     Optional Serilog level name override (e.g. <c>Debug</c>, <c>Information</c>).
     ///     Read from <c>SILVERSCREEN_LOG_LEVEL</c>; <c>null</c> means "no override".
     /// </summary>
-    public string? LogLevelOverride { get; init; }
+    public string? LogLevelOverride { get; private init; }
 
     public static ApplicationConfiguration FromEnvironment()
     {

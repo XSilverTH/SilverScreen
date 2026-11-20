@@ -14,7 +14,6 @@ public partial class CommentsView : ViewBase<Box>
     private readonly StringList _itemIds;
     private readonly Func<string, bool> _linkActivated;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
-    private readonly NoSelection _selection;
     private readonly Adjustment? _vadjustment;
     private readonly CommentsViewModel _viewModel;
     private string[] _displayedCommentIds = [];
@@ -39,7 +38,7 @@ public partial class CommentsView : ViewBase<Box>
                 () => _vadjustment.OnValueChanged -= OnScrollValueChanged);
 
         _itemIds = Lifetime.Own(StringList.New([]));
-        _selection = Lifetime.Own(NoSelection.New(_itemIds));
+        var selection = Lifetime.Own(NoSelection.New(_itemIds));
         _factory = Lifetime.Own(SignalListItemFactory.New());
         Lifetime.Track(
             () => _factory.OnSetup += OnRowSetup,
@@ -54,7 +53,7 @@ public partial class CommentsView : ViewBase<Box>
             () => _factory.OnTeardown += OnRowTeardown,
             () => _factory.OnTeardown -= OnRowTeardown);
 
-        comments_list.Model = _selection;
+        comments_list.Model = selection;
         comments_list.Factory = _factory;
         comments_stack.VisibleChildName = "unavailable";
     }

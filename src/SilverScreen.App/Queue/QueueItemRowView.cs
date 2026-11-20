@@ -40,7 +40,7 @@ internal sealed class QueueRowBinding
             return true;
         }
 
-        itemId = default;
+        itemId = Guid.Empty;
         index = -1;
         return false;
     }
@@ -54,7 +54,7 @@ internal sealed class QueueRowBinding
             return true;
         }
 
-        itemId = default;
+        itemId = Guid.Empty;
         destinationIndex = -1;
         return false;
     }
@@ -70,12 +70,8 @@ public partial class QueueItemRowView : ViewBase<Box>
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
     private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
-    private readonly SimpleActionGroup _actions;
     private readonly QueueRowBinding _binding = new();
-    private readonly WidgetPaintable _dragPaintable;
-    private readonly DragSource _dragSource;
     private readonly Action<Guid, int> _dropRequested;
-    private readonly DropTarget _dropTarget;
     private readonly SimpleAction _moveDownAction;
     private readonly Action<Guid, int> _moveRequested;
     private readonly SimpleAction _moveUpAction;
@@ -104,7 +100,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _playRequested = playRequested;
 
 
-        _actions = Lifetime.Own(SimpleActionGroup.New());
+        var actionGroup = Lifetime.Own(SimpleActionGroup.New());
         _playNowAction = CreateAction("play-now", () =>
         {
             if (_binding.TryGetPlayTarget(out var itemId, out var index))
@@ -112,21 +108,21 @@ public partial class QueueItemRowView : ViewBase<Box>
         });
         _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
         _moveDownAction = CreateAction("move-down", () => MoveBy(1));
-        _actions.AddAction(_playNowAction);
-        _actions.AddAction(_moveUpAction);
-        _actions.AddAction(_moveDownAction);
-        menu.InsertActionGroup("queue", _actions);
+        actionGroup.AddAction(_playNowAction);
+        actionGroup.AddAction(_moveUpAction);
+        actionGroup.AddAction(_moveDownAction);
+        menu.InsertActionGroup("queue", actionGroup);
 
-        _dragPaintable = Lifetime.Own(WidgetPaintable.New(Widget));
-        _dragSource = DragSource.New();
-        _dragSource.Actions = DragAction.Move;
-        _dragSource.SetIcon(_dragPaintable, 0, 0);
-        Lifetime.Attach(grip, _dragSource,
+        var dragPaintable = Lifetime.Own(WidgetPaintable.New(Widget));
+        var dragSource = DragSource.New();
+        dragSource.Actions = DragAction.Move;
+        dragSource.SetIcon(dragPaintable, 0, 0);
+        Lifetime.Attach(grip, dragSource,
             c => c.OnPrepare += OnDragPrepare,
             c => c.OnPrepare -= OnDragPrepare);
 
-        _dropTarget = DropTarget.New(Type.String, DragAction.Move);
-        Lifetime.Attach(Widget, _dropTarget,
+        var dropTarget = DropTarget.New(Type.String, DragAction.Move);
+        Lifetime.Attach(Widget, dropTarget,
             c =>
             {
                 c.OnMotion += OnDropMotion;
@@ -210,10 +206,7 @@ public partial class QueueItemRowView : ViewBase<Box>
             duration_pill.SetText(FormatDuration(item.Video.Duration));
             SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
             _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
-            if (_boundPicture is not null)
-            {
-                _boundPicture.AlternativeText = _thumbnailAlternativeText;
-            }
+            _boundPicture?.AlternativeText = _thumbnailAlternativeText;
         }
 
         position.SetText((index + 1).ToString());
@@ -348,6 +341,8 @@ public partial class QueueItemRowView : ViewBase<Box>
             return;
         }
 
+        var pixbufForIdle = decodedPixbuf;
+        var scheduled = false;
         try
         {
             Lifetime.Idle(() =>
@@ -360,12 +355,12 @@ public partial class QueueItemRowView : ViewBase<Box>
                     Texture? texture = null;
                     try
                     {
-                        var pixbufForTexture = decodedPixbuf ??
+                        var pixbufForTexture = pixbufForIdle ??
                                                throw new InvalidOperationException(
                                                    "Thumbnail decode was released before texture creation.");
                         texture = Texture.NewForPixbuf(pixbufForTexture);
                         pixbufForTexture.Dispose();
-                        decodedPixbuf = null;
+                        pixbufForIdle = null;
 
                         if (_boundPicture is null)
                         {
@@ -401,15 +396,16 @@ public partial class QueueItemRowView : ViewBase<Box>
                 }
                 finally
                 {
-                    decodedPixbuf?.Dispose();
+                    pixbufForIdle?.Dispose();
                 }
 
                 return false;
             });
+            scheduled = true;
         }
         catch (ObjectDisposedException)
         {
-            decodedPixbuf?.Dispose();
+            if (!scheduled) decodedPixbuf.Dispose();
         }
     }
 
@@ -419,10 +415,7 @@ public partial class QueueItemRowView : ViewBase<Box>
         _boundTexture = null;
         _thumbnailPressure.Release();
         thumbnail.Child = placeholder;
-        if (_boundPicture is not null)
-        {
-            _boundPicture.Paintable = null!;
-        }
+        _boundPicture?.Paintable = null!;
 
         texture?.Dispose();
     }

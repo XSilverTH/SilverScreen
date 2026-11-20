@@ -33,25 +33,15 @@ internal static class QueuePlaylistMove
             // single drag reorder; this also handles moves in either direction
             // and swaps.
             var expected = new List<string>(current.Count - 1);
-            for (var index = 0; index < current.Count; index++)
-                if (index != candidateIndex)
-                    expected.Add(current[index].Id);
+            expected.AddRange(current.Where((t, index) => index != candidateIndex).Select(t => t.Id));
             expected.Insert(destinationIndex, candidateId);
 
-            var matches = true;
-            for (var index = 0; index < next.Count; index++)
-                if (!string.Equals(expected[index], next[index].Id, StringComparison.Ordinal))
-                {
-                    matches = false;
-                    break;
-                }
+            var matches = !next.Where((t, index) => !string.Equals(expected[index], t.Id, StringComparison.Ordinal)).Any();
 
-            if (matches)
-            {
-                fromIndex = candidateIndex;
-                toIndex = destinationIndex;
-                return true;
-            }
+            if (!matches) continue;
+            fromIndex = candidateIndex;
+            toIndex = destinationIndex;
+            return true;
         }
 
         return false;

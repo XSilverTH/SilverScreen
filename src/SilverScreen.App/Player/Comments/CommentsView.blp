@@ -157,7 +157,7 @@ Gtk.Box CommentsView {
         title: "Couldn’t load comments";
         description: "Try again shortly.";
 
-        child: Gtk.Button {
+        child: Gtk.Button comments_error_retry_button {
           label: "Retry";
           clicked => $OnRetryButtonClicked();
 

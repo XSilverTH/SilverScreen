@@ -490,7 +490,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         }
     }
 
-    public static bool IsMatchingChannel(VideoSummary video, SubscribedChannel channel)
+    private static bool IsMatchingChannel(VideoSummary video, SubscribedChannel channel)
     {
         ArgumentNullException.ThrowIfNull(video);
         ArgumentNullException.ThrowIfNull(channel);
@@ -777,7 +777,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         }
     }
 
-    public static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
+    private static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
         string? paginationError = null)
     {
         var safePaginationError = string.IsNullOrWhiteSpace(paginationError ?? state.PaginationError)

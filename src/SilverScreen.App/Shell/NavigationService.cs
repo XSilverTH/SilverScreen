@@ -32,28 +32,6 @@ public sealed class NavigationPageChangedEventArgs(
     bool isBackNavigation = false)
     : EventArgs
 {
-    public NavigationPageChangedEventArgs(
-        NavigationPage? previousPage,
-        NavigationPage currentPage)
-        : this(
-            previousPage.HasValue ? new NavigationEntry(previousPage.Value) : null,
-            new NavigationEntry(currentPage))
-    {
-    }
-
-    public NavigationPageChangedEventArgs(
-        NavigationPage? previousPage,
-        NavigationPage currentPage,
-        object? previousParameter,
-        object? currentParameter,
-        bool isBackNavigation = false)
-        : this(
-            previousPage.HasValue ? new NavigationEntry(previousPage.Value, previousParameter) : null,
-            new NavigationEntry(currentPage, currentParameter),
-            isBackNavigation)
-    {
-    }
-
     public NavigationPage? PreviousPage { get; } = previousEntry?.Page;
     public NavigationPage CurrentPage { get; } = currentEntry.Page;
     public object? PreviousParameter { get; } = previousEntry?.Parameter;
@@ -81,29 +59,9 @@ public sealed class NavigationPageRegistration(
 }
 
 /// <summary>
-///     Defines the contract for high-level shell navigation.
-/// </summary>
-public interface INavigationService
-{
-    NavigationPage CurrentPage { get; }
-    object? CurrentParameter { get; }
-    NavigationEntry CurrentEntry { get; }
-    NavigationPage? PreviousPage { get; }
-    object? PreviousParameter { get; }
-    NavigationEntry? PreviousEntry { get; }
-    bool CanGoBack { get; }
-    event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
-    bool NavigateTo(NavigationPage page);
-    bool NavigateTo(NavigationPage page, object? parameter);
-    bool GoBack();
-    bool CanNavigateTo(NavigationPage page);
-    void SyncFromViewStack(string? childName);
-}
-
-/// <summary>
 ///     Coordinates typed page navigation across main and view stacks.
 /// </summary>
-public sealed class NavigationService : INavigationService, IDisposable
+public sealed class NavigationService : IDisposable
 {
     private const string ShellStackName = "shell";
     private readonly Stack<NavigationEntry> _backStack = new();
@@ -153,12 +111,7 @@ public sealed class NavigationService : INavigationService, IDisposable
         return !_disposed && _registry.ContainsKey(page);
     }
 
-    public bool NavigateTo(NavigationPage page)
-    {
-        return NavigateTo(page, null);
-    }
-
-    public bool NavigateTo(NavigationPage page, object? parameter)
+    public bool NavigateTo(NavigationPage page, object? parameter = null)
     {
         return NavigateInternal(new NavigationEntry(page, parameter), true, false);
     }
@@ -167,10 +120,7 @@ public sealed class NavigationService : INavigationService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_backStack.TryPop(out var target))
-            return NavigateInternal(target, false, true);
-
-        return false;
+        return _backStack.TryPop(out var target) && NavigateInternal(target, false, true);
     }
 
     public void SyncFromViewStack(string? childName)

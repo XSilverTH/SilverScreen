@@ -213,48 +213,11 @@ public partial class SubscriptionsView : ViewBase<Box>
         var leftClick = GestureClick.New();
         leftClick.Button = 1;
 
-        void OnLeftClickReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
-        {
-            _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
-        }
-
         holder.Lifetime.Attach(itemBox, leftClick,
             c => c.OnReleased += OnLeftClickReleased,
             c => c.OnReleased -= OnLeftClickReleased);
 
         var keyController = EventControllerKey.New();
-
-        bool OnKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
-        {
-            var keyval = args.Keyval;
-            if (keyval is Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space)
-            {
-                _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
-                return true;
-            }
-
-            if (keyval == Constants.KEY_Left)
-            {
-                var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
-                if (index > 0)
-                    _channelItems[index - 1].ItemBox.GrabFocus();
-                else if (index == 0) all_channel_button.GrabFocus();
-
-                return true;
-            }
-
-            if (keyval == Constants.KEY_Right)
-            {
-                var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
-                if (index >= 0 && index < _channelItems.Count - 1)
-                {
-                    _channelItems[index + 1].ItemBox.GrabFocus();
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         holder.Lifetime.Attach(itemBox, keyController,
             c => c.OnKeyPressed += OnKeyControllerKeyPressed,
@@ -266,11 +229,6 @@ public partial class SubscriptionsView : ViewBase<Box>
 
         var actionGroup = holder.Lifetime.Own(SimpleActionGroup.New());
         var openAction = holder.Lifetime.Own(SimpleAction.New("open-channel", null));
-
-        void OnOpenActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
-        {
-            _openChannel(channel.Url, channel.Title);
-        }
 
         holder.Lifetime.Track(
             () => openAction.OnActivate += OnOpenActionActivated,
@@ -295,6 +253,20 @@ public partial class SubscriptionsView : ViewBase<Box>
         var rightClick = GestureClick.New();
         rightClick.Button = 3;
 
+        holder.Lifetime.Attach(itemBox, rightClick,
+            c => c.OnPressed += OnRightClickPressed,
+            c => c.OnPressed -= OnRightClickPressed);
+        // Asynchronously load circular avatar
+        if (!string.IsNullOrWhiteSpace(channel.AvatarUrl))
+            LoadAvatarAsync(holder, channel.AvatarUrl, cancellationToken).FireAndForget(Logger);
+
+        return holder;
+
+        void OnOpenActionActivated(SimpleAction sender, SimpleAction.ActivateSignalArgs args)
+        {
+            _openChannel(channel.Url, channel.Title);
+        }
+
         void OnRightClickPressed(GestureClick sender, GestureClick.PressedSignalArgs args)
         {
             sender.SetState(EventSequenceState.Claimed);
@@ -309,14 +281,49 @@ public partial class SubscriptionsView : ViewBase<Box>
             popover.Popup();
         }
 
-        holder.Lifetime.Attach(itemBox, rightClick,
-            c => c.OnPressed += OnRightClickPressed,
-            c => c.OnPressed -= OnRightClickPressed);
-        // Asynchronously load circular avatar
-        if (!string.IsNullOrWhiteSpace(channel.AvatarUrl))
-            LoadAvatarAsync(holder, channel.AvatarUrl, cancellationToken).FireAndForget(Logger);
+        bool OnKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
+        {
+            var keyval = args.Keyval;
+            switch (keyval)
+            {
+                case Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space:
+                    _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
+                    return true;
+                case Constants.KEY_Left:
+                {
+                    var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
+                    switch (index)
+                    {
+                        case > 0:
+                            _channelItems[index - 1].ItemBox.GrabFocus();
+                            break;
+                        case 0:
+                            all_channel_button.GrabFocus();
+                            break;
+                    }
 
-        return holder;
+                    return true;
+                }
+                case Constants.KEY_Right:
+                {
+                    var index = _channelItems.FindIndex(h => ReferenceEquals(h.ItemBox, itemBox));
+                    if (index >= 0 && index < _channelItems.Count - 1)
+                    {
+                        _channelItems[index + 1].ItemBox.GrabFocus();
+                        return true;
+                    }
+
+                    break;
+                }
+            }
+
+            return false;
+        }
+
+        void OnLeftClickReleased(GestureClick sender, GestureClick.ReleasedSignalArgs args)
+        {
+            _viewModel.SelectChannelAsync(channel, _videoList.GetBatchSize()).FireAndForget(Logger);
+        }
     }
 
     private async Task LoadAvatarAsync(ChannelItemHolder holder, string avatarUrl, CancellationToken cancellationToken)
@@ -377,6 +384,8 @@ public partial class SubscriptionsView : ViewBase<Box>
 
             var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
 
+            var pixbufForIdle = decodedPixbuf;
+            var scheduled = false;
             try
             {
                 Functions.IdleAdd(0, () =>
@@ -390,12 +399,12 @@ public partial class SubscriptionsView : ViewBase<Box>
                         Picture? picture = null;
                         try
                         {
-                            var pixbufForTexture = decodedPixbuf ??
+                            var pixbufForTexture = pixbufForIdle ??
                                                    throw new InvalidOperationException(
                                                        "Avatar decode was released before texture creation.");
                             texture = Texture.NewForPixbuf(pixbufForTexture);
                             pixbufForTexture.Dispose();
-                            decodedPixbuf = null;
+                            pixbufForIdle = null;
 
                             picture = Picture.NewForPaintable(texture);
                             picture.AlternativeText = $"{holder.Channel.Title} avatar";
@@ -431,15 +440,17 @@ public partial class SubscriptionsView : ViewBase<Box>
                     }
                     finally
                     {
-                        decodedPixbuf?.Dispose();
+                        pixbufForIdle?.Dispose();
                     }
 
                     return false;
                 });
+                scheduled = true;
             }
             catch (ObjectDisposedException)
             {
-                decodedPixbuf?.Dispose();
+                if (!scheduled)
+                    decodedPixbuf.Dispose();
             }
         }
         catch (OperationCanceledException)
@@ -477,8 +488,9 @@ public partial class SubscriptionsView : ViewBase<Box>
             catch (ObjectDisposedException)
             {
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Logger.Debug(exception, "Failed to remove channel bar item during clear");
             }
 
             holder.Dispose();
@@ -494,13 +506,10 @@ public partial class SubscriptionsView : ViewBase<Box>
 
     private bool OnAllKeyControllerKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
     {
-        if (args.Keyval == Constants.KEY_Right && _channelItems.Count > 0)
-        {
-            _channelItems[0].ItemBox.GrabFocus();
-            return true;
-        }
+        if (args.Keyval != Constants.KEY_Right || _channelItems.Count <= 0) return false;
+        _channelItems[0].ItemBox.GrabFocus();
+        return true;
 
-        return false;
     }
 
     protected override void Dispose(bool disposing)
@@ -557,27 +566,20 @@ public partial class SubscriptionsView : ViewBase<Box>
         return slashIndex > 0 ? handle[..slashIndex] : handle;
     }
 
-    private sealed class ChannelItemHolder : IDisposable
+    private sealed class ChannelItemHolder(
+        SubscribedChannel channel,
+        Box itemBox,
+        Overlay overlay) : IDisposable
     {
         private bool _disposed;
 
-        public ChannelItemHolder(
-            SubscribedChannel channel,
-            Box itemBox,
-            Overlay overlay)
-        {
-            Channel = channel;
-            ItemBox = itemBox;
-            Overlay = overlay;
-        }
-
         public DisposeScope Lifetime { get; } = new();
 
-        public SubscribedChannel Channel { get; }
+        public SubscribedChannel Channel { get; } = channel;
 
-        public Box ItemBox { get; }
+        public Box ItemBox { get; } = itemBox;
 
-        public Overlay Overlay { get; }
+        public Overlay Overlay { get; } = overlay;
 
         public Texture? BoundTexture { get; set; }
         public Picture? BoundPicture { get; set; }

@@ -119,7 +119,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
     {
         if (IsSessionActive())
         {
-            if (!_engine.State.IsLoading && _engine.State.Videos.Count == 0)
+            if (_engine.State is { IsLoading: false, Videos.Count: 0 })
                 RefreshAsync().FireAndForget(Logger);
         }
         else
@@ -146,7 +146,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
         return HomeEmptyStatus();
     }
 
-    internal static VideoListStatus HomeSignedOutStatus(Action? openWebLogin)
+    private static VideoListStatus HomeSignedOutStatus(Action? openWebLogin)
     {
         return new VideoListStatus(
             "Home",
@@ -157,7 +157,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             openWebLogin);
     }
 
-    internal static VideoListStatus HomeAuthInvalidStatus(Action? openWebLogin, bool authenticationRejected = true)
+    private static VideoListStatus HomeAuthInvalidStatus(Action? openWebLogin, bool authenticationRejected = true)
     {
         return new VideoListStatus(
             "Home",
@@ -170,7 +170,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             openWebLogin);
     }
 
-    internal static VideoListStatus HomeErrorStatus()
+    private static VideoListStatus HomeErrorStatus()
     {
         return new VideoListStatus(
             "Home",
@@ -179,7 +179,7 @@ public sealed class HomeFeedCoordinator : IVideoListSource
             true);
     }
 
-    internal static VideoListStatus HomeEmptyStatus()
+    private static VideoListStatus HomeEmptyStatus()
     {
         return new VideoListStatus(
             "Home",

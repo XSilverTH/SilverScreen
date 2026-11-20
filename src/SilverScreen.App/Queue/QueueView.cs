@@ -15,7 +15,6 @@ public partial class QueueView : ViewBase<Box>
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
-    private readonly NoSelection _selection;
     private readonly IThumbnailService _thumbnails;
     private readonly Action<int>? _trackJumpRequested;
     private readonly QueueViewModel _viewModel;
@@ -30,14 +29,14 @@ public partial class QueueView : ViewBase<Box>
         _trackJumpRequested = trackJumpRequested;
 
         _itemIds = Lifetime.Own(StringList.New([]));
-        _selection = Lifetime.Own(NoSelection.New(_itemIds));
+        var selection = Lifetime.Own(NoSelection.New(_itemIds));
         _factory = Lifetime.Own(SignalListItemFactory.New());
         Lifetime.Track(() => _factory.OnSetup += OnRowSetup, () => _factory.OnSetup -= OnRowSetup);
         Lifetime.Track(() => _factory.OnBind += OnRowBind, () => _factory.OnBind -= OnRowBind);
         Lifetime.Track(() => _factory.OnUnbind += OnRowUnbind, () => _factory.OnUnbind -= OnRowUnbind);
         Lifetime.Track(() => _factory.OnTeardown += OnRowTeardown, () => _factory.OnTeardown -= OnRowTeardown);
 
-        queue_list.Model = _selection;
+        queue_list.Model = selection;
         queue_list.Factory = _factory;
 
         Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged,

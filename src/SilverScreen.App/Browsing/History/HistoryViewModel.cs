@@ -115,24 +115,14 @@ public sealed class HistoryViewModel : IVideoListSource
     }
 
 
-    private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state)
-    {
-        if (state.AuthenticationStatus == FeedAuthenticationStatus.Required)
-            return AuthenticatedHistoryStatus.AuthenticationRequired;
-        if (state.AuthenticationStatus == FeedAuthenticationStatus.Rejected)
-            return AuthenticatedHistoryStatus.AuthenticationRejected;
-        if (!IsSessionActive())
-            return AuthenticatedHistoryStatus.AuthenticationRequired;
-        if (state.LastError != null || !state.IsSuccess)
-            return AuthenticatedHistoryStatus.TemporaryBackendFailure;
-
-        if (state.IsLoading || state.IsLoadingMore)
-            return AuthenticatedHistoryStatus.Success;
-
-        return state.Videos.Count == 0
-            ? AuthenticatedHistoryStatus.Empty
-            : AuthenticatedHistoryStatus.Success;
-    }
+    private AuthenticatedHistoryStatus GetHistoryStatus(FeedEngineState state) =>
+        state.AuthenticationStatus == FeedAuthenticationStatus.Required ? AuthenticatedHistoryStatus.AuthenticationRequired:
+        state.AuthenticationStatus == FeedAuthenticationStatus.Rejected ? AuthenticatedHistoryStatus.AuthenticationRejected:
+        !IsSessionActive() ? AuthenticatedHistoryStatus.AuthenticationRejected:
+        state.LastError != null || !state.IsSuccess ? AuthenticatedHistoryStatus.TemporaryBackendFailure:
+        state.IsLoading || state.IsLoadingMore ? AuthenticatedHistoryStatus.Success:
+        state.Videos.Count == 0 ? AuthenticatedHistoryStatus.Empty:
+        AuthenticatedHistoryStatus.Success;
 
 
     private void OnSessionChanged(object? sender, EventArgs e)
@@ -186,7 +176,7 @@ public sealed class HistoryViewModel : IVideoListSource
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    public static VideoListStatus MapStatus(AuthenticatedHistoryStatus historyStatus, FeedEngineState state)
+    private static VideoListStatus MapStatus(AuthenticatedHistoryStatus historyStatus, FeedEngineState state)
     {
         var status = state.LastError != null ? AuthenticatedHistoryStatus.TemporaryBackendFailure : historyStatus;
         var isSuccess = state is { IsSuccess: true, LastError: null };

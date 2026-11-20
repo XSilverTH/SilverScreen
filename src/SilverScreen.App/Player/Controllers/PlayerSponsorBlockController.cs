@@ -157,7 +157,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void OnSkipRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_skipRevealer.ChildRevealed && !_skipRevealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _skipRevealer is { ChildRevealed: false, RevealChild: false })
         {
             _skipRevealer.SetVisible(false);
         }

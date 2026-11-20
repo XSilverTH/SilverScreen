@@ -8,18 +8,12 @@ internal sealed class PlayerChromeController : IDisposable
     private const long ControlsIdleDelayMilliseconds = 1_500;
     private const uint ControlsVisibilityCheckMilliseconds = 100;
     private readonly Box _centerControls;
-    private readonly GestureClick _clickGesture;
-
     private readonly Widget _headerBar;
-
     private readonly DisposeScope _lifetime = new();
-
-    private readonly EventControllerMotion _motionController;
     private readonly Action? _onActivity;
     private readonly Action<bool>? _onControlsVisibilityChanged;
     private readonly Action<double, double>? _onPointerMoved;
     private readonly Widget _playerControls;
-
     private readonly Widget _viewWidget;
     private long _lastActivityMilliseconds;
     private double _lastPointerX = double.NaN;
@@ -43,16 +37,16 @@ internal sealed class PlayerChromeController : IDisposable
         _onActivity = onActivity;
         _onPointerMoved = onPointerMoved;
         _onControlsVisibilityChanged = onControlsVisibilityChanged;
-        _motionController = EventControllerMotion.New();
-        _motionController.SetPropagationPhase(PropagationPhase.Capture);
-        _lifetime.Attach(_viewWidget, _motionController,
+        var motionController = EventControllerMotion.New();
+        motionController.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_viewWidget, motionController,
             c => c.OnMotion += OnMotion,
             c => c.OnMotion -= OnMotion);
 
-        _clickGesture = GestureClick.New();
-        _clickGesture.Button = 0;
-        _clickGesture.SetPropagationPhase(PropagationPhase.Capture);
-        _lifetime.Attach(_viewWidget, _clickGesture,
+        var clickGesture = GestureClick.New();
+        clickGesture.Button = 0;
+        clickGesture.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_viewWidget, clickGesture,
             c => c.OnPressed += OnPressed,
             c => c.OnPressed -= OnPressed);
 

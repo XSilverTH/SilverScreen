@@ -307,7 +307,7 @@ public sealed class SearchViewModel : IVideoListSource
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    public static VideoListStatus MapStatus(FeedEngineState state)
+    private static VideoListStatus MapStatus(FeedEngineState state)
     {
         if (!state.IsSuccess || state.LastError != null)
         {

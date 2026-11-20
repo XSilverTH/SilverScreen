@@ -412,9 +412,4 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     {
         Dispose();
     }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-    }
 }

@@ -17,7 +17,7 @@ internal static class RichLabelMarkup
         return Build(YouTubeRichText.Parse(text));
     }
 
-    public static string Build(IReadOnlyList<YouTubeRichTextSegment> segments)
+    private static string Build(IReadOnlyList<YouTubeRichTextSegment> segments)
     {
         var builder = new StringBuilder();
         foreach (var segment in segments)
@@ -48,7 +48,7 @@ internal static class RichLabelMarkup
         return builder.ToString();
     }
 
-    public static string EscapeText(string text)
+    private static string EscapeText(string text)
     {
         return text.Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)

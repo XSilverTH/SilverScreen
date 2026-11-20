@@ -60,7 +60,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void OnResumeRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_resumeRevealer.ChildRevealed && !_resumeRevealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _resumeRevealer is { ChildRevealed: false, RevealChild: false })
         {
             _resumeRevealer.SetVisible(false);
         }
@@ -68,7 +68,7 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void OnRestartRevealerNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && !_restartRevealer.ChildRevealed && !_restartRevealer.RevealChild)
+        if (args.Pspec.GetName() == "child-revealed" && _restartRevealer is { ChildRevealed: false, RevealChild: false })
         {
             _restartRevealer.SetVisible(false);
         }
