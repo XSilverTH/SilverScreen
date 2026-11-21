@@ -1,6 +1,9 @@
 using System.Globalization;
-using SilverScreen.Core.Domain;
+using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
+using SilverScreen.Core.Player;
+using SilverScreen.Shell;
 
 namespace SilverScreen.Player.RichText;
 
@@ -16,6 +19,21 @@ internal sealed class PlayerLinkRouter(
     Action<string> searchRequested,
     Action<string> externalRequested)
 {
+    private static readonly ILogger Logger = Log.ForContext<PlayerLinkRouter>();
+
+    public PlayerLinkRouter(
+        INavigationService navigation,
+        IPlaybackService playback,
+        Action<double> seekRequested,
+        Action<string>? externalRequested = null)
+        : this(
+            seekRequested,
+            video => playback.PlayAsync(new PlaybackRequest([video])).FireAndForget(Logger),
+            (url, name) => navigation.NavigateToChannel(url, name),
+            tag => navigation.NavigateToSearch("#" + tag),
+            externalRequested ?? (_ => { }))
+    {
+    }
     public bool Activate(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri))

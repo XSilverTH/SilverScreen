@@ -1,0 +1,94 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.StatusPage PlayerErrorView {
+  icon-name: "dialog-error-symbolic";
+  title: "Playback Error";
+  description: "An unexpected error occurred.";
+  visible: false;
+
+  styles [
+    "player-error-page",
+  ]
+
+  child: Gtk.Box {
+    orientation: vertical;
+    spacing: 16;
+    halign: center;
+    valign: center;
+
+    Gtk.Box {
+      spacing: 12;
+      halign: center;
+
+      Gtk.Button player_error_browser_button {
+        label: "Open in browser";
+        icon-name: "web-browser-symbolic";
+        visible: false;
+        clicked => $OnBrowserClicked();
+
+        styles [
+          "player-overlay-button",
+        ]
+      }
+
+      Gtk.Button player_error_retry_button {
+        label: "Retry";
+        icon-name: "view-refresh-symbolic";
+        clicked => $OnRetryClicked();
+
+        styles [
+          "suggested-action",
+          "player-overlay-button",
+        ]
+      }
+    }
+
+    Gtk.Button player_error_toggle_detail_button {
+      label: "Show technical details";
+      halign: center;
+      clicked => $OnToggleDetailClicked();
+
+      styles [
+        "flat",
+        "dim-label",
+      ]
+    }
+
+    Gtk.Box player_error_detail_box {
+      orientation: vertical;
+      spacing: 8;
+      visible: false;
+      halign: center;
+      width-request: 480;
+
+      styles [
+        "card",
+        "player-error-detail-card",
+      ]
+
+      Gtk.ScrolledWindow {
+        max-content-height: 180;
+        min-content-height: 80;
+        propagate-natural-height: true;
+        hscrollbar-policy: never;
+
+        child: Gtk.Label player_error_detail_label {
+          wrap: true;
+          wrap-mode: word_char;
+          selectable: true;
+          xalign: 0;
+          margin-top: 8;
+          margin-bottom: 8;
+          margin-start: 12;
+          margin-end: 12;
+
+          styles [
+            "monospace",
+            "caption",
+          ]
+        };
+      }
+    }
+  };
+}

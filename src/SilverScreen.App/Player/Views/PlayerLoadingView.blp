@@ -1,0 +1,93 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box PlayerLoadingView {
+  orientation: vertical;
+  halign: center;
+  valign: center;
+  can-target: false;
+
+  Adw.Bin player_loading_indicator {
+    halign: center;
+    valign: center;
+    visible: false;
+    can-target: false;
+
+    styles [
+      "player-loading-indicator",
+    ]
+
+    child: Gtk.Box {
+      orientation: vertical;
+      spacing: 16;
+      halign: center;
+      valign: center;
+
+      Adw.Spinner player_loading_spinner {
+        width-request: 72;
+        height-request: 72;
+
+        styles [
+          "player-big-spinner",
+        ]
+      }
+
+      Gtk.Revealer player_delay_revealer {
+        reveal-child: false;
+        transition-type: crossfade;
+
+        child: Gtk.DrawingArea player_delay_bar {
+          halign: center;
+          valign: center;
+          content-width: 280;
+          content-height: 26;
+
+          styles [
+            "player-delay-bar",
+          ]
+        };
+      }
+    };
+  }
+
+  Adw.Bin player_buffering_indicator {
+    halign: center;
+    valign: center;
+    visible: false;
+    can-target: false;
+
+    styles [
+      "player-buffering-indicator",
+    ]
+
+    child: Gtk.Box {
+      spacing: 8;
+      halign: center;
+      valign: center;
+
+      styles [
+        "player-buffering-badge",
+      ]
+
+      Gtk.Spinner player_buffering_spinner {
+        spinning: true;
+        width-request: 16;
+        height-request: 16;
+
+        styles [
+          "player-buffering-spinner",
+        ]
+      }
+
+      Gtk.Label player_buffering_label {
+        label: "Buffering…";
+
+        styles [
+          "caption",
+          "heading",
+          "player-buffering-label",
+        ]
+      }
+    };
+  }
+}

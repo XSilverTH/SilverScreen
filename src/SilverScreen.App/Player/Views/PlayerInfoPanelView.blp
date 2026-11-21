@@ -1,0 +1,185 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Overlay PlayerInfoPanelView {
+  halign: fill;
+  valign: fill;
+
+  child: Gtk.Button player_info_backdrop {
+    tooltip-text: "Close video details";
+    visible: false;
+    halign: fill;
+    valign: fill;
+    clicked => $OnBackdropClicked();
+
+    styles [
+      "player-info-backdrop",
+    ]
+  };
+
+  [overlay]
+  Gtk.Revealer player_info_revealer {
+    halign: fill;
+    valign: end;
+    hexpand: true;
+    visible: false;
+    reveal-child: false;
+    transition-type: slide_up;
+    transition-duration: 250;
+    notify => $OnRevealerNotify();
+
+    child: Gtk.Box player_info_panel {
+      orientation: vertical;
+      spacing: 10;
+      margin-top: 16;
+      margin-bottom: 16;
+      margin-start: 16;
+      margin-end: 16;
+      width-request: 420;
+      height-request: 300;
+
+      styles [
+        "player-info-panel",
+      ]
+
+      Gtk.Box {
+        spacing: 12;
+        valign: center;
+
+        Gtk.Box {
+          orientation: vertical;
+          spacing: 2;
+          hexpand: true;
+
+          Gtk.Label player_info_title_label {
+            label: "Video details";
+            xalign: 0;
+            ellipsize: end;
+
+            styles [
+              "title-4",
+            ]
+          }
+
+          Gtk.Button player_info_channel_button {
+            clicked => $OnChannelButtonClicked();
+            tooltip-text: "Open channel";
+            halign: start;
+
+            styles [
+              "flat",
+              "player-channel-button",
+            ]
+
+            child: Gtk.Label player_info_channel_label {
+              label: "";
+              xalign: 0;
+              ellipsize: end;
+
+              styles [
+                "caption",
+                "dim-label",
+              ]
+            };
+          }
+        }
+
+        Gtk.Button player_info_close_button {
+          clicked => $OnCloseButtonClicked();
+          icon-name: "window-close-symbolic";
+          tooltip-text: "Close video details (Escape)";
+
+          styles [
+            "flat",
+            "player-overlay-button",
+          ]
+        }
+      }
+
+      Gtk.Label player_info_stats_label {
+        label: "";
+        xalign: 0;
+        wrap: true;
+
+        styles [
+          "caption",
+          "dim-label",
+        ]
+      }
+
+      Gtk.Label player_info_status_label {
+        label: "Move to the bottom edge to reveal video details.";
+        xalign: 0;
+        wrap: true;
+
+        styles [
+          "dim-label",
+        ]
+      }
+
+      Gtk.ScrolledWindow player_info_description_scroller {
+        hexpand: true;
+        vexpand: true;
+        visible: false;
+        propagate-natural-height: true;
+
+        Gtk.Label player_info_description {
+          xalign: 0;
+          yalign: 0;
+          wrap: true;
+          wrap-mode: word;
+          selectable: true;
+          use-markup: true;
+          hexpand: true;
+          activate-link => $OnDescriptionLinkActivated();
+
+          styles [
+            "player-info-description",
+          ]
+        }
+      }
+    };
+  }
+
+  [overlay]
+  Gtk.Revealer player_info_cue_revealer {
+    visible: false;
+    reveal-child: false;
+    transition-type: slide_up;
+    transition-duration: 200;
+    halign: center;
+    valign: end;
+    notify => $OnCueRevealerNotify();
+
+    child: Gtk.Button player_info_cue_button {
+      halign: center;
+      valign: end;
+      margin-bottom: 0;
+      clicked => $OnCueButtonClicked();
+      tooltip-text: "Show video details (D)";
+
+      styles [
+        "player-info-cue-button",
+      ]
+
+      child: Adw.Bin {
+        halign: center;
+        valign: end;
+
+        styles [
+          "player-info-cue-handle",
+        ]
+
+        Gtk.Image {
+          icon-name: "info-symbolic";
+          pixel-size: 16;
+          accessible-role: presentation;
+
+          styles [
+            "player-info-cue-icon",
+          ]
+        }
+      };
+    };
+  }
+}

@@ -5,7 +5,7 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentsView : ViewBase<Box>
+public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 {
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
 
@@ -15,21 +15,14 @@ public partial class CommentsView : ViewBase<Box>
     private readonly Func<string, bool> _linkActivated;
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly Adjustment? _vadjustment;
-    private readonly CommentsViewModel _viewModel;
     private string[] _displayedCommentIds = [];
-    private CommentsViewState _state;
+    private CommentsViewState _state = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
     public CommentsView(CommentsViewModel viewModel, Action closeRequested, Func<string, bool> linkActivated)
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        ArgumentNullException.ThrowIfNull(viewModel);
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
-        _state = _viewModel.State;
-
-        Lifetime.Own(_viewModel);
-        Lifetime.Track(
-            () => _viewModel.StateChanged += OnViewModelStateChanged,
-            () => _viewModel.StateChanged -= OnViewModelStateChanged);
 
         _vadjustment = comments_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
@@ -56,16 +49,28 @@ public partial class CommentsView : ViewBase<Box>
         comments_list.Model = selection;
         comments_list.Factory = _factory;
         comments_stack.VisibleChildName = "unavailable";
+
+        Lifetime.Own(viewModel);
+        ViewModel = viewModel;
+    }
+
+    protected override void BindViewModel(CommentsViewModel viewModel, BindingScope<CommentsViewModel> bindings)
+    {
+        bindings.Bind(
+            nameof(CommentsViewModel.State),
+            this,
+            static vm => vm.State,
+            static (view, state) => view.Render(state));
     }
 
     public void SetVideo(string? videoId)
     {
-        _viewModel.SetVideo(videoId);
+        ViewModel?.SetVideo(videoId);
     }
 
     public void EnsureLoaded()
     {
-        _viewModel.EnsureLoaded();
+        ViewModel?.EnsureLoaded();
     }
 
     private void OnCloseButtonClicked(object? sender, EventArgs args)
@@ -75,7 +80,7 @@ public partial class CommentsView : ViewBase<Box>
 
     private void OnRetryButtonClicked(object? sender = null, EventArgs? args = null)
     {
-        _viewModel.Retry();
+        ViewModel?.Retry();
     }
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
@@ -84,21 +89,12 @@ public partial class CommentsView : ViewBase<Box>
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 280)
             return;
 
-        _viewModel.LoadMoreAsync().FireAndForget(Logger);
+        ViewModel?.LoadMoreAsync().FireAndForget(Logger);
     }
 
     private void OnSortDropdownNotify(object? sender, EventArgs args)
     {
-        _viewModel.SetSortSelection(comments_sort_dropdown.GetSelected());
-    }
-
-    private void OnViewModelStateChanged(object? sender, CommentsViewState state)
-    {
-        Lifetime.Idle(() =>
-        {
-            Render(state);
-            return false;
-        });
+        ViewModel?.SetSortSelection(comments_sort_dropdown.GetSelected());
     }
 
     private void Render(CommentsViewState state)
@@ -164,7 +160,7 @@ public partial class CommentsView : ViewBase<Box>
             return;
 
         listItem.Focusable = true;
-        var row = new CommentRowView(_viewModel.ToggleReplies, _linkActivated);
+        var row = new CommentRowView(id => ViewModel?.ToggleReplies(id), _linkActivated);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

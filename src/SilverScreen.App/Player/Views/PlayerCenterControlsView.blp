@@ -1,0 +1,45 @@
+using Gtk 4.0;
+
+Gtk.Box PlayerCenterControlsView {
+  orientation: horizontal;
+  spacing: 24;
+  halign: center;
+  valign: center;
+
+  styles [
+    "player-center-controls",
+  ]
+
+  Gtk.Button player_rewind_button {
+    icon-name: "media-seek-backward-symbolic";
+    tooltip-text: "Rewind 10 seconds (J / ←)";
+    clicked => $OnRewindClicked();
+
+    styles [
+      "circular",
+      "player-center-button",
+    ]
+  }
+
+  Gtk.Button player_play_pause_button {
+    icon-name: "media-playback-start-symbolic";
+    tooltip-text: "Play (Space / K)";
+    clicked => $OnPlayPauseClicked();
+
+    styles [
+      "circular",
+      "player-center-play-button",
+    ]
+  }
+
+  Gtk.Button player_forward_button {
+    icon-name: "media-seek-forward-symbolic";
+    tooltip-text: "Forward 10 seconds (L / →)";
+    clicked => $OnForwardClicked();
+
+    styles [
+      "circular",
+      "player-center-button",
+    ]
+  }
+}

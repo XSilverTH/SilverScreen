@@ -1,0 +1,62 @@
+using Gtk 4.0;
+
+Gtk.Box PlayerReactionsView {
+  spacing: 2;
+  valign: center;
+
+  Gtk.Button player_like_button {
+    clicked => $OnLikeButtonClicked();
+    tooltip-text: "Like this video on YouTube";
+
+    styles [
+      "flat",
+      "player-reaction-button",
+    ]
+
+    child: Gtk.Box {
+      spacing: 6;
+
+      Gtk.Image player_like_image {
+        resource: "/SilverScreen/Assets/like-symbolic.svg";
+        pixel-size: 18;
+        accessible-role: presentation;
+      }
+
+      Gtk.Label player_likes_label {
+        label: "—";
+
+        styles [
+          "player-reaction-count",
+        ]
+      }
+    };
+  }
+
+  Gtk.Button player_dislike_button {
+    clicked => $OnDislikeButtonClicked();
+    tooltip-text: "Dislike this video on YouTube";
+
+    styles [
+      "flat",
+      "player-reaction-button",
+    ]
+
+    child: Gtk.Box {
+      spacing: 6;
+
+      Gtk.Image player_dislike_image {
+        resource: "/SilverScreen/Assets/dislike-symbolic.svg";
+        pixel-size: 18;
+        accessible-role: presentation;
+      }
+
+      Gtk.Label player_dislikes_label {
+        label: "—";
+
+        styles [
+          "player-reaction-count",
+        ]
+      }
+    };
+  }
+}

@@ -1,0 +1,37 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.HeaderBar PlayerHeaderBarView {
+  valign: start;
+  show-title: false;
+  show-end-title-buttons: false;
+  show-start-title-buttons: false;
+
+  styles [
+    "player-header-bar",
+  ]
+
+  [start]
+  Gtk.Button player_back_button {
+    icon-name: "go-previous-symbolic";
+    tooltip-text: "Back to browsing (Escape)";
+    clicked => $OnBackButtonClicked();
+
+    styles [
+      "flat",
+      "player-overlay-button",
+    ]
+  }
+
+  [end]
+  Gtk.Button player_fullscreen_button {
+    icon-name: "view-fullscreen-symbolic";
+    tooltip-text: "Toggle fullscreen (F)";
+    clicked => $OnFullscreenButtonClicked();
+
+    styles [
+      "flat",
+      "player-overlay-button",
+    ]
+  }
+}

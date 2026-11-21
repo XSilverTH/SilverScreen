@@ -1,0 +1,20 @@
+using Gtk 4.0;
+
+Gtk.GraphicsOffload PlayerSurfaceView {
+  enabled: enabled;
+  black-background: true;
+
+  child: Gtk.GLArea player_surface {
+    auto-render: false;
+    hexpand: true;
+    vexpand: true;
+    realize => $OnSurfaceRealize();
+    unrealize => $OnSurfaceUnrealize();
+    resize => $OnSurfaceResize();
+    render => $OnSurfaceRender();
+
+    styles [
+      "embedded-player-surface",
+    ]
+  };
+}

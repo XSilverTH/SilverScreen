@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
@@ -28,7 +29,7 @@ public sealed record CommentsViewState(
     bool HasMore = false,
     string PaginationLoadingMessage = "Loading more comments…");
 
-public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDisposable
+public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotifyPropertyChanged, IDisposable
 {
     public const int InitialPageSize = 20;
     public const int PageSizeIncrement = 20;
@@ -52,6 +53,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
     public CommentsViewState State { get; private set; } = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public void Dispose()
     {
         if (_disposed)
@@ -59,6 +62,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
 
         _disposed = true;
         CancelLoad();
+        PropertyChanged = null;
         StateChanged = null;
         _commentsById.Clear();
         _repliesByParentId.Clear();
@@ -311,6 +315,7 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : IDispos
     private void Publish(CommentsViewStatus status, string statusMessage, bool isLoadingMore = false)
     {
         State = new CommentsViewState(status, BuildVisibleComments(), statusMessage, isLoadingMore, _hasMore);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(State)));
         StateChanged?.Invoke(this, State);
     }
 

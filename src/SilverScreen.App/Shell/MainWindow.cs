@@ -81,11 +81,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _notificationService = notificationService;
         if (_notificationService is NotificationService concreteNotify)
             concreteNotify.AttachToastOverlay(toast_overlay);
-        _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
-            video => OpenChannelAsync(video).FireAndForget(Logger),
-            video => PlayVideoAsync(video).FireAndForget(Logger),
-            OnSearchSubmitted,
-            player);
+        _embeddedPlayer = new EmbeddedPlayerView(_navigationService, player);
         _playback = new PlaybackModeRoutingService(account.Preferences, playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
         var actions = CreateVideoActions();
@@ -364,12 +360,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _navigationService.NavigateToPlayer();
         if (_account.Preferences.GetPreferences().OpenInFullscreen)
             Widget.Fullscreen();
-    }
-
-    private void CloseEmbeddedPlayer()
-    {
-        Widget.Unfullscreen();
-        if (!_navigationService.GoBack()) _navigationService.NavigateTo(NavigationPage.Home);
     }
 
     private void ReportStartupDependencyWarnings()

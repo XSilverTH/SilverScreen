@@ -17,10 +17,6 @@ public partial class CommentRowView : ViewBase<Bin>
         _repliesToggleRequested =
             repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
-
-        Lifetime.Track(
-            () => comment_text_label.OnActivateLink += OnCommentTextActivateLink,
-            () => comment_text_label.OnActivateLink -= OnCommentTextActivateLink);
     }
 
     private bool OnCommentTextActivateLink(Label sender, Label.ActivateLinkSignalArgs args)

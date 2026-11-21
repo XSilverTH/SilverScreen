@@ -1,10 +1,8 @@
-using System.Collections.Immutable;
 using Adw;
-using GObject;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
@@ -31,1276 +29,209 @@ internal interface IEmbeddedPlayerPresenter
     Task TogglePauseAsync();
 }
 
+/// <summary>
+///     Structural host view composing the player surface, overlay layers, comments, and queue sidebars.
+/// </summary>
 public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedPlayerPresenter
 {
-    private const double MinimumPlaybackSpeed = 0.25;
-    private const double MaximumPlaybackSpeed = 4;
-    private const double PlaybackSpeedIncrement = 0.25;
-
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
 
-    private static readonly string[] DefaultQualityPresets =
-    [
-        "4320p",
-        "2160p",
-        "1440p",
-        "1080p",
-        "720p",
-        "480p",
-        "360p",
-        "240p",
-        "144p"
-    ];
-
-    private readonly List<string> _availableQualities = ["Best"];
-    private readonly Action _backRequested;
-    private readonly Action<VideoSummary> _channelRequested;
-    private readonly PlayerChapterOverlay _chapterOverlay;
-    private readonly PlayerChromeController _chromeController;
-    private readonly CommentsView _commentsView;
-    private readonly VideoInfoPanelController _infoPanel;
-    private readonly PlayerLinkRouter _linkRouter;
-    private readonly IYouTubeMediaResolver _mediaResolver;
-    private readonly PlayerOsdController _osdController;
-    private readonly LibMpvPlayer _player;
+    private readonly INavigationService _navigation;
     private readonly IPreferencesService _preferences;
-    private readonly Action _presentRequested;
+    private readonly IYouTubeMediaResolver _mediaResolver;
     private readonly IQueueService _queueService;
-    private readonly QueueViewModel _queueViewModel;
-    private readonly PlayerResumeController _resumeController;
+    private readonly LibMpvPlayer _player;
     private readonly PlaybackSession _session;
-    private readonly PlayerShortcutController _shortcutController;
-    private readonly PlayerSponsorBlockController _sponsorBlockController;
-    private readonly PlayerStreamDelayController _streamDelayController;
-    private readonly PlayerSubtitleController _subtitleController;
-    private readonly PlayerTimelineController _timelineController;
+    private readonly PlayerLinkRouter _linkRouter;
+    private readonly PlayerOverlayComposer _overlay;
+    private readonly CommentsView _commentsView;
+    private readonly QueueView _queueView;
+    private readonly QueueViewModel _queueViewModel;
 
-    private PlayerErrorInfo? _currentErrorInfo;
-    private string _currentQuality = "Best";
-    private string? _currentQualityVideoId;
-    private VideoSummary? _failedVideo;
-    private bool _hasPlaybackError;
-    private bool _isLoading;
-    private bool _isMuted;
     private PlaybackRequest? _lastPlaybackRequest;
     private PlaybackRequest? _loadedRequest;
-    private CancellationTokenSource? _qualityLoadCancellation;
-    private int _qualityLoadGeneration;
-    private bool _rendererReady;
-    private double _speed = 1;
-    private int _surfacePixelHeight;
-
-    private int _surfacePixelWidth;
+    private VideoSummary? _failedVideo;
     private bool _syncingQueue;
-    private bool _updatingControls;
-    private double _volume = 100;
-
-    public EmbeddedPlayerView(Action presentRequested, Action backRequested, Action<VideoSummary> channelRequested,
-        Action<VideoSummary> videoRequested, Action<string> searchRequested,
-        PlayerDependencies dependencies)
-    {
-        _presentRequested = presentRequested;
-        _backRequested = backRequested;
-        _channelRequested = channelRequested;
-        var videoRequested1 = videoRequested ?? throw new ArgumentNullException(nameof(videoRequested));
-        var searchRequested1 = searchRequested ?? throw new ArgumentNullException(nameof(searchRequested));
-        _linkRouter = new PlayerLinkRouter(
-            SeekToTimestamp,
-            videoRequested1,
-            OpenLinkedChannel,
-            tag => searchRequested1("#" + tag),
-            OpenExternalLink);
-        _preferences = dependencies.Preferences;
-        _mediaResolver = dependencies.MediaResolver;
-        _commentsView = Lifetime.Own(new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
-            OnRichLinkActivated));
-        comments_sidebar_host.Append(_commentsView.Widget);
-        _queueService = dependencies.Queue;
-        _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this)));
-        var queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue,
-            OnTrackJumpRequested));
-        player_queue_sidebar_host.Append(queueView.Widget);
-        player_queue_button.BindProperty("active", player_queue_split_view, "show-sidebar",
-            BindingFlags.Bidirectional | BindingFlags.SyncCreate);
-        Lifetime.Track(() => _queueService.Changed += OnQueueChanged, () => _queueService.Changed -= OnQueueChanged);
-        _player = Lifetime.Own(new LibMpvPlayer(action => Functions.IdleAdd(0, () =>
-        {
-            if (!IsDisposed) action();
-            return false;
-        })));
-        _timelineController = Lifetime.Own(new PlayerTimelineController(player_timeline, player_timeline_overlay,
-            player_scrub_cue,
-            player_scrub_time_label, player_scrub_delta_label, player_scrub_chapter_label, player_position_label,
-            player_duration_label,
-            (pos, exact) => _player.SeekAbsolute(pos, exact), RegisterActivity));
-        var desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, presentRequested));
-        _session = Lifetime.Own(new PlaybackSession(dependencies, desktopMedia));
-        Lifetime.Track(() => _session.SeekRequested += SeekAbsolute, () => _session.SeekRequested -= SeekAbsolute);
-        Lifetime.Track(() => _session.VideoChanged += OnSessionVideoChanged,
-            () => _session.VideoChanged -= OnSessionVideoChanged);
-        Lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
-        Lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
-        Lifetime.Own(new PlayerEngagementController(_session, player_like_button, player_like_image,
-            player_likes_label, player_dislike_button, player_dislike_image, player_dislikes_label));
-        _chapterOverlay = Lifetime.Own(new PlayerChapterOverlay(player_timeline_overlay, player_timeline,
-            () => _timelineController.PlaybackPosition, pos => SeekAbsolute(pos), RegisterActivity));
-        _sponsorBlockController = Lifetime.Own(new PlayerSponsorBlockController(_session, _preferences,
-            player_timeline,
-            player_timeline_overlay, player_sponsorblock_revealer, player_sponsorblock_skip_button,
-            player_sponsorblock_label));
-        _resumeController = Lifetime.Own(new PlayerResumeController(_session,
-            player_resume_revealer, player_resume_button, player_resume_label,
-            player_restart_revealer, player_restart_button, player_restart_label));
-        _infoPanel = Lifetime.Own(
-            new VideoInfoPanelController(dependencies.MediaResolver, _channelRequested,
-                player_info_backdrop, player_info_cue_revealer,
-                player_info_revealer, player_info_title_label,
-                player_info_channel_label, player_info_stats_label,
-                player_info_status_label, player_info_description_scroller,
-                player_info_description, player_info_close_button,
-                OnRichLinkActivated, () =>
-                {
-                    if (_session.HasMedia) player_surface.GrabFocus();
-                }));
-        _subtitleController = Lifetime.Own(new PlayerSubtitleController(_preferences, player_subtitle_dropdown,
-            player_subtitle_model,
-            player_subtitle_button, trackId => _player.SelectSubtitleTrack(trackId)));
-        Lifetime.Track(() => _player.RenderRequested += OnRenderRequested,
-            () => _player.RenderRequested -= OnRenderRequested);
-        Lifetime.Track(() => _player.StateChanged += OnStateChanged, () => _player.StateChanged -= OnStateChanged);
-        Lifetime.Track(() => _player.PlaybackFailed += OnPlaybackFailed,
-            () => _player.PlaybackFailed -= OnPlaybackFailed);
-        ResetQualityDropdownToDefaults();
-        SetControls(100, 1, "Best");
-        _osdController =
-            Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
-        _streamDelayController = Lifetime.Own(new PlayerStreamDelayController(_player, player_delay_revealer,
-            player_delay_bar));
-        var statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player),
-            player_stats_revealer, player_stats_label));
-
-        player_comments_cue_revealer.SetVisible(false);
-        Lifetime.Track(
-            () => player_comments_cue_revealer.OnNotify += OnCommentsCueRevealerNotify,
-            () => player_comments_cue_revealer.OnNotify -= OnCommentsCueRevealerNotify);
-
-        SyncPromptStackVisibility();
-        Lifetime.Track(
-            () => player_sponsorblock_revealer.OnNotify += OnPromptRevealerVisibleNotify,
-            () => player_sponsorblock_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
-        Lifetime.Track(
-            () => player_resume_revealer.OnNotify += OnPromptRevealerVisibleNotify,
-            () => player_resume_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
-        Lifetime.Track(
-            () => player_restart_revealer.OnNotify += OnPromptRevealerVisibleNotify,
-            () => player_restart_revealer.OnNotify -= OnPromptRevealerVisibleNotify);
-        _chromeController = Lifetime.Own(new PlayerChromeController(
-            Widget,
-            player_header_bar,
-            player_center_controls,
-            player_controls,
-            () => player_volume_popover.GetVisible() || player_settings_popover.GetVisible() || _infoPanel.IsOpen,
-            () => _chapterOverlay.Layout(),
-            UpdatePointer,
-            visible => _osdController.SetChromeVisible(visible)));
-        _osdController.SetChromeVisible(true);
-        _shortcutController = Lifetime.Own(new PlayerShortcutController(Widget));
-        _shortcutController.KeyInterceptor = statsController.HandleKeyPress;
-        _shortcutController.RegisterAction(PlayerShortcutActions.TogglePause, () =>
-        {
-            IsPaused = !IsPaused;
-            _player.TogglePause();
-            _osdController.ShowPlayPause(IsPaused);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekBackward, () =>
-        {
-            SeekRelative(-10);
-            _osdController.ShowSeek(-10);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekForward, () =>
-        {
-            SeekRelative(10);
-            _osdController.ShowSeek(10);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.StepFrameBackward, () => _player.StepFrame(false));
-        _shortcutController.RegisterAction(PlayerShortcutActions.StepFrameForward, () => _player.StepFrame(true));
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleMute, () =>
-        {
-            _isMuted = !_isMuted;
-            _player.ToggleMute();
-            _osdController.ShowVolume(_volume, _isMuted);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeUp, () =>
-        {
-            _volume = Math.Clamp(_volume + 5, 0, 100);
-            _isMuted = false;
-            _player.AdjustVolume(5);
-            _osdController.ShowVolume(_volume, _isMuted);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.VolumeDown, () =>
-        {
-            _volume = Math.Clamp(_volume - 5, 0, 100);
-            _isMuted = false;
-            _player.AdjustVolume(-5);
-            _osdController.ShowVolume(_volume, _isMuted);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.SeekToBeginning, () =>
-        {
-            SeekAbsolute(0);
-            _osdController.ShowSeekToBeginning();
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ReturnToShell, () =>
-        {
-            if (statsController.IsOpen) statsController.Close();
-            else if (_timelineController.IsScrubbing) _timelineController.CancelScrubbing();
-            else if (player_queue_button.Active) player_queue_button.Active = false;
-            else if (Widget.ShowSidebar) CloseComments();
-            else if (_infoPanel.IsOpen) _infoPanel.Close();
-            else ReturnToShell();
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleQueue, () =>
-        {
-            player_queue_button.Active = !player_queue_button.Active;
-            _osdController.ShowQueue(player_queue_button.Active);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleVideoInfo, () =>
-        {
-            _infoPanel.Toggle(_session.CurrentVideo);
-            _osdController.ShowVideoInfo(_infoPanel.IsOpen);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleStats, statsController.Toggle);
-        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedDecrease, () =>
-        {
-            var speed = AdjustSpeed(-1);
-            _osdController.ShowSpeed(speed);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.SpeedIncrease, () =>
-        {
-            var speed = AdjustSpeed(1);
-            _osdController.ShowSpeed(speed);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.NextVideo, () =>
-        {
-            _player.MovePlaylist(true);
-            _osdController.ShowNextVideo();
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.PreviousVideo, () =>
-        {
-            _player.MovePlaylist(false);
-            _osdController.ShowPreviousVideo();
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ToggleFullscreen, () =>
-        {
-            var isFullscreen = ToggleFullscreen();
-            _osdController.ShowFullscreen(isFullscreen);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.PreferredSubtitle, () =>
-        {
-            var state = ShowPreferredSubtitle();
-            _osdController.ShowSubtitles(state);
-        });
-        _shortcutController.RegisterAction(PlayerShortcutActions.ResumeOrSkip, () =>
-        {
-            if (_resumeController.TryConsumeSeekPrompt(out var returnPosition))
-                SeekBackTo(returnPosition);
-            else if (_session.TryResume())
-                _osdController.ShowResumed();
-            else if (_session.TrySkipManualSegment())
-                _osdController.ShowSkippedSponsor();
-        });
-        _shortcutController.UpdateBindings(_preferences.GetPreferences().Shortcuts);
-        Lifetime.Track(
-            () => _preferences.PreferencesChanged += OnPreferencesChanged,
-            () => _preferences.PreferencesChanged -= OnPreferencesChanged);
-        Lifetime.Track(
-            () => Widget.OnNotify += OnWidgetNotify,
-            () => Widget.OnNotify -= OnWidgetNotify);
-    }
 
     public bool HasMedia => _session.HasMedia;
     public bool IsPaused { get; private set; } = true;
-
     public event EventHandler? PlaybackStateChanged;
 
-    public Task TogglePauseAsync()
+    public EmbeddedPlayerView(INavigationService navigation, PlayerDependencies dependencies)
     {
-        _player.TogglePause();
-        return Task.CompletedTask;
+        _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
+        ArgumentNullException.ThrowIfNull(dependencies);
+        _preferences = dependencies.Preferences;
+        _mediaResolver = dependencies.MediaResolver;
+        _queueService = dependencies.Queue;
+
+        _player = Lifetime.Own(new LibMpvPlayer(a => Functions.IdleAdd(0, () => { if (!IsDisposed) a(); return false; })));
+        var desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, PresentPlayer));
+        _session = Lifetime.Own(new PlaybackSession(dependencies, desktopMedia));
+        _linkRouter = new PlayerLinkRouter(pos => _player.SeekAbsolute(pos), v => PresentAsync(new PlaybackRequest([v])).FireAndForget(Logger), (url, name) => _navigation.NavigateToChannel(url, name), tag => _navigation.NavigateToSearch("#" + tag), OpenExternalLink);
+        _overlay = Lifetime.Own(new PlayerOverlayComposer(
+            player_overlay, Widget, _player, _session, _navigation, _preferences, dependencies, _linkRouter,
+            ReturnToShell, ToggleFullscreen, CloseComments, () => Widget.ShowSidebar = true, () => Widget.ShowSidebar));
+
+        _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this)));
+        _queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue, idx =>
+        {
+            if (_session.Request is { } req && idx >= 0 && idx < req.Videos.Length) _player.PlayPlaylistIndex(idx);
+        }));
+        _commentsView = Lifetime.Own(new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments, uri => _linkRouter.Activate(uri)));
+
+        comments_sidebar_host.Append(_commentsView.Widget);
+        player_queue_sidebar_host.Append(_queueView.Widget);
+        WireEvents();
+    }
+
+    private void WireEvents()
+    {
+        _overlay.Surface.Realized += (_, _) => OnSurfaceRealized();
+        _overlay.Surface.PlaybackFailed += (_, err) => _session.Fail(err);
+        _overlay.ControlsBar.QueueToggled += (_, open) => player_queue_split_view.ShowSidebar = open;
+        _overlay.Error.RetryRequested += (_, _) => { if (_lastPlaybackRequest is not null) PresentAsync(_lastPlaybackRequest); };
+        _overlay.Error.BrowserRequested += (_, _) => OpenBrowser();
+
+        Lifetime.Track(() => _session.VideoChanged += OnSessionVideoChanged, () => _session.VideoChanged -= OnSessionVideoChanged);
+        Lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        Lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
+        Lifetime.Track(() => _player.StateChanged += OnStateChanged, () => _player.StateChanged -= OnStateChanged);
+        Lifetime.Track(() => _player.PlaybackFailed += (_, detail) => _session.Fail(detail), () => { });
+        Lifetime.Track(() => _queueService.Changed += OnQueueChanged, () => _queueService.Changed -= OnQueueChanged);
+        Lifetime.Track(() => _preferences.PreferencesChanged += OnPreferencesChanged, () => _preferences.PreferencesChanged -= OnPreferencesChanged);
     }
 
     public Task<string> PresentAsync(PlaybackRequest request)
     {
-        try
-        {
-            _ = MpvCommandBuilder.GetPlaybackUrls(request);
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to resolve playback URLs for request");
-            return Task.FromResult(DiagnosticSanitizer.Sanitize(exception.Message));
-        }
-
-        if (!_player.IsAvailable)
-            return Task.FromResult(_player.AvailabilityError ?? RuntimeDependencyGuidance.LibMpvUnavailable);
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Videos.Length == 0) return Task.FromResult("No videos to play.");
         Functions.IdleAdd(0, () =>
         {
-            EndSession(true);
-            _session.Start(request);
+            if (IsDisposed) return false;
             _syncingQueue = true;
-            try
-            {
-                _queueService.Replace(request.Videos);
-            }
-            finally
-            {
-                _syncingQueue = false;
-            }
-
+            try { _queueService.Replace(request.Videos); } finally { _syncingQueue = false; }
             _queueViewModel.SetCurrentPlayingIndex(0);
-            var preferences = _preferences.GetPreferences();
-            var firstVideo = request.Videos[0];
-            _hasPlaybackError = false;
+            var first = request.Videos[0];
             _failedVideo = null;
             _lastPlaybackRequest = request;
-            player_error_page.SetVisible(false);
-
-            _timelineController.Reset();
-            _timelineController.SetExpectedMedia(firstVideo.Duration, firstVideo.Duration <= TimeSpan.Zero);
-            _infoPanel.SetVideo(firstVideo);
-            RegisterActivity();
-            _chapterOverlay.Update([], TimeSpan.Zero);
-
-            SetControls(100, 1, NormalizeQuality(preferences.Quality.ToPersistedString()));
-            LoadQualityTracks(firstVideo.Id);
-            SetLoading(true);
-            player_queue_controls.SetVisible(request.Videos.Length > 1);
-            player_previous_queue_button.Sensitive = false;
-            player_next_queue_button.Sensitive = request.Videos.Length > 1;
-            _presentRequested();
-            _shortcutController.Attach();
+            _overlay.Error.ClearError();
+            _overlay.Timeline.Reset();
+            _overlay.Timeline.SetExpectedMedia(first.Duration, first.Duration <= TimeSpan.Zero);
+            _overlay.InfoPanel.SetVideo(first);
+            _overlay.Chrome.RegisterActivity();
+            _overlay.ControlsBar.SetVolume(100);
+            _overlay.ControlsBar.SetSpeed(1);
+            _overlay.ControlsBar.LoadQualityTracks(first.Id, _mediaResolver, _preferences.GetPreferences().Quality.ToPersistedString());
+            _overlay.Loading.SetLoading(true);
+            _overlay.ControlsBar.SetQueueControls(request.Videos.Length > 1, false, request.Videos.Length > 1, player_queue_split_view.ShowSidebar);
+            PresentPlayer();
+            _overlay.Shortcuts.Attach();
             Widget.GrabFocus();
-            if (!_rendererReady)
-            {
-                player_surface.MakeCurrent();
-                if (player_surface.GetError() is null)
-                {
-                    _player.InitializeRenderer();
-                    _rendererReady = true;
-                }
-            }
 
-            if (!_rendererReady) return false;
-            _player.Load(request, preferences, _session.CookieFilePath);
+            if (!_overlay.Surface.IsRendererReady) _overlay.Surface.MakeCurrent();
+            if (!_overlay.Surface.IsRendererReady) return false;
+            _player.Load(request, _preferences.GetPreferences(), _session.CookieFilePath);
             _loadedRequest = request;
-
             return false;
         });
-
         return Task.FromResult("Opening embedded player.");
     }
 
-    private void OnWidgetNotify(Object sender, Object.NotifySignalArgs e)
+    public Task TogglePauseAsync() { _player.TogglePause(); IsPaused = !IsPaused; return Task.CompletedTask; }
+    private void PresentPlayer() { _navigation.NavigateToPlayer(); if (_preferences.GetPreferences().OpenInFullscreen && Widget.GetRoot() is Window w) w.Fullscreen(); }
+    private void ReturnToShell() { _overlay.Shortcuts.Detach(); EndSession(true); if (Widget.GetRoot() is Window w) w.Unfullscreen(); if (!_navigation.GoBack()) _navigation.NavigateTo(SilverScreen.Shell.NavigationPage.Home); }
+    private bool ToggleFullscreen() { if (Widget.GetRoot() is not Window w) return false; var fs = !w.Fullscreened; if (fs) w.Fullscreen(); else w.Unfullscreen(); _overlay.HeaderBar.SetFullscreen(fs); return fs; }
+    private void CloseComments() { Widget.ShowSidebar = false; if (_session.HasMedia) _overlay.Surface.GrabFocus(); }
+    private void CloseQueue() { player_queue_split_view.ShowSidebar = false; if (_session.HasMedia) _overlay.Surface.GrabFocus(); }
+    private void OpenBrowser() { var url = _failedVideo is { } v ? (v.WatchUrl ?? PlaybackRequest.BuildWatchUrl(v.Id)) : null; if (!string.IsNullOrWhiteSpace(url)) OpenExternalLink(url); }
+    private void OpenExternalLink(string url) { try { if (Widget.GetRoot() is Window p) UriLauncher.New(url).LaunchAsync(p).FireAndForget(Logger); } catch (Exception ex) { Logger.Warning(ex, "Failed to open link"); } }
+
+    private void OnSurfaceRealized()
     {
-        if (e.Pspec.GetName() != "visible") return;
-        if (Widget.GetVisible())
-            _shortcutController.Attach();
-        else
-            _shortcutController.Detach();
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        _qualityLoadCancellation?.Cancel();
-        _qualityLoadCancellation?.Dispose();
-        _qualityLoadCancellation = null;
-        if (disposing)
-            if (_rendererReady)
-            {
-                player_surface.MakeCurrent();
-                _player.ShutdownRenderer();
-                _rendererReady = false;
-            }
-
-        base.Dispose(disposing);
-    }
-
-    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
-    {
-        _shortcutController.UpdateBindings(preferences.Shortcuts);
-        _player.UpdatePreferences(preferences);
-    }
-
-    private void OnPlayerSurfaceResize(GLArea sender, GLArea.ResizeSignalArgs args)
-    {
-        _surfacePixelWidth = args.Width;
-        _surfacePixelHeight = args.Height;
-    }
-
-    /// <summary>
-    ///     Re-realizes the OpenGL surface when navigating back to the player view,
-    ///     allowing the player engine to resume playback seamlessly at the captured reload position and state.
-    /// </summary>
-    private void OnPlayerSurfaceRealize(object? sender, EventArgs args)
-    {
-        player_surface.MakeCurrent();
-        if (player_surface.GetError() is not null)
-        {
-            OnPlaybackFailed(this, "Unable to create an OpenGL context for embedded playback.");
-            return;
-        }
-
-        _player.InitializeRenderer();
-        _rendererReady = true;
-        _shortcutController.Attach();
-
+        _overlay.Shortcuts.Attach();
         if (_session.Request is null || ReferenceEquals(_loadedRequest, _session.Request)) return;
         _player.Load(_session.Request, _preferences.GetPreferences(), _session.CookieFilePath);
         _loadedRequest = _session.Request;
     }
 
-    /// <summary>
-    ///     Unrealizes the OpenGL surface when navigating away from the player view,
-    ///     capturing active playback position, playlist index, and pause state for restoration.
-    /// </summary>
-    private void OnPlayerSurfaceUnrealize(object? sender, EventArgs args)
-    {
-        player_surface.MakeCurrent();
-        _player.ShutdownRenderer();
-        _rendererReady = false;
-        _surfacePixelWidth = 0;
-        _surfacePixelHeight = 0;
-    }
-
-    private bool OnPlayerSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
-    {
-        if (IsDisposed || !_rendererReady) return false;
-        var width = _surfacePixelWidth > 0
-            ? _surfacePixelWidth
-            : player_surface.GetAllocatedWidth() * player_surface.GetScaleFactor();
-        var height = _surfacePixelHeight > 0
-            ? _surfacePixelHeight
-            : player_surface.GetAllocatedHeight() * player_surface.GetScaleFactor();
-        _player.Render(width, height);
-        return true;
-    }
-
-
-    private void SeekAbsolute(double position, bool exact = true)
-    {
-        _timelineController.SeekAbsolute(position, exact);
-    }
-
-
-    private void SeekRelative(double offset)
-    {
-        _player.SeekRelative(offset);
-    }
-
-    private double AdjustSpeed(int direction)
-    {
-        var newSpeed = Math.Clamp(SnapPlaybackSpeed(_speed) + direction * PlaybackSpeedIncrement,
-            MinimumPlaybackSpeed, MaximumPlaybackSpeed);
-        _speed = newSpeed;
-        _player.SetSpeed(newSpeed);
-        return newSpeed;
-    }
-
-    private bool ToggleFullscreen()
-    {
-        if (Widget.GetRoot() is not Window window) return false;
-        window.Fullscreened = !window.Fullscreened;
-        return window.Fullscreened;
-    }
-
-    private void RegisterActivity()
-    {
-        _chromeController.RegisterActivity();
-    }
-
-    private void OnBackButtonClicked(object? sender, EventArgs args)
-    {
-        ReturnToShell();
-    }
-
-    private void OnFullscreenButtonClicked(object? sender, EventArgs args)
-    {
-        ToggleFullscreen();
-    }
-
-    private void ReturnToShell()
-    {
-        _shortcutController.Detach();
-        EndSession(true);
-        _backRequested();
-    }
-
-    private void OnPreviousQueueButtonClicked(object? sender, EventArgs args)
-    {
-        _player.MovePlaylist(false);
-    }
-
-    private void OnNextQueueButtonClicked(object? sender, EventArgs args)
-    {
-        _player.MovePlaylist(true);
-    }
-
-
-    private void CloseQueue()
-    {
-        player_queue_button.Active = false;
-    }
-
-    private void OnTrackJumpRequested(int index)
-    {
-        if (_session.Request is null || index < 0 || index >= _session.Request.Videos.Length)
-            return;
-
-        _player.PlayPlaylistIndex(index);
-    }
-
-    private void OnRewindButtonClicked(object? sender, EventArgs args)
-    {
-        SeekRelative(-10);
-    }
-
-    private void OnForwardButtonClicked(object? sender, EventArgs args)
-    {
-        SeekRelative(10);
-    }
-
-    private void OnPlayPauseButtonClicked(object? sender, EventArgs args)
-    {
-        _player.TogglePause();
-    }
-
-    private void OnLikeButtonClicked(object? sender, EventArgs args)
-    {
-        _session.SubmitVote(VideoVote.Like);
-    }
-
-    private void OnDislikeButtonClicked(object? sender, EventArgs args)
-    {
-        _session.SubmitVote(VideoVote.Dislike);
-    }
-
-    private void OnPlayerChannelButtonClicked(object? sender, EventArgs args)
-    {
-        OpenCurrentChannel();
-    }
-
-
-    private void OpenCurrentChannel()
-    {
-        if (_session.CurrentVideo is not { } video) return;
-        _shortcutController.Detach();
-        _channelRequested(video);
-    }
-
-    private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
-    {
-        if (_session.TrySkipManualSegment())
-            RegisterActivity();
-    }
-
-    private void OnResumeButtonClicked(object? sender, EventArgs args)
-    {
-        if (_resumeController.TryConsumeSeekPrompt(out var returnPosition))
-        {
-            SeekBackTo(returnPosition);
-            RegisterActivity();
-        }
-        else if (_session.TryResume())
-        {
-            RegisterActivity();
-        }
-    }
-
-    private bool OnRichLinkActivated(string uri)
-    {
-        return _linkRouter.Activate(uri);
-    }
-
-    private void SeekToTimestamp(double positionSeconds)
-    {
-        if (!_session.HasMedia)
-            return;
-
-        var previousPosition = _timelineController.PlaybackPosition;
-        SeekAbsolute(positionSeconds);
-        _osdController.ShowSeek(SeekDeltaSeconds(previousPosition, positionSeconds));
-        _resumeController.ShowSeekPrompt(previousPosition);
-        RegisterActivity();
-    }
-
-    private void SeekBackTo(TimeSpan returnPosition)
-    {
-        var currentPosition = _timelineController.PlaybackPosition;
-        SeekAbsolute(returnPosition.TotalSeconds);
-        _osdController.ShowSeek(SeekDeltaSeconds(currentPosition, returnPosition.TotalSeconds));
-    }
-
-    private static int SeekDeltaSeconds(TimeSpan from, double toSeconds)
-    {
-        return (int)Math.Round(toSeconds - from.TotalSeconds, MidpointRounding.AwayFromZero);
-    }
-
-    private void OpenLinkedChannel(string channelUrl, string displayName)
-    {
-        var name = string.IsNullOrWhiteSpace(displayName) ? channelUrl : displayName;
-        _channelRequested(new VideoSummary(
-            string.Empty,
-            name,
-            name,
-            TimeSpan.Zero,
-            string.Empty,
-            false,
-            null,
-            null,
-            null,
-            channelUrl));
-    }
-
-    private void OpenExternalLink(string url)
-    {
-        try
-        {
-            if (Widget.GetRoot() is not Window parent)
-            {
-                Logger.Warning("Cannot open link without a parent window");
-                return;
-            }
-
-            UriLauncher.New(url).LaunchAsync(parent).ContinueWith(task =>
-            {
-                if (task.IsFaulted)
-                    Logger.Warning(task.Exception, "Failed to open link in browser");
-            }, TaskScheduler.Default);
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to open link in browser");
-        }
-    }
-
-    private void OnRestartButtonClicked(object? sender, EventArgs args)
-    {
-        if (_session.TryRestart())
-            RegisterActivity();
-    }
-
-
-    private void OnInfoBackdropClicked(object? sender, EventArgs args)
-    {
-        _infoPanel.Close();
-    }
-
-    private void OnInfoCueButtonClicked(object? sender, EventArgs args)
-    {
-        _infoPanel.Show();
-    }
-
-    private void OnInfoCloseButtonClicked(object? sender, EventArgs args)
-    {
-        _infoPanel.Close();
-    }
-
-    private void OnInfoChannelButtonClicked(object? sender, EventArgs args)
-    {
-        _infoPanel.OpenChannel();
-    }
-
-    private void OnSubtitleButtonClicked(object? sender, EventArgs args)
-    {
-        ShowPreferredSubtitle();
-    }
-
-    private string ShowPreferredSubtitle()
-    {
-        return _subtitleController.ShowPreferredSubtitle();
-    }
-
-    private void UpdatePointer(double x, double y)
-    {
-        var height = Widget.GetAllocatedHeight();
-        var width = Widget.GetAllocatedWidth();
-        _infoPanel.UpdatePointer(x, y, width, height, _session.HasMedia);
-        UpdateCommentsCue(x, y, width, height);
-    }
-
-    private void UpdateCommentsCue(double x, double y, double width, double height)
-    {
-        if (!_session.HasMedia || Widget.ShowSidebar || _infoPanel.IsOpen || width <= 0 || height <= 0)
-        {
-            if (player_comments_cue_revealer.RevealChild)
-                player_comments_cue_revealer.RevealChild = false;
-            return;
-        }
-
-        var isVisible = player_comments_cue_revealer.RevealChild;
-        var inZone = PlayerCueGeometry.IsCommentsCueActive(x, y, width, height, isVisible);
-        if (isVisible == inZone) return;
-        if (inZone) player_comments_cue_revealer.SetVisible(true);
-        player_comments_cue_revealer.RevealChild = inZone;
-    }
-
-    private void OnCommentsCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "child-revealed" && player_comments_cue_revealer is
-                { ChildRevealed: false, RevealChild: false }) player_comments_cue_revealer.SetVisible(false);
-    }
-
-    private void OnPromptRevealerVisibleNotify(Object sender, Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "visible") SyncPromptStackVisibility();
-    }
-
-    private void SyncPromptStackVisibility()
-    {
-        var anyVisible = player_sponsorblock_revealer.GetVisible() ||
-                         player_resume_revealer.GetVisible() ||
-                         player_restart_revealer.GetVisible();
-        player_prompt_stack.SetVisible(anyVisible);
-    }
-
-    private void OnCommentsCueButtonClicked(object? sender, EventArgs args)
-    {
-        OpenComments();
-    }
-
-    private void OpenComments()
-    {
-        if (!_session.HasMedia) return;
-        Widget.ShowSidebar = true;
-        player_comments_cue_revealer.RevealChild = false;
-        player_comments_cue_revealer.SetVisible(false);
-        _commentsView.EnsureLoaded();
-    }
-
-    private void CloseComments()
-    {
-        Widget.ShowSidebar = false;
-    }
-
-    private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
-    {
-        if (!_updatingControls) _player.SetVolume(player_volume_scale.GetValue());
-    }
-
-    private void OnQualityDropdownNotify(object? sender, EventArgs args)
-    {
-        if (_updatingControls) return;
-        var selected = player_quality_dropdown.GetSelected();
-        if (selected >= (uint)_availableQualities.Count) return;
-        var quality = _availableQualities[(int)selected];
-        _currentQuality = quality;
-        _player.SetQuality(quality);
-    }
-
-    private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
-    {
-        if (_updatingControls) return;
-
-        var speed = SnapPlaybackSpeed(player_speed_scale.GetValue());
-        if (Math.Abs(player_speed_scale.GetValue() - speed) > 0.0001)
-        {
-            _updatingControls = true;
-            try
-            {
-                player_speed_scale.SetValue(speed);
-            }
-            finally
-            {
-                _updatingControls = false;
-            }
-        }
-
-        SetSpeedLabel(speed);
-        _player.SetSpeed(speed);
-    }
-
-    private void OnSubtitleDropdownNotify(object? sender, EventArgs args)
-    {
-        if (_updatingControls || !_session.HasMedia) return;
-        _subtitleController.OnSelectionChanged();
-    }
-
-
-    private void OnRenderRequested(object? sender, EventArgs args)
-    {
-        if (IsDisposed) return;
-
-        player_surface.QueueRender();
-    }
-
     private void OnStateChanged(object? sender, LibMpvPlaybackState state)
     {
-        if (IsDisposed) return;
-        _speed = state.Speed;
         IsPaused = state.IsPaused;
-        _volume = state.Volume;
-        _isMuted = state.IsMuted;
         _session.UpdatePlayback(state);
+        var count = _queueService.Items.Count;
+        _overlay.SyncState(state, count > 1, state.PlaylistIndex > 0, state.PlaylistIndex < count - 1, player_queue_split_view.ShowSidebar);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
-
-        if (_isLoading)
-        {
-            if (state is { HasMedia: true, IsLoading: false })
-                SetLoading(false);
-        }
-        else if (state.IsLoading)
-        {
-            SetLoading(true);
-        }
-
-        SetBuffering(state is { IsBuffering: true, IsLoading: false }, state.BufferingPercent);
-        _updatingControls = true;
-        _subtitleController.UpdateTracks(state.SubtitleTracks, _updatingControls);
-        try
-        {
-            _timelineController.UpdatePosition(state);
-            _chapterOverlay.Update(state.Chapters, state.Duration);
-
-            player_play_pause_button.SetIconName(state is { HasMedia: true, IsPaused: false }
-                ? "media-playback-pause-symbolic"
-                : "media-playback-start-symbolic");
-            player_play_pause_button.SetTooltipText(state is { HasMedia: true, IsPaused: false }
-                ? "Pause (Space or K)"
-                : "Play (Space or K)");
-            player_volume_scale.SetValue(Math.Clamp(state.Volume, 0, 100));
-            player_volume_button.SetIconName(VolumeIcon(state.Volume, state.IsMuted));
-            var speed = SnapPlaybackSpeed(state.Speed);
-            player_speed_scale.SetValue(speed);
-            SetSpeedLabel(speed);
-            if (_session.Request is not { } request || state.PlaylistIndex is < 0 or >= int.MaxValue ||
-                state.PlaylistIndex >= request.Videos.Length) return;
-            _queueViewModel.SetCurrentPlayingIndex(state.PlaylistIndex);
-            player_previous_queue_button.Sensitive = state.PlaylistIndex > 0;
-            player_next_queue_button.Sensitive = state.PlaylistIndex < request.Videos.Length - 1;
-            _sponsorBlockController.Redraw();
-        }
-        finally
-        {
-            _updatingControls = false;
-        }
     }
 
     private void OnSessionVideoChanged(VideoSummary video, int playlistIndex)
     {
-        _infoPanel.SetVideo(video);
-        player_title_label.SetText(video.Title);
-        player_channel_label.SetText(video.ChannelName);
-        _timelineController.SetExpectedMedia(video.Duration, video.Duration <= TimeSpan.Zero);
-
+        _queueViewModel.SetCurrentPlayingIndex(playlistIndex);
+        _overlay.SyncSessionVideo(video, _preferences.GetPreferences().Quality.ToPersistedString());
         _commentsView.SetVideo(video.Id);
-        if (Widget.ShowSidebar)
-            _commentsView.EnsureLoaded();
-
-        LoadQualityTracks(video.Id);
-    }
-
-    private void OnPlaybackFailed(object? sender, string detail)
-    {
-        _session.Fail(detail);
+        if (Widget.ShowSidebar) _commentsView.EnsureLoaded();
     }
 
     private void OnSessionFailed(string detail)
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
-        _hasPlaybackError = true;
-        _failedVideo = _session.CurrentVideo ??
-                       _loadedRequest?.Videos.FirstOrDefault() ?? _lastPlaybackRequest?.Videos.FirstOrDefault();
-
-        _infoPanel.Close();
-        _infoPanel.SetVideo(null);
-        SetLoading(false);
-        SetBuffering(false, 0);
-
-        _timelineController.Reset();
-        _osdController.HideImmediate();
-        player_play_pause_button.SetIconName("media-playback-start-symbolic");
-
-        _chapterOverlay.Update([], TimeSpan.Zero);
-        _commentsView.SetVideo(null);
-        CloseComments();
-        player_comments_cue_revealer.RevealChild = false;
-        player_queue_controls.SetVisible(false);
-        player_queue_button.Active = false;
-        _queueViewModel.SetCurrentPlayingIndex(-1);
-        _player.Stop();
-        _loadedRequest = null;
-
-        ShowPlaybackError(detail);
-        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void ShowPlaybackError(string detail)
-    {
-        _currentErrorInfo = PlayerErrorClassifier.Classify(detail);
-
-        player_error_page.IconName = _currentErrorInfo.IconName;
-        player_error_page.Title = _currentErrorInfo.Title;
-        player_error_page.Description = _currentErrorInfo.Message;
-        player_error_detail_label.SetText(_currentErrorInfo.TechnicalDetail);
-        player_error_detail_box.SetVisible(false);
-        player_error_toggle_detail_button.SetLabel("Show technical details");
-
-        var canOpenBrowser = _failedVideo is not null && !string.IsNullOrWhiteSpace(_failedVideo.Id);
-        player_error_browser_button.SetVisible(canOpenBrowser);
-
-        player_error_page.SetVisible(true);
-        player_loading_indicator.SetVisible(false);
-        player_buffering_indicator.SetVisible(false);
-        player_center_controls.SetVisible(false);
-
-        player_title_label.SetText(_currentErrorInfo.Title);
-        player_channel_label.SetText(_currentErrorInfo.Message);
-    }
-
-    private void OnErrorRetryClicked(object? sender, EventArgs args)
-    {
-        player_error_page.SetVisible(false);
-        _hasPlaybackError = false;
-        if (_lastPlaybackRequest is not null) PresentAsync(_lastPlaybackRequest);
-    }
-
-    private void OnErrorBrowserClicked(object? sender, EventArgs args)
-    {
-        if (_failedVideo is not { } video) return;
-        var url = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id);
-        if (!string.IsNullOrWhiteSpace(url)) OpenExternalLink(url);
-    }
-
-
-    private void OnErrorToggleDetailClicked(object? sender, EventArgs args)
-    {
-        var isVisible = !player_error_detail_box.GetVisible();
-        player_error_detail_box.SetVisible(isVisible);
-        player_error_toggle_detail_button.SetLabel(isVisible ? "Hide technical details" : "Show technical details");
-    }
-
-    private void EndSession(bool stop)
-    {
-        _qualityLoadCancellation?.Cancel();
-        _qualityLoadCancellation?.Dispose();
-        _qualityLoadCancellation = null;
-        _currentQualityVideoId = null;
-        if (stop)
-        {
-            _player.Stop();
-            if (_rendererReady)
-            {
-                player_surface.MakeCurrent();
-                _player.ShutdownRenderer();
-                _rendererReady = false;
-            }
-        }
-
-        _session.EndSession();
+        _failedVideo = _session.CurrentVideo;
+        _overlay.SyncSessionFailed(detail, _failedVideo);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSessionEnded()
     {
-        _timelineController.Reset();
-        _osdController.HideImmediate();
+        _overlay.SyncSessionEnded();
         _loadedRequest = null;
-        _hasPlaybackError = false;
-        player_error_page.SetVisible(false);
-        SetBuffering(false, 0);
-        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
-        _infoPanel.SetVideo(null);
-        player_queue_controls.SetVisible(false);
-        player_queue_button.Active = false;
         _queueViewModel.SetCurrentPlayingIndex(-1);
-
-
-        _chapterOverlay.Update([], TimeSpan.Zero);
         _commentsView.SetVideo(null);
         CloseComments();
-        player_comments_cue_revealer.RevealChild = false;
-        _streamDelayController.Reset();
-        SetLoading(false);
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SetLoading(bool loading)
+    private void OnQueueChanged(object? sender, EventArgs e)
     {
-        _isLoading = loading;
-        if (!loading) _streamDelayController.Reset();
-        player_loading_indicator.SetVisible(loading);
-        if (_hasPlaybackError)
-        {
-            player_center_controls.SetVisible(false);
-            return;
-        }
-
-        player_center_controls.SetVisible(!loading);
+        if (_syncingQueue) return;
+        var count = _queueService.Items.Count;
+        var idx = _session.CurrentPlaylistIndex;
+        _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1, player_queue_split_view.ShowSidebar);
     }
 
-    private void SetBuffering(bool buffering, int percent)
+    private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
-        if (buffering && !_isLoading && !_hasPlaybackError)
-        {
-            player_buffering_label.SetText(percent > 0 ? $"Buffering {percent}%" : "Buffering…");
-            player_buffering_indicator.SetVisible(true);
-        }
-        else
-        {
-            player_buffering_indicator.SetVisible(false);
-        }
+        _player.UpdatePreferences(preferences);
+        _overlay.Shortcuts.UpdateBindings(preferences.Shortcuts);
     }
 
-    private void SetControls(double volume, double speed, string quality)
+    private void EndSession(bool stop)
     {
-        _updatingControls = true;
-        _volume = volume;
-        _speed = speed;
-        _isMuted = false;
-        _currentQuality = quality;
-        try
-        {
-            player_volume_scale.SetValue(volume);
-            player_volume_button.SetIconName(VolumeIcon(volume, false));
-            var normalizedSpeed = SnapPlaybackSpeed(speed);
-            player_speed_scale.SetValue(normalizedSpeed);
-            SetSpeedLabel(normalizedSpeed);
-            SelectQualityInDropdown(quality);
-        }
-        finally
-        {
-            _updatingControls = false;
-        }
+        if (stop) _player.Stop();
+        _session.EndSession();
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SelectQualityInDropdown(string quality)
+    private void OnCommentsSidebarNotify(Object sender, Object.NotifySignalArgs args)
     {
-        var targetHeight = YtDlpFormatSelector.ParseTargetHeight(quality);
-        int index;
-
-        if (string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(quality, "Auto", StringComparison.OrdinalIgnoreCase) ||
-            !targetHeight.HasValue)
+        if (args.Pspec.GetName() == "show-sidebar" && Widget.ShowSidebar)
         {
-            index = 0;
+            _overlay.CommentsCue.Hide();
+            _commentsView.EnsureLoaded();
         }
-        else
-        {
-            index = _availableQualities.FindIndex(q =>
-                string.Equals(q, quality, StringComparison.OrdinalIgnoreCase));
-
-            if (index < 0)
-                index = _availableQualities.FindIndex(q =>
-                    YtDlpFormatSelector.ParseTargetHeight(q) == targetHeight.Value);
-
-            if (index < 0)
-                index = _availableQualities.FindIndex(q =>
-                    YtDlpFormatSelector.ParseTargetHeight(q) is { } h && h <= targetHeight.Value);
-
-            if (index < 0)
-                index = 0;
-        }
-
-        player_quality_dropdown.SetSelected((uint)index);
     }
 
-    private void LoadQualityTracks(string videoId)
+    private void OnQueueSidebarNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (string.Equals(_currentQualityVideoId, videoId, StringComparison.Ordinal))
-            return;
-
-        _currentQualityVideoId = videoId;
-        _qualityLoadCancellation?.Cancel();
-        _qualityLoadCancellation?.Dispose();
-        _qualityLoadCancellation = null;
-
-        if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
+        if (args.Pspec.GetName() == "show-sidebar")
         {
-            ResetQualityDropdownToDefaults();
-            return;
-        }
-
-        var cancellation = new CancellationTokenSource();
-        _qualityLoadCancellation = cancellation;
-        var generation = ++_qualityLoadGeneration;
-
-        LoadQualityTracksAsync(videoId, generation, cancellation).FireAndForget(Logger);
-    }
-
-    private async Task LoadQualityTracksAsync(string videoId, int generation, CancellationTokenSource cancellation)
-    {
-        try
-        {
-            var tracks = await _mediaResolver.GetQualityTracksAsync(videoId, cancellation.Token).ConfigureAwait(false);
-            if (cancellation.IsCancellationRequested || generation != _qualityLoadGeneration)
-                return;
-
-            Functions.IdleAdd(0, () =>
-            {
-                if (cancellation.IsCancellationRequested || generation != _qualityLoadGeneration || IsDisposed)
-                    return false;
-                UpdateQualityTracks(tracks);
-                return false;
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Failed to load quality tracks for video");
+            var count = _queueService.Items.Count;
+            var idx = _session.CurrentPlaylistIndex;
+            _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1, player_queue_split_view.ShowSidebar);
         }
     }
-
-    private void UpdateQualityTracks(IReadOnlyList<string> tracks)
-    {
-        _updatingControls = true;
-        try
-        {
-            var selectedQuality = _currentQuality;
-            _availableQualities.Clear();
-            _availableQualities.Add("Best");
-
-            if (tracks.Count > 0)
-            {
-                foreach (var track in tracks)
-                    if (!_availableQualities.Contains(track, StringComparer.OrdinalIgnoreCase))
-                        _availableQualities.Add(track);
-            }
-            else
-            {
-                foreach (var preset in DefaultQualityPresets)
-                    if (!_availableQualities.Contains(preset, StringComparer.OrdinalIgnoreCase))
-                        _availableQualities.Add(preset);
-            }
-
-            player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
-            SelectQualityInDropdown(selectedQuality);
-        }
-        finally
-        {
-            _updatingControls = false;
-        }
-    }
-
-    private void ResetQualityDropdownToDefaults()
-    {
-        _updatingControls = true;
-        try
-        {
-            _availableQualities.Clear();
-            _availableQualities.Add("Best");
-            foreach (var preset in DefaultQualityPresets)
-                _availableQualities.Add(preset);
-
-            player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
-            SelectQualityInDropdown(_currentQuality);
-        }
-        finally
-        {
-            _updatingControls = false;
-        }
-    }
-
-    private static string NormalizeQuality(string quality)
-    {
-        return MpvCommandBuilder.BuildYtdlFormat(quality) is null &&
-               !string.Equals(quality, "Best", StringComparison.OrdinalIgnoreCase)
-            ? "Best"
-            : quality;
-    }
-
-    private static double SnapPlaybackSpeed(double speed)
-    {
-        var clampedSpeed = Math.Clamp(speed, MinimumPlaybackSpeed, MaximumPlaybackSpeed);
-        var steps = Math.Round((clampedSpeed - MinimumPlaybackSpeed) / PlaybackSpeedIncrement,
-            MidpointRounding.AwayFromZero);
-        return MinimumPlaybackSpeed + steps * PlaybackSpeedIncrement;
-    }
-
-    private void SetSpeedLabel(double speed)
-    {
-        player_speed_label.SetText($"{speed:0.##}×");
-    }
-
-    private static string VolumeIcon(double volume, bool muted)
-    {
-        return muted || volume <= 0 ? "audio-volume-muted-symbolic" :
-            volume <= 50 ? "audio-volume-low-symbolic" : "audio-volume-high-symbolic";
-    }
-
-    private void OnQueueChanged(object? sender, EventArgs args)
-    {
-        Functions.IdleAdd(0, () =>
-        {
-            if (IsDisposed || _syncingQueue || _session.Request is null)
-                return false;
-
-            var currentVideos = _session.Request.Videos;
-            var newItems = _queueService.Items;
-            var newVideos = newItems.Select(i => i.Video).ToImmutableArray();
-
-            if (newVideos.SequenceEqual(currentVideos))
-                return false;
-
-            if (newVideos.Length > currentVideos.Length &&
-                newVideos.Take(currentVideos.Length).SequenceEqual(currentVideos))
-            {
-                for (var i = currentVideos.Length; i < newVideos.Length; i++)
-                {
-                    var video = newVideos[i];
-                    var url = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id);
-                    if (!string.IsNullOrWhiteSpace(url))
-                        _player.AppendPlaylistItem(url);
-                }
-            }
-            else if (newVideos.Length == currentVideos.Length - 1)
-            {
-                var removedIndex = -1;
-                for (var i = 0; i < newVideos.Length; i++)
-                    if (currentVideos[i].Id != newVideos[i].Id)
-                    {
-                        removedIndex = i;
-                        break;
-                    }
-
-                if (removedIndex < 0)
-                    removedIndex = currentVideos.Length - 1;
-
-                _player.RemovePlaylistItem(removedIndex);
-            }
-            else if (newVideos.Length == currentVideos.Length)
-            {
-                if (QueuePlaylistMove.TryTranslate(currentVideos, newVideos, out var fromIndex, out var toIndex))
-                    _player.MovePlaylistItem(fromIndex, toIndex);
-            }
-
-            _session.UpdateQueue(newVideos);
-            if (_session.Request is { } updatedRequest)
-            {
-                _player.UpdatePlaylistRequest(updatedRequest);
-                _loadedRequest = updatedRequest;
-            }
-
-            player_queue_controls.SetVisible(newVideos.Length > 1);
-            player_previous_queue_button.Sensitive = _session.CurrentPlaylistIndex > 0;
-            player_next_queue_button.Sensitive = _session.CurrentPlaylistIndex < newVideos.Length - 1;
-            return false;
-        });
-    }
-
 
     private sealed class EmbeddedPlayerPlaybackService(EmbeddedPlayerView player) : IPlaybackService
     {
-        public Task<string> PlayAsync(PlaybackRequest request)
-        {
-            return player.PresentAsync(request);
-        }
-    }
-
-    private sealed class PlayerStatsProvider(LibMpvPlayer player) : IPlayerStatsProvider
-    {
-        public PlaybackStats? GetPlaybackStats(bool includeTracks = false)
-        {
-            return player.GetPlaybackStats(includeTracks);
-        }
+        public Task<string> PlayAsync(PlaybackRequest request) => player.PresentAsync(request);
     }
 }

@@ -7,7 +7,7 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Queue;
 
-public partial class QueueView : ViewBase<Box>
+public partial class QueueView : ViewBase<Box, QueueViewModel>
 {
     private static readonly ILogger Logger = Log.ForContext<QueueView>();
     private readonly Action _closeRequested;
@@ -23,7 +23,7 @@ public partial class QueueView : ViewBase<Box>
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails,
         Action closeRequested, Action<int>? trackJumpRequested = null)
     {
-        _viewModel = viewModel;
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails;
         _closeRequested = closeRequested;
         _trackJumpRequested = trackJumpRequested;
@@ -39,9 +39,16 @@ public partial class QueueView : ViewBase<Box>
         queue_list.Model = selection;
         queue_list.Factory = _factory;
 
-        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged,
-            () => _viewModel.StateChanged -= OnStateChanged);
-        Render(_viewModel.State);
+        ViewModel = viewModel;
+    }
+
+    protected override void BindViewModel(QueueViewModel viewModel, BindingScope<QueueViewModel> bindings)
+    {
+        bindings.Bind(
+            nameof(QueueViewModel.State),
+            this,
+            static vm => vm.State,
+            static (view, state) => view.Render(state));
     }
 
     private void OnCloseButtonClicked(object? sender, EventArgs args)
@@ -70,23 +77,6 @@ public partial class QueueView : ViewBase<Box>
         PlayFailed?.Invoke(this, error);
     }
 
-    private void OnStateChanged(object? sender, QueuePresentationState state)
-    {
-        if (IsDisposed) return;
-        try
-        {
-            Lifetime.Idle(() =>
-            {
-                if (!IsDisposed)
-                    Render(state);
-
-                return false;
-            });
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-    }
 
     private void Render(QueuePresentationState state)
     {

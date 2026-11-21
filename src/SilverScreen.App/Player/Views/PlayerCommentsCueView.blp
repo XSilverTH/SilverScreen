@@ -1,0 +1,41 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Revealer PlayerCommentsCueView {
+  visible: false;
+  reveal-child: false;
+  transition-type: slide_right;
+  transition-duration: 200;
+  halign: start;
+  valign: center;
+  notify => $OnRevealerNotify();
+
+  child: Gtk.Button player_comments_cue_button {
+    valign: center;
+    margin-start: 0;
+    clicked => $OnCueButtonClicked();
+    tooltip-text: "Show comments";
+
+    styles [
+      "player-comments-cue-button",
+    ]
+
+    child: Adw.Bin {
+      valign: center;
+
+      styles [
+        "player-comments-cue-handle",
+      ]
+
+      Gtk.Image {
+        icon-name: "comments-symbolic";
+        pixel-size: 16;
+        accessible-role: presentation;
+
+        styles [
+          "player-comments-cue-icon",
+        ]
+      }
+    };
+  };
+}

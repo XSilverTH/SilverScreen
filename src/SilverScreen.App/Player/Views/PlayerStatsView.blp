@@ -1,0 +1,21 @@
+using Gtk 4.0;
+
+Gtk.Revealer PlayerStatsView {
+  halign: start;
+  valign: start;
+  reveal-child: false;
+  transition-type: crossfade;
+  margin-top: 56;
+  margin-start: 16;
+  can-target: false;
+
+  child: Gtk.Label player_stats_label {
+    use-markup: true;
+    selectable: false;
+    can-target: false;
+
+    styles [
+      "player-stats-overlay",
+    ]
+  };
+}
