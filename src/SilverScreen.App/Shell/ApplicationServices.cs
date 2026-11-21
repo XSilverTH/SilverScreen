@@ -63,6 +63,12 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton(configuration);
         services.AddSingleton<IPreferencesService, FilePreferencesService>();
         services.AddSingleton<IQueueService, QueueService>();
+        services.AddSingleton<NavigationService>(static _ => new NavigationService());
+        services.AddSingleton<INavigationService>(static provider =>
+            provider.GetRequiredService<NavigationService>());
+        services.AddSingleton<NotificationService>(static _ => new NotificationService());
+        services.AddSingleton<INotificationService>(static provider =>
+            provider.GetRequiredService<NotificationService>());
         services.AddSingleton<SecretServiceSessionService>(static provider =>
             new SecretServiceSessionService(provider.GetRequiredService<IAccountProfileService>));
         services.AddSingleton<ISessionService>(static provider =>

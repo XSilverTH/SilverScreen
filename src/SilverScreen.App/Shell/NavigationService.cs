@@ -1,5 +1,6 @@
 using Adw;
 using Gtk;
+using SilverScreen.Browsing.Channel;
 
 namespace SilverScreen.Shell;
 
@@ -61,19 +62,23 @@ public sealed class NavigationPageRegistration(
 /// <summary>
 ///     Coordinates typed page navigation across main and view stacks.
 /// </summary>
-public sealed class NavigationService : IDisposable
+public sealed class NavigationService : INavigationService, IDisposable
 {
     private const string ShellStackName = "shell";
     private readonly Stack<NavigationEntry> _backStack = new();
 
-    private readonly Stack? _mainStack;
+    private Stack? _mainStack;
     private readonly Dictionary<NavigationPage, NavigationPageRegistration> _registry = new();
-    private readonly ViewStack? _viewStack;
+    private ViewStack? _viewStack;
     private readonly Dictionary<string, NavigationPage> _viewStackNameToPage = new(StringComparer.Ordinal);
     private bool _disposed;
     private bool _isNavigating;
 
-    public NavigationService(Stack? mainStack = null, ViewStack? viewStack = null)
+    public NavigationService() : this(null, null)
+    {
+    }
+
+    public NavigationService(Stack? mainStack, ViewStack? viewStack)
     {
         _mainStack = mainStack;
         _viewStack = viewStack;
@@ -99,12 +104,40 @@ public sealed class NavigationService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _mainStack = null;
+        _viewStack = null;
         _backStack.Clear();
         _registry.Clear();
         _viewStackNameToPage.Clear();
     }
 
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
+
+    public void AttachStacks(Stack? mainStack, ViewStack? viewStack)
+    {
+        _mainStack = mainStack;
+        _viewStack = viewStack;
+
+        if (_registry.TryGetValue(CurrentEntry.Page, out var entry))
+        {
+            if (entry.IsShellPage)
+            {
+                if (_mainStack is not null &&
+                    !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
+                    _mainStack.VisibleChildName = ShellStackName;
+
+                if (_viewStack is not null &&
+                    !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                    _viewStack.VisibleChildName = entry.StackName;
+            }
+            else
+            {
+                if (_mainStack is not null &&
+                    !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                    _mainStack.VisibleChildName = entry.StackName;
+            }
+        }
+    }
 
     public bool CanNavigateTo(NavigationPage page)
     {
@@ -114,6 +147,23 @@ public sealed class NavigationService : IDisposable
     public bool NavigateTo(NavigationPage page, object? parameter = null)
     {
         return NavigateInternal(new NavigationEntry(page, parameter), true, false);
+    }
+
+    public bool NavigateToChannel(string channelUrl, string? channelName = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(channelUrl);
+        return NavigateTo(NavigationPage.Channel, new ChannelNavigationArgs(channelUrl, channelName));
+    }
+
+    public bool NavigateToSearch(string query)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        return NavigateTo(NavigationPage.Search, query.Trim());
+    }
+
+    public bool NavigateToPlayer()
+    {
+        return NavigateTo(NavigationPage.Player);
     }
 
     public bool GoBack()

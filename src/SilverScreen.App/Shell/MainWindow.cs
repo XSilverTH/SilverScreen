@@ -48,7 +48,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private readonly VideoListView _history;
     private readonly HistoryViewModel _historyViewModel;
     private readonly VideoListView _home;
-    private readonly NavigationService _navigationService;
+    private readonly INavigationService _navigationService;
+    private readonly INotificationService _notificationService;
     private readonly PlaybackModeRoutingService _playback;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
@@ -67,6 +68,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         IPlaybackService playback,
         PlayerDependencies player,
         RuntimeDependencyDiagnostics diagnostics,
+        INavigationService navigationService,
+        INotificationService notificationService,
         Action disposeApplicationServices,
         string? initialQuery = null)
     {
@@ -74,6 +77,10 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _account = account;
         _diagnostics = diagnostics;
         _disposeApplicationServices = disposeApplicationServices;
+        _navigationService = navigationService;
+        _notificationService = notificationService;
+        if (_notificationService is NotificationService concreteNotify)
+            concreteNotify.AttachToastOverlay(toast_overlay);
         _embeddedPlayer = new EmbeddedPlayerView(OpenEmbeddedPlayer, CloseEmbeddedPlayer,
             video => OpenChannelAsync(video).FireAndForget(Logger),
             video => PlayVideoAsync(video).FireAndForget(Logger),
@@ -154,32 +161,35 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             Widget.Maximize();
 
         SetupDesktopBackShortcuts();
-        _navigationService = new NavigationService(main_stack, view_stack);
+        if (_navigationService is NavigationService concreteNav)
+        {
+            concreteNav.AttachStacks(main_stack, view_stack);
+            concreteNav.Initialize();
+            concreteNav.RegisterPage(
+                NavigationPage.Home,
+                "home",
+                onEnter: ClearBrowsingHistory);
+            concreteNav.RegisterPage(
+                NavigationPage.Subscriptions,
+                "subscriptions",
+                onEnter: ClearBrowsingHistory);
+            concreteNav.RegisterPage(
+                NavigationPage.History,
+                "history",
+                onEnter: ClearBrowsingHistory);
+            concreteNav.RegisterPage(
+                NavigationPage.Search,
+                "search",
+                onEnter: RestoreSearchBrowsingState,
+                onLeave: CaptureSearchBrowsingState);
+            concreteNav.RegisterPage(
+                NavigationPage.Channel,
+                "channel",
+                onEnter: RestoreChannelBrowsingState,
+                onLeave: CaptureChannelBrowsingState);
+        }
         Lifetime.Track(() => _navigationService.PageChanged += OnNavigationPageChanged,
             () => _navigationService.PageChanged -= OnNavigationPageChanged);
-        _navigationService.Initialize();
-        _navigationService.RegisterPage(
-            NavigationPage.Home,
-            "home",
-            onEnter: ClearBrowsingHistory);
-        _navigationService.RegisterPage(
-            NavigationPage.Subscriptions,
-            "subscriptions",
-            onEnter: ClearBrowsingHistory);
-        _navigationService.RegisterPage(
-            NavigationPage.History,
-            "history",
-            onEnter: ClearBrowsingHistory);
-        _navigationService.RegisterPage(
-            NavigationPage.Search,
-            "search",
-            onEnter: RestoreSearchBrowsingState,
-            onLeave: CaptureSearchBrowsingState);
-        _navigationService.RegisterPage(
-            NavigationPage.Channel,
-            "channel",
-            onEnter: RestoreChannelBrowsingState,
-            onLeave: CaptureChannelBrowsingState);
         account_popover.Child = _accountPopover.Widget;
         Lifetime.Track(() => _playback.PlaybackStateChanged += OnPlaybackStateChanged,
             () => _playback.PlaybackStateChanged -= OnPlaybackStateChanged);
@@ -318,8 +328,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         if (_navigationService.CurrentPage == NavigationPage.Player)
             Widget.Unfullscreen();
 
-        var channelArgs = new ChannelNavigationArgs(video.ChannelUrl, video.ChannelName);
-        _navigationService.NavigateTo(NavigationPage.Channel, channelArgs);
+        _navigationService.NavigateToChannel(video.ChannelUrl, video.ChannelName);
         await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
             .ConfigureAwait(false);
     }
@@ -334,7 +343,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             return;
         }
 
-        _navigationService.NavigateTo(NavigationPage.Search, trimmed);
+        _navigationService.NavigateToSearch(trimmed);
         SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
     }
 
@@ -352,7 +361,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     private void OpenEmbeddedPlayer()
     {
-        _navigationService.NavigateTo(NavigationPage.Player);
+        _navigationService.NavigateToPlayer();
         if (_account.Preferences.GetPreferences().OpenInFullscreen)
             Widget.Fullscreen();
     }
@@ -520,7 +529,8 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
         if (_closed) return;
-        _navigationService.SyncFromViewStack(view_stack.VisibleChildName);
+        if (_navigationService is NavigationService concreteNav)
+            concreteNav.SyncFromViewStack(view_stack.VisibleChildName);
     }
 
     private void OnNavigationPageChanged(object? sender, NavigationPageChangedEventArgs e)
@@ -632,22 +642,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
     /// <summary>
     ///     Shows a transient toast for one-shot failures (play, paste, queue, save).
-    ///     Kept as a plain shell method so a future notification bus can take over without touching callers.
-    ///     Safe to call from any thread.
+    ///     Delegates directly to <see cref="INotificationService"/>; safe to call from any thread.
     /// </summary>
     private void ShowToast(string message)
     {
-        if (string.IsNullOrWhiteSpace(message))
-            return;
-
-        var text = DiagnosticSanitizer.Sanitize(message.Trim());
-        Functions.IdleAdd(0, () =>
-        {
-            if (!_closed)
-                toast_overlay.AddToast(Toast.New(text));
-
-            return false;
-        });
+        _notificationService.ShowToast(message);
     }
 
     private void UpdateBackButton()
@@ -820,7 +819,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (disposing)
         {
-            _navigationService.Dispose();
+            if (_notificationService is NotificationService concreteNotify)
+                concreteNotify.DetachToastOverlay(toast_overlay);
+            (_navigationService as IDisposable)?.Dispose();
             _subscriptions.Dispose();
             _subscriptionsViewModel.Dispose();
             _searchView.Dispose();

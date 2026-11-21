@@ -247,4 +247,64 @@ public sealed class NavigationHistoryTests
         Assert.Null(registration.OnEnter);
         Assert.Null(registration.OnLeave);
     }
+
+    [Fact]
+    public void NavigateToChannel_WithValidUrlAndName_NavigatesWithChannelNavigationArgs()
+    {
+        INavigationService nav = new NavigationService();
+        ((NavigationService)nav).Initialize();
+
+        var result = nav.NavigateToChannel("https://youtube.com/@testchannel", "Test Channel");
+
+        Assert.True(result);
+        Assert.Equal(NavigationPage.Channel, nav.CurrentPage);
+        var args = Assert.IsType<ChannelNavigationArgs>(nav.CurrentEntry.Parameter);
+        Assert.Equal("https://youtube.com/@testchannel", args.Url);
+        Assert.Equal("Test Channel", args.Name);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NavigateToChannel_WithInvalidUrl_ThrowsArgumentException(string? invalidUrl)
+    {
+        INavigationService nav = new NavigationService();
+        Assert.ThrowsAny<ArgumentException>(() => nav.NavigateToChannel(invalidUrl!));
+    }
+
+    [Fact]
+    public void NavigateToSearch_WithValidQuery_NavigatesWithTrimmedString()
+    {
+        INavigationService nav = new NavigationService();
+        ((NavigationService)nav).Initialize();
+
+        var result = nav.NavigateToSearch("  test query  ");
+
+        Assert.True(result);
+        Assert.Equal(NavigationPage.Search, nav.CurrentPage);
+        Assert.Equal("test query", nav.CurrentEntry.Parameter);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NavigateToSearch_WithInvalidQuery_ThrowsArgumentException(string? invalidQuery)
+    {
+        INavigationService nav = new NavigationService();
+        Assert.ThrowsAny<ArgumentException>(() => nav.NavigateToSearch(invalidQuery!));
+    }
+
+    [Fact]
+    public void NavigateToPlayer_NavigatesToPlayerPage()
+    {
+        INavigationService nav = new NavigationService();
+        ((NavigationService)nav).Initialize();
+
+        var result = nav.NavigateToPlayer();
+
+        Assert.True(result);
+        Assert.Equal(NavigationPage.Player, nav.CurrentPage);
+    }
 }

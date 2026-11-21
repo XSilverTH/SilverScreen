@@ -97,6 +97,8 @@ public partial class App
             _serviceProvider.GetRequiredService<IPlaybackService>(),
             _serviceProvider.GetRequiredService<PlayerDependencies>(),
             _serviceProvider.GetRequiredService<RuntimeDependencyDiagnostics>(),
+            _serviceProvider.GetRequiredService<INavigationService>(),
+            _serviceProvider.GetRequiredService<INotificationService>(),
             () =>
             {
                 if (createdWindow is not null)
