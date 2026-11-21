@@ -88,7 +88,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void WireEvents()
     {
         _overlay.Surface.Realized += (_, _) => OnSurfaceRealized();
-        _overlay.Surface.PlaybackFailed += (_, err) => _session.Fail(err);
+        _overlay.Surface.PlaybackFailed += OnPlaybackFailed;
         _overlay.ControlsBar.QueueToggled += (_, open) => player_queue_split_view.ShowSidebar = open;
         _overlay.Error.RetryRequested += (_, _) => { if (_lastPlaybackRequest is not null) PresentAsync(_lastPlaybackRequest); };
         _overlay.Error.BrowserRequested += (_, _) => OpenBrowser();
@@ -97,7 +97,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         Lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
         Lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
         Lifetime.Track(() => _player.StateChanged += OnStateChanged, () => _player.StateChanged -= OnStateChanged);
-        Lifetime.Track(() => _player.PlaybackFailed += (_, detail) => _session.Fail(detail), () => { });
+        Lifetime.Track(
+            () => _player.PlaybackFailed += OnPlaybackFailed,
+            () => _player.PlaybackFailed -= OnPlaybackFailed);
         Lifetime.Track(() => _queueService.Changed += OnQueueChanged, () => _queueService.Changed -= OnQueueChanged);
         Lifetime.Track(() => _preferences.PreferencesChanged += OnPreferencesChanged, () => _preferences.PreferencesChanged -= OnPreferencesChanged);
     }
@@ -171,6 +173,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar) _commentsView.EnsureLoaded();
     }
+
+    private void OnPlaybackFailed(object? sender, string detail) => _session.Fail(detail);
 
     private void OnSessionFailed(string detail)
     {

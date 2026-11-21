@@ -1,4 +1,5 @@
 using Gtk;
+using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
@@ -15,6 +16,8 @@ namespace SilverScreen.Player.Views;
 /// </summary>
 public partial class PlayerInfoPanelView : ViewBase<Overlay>
 {
+    private static readonly ILogger Logger = Log.ForContext<PlayerInfoPanelView>();
+
     private readonly PlayerVideoInfoLoader _loader;
     private readonly INavigationService _navigation;
     private readonly Func<string, bool> _linkActivated;
@@ -92,8 +95,13 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         _closed?.Invoke();
     }
 
-    public void Toggle(VideoSummary? video = null) =>
-        _ = IsOpen ? (Action)Close : () => { if ((video ?? _currentVideo) is { } v) Show(v); };
+    public void Toggle(VideoSummary? video = null)
+    {
+        if (IsOpen)
+            Close();
+        else if ((video ?? _currentVideo) is { } targetVideo)
+            Show(targetVideo);
+    }
 
     public void SetVideo(VideoSummary? video)
     {
@@ -166,6 +174,17 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         player_info_status_label.SetVisible(details is null || string.IsNullOrWhiteSpace(details.Description));
         player_info_description_scroller.SetVisible(details is not null && !string.IsNullOrWhiteSpace(details.Description));
         if (details is not null)
-            player_info_description.SetMarkup(PlayerVideoInfoLoader.FormatMarkup(details.Description ?? string.Empty));
+        {
+            var description = details.Description ?? string.Empty;
+            try
+            {
+                player_info_description.SetMarkup(PlayerVideoInfoLoader.FormatMarkup(description));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(ex, "Failed to render video description markup; falling back to plain text");
+                player_info_description.SetText(description);
+            }
+        }
     }
 }

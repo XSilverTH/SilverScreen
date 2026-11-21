@@ -104,7 +104,22 @@ internal sealed class PlayerOverlayComposer : IDisposable
         ControlsBar.QualitySelected += (_, q) => player.SetQuality(q);
         ControlsBar.PreviousQueueClicked += (_, _) => player.MovePlaylist(false);
         ControlsBar.NextQueueClicked += (_, _) => player.MovePlaylist(true);
+        ControlsBar.SubtitleToggled += (_, sub) =>
+        {
+            if (!string.IsNullOrEmpty(sub))
+                Osd.ShowSubtitles(sub);
+        };
         CommentsCue.CueClicked += (_, _) => openComments();
+
+        PromptStack.SeekRequested += (_, pos) =>
+        {
+            Timeline.SeekAbsolute(pos.TotalSeconds);
+            Osd.ShowSeek((int)pos.TotalSeconds);
+        };
+
+        _lifetime.Track(
+            () => session.SeekRequested += OnSessionSeekRequested,
+            () => session.SeekRequested -= OnSessionSeekRequested);
 
         // Mount layers in exact visual stacking order
         overlay.Child = Surface.Widget;
@@ -188,6 +203,9 @@ internal sealed class PlayerOverlayComposer : IDisposable
         ControlsBar.SetQueueControls(false, false, false, false);
         CommentsCue.Hide();
     }
+
+    private void OnSessionSeekRequested(double positionSeconds, bool exact) =>
+        Timeline.SeekAbsolute(positionSeconds, exact);
 
     public void Dispose()
     {

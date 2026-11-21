@@ -2,31 +2,42 @@ using Gtk 4.0;
 
 Gtk.Revealer PlayerOsdView {
   halign: center;
-  valign: center;
+  valign: end;
   reveal-child: false;
   transition-type: crossfade;
-  transition-duration: 200;
+  transition-duration: 250;
   can-target: false;
 
+  styles [
+    "player-osd-revealer",
+  ]
+
   child: Gtk.Box {
+    orientation: horizontal;
+    spacing: 10;
     halign: center;
-    spacing: 12;
+    valign: center;
     can-target: false;
 
     styles [
-      "player-osd-pill",
+      "osd",
+      "player-osd-badge",
     ]
 
     Gtk.Image player_osd_icon {
-      pixel-size: 24;
+      pixel-size: 20;
       accessible-role: presentation;
+
+      styles [
+        "player-osd-icon",
+      ]
     }
 
     Gtk.Label player_osd_label {
       label: "";
 
       styles [
-        "title-3",
+        "player-osd-label",
       ]
     }
   };

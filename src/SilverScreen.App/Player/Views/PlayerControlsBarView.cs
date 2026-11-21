@@ -39,6 +39,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler<double>? SpeedChanged;
     public event EventHandler<string>? QualitySelected;
+    public event EventHandler<string>? SubtitleToggled;
 
     public PlayerControlsBarView(
         INavigationService navigation,
@@ -159,8 +160,14 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     private void OnPreviousQueueButtonClicked(object? sender, EventArgs args) => PreviousQueueClicked?.Invoke(this, EventArgs.Empty);
     private void OnQueueButtonToggled(object? sender, EventArgs args) => QueueToggled?.Invoke(this, player_queue_button.Active);
     private void OnNextQueueButtonClicked(object? sender, EventArgs args) => NextQueueClicked?.Invoke(this, EventArgs.Empty);
-    private void OnSubtitleButtonClicked(object? sender, EventArgs args) { }
-    private void OnSubtitleDropdownNotify(object? sender, EventArgs args) { }
+    private void OnSubtitleButtonClicked(object? sender, EventArgs args)
+    {
+        var subtitle = ShowPreferredSubtitle();
+        SubtitleToggled?.Invoke(this, subtitle);
+    }
+
+    private void OnSubtitleDropdownNotify(object? sender, EventArgs args) =>
+        _subtitleController?.OnSelectionChanged();
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
     {

@@ -42,10 +42,6 @@ public partial class PlayerPromptStackView : ViewBase<Box>
             player_restart_revealer,
             player_restart_button,
             player_restart_label));
-
-        Lifetime.Track(() => player_sponsorblock_revealer.OnNotify += OnRevealerNotify, () => player_sponsorblock_revealer.OnNotify -= OnRevealerNotify);
-        Lifetime.Track(() => player_resume_revealer.OnNotify += OnRevealerNotify, () => player_resume_revealer.OnNotify -= OnRevealerNotify);
-        Lifetime.Track(() => player_restart_revealer.OnNotify += OnRevealerNotify, () => player_restart_revealer.OnNotify -= OnRevealerNotify);
     }
 
     public bool TryConsumeSeekPrompt(out TimeSpan returnPosition)
@@ -65,9 +61,13 @@ public partial class PlayerPromptStackView : ViewBase<Box>
     public void ConsumeResumePrompt()
     {
         if (_resumeController is not null && _resumeController.TryConsumeSeekPrompt(out var pos))
+        {
             SeekRequested?.Invoke(this, pos);
-        else
-            _session?.TryResume();
+        }
+        else if (_session is { ResumePosition: var resumePos } && resumePos > TimeSpan.Zero && _session.TryResume())
+        {
+            SeekRequested?.Invoke(this, resumePos);
+        }
     }
 
     public void ConsumeRestartPrompt()

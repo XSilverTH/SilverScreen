@@ -16,8 +16,9 @@ Gtk.Box PlayerCenterControlsView {
     clicked => $OnRewindClicked();
 
     styles [
-      "circular",
-      "player-center-button",
+      "flat",
+      "player-overlay-button",
+      "player-seek-button",
     ]
   }
 
@@ -27,8 +28,8 @@ Gtk.Box PlayerCenterControlsView {
     clicked => $OnPlayPauseClicked();
 
     styles [
-      "circular",
-      "player-center-play-button",
+      "flat",
+      "player-primary-control",
     ]
   }
 
@@ -38,8 +39,9 @@ Gtk.Box PlayerCenterControlsView {
     clicked => $OnForwardClicked();
 
     styles [
-      "circular",
-      "player-center-button",
+      "flat",
+      "player-overlay-button",
+      "player-seek-button",
     ]
   }
 }

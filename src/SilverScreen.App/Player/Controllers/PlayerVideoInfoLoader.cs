@@ -86,18 +86,8 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
         return string.Join(" · ", parts);
     }
 
-    public static string FormatMarkup(string description)
-    {
-        try
-        {
-            return RichLabelMarkup.Build(description);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warning(ex, "Failed to render video description markup");
-            return description;
-        }
-    }
+    public static string FormatMarkup(string description) =>
+        RichLabelMarkup.Build(description);
 
     public void Dispose()
     {

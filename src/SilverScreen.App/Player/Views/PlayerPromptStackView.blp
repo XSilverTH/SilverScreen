@@ -19,6 +19,7 @@ Gtk.Box PlayerPromptStackView {
     transition-type: slide_left;
     transition-duration: 200;
     halign: end;
+    notify => $OnRevealerNotify();
 
     child: Gtk.Button player_sponsorblock_skip_button {
       tooltip-text: "Skip Sponsor";
@@ -64,6 +65,7 @@ Gtk.Box PlayerPromptStackView {
     transition-type: slide_left;
     transition-duration: 200;
     halign: end;
+    notify => $OnRevealerNotify();
 
     child: Gtk.Button player_resume_button {
       tooltip-text: "Resume";
@@ -73,7 +75,7 @@ Gtk.Box PlayerPromptStackView {
 
       styles [
         "player-edge-prompt-button",
-        "player-resume-button",
+        "player-resume-prompt-button",
       ]
 
       child: Gtk.Box {
@@ -109,6 +111,7 @@ Gtk.Box PlayerPromptStackView {
     transition-type: slide_left;
     transition-duration: 200;
     halign: end;
+    notify => $OnRevealerNotify();
 
     child: Gtk.Button player_restart_button {
       tooltip-text: "Start over";
@@ -118,7 +121,7 @@ Gtk.Box PlayerPromptStackView {
 
       styles [
         "player-edge-prompt-button",
-        "player-restart-button",
+        "player-resume-restart-button",
       ]
 
       child: Gtk.Box {

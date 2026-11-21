@@ -28,7 +28,7 @@ Adw.StatusPage PlayerErrorView {
         clicked => $OnBrowserClicked();
 
         styles [
-          "player-overlay-button",
+          "pill",
         ]
       }
 
@@ -39,7 +39,7 @@ Adw.StatusPage PlayerErrorView {
 
         styles [
           "suggested-action",
-          "player-overlay-button",
+          "pill",
         ]
       }
     }
@@ -63,8 +63,7 @@ Adw.StatusPage PlayerErrorView {
       width-request: 480;
 
       styles [
-        "card",
-        "player-error-detail-card",
+        "player-error-detail-box",
       ]
 
       Gtk.ScrolledWindow {
@@ -86,6 +85,7 @@ Adw.StatusPage PlayerErrorView {
           styles [
             "monospace",
             "caption",
+            "player-error-detail-label",
           ]
         };
       }
