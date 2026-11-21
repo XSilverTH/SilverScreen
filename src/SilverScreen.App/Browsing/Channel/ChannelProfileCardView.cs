@@ -88,6 +88,8 @@ public partial class ChannelProfileCardView : ViewBase<Box, ChannelViewModel>
 
     private void ClearAvatar()
     {
+        try { _avatarCancellation?.Cancel(); } catch (Exception) { }
+        _avatarCancellation?.Dispose(); _avatarCancellation = null;
         var texture = _boundTexture; _boundTexture = null;
         _avatarPressure.Release();
         channel_avatar_overlay.Child = channel_avatar_placeholder;
@@ -97,12 +99,7 @@ public partial class ChannelProfileCardView : ViewBase<Box, ChannelViewModel>
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            try { _avatarCancellation?.Cancel(); } catch (Exception) { }
-            _avatarCancellation?.Dispose(); _avatarCancellation = null;
-            ClearAvatar(); _avatarPressure.Dispose();
-        }
+        if (disposing) { ClearAvatar(); _avatarPressure.Dispose(); }
         base.Dispose(disposing);
     }
 }

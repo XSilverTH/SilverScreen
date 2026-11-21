@@ -38,15 +38,13 @@ public partial class SubscriptionsChannelPillView : ViewBase<Box>
         Lifetime.Attach(Widget, leftClick, c => c.OnReleased += (_, _) => selectChannel(_channel), c => c.OnReleased -= (_, _) => selectChannel(_channel));
 
         var keyController = EventControllerKey.New();
-        Lifetime.Attach(Widget, keyController,
-            c => c.OnKeyPressed += (s, a) =>
-            {
-                if (a.Keyval is Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space) { selectChannel(_channel); return true; }
-                if (a.Keyval == Constants.KEY_Left && focusPrevious != null) { focusPrevious(); return true; }
-                if (a.Keyval == Constants.KEY_Right && focusNext != null) { focusNext(); return true; }
-                return false;
-            },
-            c => c.OnKeyPressed -= (_, _) => false);
+        Lifetime.Attach(Widget, keyController, c => c.OnKeyPressed += (s, a) =>
+        {
+            if (a.Keyval is Constants.KEY_Return or Constants.KEY_KP_Enter or Constants.KEY_space) { selectChannel(_channel); return true; }
+            if (a.Keyval == Constants.KEY_Left && focusPrevious != null) { focusPrevious(); return true; }
+            if (a.Keyval == Constants.KEY_Right && focusNext != null) { focusNext(); return true; }
+            return false;
+        }, c => c.OnKeyPressed -= (_, _) => false);
 
         SubscriptionsChannelContextMenu.Attach(Widget, _channel, _navigation, Lifetime);
         if (!string.IsNullOrWhiteSpace(channel.AvatarUrl)) LoadAvatarAsync(channel.AvatarUrl, avatarSemaphore, ct).FireAndForget(Logger);
@@ -71,36 +69,38 @@ public partial class SubscriptionsChannelPillView : ViewBase<Box>
             var result = await _thumbnails.GetThumbnailAsync(avatarUrl, ct).ConfigureAwait(false);
             if (result is null || IsDisposed || ct.IsCancellationRequested) return;
 
-            using var pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true), ct).ConfigureAwait(false);
-            if (pixbuf is null || IsDisposed || ct.IsCancellationRequested) return;
+            var pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true), ct).ConfigureAwait(false);
+            if (pixbuf is null || IsDisposed || ct.IsCancellationRequested) { pixbuf?.Dispose(); return; }
 
+            var decodedPixbuf = pixbuf;
             Functions.IdleAdd(0, () =>
             {
-                if (IsDisposed || ct.IsCancellationRequested) return false;
-                var texture = Texture.NewForPixbuf(pixbuf);
-                var picture = Picture.NewForPaintable(texture);
-                picture.AlternativeText = $"{_channel.Title} avatar";
-                picture.ContentFit = ContentFit.Cover;
-                picture.WidthRequest = picture.HeightRequest = AvatarSize;
-                picture.CanShrink = true;
+                try
+                {
+                    if (IsDisposed || ct.IsCancellationRequested) return false;
+                    var texture = Texture.NewForPixbuf(decodedPixbuf);
+                    var picture = Picture.NewForPaintable(texture);
+                    picture.AlternativeText = $"{_channel.Title} avatar";
+                    picture.ContentFit = ContentFit.Cover;
+                    picture.WidthRequest = picture.HeightRequest = AvatarSize; picture.CanShrink = true;
 
-                avatar_overlay.Child = picture;
-                _boundTexture?.Dispose(); _boundPicture?.Dispose();
-                _boundTexture = texture; _boundPicture = picture;
-                _memoryPressure.Track(AvatarSize * AvatarSize * 4);
+                    avatar_overlay.Child = picture;
+                    _boundTexture?.Dispose(); _boundPicture?.Dispose();
+                    _boundTexture = texture; _boundPicture = picture;
+                    _memoryPressure.Track(AvatarSize * AvatarSize * 4);
+                }
+                catch (Exception ex) { Logger.Warning(ex, "Failed to render channel avatar texture"); }
+                finally { decodedPixbuf.Dispose(); }
                 return false;
             });
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { Logger.Warning(ex, "Failed to load channel avatar for {Title}", _channel.Title); }
+        catch (OperationCanceledException) { } catch (Exception ex) { Logger.Warning(ex, "Failed to load channel avatar for {Title}", _channel.Title); }
         finally { if (acquired) try { semaphore.Release(); } catch (ObjectDisposedException) { } }
     }
 
-    private static string FormatChannelTooltip(SubscribedChannel ch)
-    {
-        var h = ChannelFormatter.ExtractHandle(ch.Url);
-        return !string.IsNullOrWhiteSpace(h) && !string.Equals(ch.Title, h, StringComparison.OrdinalIgnoreCase) ? $"{ch.Title} ({h})" : ch.Title;
-    }
+    private static string FormatChannelTooltip(SubscribedChannel ch) =>
+        ChannelFormatter.ExtractHandle(ch.Url) is { Length: > 0 } h && !string.Equals(ch.Title, h, StringComparison.OrdinalIgnoreCase)
+            ? $"{ch.Title} ({h})" : ch.Title;
 
     protected override void Dispose(bool disposing)
     {
