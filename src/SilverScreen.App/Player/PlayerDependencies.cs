@@ -1,5 +1,5 @@
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;

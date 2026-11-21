@@ -1,13 +1,13 @@
 using Serilog;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.Feeds;
 using YoutubeAPI.Models.Videos;
-using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
+using VideoSummary = SilverScreen.Core.Domain.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Home;
 

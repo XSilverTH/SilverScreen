@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using Serilog;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Core.Player;
 

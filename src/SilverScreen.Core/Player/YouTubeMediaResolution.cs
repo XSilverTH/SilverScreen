@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Core.Player;
 

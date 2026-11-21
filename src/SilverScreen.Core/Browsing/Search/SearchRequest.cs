@@ -1,5 +1,3 @@
-using SilverScreen.Core.Browsing.Common;
-
 namespace SilverScreen.Core.Browsing.Search;
 
 public sealed record SearchRequest(

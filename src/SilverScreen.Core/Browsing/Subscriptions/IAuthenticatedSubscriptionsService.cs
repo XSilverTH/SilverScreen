@@ -1,5 +1,3 @@
-using SilverScreen.Core.Browsing.Common;
-
 namespace SilverScreen.Core.Browsing.Subscriptions;
 
 /// <summary>Loads the signed-in account's subscribed channels and subscription feed from YouTube.</summary>

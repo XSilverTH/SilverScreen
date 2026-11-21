@@ -1,6 +1,7 @@
 using SilverScreen.Browsing.Channel;
 using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Tests.Browsing.Channel;
 

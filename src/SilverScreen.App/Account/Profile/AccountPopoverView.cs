@@ -3,7 +3,7 @@ using Gdk;
 using GdkPixbuf;
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 

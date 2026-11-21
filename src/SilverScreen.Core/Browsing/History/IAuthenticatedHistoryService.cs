@@ -1,5 +1,3 @@
-using SilverScreen.Core.Browsing.Common;
-
 namespace SilverScreen.Core.Browsing.History;
 
 /// <summary>Loads the signed-in account's watch history from YouTube.</summary>

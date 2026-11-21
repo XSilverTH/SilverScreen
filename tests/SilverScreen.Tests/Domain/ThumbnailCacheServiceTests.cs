@@ -1,7 +1,8 @@
 using System.Net;
-using SilverScreen.Infrastructure.Browsing.Common;
+using SilverScreen.Core.Domain;
+using SilverScreen.Infrastructure.Domain;
 
-namespace SilverScreen.Tests.Browsing.Common;
+namespace SilverScreen.Tests.Domain;
 
 public sealed class ThumbnailCacheServiceTests
 {

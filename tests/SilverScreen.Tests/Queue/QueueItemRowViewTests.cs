@@ -1,4 +1,4 @@
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
 using SilverScreen.Queue;
 

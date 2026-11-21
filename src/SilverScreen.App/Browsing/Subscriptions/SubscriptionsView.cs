@@ -5,7 +5,7 @@ using Gtk;
 using Pango;
 using Serilog;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;

@@ -1,5 +1,5 @@
 using Gtk;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
 using static GLib.Functions;

@@ -1,4 +1,4 @@
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using ApiPlaybackProgress = YoutubeAPI.Models.Videos.VideoPlaybackProgress;
 
 namespace SilverScreen.Infrastructure.YouTube;

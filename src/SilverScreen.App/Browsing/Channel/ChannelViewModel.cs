@@ -3,7 +3,8 @@ using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Browsing.Channel;
 

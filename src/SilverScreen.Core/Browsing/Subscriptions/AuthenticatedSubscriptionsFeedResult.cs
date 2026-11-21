@@ -1,5 +1,3 @@
-using SilverScreen.Core.Browsing.Common;
-
 namespace SilverScreen.Core.Browsing.Subscriptions;
 
 public sealed record AuthenticatedSubscriptionsFeedResult(

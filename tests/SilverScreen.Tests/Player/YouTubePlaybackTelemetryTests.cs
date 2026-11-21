@@ -1,6 +1,6 @@
 using System.Net;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;

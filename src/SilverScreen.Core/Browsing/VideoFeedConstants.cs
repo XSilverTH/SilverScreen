@@ -1,4 +1,4 @@
-namespace SilverScreen.Core.Browsing.Common;
+namespace SilverScreen.Core.Browsing;
 
 public static class VideoFeedConstants
 {

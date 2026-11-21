@@ -1,4 +1,4 @@
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Core.Browsing.Channel;
 

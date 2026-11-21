@@ -1,4 +1,4 @@
-namespace SilverScreen.Core.Browsing.Common;
+namespace SilverScreen.Core.Domain;
 
 public sealed record VideoSummary(
     string Id,

@@ -7,7 +7,7 @@ using YoutubeAPI.Models.ValueTypes;
 using YoutubeAPI.Models.Videos;
 using ApiChannelVideoSort = YoutubeAPI.Models.Enums.ChannelVideoSort;
 using ApiVideoSummary = YoutubeAPI.Models.Videos.VideoSummary;
-using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
+using VideoSummary = SilverScreen.Core.Domain.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Channel;
 

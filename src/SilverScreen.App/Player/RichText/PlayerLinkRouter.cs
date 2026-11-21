@@ -1,5 +1,5 @@
 using System.Globalization;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 
 namespace SilverScreen.Player.RichText;

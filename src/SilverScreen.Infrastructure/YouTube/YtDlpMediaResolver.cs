@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;

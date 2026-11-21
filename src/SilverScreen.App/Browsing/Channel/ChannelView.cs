@@ -4,7 +4,7 @@ using Gtk;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;

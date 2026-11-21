@@ -11,7 +11,7 @@ using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;

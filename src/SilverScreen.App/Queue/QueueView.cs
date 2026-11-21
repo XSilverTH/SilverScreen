@@ -1,6 +1,6 @@
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Queue;
 using XSTH.Blueprint.Helpers;

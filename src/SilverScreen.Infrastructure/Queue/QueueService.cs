@@ -1,5 +1,5 @@
 using Serilog;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
 
 namespace SilverScreen.Infrastructure.Queue;

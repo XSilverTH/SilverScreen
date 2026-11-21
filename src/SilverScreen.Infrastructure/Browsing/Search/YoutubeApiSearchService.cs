@@ -9,7 +9,7 @@ using YoutubeAPI.Models.Videos;
 using CoreSearchRequest = SilverScreen.Core.Browsing.Search.SearchRequest;
 using ApiVideoSummary = YoutubeAPI.Models.Videos.VideoSummary;
 using SearchRequest = YoutubeAPI.Models.Search.SearchRequest;
-using VideoSummary = SilverScreen.Core.Browsing.Common.VideoSummary;
+using VideoSummary = SilverScreen.Core.Domain.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Search;
 

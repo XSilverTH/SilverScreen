@@ -1,6 +1,7 @@
 using SilverScreen.Browsing.History;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Browsing;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Browsing.History;
 using SilverScreen.Infrastructure.Account.Session;
 

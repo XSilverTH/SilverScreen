@@ -3,9 +3,9 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Serilog;
-using SilverScreen.Core.Browsing.Common;
+using SilverScreen.Core.Domain;
 
-namespace SilverScreen.Infrastructure.Browsing.Common;
+namespace SilverScreen.Infrastructure.Domain;
 
 public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 {

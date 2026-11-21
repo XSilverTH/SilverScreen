@@ -1,7 +1,7 @@
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Models.Common;
 
-namespace SilverScreen.Tests.Browsing.Common;
+namespace SilverScreen.Tests.YouTube;
 
 public sealed class ThumbnailResolutionSelectorTests
 {

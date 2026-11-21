@@ -1,4 +1,4 @@
-namespace SilverScreen.Core.Browsing.Common;
+namespace SilverScreen.Core.Domain;
 
 /// <summary>
 ///     Represents playback state supplied by YouTube for the authenticated viewer.
