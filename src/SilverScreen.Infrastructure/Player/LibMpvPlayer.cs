@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Serilog;
 using SilverScreen.Core.Common;
@@ -30,7 +31,7 @@ public sealed record LibMpvPlaybackState(
     bool IsBuffering = false,
     int BufferingPercent = 0);
 
-public sealed class LibMpvPlayer : IDisposable
+public sealed partial class LibMpvPlayer : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<LibMpvPlayer>();
 
@@ -215,6 +216,7 @@ public sealed class LibMpvPlayer : IDisposable
     public event EventHandler? RenderRequested;
     public event EventHandler<LibMpvPlaybackState>? StateChanged;
     public event EventHandler<string>? PlaybackFailed;
+    public event EventHandler<TimeSpan>? StreamDelayDetected;
 
     public unsafe void InitializeRenderer()
     {
@@ -567,6 +569,36 @@ public sealed class LibMpvPlayer : IDisposable
         }
     }
 
+    [GeneratedRegex(@"Waiting\s+(?<seconds>\d+(?:[.,]\d+)?)\s+seconds\s+for\s+the\s+stream\s+to\s+become\s+available", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex StreamWaitRegex();
+
+    internal static bool TryParseStreamDelay(string prefix, string text, out TimeSpan delay)
+    {
+        if (string.Equals(prefix, "ytdl_hook", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("stream to become available", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = StreamWaitRegex().Match(text);
+            if (match.Success)
+            {
+                var secondsSpan = match.Groups["seconds"].ValueSpan;
+                Span<char> normalized = stackalloc char[secondsSpan.Length];
+                for (var i = 0; i < secondsSpan.Length; i++)
+                {
+                    normalized[i] = secondsSpan[i] == ',' ? '.' : secondsSpan[i];
+                }
+
+                if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                {
+                    delay = TimeSpan.FromSeconds(seconds);
+                    return true;
+                }
+            }
+        }
+
+        delay = TimeSpan.Zero;
+        return false;
+    }
+
     private void HandleLogMessage(nint data)
     {
         if (data == 0) return;
@@ -574,6 +606,11 @@ public sealed class LibMpvPlayer : IDisposable
         var prefix = Marshal.PtrToStringUTF8(message.Prefix) ?? "unknown";
         var text = DiagnosticSanitizer.Sanitize(Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n'));
         if (string.IsNullOrWhiteSpace(text)) return;
+
+        if (TryParseStreamDelay(prefix, text, out var streamDelay))
+        {
+            Dispatch(() => StreamDelayDetected?.Invoke(this, streamDelay));
+        }
 
         if (message.LogLevel <= LibMpvLogLevel.Error ||
             (message.LogLevel <= LibMpvLogLevel.Warn && (prefix == "ytdl_hook" || text.Contains("ERROR"))))

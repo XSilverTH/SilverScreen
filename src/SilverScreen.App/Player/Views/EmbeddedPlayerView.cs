@@ -71,6 +71,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private readonly PlaybackSession _session;
     private readonly PlayerShortcutController _shortcutController;
     private readonly PlayerSponsorBlockController _sponsorBlockController;
+    private readonly PlayerStreamDelayController _streamDelayController;
     private readonly PlayerSubtitleController _subtitleController;
     private readonly PlayerTimelineController _timelineController;
 
@@ -173,6 +174,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         SetControls(100, 1, "Best");
         _osdController =
             Lifetime.Own(new PlayerOsdController(_preferences, player_osd_revealer, player_osd_icon, player_osd_label));
+        _streamDelayController = Lifetime.Own(new PlayerStreamDelayController(_player, player_delay_revealer,
+            player_delay_bar));
         var statsController = Lifetime.Own(new PlayerStatsController(new PlayerStatsProvider(_player),
             player_stats_revealer, player_stats_label));
 
@@ -1015,12 +1018,14 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView.SetVideo(null);
         CloseComments();
         player_comments_cue_revealer.RevealChild = false;
+        _streamDelayController.Reset();
         SetLoading(false);
     }
 
     private void SetLoading(bool loading)
     {
         _isLoading = loading;
+        if (!loading) _streamDelayController.Reset();
         player_loading_indicator.SetVisible(loading);
         if (_hasPlaybackError)
         {

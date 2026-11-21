@@ -749,6 +749,70 @@ public sealed class LibMpvPlayerTests
         }
     }
 
+    [Theory]
+    [InlineData("ytdl_hook", "Waiting 4.00 seconds for the stream to become available...", 4.0)]
+    [InlineData("ytdl_hook", "Waiting 12.5 seconds for the stream to become available...", 12.5)]
+    [InlineData("ytdl_hook", "Waiting 2 seconds for the stream to become available", 2.0)]
+    [InlineData("ytdl_hook", "Waiting 4,50 seconds for the stream to become available...", 4.5)]
+    [InlineData("other_prefix", "Waiting 3.00 seconds for the stream to become available...", 3.0)]
+    public void TryParseStreamDelay_ParsesValidMessages(string prefix, string message, double expectedSeconds)
+    {
+        var result = LibMpvPlayer.TryParseStreamDelay(prefix, message, out var delay);
+
+        Assert.True(result);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), delay);
+    }
+
+    [Theory]
+    [InlineData("ytdl_hook", "Waiting 0 seconds for the stream to become available")]
+    [InlineData("ytdl_hook", "Waiting -2.5 seconds for the stream to become available")]
+    [InlineData("ytdl_hook", "Some other log message from ytdl")]
+    [InlineData("ffmpeg", "Waiting 5 seconds for something else")]
+    [InlineData("", "")]
+    public void TryParseStreamDelay_RejectsInvalidMessages(string prefix, string message)
+    {
+        var result = LibMpvPlayer.TryParseStreamDelay(prefix, message, out var delay);
+
+        Assert.False(result);
+        Assert.Equal(TimeSpan.Zero, delay);
+    }
+
+    [Fact]
+    public void LogMessageWithStreamDelay_FiresStreamDelayDetectedEvent()
+    {
+        var native = new RecordingNative { KeepEventLoopAlive = true };
+        var pPrefix = Marshal.StringToCoTaskMemUTF8("ytdl_hook");
+        var pLevel = Marshal.StringToCoTaskMemUTF8("info");
+        var pText = Marshal.StringToCoTaskMemUTF8("Waiting 4.00 seconds for the stream to become available...\n");
+        var logMessage = new LibMpvEventLogMessage(pPrefix, pLevel, pText, LibMpvLogLevel.Info);
+        var pLog = Marshal.AllocCoTaskMem(Marshal.SizeOf<LibMpvEventLogMessage>());
+        Marshal.StructureToPtr(logMessage, pLog, false);
+
+        try
+        {
+            using var player = new LibMpvPlayer(native, action => action());
+            var delayDetected = false;
+            var detectedDuration = TimeSpan.Zero;
+            player.StreamDelayDetected += (_, duration) =>
+            {
+                delayDetected = true;
+                detectedDuration = duration;
+            };
+
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.LogMessage, 0, 0, pLog));
+
+            Assert.True(SpinWait.SpinUntil(() => delayDetected, TimeSpan.FromSeconds(2)));
+            Assert.Equal(TimeSpan.FromSeconds(4.0), detectedDuration);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pPrefix);
+            Marshal.FreeCoTaskMem(pLevel);
+            Marshal.FreeCoTaskMem(pText);
+            Marshal.FreeCoTaskMem(pLog);
+        }
+    }
+
     private static VideoSummary Video(string id)
     {
         return new VideoSummary(id, id, "Channel", TimeSpan.FromMinutes(3), "", false);

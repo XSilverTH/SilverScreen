@@ -59,13 +59,36 @@ Adw.OverlaySplitView EmbeddedPlayerView {
           "player-loading-indicator",
         ]
 
-        child: Adw.Spinner player_loading_spinner {
-          width-request: 72;
-          height-request: 72;
+        child: Gtk.Box {
+          orientation: vertical;
+          spacing: 16;
+          halign: center;
+          valign: center;
 
-          styles [
-            "player-big-spinner",
-          ]
+          Adw.Spinner player_loading_spinner {
+            width-request: 72;
+            height-request: 72;
+
+            styles [
+              "player-big-spinner",
+            ]
+          }
+
+          Gtk.Revealer player_delay_revealer {
+            reveal-child: false;
+            transition-type: crossfade;
+
+            child: Gtk.DrawingArea player_delay_bar {
+              halign: center;
+              valign: center;
+              content-width: 280;
+              content-height: 26;
+
+              styles [
+                "player-delay-bar",
+              ]
+            };
+          }
         };
       }
 

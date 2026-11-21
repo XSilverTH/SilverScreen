@@ -23,6 +23,12 @@
     filter: drop-shadow(0 2px 4px alpha(#000000, 0.55));
 }
 
+/* YouTube Stream Delay Indicator */
+.player-delay-bar {
+    min-width: 280px;
+    min-height: 26px;
+}
+
 /* Video Buffering Indicator */
 .player-buffering-indicator {
     margin-bottom: 28px;
