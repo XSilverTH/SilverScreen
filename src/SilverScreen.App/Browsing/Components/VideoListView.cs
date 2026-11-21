@@ -19,8 +19,7 @@ public partial class VideoListView : ViewBase<Bin>
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
     private readonly IVideoListSource _source;
-    private readonly IThumbnailService _thumbnails;
-    private readonly VideoCardActions _videoActions;
+    private readonly VideoCardServices _services;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
     private readonly Dictionary<string, VideoSummary> _videosById = [];
@@ -35,12 +34,10 @@ public partial class VideoListView : ViewBase<Bin>
 
     public VideoListView(
         IVideoListSource source,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
+        VideoCardServices services)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
-        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
-        _videoActions = videoActions ?? throw new ArgumentNullException(nameof(videoActions));
+        _services = services ?? throw new ArgumentNullException(nameof(services));
 
         Vadjustment = video_list_scrolled_window.Vadjustment;
         if (Vadjustment is not null)
@@ -374,7 +371,7 @@ public partial class VideoListView : ViewBase<Bin>
         if (args.Object is not ListItem listItem)
             return;
 
-        var card = new VideoCardView(_thumbnails, _videoActions);
+        var card = new VideoCardView(_services);
         listItem.Child = card.Widget;
         _cardsByListItem.Add(listItem, card);
     }

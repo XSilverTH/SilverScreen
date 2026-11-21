@@ -1,0 +1,44 @@
+using Gtk 4.0;
+
+Gtk.Box SubscriptionsChannelPillView {
+  orientation: vertical;
+  spacing: 4;
+  halign: center;
+  valign: center;
+  focusable: true;
+  accessible-role: button;
+
+  styles [
+    "subscriptions-channel-item",
+  ]
+
+  Gtk.Overlay avatar_overlay {
+    width-request: 56;
+    height-request: 56;
+    halign: center;
+    valign: center;
+
+    styles [
+      "subscriptions-channel-avatar",
+    ]
+
+    child: Gtk.Image placeholder_avatar {
+      icon-name: "avatar-default-symbolic";
+      pixel-size: 32;
+      halign: center;
+      valign: center;
+    };
+  }
+
+  Gtk.Label name_label {
+    halign: center;
+    xalign: 0.5;
+    ellipsize: end;
+    lines: 1;
+    max-width-chars: 11;
+
+    styles [
+      "subscriptions-channel-title",
+    ]
+  }
+}

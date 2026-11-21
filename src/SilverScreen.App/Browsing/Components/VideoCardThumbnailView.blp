@@ -1,0 +1,44 @@
+using Gtk 4.0;
+
+Gtk.Overlay VideoCardThumbnailView {
+  height-request: 189;
+  hexpand: true;
+  overflow: hidden;
+
+  styles [
+    "video-thumbnail",
+  ]
+
+  child: Gtk.Image placeholder {
+    icon-name: "media-playback-start-symbolic";
+    pixel-size: 44;
+    halign: center;
+    valign: center;
+    accessible-role: presentation;
+  };
+
+  [overlay]
+  Gtk.Label duration {
+    halign: end;
+    valign: end;
+    margin-end: 10;
+    margin-bottom: 9;
+
+    styles [
+      "caption",
+      "duration-pill",
+    ]
+  }
+
+  [overlay]
+  Gtk.ProgressBar watched_progress {
+    halign: fill;
+    valign: end;
+    visible: false;
+    show-text: false;
+
+    styles [
+      "watched-progress-bar",
+    ]
+  }
+}

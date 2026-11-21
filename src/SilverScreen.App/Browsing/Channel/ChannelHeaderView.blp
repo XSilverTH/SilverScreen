@@ -1,0 +1,28 @@
+using Gtk 4.0;
+
+Gtk.Revealer ChannelHeaderView {
+  reveal-child: true;
+  transition-type: slide_down;
+  transition-duration: 250;
+
+  child: Gtk.Box channel_header {
+    orientation: vertical;
+    spacing: 16;
+    margin-start: 24;
+    margin-end: 24;
+    margin-top: 16;
+    margin-bottom: 8;
+
+    styles [
+      "channel-header-card",
+    ]
+
+    Gtk.Box profile_host {
+      orientation: horizontal;
+    }
+
+    Gtk.Box controls_host {
+      orientation: horizontal;
+    }
+  };
+}

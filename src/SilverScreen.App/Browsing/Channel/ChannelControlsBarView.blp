@@ -1,0 +1,43 @@
+using Gtk 4.0;
+
+Gtk.Box ChannelControlsBarView {
+  orientation: horizontal;
+  spacing: 12;
+  margin-top: 8;
+
+  Gtk.Label sort_label {
+    label: "Sort by:";
+
+    styles [
+      "dim-label",
+    ]
+  }
+
+  Gtk.DropDown channel_sort_dropdown {
+    notify => $OnSortDropdownNotify();
+
+    model: Gtk.StringList {
+      strings: [
+        "Newest",
+        "Oldest",
+        "Popular",
+      ];
+    };
+
+    selected: 0;
+  }
+
+  Gtk.Box channel_controls_spacer {
+    hexpand: true;
+  }
+
+  Gtk.MenuButton channel_about_button {
+    label: "About";
+    icon-name: "dialog-information-symbolic";
+    tooltip-text: "About channel";
+
+    styles [
+      "flat",
+    ]
+  }
+}

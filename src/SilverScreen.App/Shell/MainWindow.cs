@@ -84,36 +84,36 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _embeddedPlayer = new EmbeddedPlayerView(_navigationService, player);
         _playback = new PlaybackModeRoutingService(account.Preferences, playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
-        var actions = CreateVideoActions();
+        var cardServices = new VideoCardServices(
+            browsing.Thumbnails,
+            _navigationService,
+            _playback,
+            account.Queue,
+            _notificationService);
+
         _channelViewModel = new ChannelViewModel(browsing.Channels);
-        _channel = new ChannelView(_channelViewModel, browsing.Thumbnails, actions);
+        _channel = new ChannelView(_channelViewModel, cardServices);
         Lifetime.Track(() => _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged,
             () => _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged);
         channel_host.Append(_channel.Widget);
-        _home = new VideoListView(
-            browsing.HomeFeed.GetVideoListSource(OpenWebLogin),
-            browsing.Thumbnails,
-            actions);
+
+        _home = new VideoListView(browsing.HomeFeed.GetVideoListSource(OpenWebLogin), cardServices);
         Lifetime.Track(() => _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged,
             () => _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged);
+
         _historyViewModel = new HistoryViewModel(browsing.History, account.Session, OpenWebLogin);
-        _history = new VideoListView(_historyViewModel, browsing.Thumbnails, actions);
+        _history = new VideoListView(_historyViewModel, cardServices);
         Lifetime.Track(() => _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged,
             () => _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged);
+
         _subscriptionsViewModel = new SubscriptionsViewModel(
             browsing.Subscriptions,
             browsing.Channels,
             account.Session,
             true,
-            OpenWebLogin);
-        _subscriptions = new SubscriptionsView(
-            _subscriptionsViewModel,
-            browsing.Thumbnails,
-            actions,
             OpenWebLogin,
-            (url, name) =>
-                OpenChannelAsync(new VideoSummary("", "", name, TimeSpan.Zero, "", false, "", null, null, url))
-                    .FireAndForget(Logger));
+            account.Auth);
+        _subscriptions = new SubscriptionsView(_subscriptionsViewModel, cardServices);
         Lifetime.Track(() => _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged,
             () => _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged);
         subscriptions_host.Append(_subscriptions.Widget);
@@ -122,10 +122,13 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         UpdateHomeRefreshButton(_home.IsLoading);
         _searchViewModel = new SearchViewModel(browsing.Search, _playback, browsing.SearchSuggestions);
         _searchViewModel.OpenChannelRequested = channelTarget =>
+        {
             OpenChannelAsync(new VideoSummary("", "", channelTarget, TimeSpan.Zero, "", false, "", null, null,
                 channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                     ? channelTarget
                     : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
+            return Task.CompletedTask;
+        };
         _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
         search_popover.Child = _searchPopover.Widget;
         Lifetime.Track(() => search_popover.OnClosed += OnSearchPopoverClosed,
@@ -133,7 +136,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => search_popover.OnNotify += OnSearchPopoverNotify,
             () => search_popover.OnNotify -= OnSearchPopoverNotify);
 
-        _searchView = new VideoListView(_searchViewModel, browsing.Thumbnails, actions);
+        _searchView = new VideoListView(_searchViewModel, cardServices);
         Lifetime.Track(() => _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged,
             () => _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged);
         search_host.Append(_searchView.Widget);
@@ -261,58 +264,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     }
 
 
-    private VideoCardActions CreateVideoActions()
-    {
-        return new VideoCardActions
-        {
-            PlayAsync = PlayVideoAsync,
-            OpenInAlternatePlayerAsync = OpenInAlternatePlayerAsync,
-            AddToQueue = video =>
-            {
-                _account.Queue.Add(video);
-                ShowToast($"Added “{video.Title}” to queue");
-            },
-            OpenChannelAsync = OpenChannelAsync
-        };
-    }
-
-    private async Task PlayVideoAsync(VideoSummary video)
-    {
-        try
-        {
-            var result = await _playback.PlayAsync(new PlaybackRequest([video])).ConfigureAwait(false);
-            if (!PlaybackResult.IsSuccessStatus(result))
-            {
-                Logger.Warning("Playback reported failure for video: {Result}", result);
-                ShowToast(result);
-            }
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to start playback for video");
-            ShowToast($"Could not start playback for “{video.Title}”.");
-        }
-    }
-
-    private async Task OpenInAlternatePlayerAsync(VideoSummary video)
-    {
-        try
-        {
-            var result = await _playback.PlayAlternateAsync(new PlaybackRequest([video])).ConfigureAwait(false);
-            if (!PlaybackResult.IsSuccessStatus(result))
-            {
-                Logger.Warning("Alternate playback reported failure for video: {Result}", result);
-                ShowToast(result);
-            }
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to start alternate playback for video");
-            ShowToast($"Could not play “{video.Title}” in the alternate player.");
-        }
-    }
-
-    private async Task OpenChannelAsync(VideoSummary video)
+    private void OpenChannelAsync(VideoSummary video)
     {
         if (string.IsNullOrWhiteSpace(video.ChannelUrl) ||
             video.ChannelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
@@ -325,8 +277,6 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             Widget.Unfullscreen();
 
         _navigationService.NavigateToChannel(video.ChannelUrl, video.ChannelName);
-        await _channelViewModel.OpenChannelAsync(video.ChannelUrl, video.ChannelName, _channel.GetBatchSize())
-            .ConfigureAwait(false);
     }
 
     private void OnSearchSubmitted(string query)
@@ -482,6 +432,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         }
 
         _channelViewModel.Clear();
+        if (entry.Parameter is ChannelNavigationArgs channelArgs)
+        {
+            _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? string.Empty, _channel.GetBatchSize())
+                .FireAndForget(Logger);
+        }
     }
 
     private static void RestoreScrollPosition(Adjustment? adjustment, double value)

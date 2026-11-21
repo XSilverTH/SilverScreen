@@ -1,0 +1,109 @@
+using Gtk 4.0;
+
+Gtk.Box ChannelProfileCardView {
+  orientation: horizontal;
+  spacing: 20;
+  valign: start;
+
+  Gtk.Overlay channel_avatar_overlay {
+    width-request: 80;
+    height-request: 80;
+    halign: start;
+    valign: start;
+
+    styles [
+      "channel-avatar",
+    ]
+
+    child: Gtk.Image channel_avatar_placeholder {
+      icon-name: "avatar-default-symbolic";
+      pixel-size: 48;
+      halign: center;
+      valign: center;
+      accessible-role: presentation;
+    };
+  }
+
+  Gtk.Box channel_meta_details {
+    orientation: vertical;
+    spacing: 4;
+    hexpand: true;
+    valign: start;
+
+    Gtk.Label channel_name {
+      xalign: 0;
+      wrap: true;
+      selectable: true;
+
+      styles [
+        "channel-title",
+      ]
+    }
+
+    Gtk.Box channel_sub_meta {
+      orientation: horizontal;
+      spacing: 8;
+      halign: start;
+
+      Gtk.Label channel_handle {
+        xalign: 0;
+        visible: false;
+
+        styles [
+          "dim-label",
+          "caption",
+        ]
+      }
+
+      Gtk.Label channel_meta_dot1 {
+        label: "•";
+        visible: false;
+
+        styles [
+          "dim-label",
+          "caption",
+        ]
+      }
+
+      Gtk.Label channel_subscribers {
+        xalign: 0;
+        visible: false;
+
+        styles [
+          "dim-label",
+          "caption",
+        ]
+      }
+    }
+
+    Gtk.ScrolledWindow channel_description_scroller {
+      hscrollbar-policy: never;
+      vscrollbar-policy: automatic;
+      max-content-height: 80;
+      propagate-natural-height: true;
+      hexpand: true;
+      visible: false;
+      margin-top: 4;
+
+      styles [
+        "channel-description-scroller",
+      ]
+
+      Gtk.TextView channel_description {
+        editable: false;
+        cursor-visible: false;
+        wrap-mode: word;
+        accepts-tab: false;
+        monospace: false;
+        top-margin: 0;
+        bottom-margin: 0;
+        left-margin: 0;
+        right-margin: 0;
+
+        styles [
+          "channel-description",
+        ]
+      }
+    }
+  }
+}

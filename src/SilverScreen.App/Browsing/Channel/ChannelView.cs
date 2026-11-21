@@ -1,103 +1,47 @@
-using Gdk;
-using GdkPixbuf;
 using Gtk;
-using Serilog;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Core.Browsing.Channel;
-using SilverScreen.Core.Domain;
-using SilverScreen.Core.Common;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
-using Task = System.Threading.Tasks.Task;
 
 namespace SilverScreen.Browsing.Channel;
 
-public partial class ChannelView : ViewBase<Box>
+public partial class ChannelView : ViewBase<Box, ChannelViewModel>
 {
-    private const int AvatarSize = 80;
-    private const double CollapseThreshold = 50.0;
-    private const double TopRevealThreshold = 1.0;
-    private const double TopHoverZoneThreshold = 40.0;
-    private const long LayoutStabilizationMs = 350;
-    private static readonly ILogger Logger = Log.ForContext<ChannelView>();
-    private readonly NativeMemoryPressure _avatarPressure = new();
-    private readonly IThumbnailService _thumbnails;
+    private readonly ChannelHeaderView _header;
     private readonly VideoListView _videoList;
-    private readonly ChannelViewModel _viewModel;
-
-    private int _avatarBindingGeneration;
-    private CancellationTokenSource? _avatarCancellation;
-    private Picture? _boundAvatarPicture;
-    private Texture? _boundAvatarTexture;
-    private string? _currentAvatarUrl;
-
-    private bool _isHeaderCollapsed;
-    private bool _isUserScrollingUp;
-    private long _lastHeaderStateChangeTicks;
-    private long _lastScrollDownTicks;
-    private double _lastScrollY;
-    private long _lastUserScrollTicks;
-    private bool _updatingSortDropdown;
 
     public ChannelView(
         ChannelViewModel viewModel,
-        IThumbnailService thumbnails,
-        VideoCardActions videoActions)
+        VideoCardServices cardServices)
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
+        ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(cardServices);
 
-        _videoList = Lifetime.Own(new VideoListView(
-            viewModel,
-            thumbnails,
-            videoActions ?? throw new ArgumentNullException(nameof(videoActions))));
+        _videoList = Lifetime.Own(new VideoListView(viewModel, cardServices));
         channel_video_list_host.Append(_videoList.Widget);
 
-        Vadjustment = _videoList.Vadjustment;
-        if (Vadjustment is not null)
-            Lifetime.Track(
-                () => Vadjustment.OnValueChanged += OnScrollValueChanged,
-                () => Vadjustment.OnValueChanged -= OnScrollValueChanged);
+        _header = Lifetime.Own(new ChannelHeaderView(cardServices.Thumbnails, () => _videoList.GetBatchSize()));
+        channel_header_host.Append(_header.Widget);
 
-        var scrollController = EventControllerScroll.New(EventControllerScrollFlags.Vertical);
-        scrollController.SetPropagationPhase(PropagationPhase.Capture);
-        Lifetime.Attach(_videoList.ScrolledWindow, scrollController,
-            c => c.OnScroll += OnScrollEvent,
-            c => c.OnScroll -= OnScrollEvent);
+        _header.AttachScrollTracking(_videoList.ScrolledWindow, _videoList.Vadjustment);
 
-        var videoMotionController = EventControllerMotion.New();
-        videoMotionController.SetPropagationPhase(PropagationPhase.Capture);
-        Lifetime.Attach(_videoList.ScrolledWindow, videoMotionController,
-            c =>
-            {
-                c.OnEnter += OnVideoPointerEnter;
-                c.OnMotion += OnVideoPointerMotion;
-            },
-            c =>
-            {
-                c.OnEnter -= OnVideoPointerEnter;
-                c.OnMotion -= OnVideoPointerMotion;
-            });
         Lifetime.Track(
             () => _videoList.RefreshLoadingChanged += OnVideoListRefreshLoadingChanged,
             () => _videoList.RefreshLoadingChanged -= OnVideoListRefreshLoadingChanged);
 
-        Lifetime.Track(
-            () => _viewModel.StateChanged += OnStateChanged,
-            () => _viewModel.StateChanged -= OnStateChanged);
-        Render(_viewModel.State);
+        ViewModel = viewModel;
+    }
+
+    protected override void BindViewModel(ChannelViewModel viewModel, BindingScope<ChannelViewModel> bindings)
+    {
+        _header.ViewModel = viewModel;
     }
 
     public bool IsLoading => _videoList.IsLoading;
-    public Adjustment? Vadjustment { get; }
-
-
+    public Adjustment? Vadjustment => _videoList.Vadjustment;
     public event EventHandler<bool>? RefreshLoadingChanged;
 
-    public int GetBatchSize()
-    {
-        return _videoList.GetBatchSize();
-    }
+    public int GetBatchSize() => _videoList.GetBatchSize();
 
     public async Task RefreshAsync()
     {
@@ -110,7 +54,7 @@ public partial class ChannelView : ViewBase<Box>
             Functions.IdleAdd(0, () =>
             {
                 if (!IsDisposed)
-                    SetHeaderCollapsed(false);
+                    _header.SetHeaderCollapsed(false);
                 return false;
             });
         }
@@ -119,397 +63,5 @@ public partial class ChannelView : ViewBase<Box>
     private void OnVideoListRefreshLoadingChanged(object? sender, bool isLoading)
     {
         RefreshLoadingChanged?.Invoke(this, isLoading);
-    }
-
-    private bool OnScrollEvent(EventControllerScroll sender, EventControllerScroll.ScrollSignalArgs args)
-    {
-        if (IsDisposed) return false;
-
-        switch (args.Dy)
-        {
-            case < -0.01:
-                _isUserScrollingUp = true;
-                _lastUserScrollTicks = Environment.TickCount64;
-                break;
-            case > 0.01:
-                _isUserScrollingUp = false;
-                _lastUserScrollTicks = Environment.TickCount64;
-                _lastScrollDownTicks = Environment.TickCount64;
-                break;
-        }
-
-        return false;
-    }
-
-    private void OnScrollValueChanged(object? sender, EventArgs args)
-    {
-        if (IsDisposed || Vadjustment is null) return;
-
-        var currentY = Vadjustment.Value;
-        var now = Environment.TickCount64;
-
-        if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs)
-        {
-            _lastScrollY = currentY;
-            return;
-        }
-
-        if (!_isHeaderCollapsed)
-        {
-            if (currentY > CollapseThreshold && currentY > _lastScrollY) SetHeaderCollapsed(true);
-        }
-        else
-        {
-            var reachesTop = currentY <= TopRevealThreshold;
-            var userMovingUp = currentY < _lastScrollY || (_isUserScrollingUp && now - _lastUserScrollTicks < 500);
-
-            if (reachesTop && userMovingUp) SetHeaderCollapsed(false);
-        }
-
-        _lastScrollY = currentY;
-    }
-
-    private void OnVideoPointerEnter(EventControllerMotion sender, EventControllerMotion.EnterSignalArgs args)
-    {
-        CheckHoverReveal(args.Y);
-    }
-
-    private void OnVideoPointerMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
-    {
-        CheckHoverReveal(args.Y);
-    }
-
-    private void CheckHoverReveal(double y)
-    {
-        if (IsDisposed || !_isHeaderCollapsed) return;
-
-        var now = Environment.TickCount64;
-        if (now - _lastHeaderStateChangeTicks < LayoutStabilizationMs) return;
-        if (now - _lastScrollDownTicks < 300) return;
-
-        if (y is >= 0 and <= TopHoverZoneThreshold) SetHeaderCollapsed(false);
-    }
-
-    private void SetHeaderCollapsed(bool collapsed)
-    {
-        _isHeaderCollapsed = collapsed;
-        channel_header_revealer.RevealChild = !collapsed;
-        _lastHeaderStateChangeTicks = Environment.TickCount64;
-        if (Vadjustment is not null) _lastScrollY = Vadjustment.Value;
-    }
-
-    private void OnStateChanged(object? sender, ChannelViewState state)
-    {
-        Functions.IdleAdd(0, () =>
-        {
-            if (IsDisposed) return false;
-            Render(state);
-            return false;
-        });
-    }
-
-    private void Render(ChannelViewState state)
-    {
-        // 1. Metadata & Avatar
-        channel_name.SetText(state.Name);
-
-        var handle = ExtractHandle(state.Url);
-        if (!string.IsNullOrWhiteSpace(handle))
-        {
-            channel_handle.SetText(handle);
-            channel_handle.Visible = true;
-        }
-        else
-        {
-            channel_handle.Visible = false;
-        }
-
-        if (state.SubscriberCount is { } subsCount)
-        {
-            channel_subscribers.SetText(FormatSubscriberCount(subsCount));
-            channel_subscribers.Visible = true;
-        }
-        else
-        {
-            channel_subscribers.Visible = false;
-        }
-
-        channel_meta_dot1.Visible = channel_handle.Visible && channel_subscribers.Visible;
-
-        if (!string.IsNullOrWhiteSpace(state.Description))
-        {
-            if (channel_description.Buffer is { } buffer)
-                buffer.Text = state.Description;
-
-            channel_description_scroller.Vadjustment?.SetValue(0);
-            channel_description_scroller.Visible = true;
-        }
-        else
-        {
-            if (channel_description.Buffer is { } buffer)
-                buffer.Text = string.Empty;
-
-            channel_description_scroller.Visible = false;
-        }
-
-        // Populate "About" popover with full channel links and details
-        about_channel_title.SetText(state.Name);
-
-        if (!string.IsNullOrWhiteSpace(handle))
-        {
-            about_handle_label.SetText($"Handle: {handle}");
-            about_handle_label.Visible = true;
-        }
-        else
-        {
-            about_handle_label.Visible = false;
-        }
-
-        if (state.SubscriberCount is { } subs)
-        {
-            about_subscribers_label.SetText($"Subscribers: {FormatSubscriberCount(subs)}");
-            about_subscribers_label.Visible = true;
-        }
-        else
-        {
-            about_subscribers_label.Visible = false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(state.Url))
-        {
-            about_channel_link.SetUri(state.Url);
-            about_channel_link.SetLabel(state.Url);
-            about_channel_link.Visible = true;
-            about_links_section.Visible = true;
-        }
-        else
-        {
-            about_channel_link.Visible = false;
-            about_links_section.Visible = false;
-        }
-
-        var contactInfo = ExtractContactInfo(state.Description);
-        if (!string.IsNullOrWhiteSpace(contactInfo))
-        {
-            about_contact_label.SetText(contactInfo);
-            about_contact_section.Visible = true;
-        }
-        else
-        {
-            about_contact_label.SetText(string.Empty);
-            about_contact_section.Visible = false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(state.Description))
-        {
-            about_description_label.SetText(state.Description);
-            about_description_section.Visible = true;
-        }
-        else
-        {
-            about_description_label.SetText(string.Empty);
-            about_description_section.Visible = false;
-        }
-
-        if (!string.Equals(_currentAvatarUrl, state.AvatarUrl, StringComparison.Ordinal))
-        {
-            _currentAvatarUrl = state.AvatarUrl;
-            if (!string.IsNullOrWhiteSpace(state.AvatarUrl))
-            {
-                var gen = ++_avatarBindingGeneration;
-                _avatarCancellation?.Cancel();
-                _avatarCancellation?.Dispose();
-                _avatarCancellation = new CancellationTokenSource();
-                LoadAvatarAsync(state.AvatarUrl, gen, _avatarCancellation.Token).FireAndForget(Logger);
-            }
-            else
-            {
-                ClearAvatar();
-            }
-        }
-
-        // 2. Sort Dropdown synchronization
-        _updatingSortDropdown = true;
-        try
-        {
-            var sortIndex = state.Sort switch
-            {
-                ChannelVideoSort.Oldest => 1u,
-                ChannelVideoSort.Popular => 2u,
-                _ => 0u
-            };
-            if (channel_sort_dropdown.Selected != sortIndex) channel_sort_dropdown.Selected = sortIndex;
-        }
-        finally
-        {
-            _updatingSortDropdown = false;
-        }
-    }
-
-    private static string FormatSubscriberCount(long count)
-    {
-        return count switch
-        {
-            >= 1_000_000 => $"{count / 1_000_000.0:0.#}M subscribers",
-            >= 1_000 => $"{count / 1_000.0:0.#}K subscribers",
-            _ => count == 1 ? "1 subscriber" : $"{count:N0} subscribers"
-        };
-    }
-
-    private async void OnSortDropdownNotify(object? sender = null, EventArgs? args = null)
-    {
-        try
-        {
-            if (_updatingSortDropdown || IsDisposed) return;
-
-            var selected = channel_sort_dropdown.Selected;
-            await _viewModel.SetSortSelection(selected, GetBatchSize());
-        }
-        catch (OperationCanceledException)
-        {
-            // Ignore cancelled sort requests
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to update channel sort selection");
-        }
-    }
-
-    private async Task LoadAvatarAsync(string avatarUrl, int generation, CancellationToken cancellationToken)
-    {
-        Pixbuf? pixbuf;
-        try
-        {
-            var result = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
-            if (result is null) return;
-
-            pixbuf = await Task.Run(
-                () => Pixbuf.NewFromFileAtScale(result.LocalPath, AvatarSize, AvatarSize, true),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Logger.Warning(exception, "Failed to load channel avatar");
-            return;
-        }
-
-        var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
-
-        Functions.IdleAdd(0, () =>
-        {
-            try
-            {
-                if (IsDisposed || cancellationToken.IsCancellationRequested || _avatarBindingGeneration != generation ||
-                    channel_avatar_overlay.GetRoot() is null)
-                    return false;
-
-                Texture? texture = null;
-                Picture? picture = null;
-                try
-                {
-                    var pixbufForTexture = decodedPixbuf ??
-                                           throw new InvalidOperationException(
-                                               "Avatar decode was released before texture creation.");
-                    texture = Texture.NewForPixbuf(pixbufForTexture);
-                    pixbufForTexture.Dispose();
-                    decodedPixbuf = null;
-
-                    picture = Picture.NewForPaintable(texture);
-                    picture.AlternativeText = $"{channel_name.GetText()} avatar";
-                    picture.ContentFit = ContentFit.Cover;
-                    picture.WidthRequest = AvatarSize;
-                    picture.HeightRequest = AvatarSize;
-                    picture.CanShrink = true;
-
-                    ClearAvatar();
-                    channel_avatar_overlay.Child = picture;
-                    _boundAvatarTexture = texture;
-                    _avatarPressure.Track((long)AvatarSize * AvatarSize * 4);
-                    _boundAvatarPicture = picture;
-                    texture = null;
-                    picture = null;
-                }
-                finally
-                {
-                    picture?.Dispose();
-                    texture?.Dispose();
-                }
-            }
-            catch (Exception exception)
-            {
-                Logger.Warning(exception, "Failed to render channel avatar texture");
-                // Leave placeholder intact on decode error
-            }
-            finally
-            {
-                decodedPixbuf?.Dispose();
-            }
-
-            return false;
-        });
-    }
-
-    private void ClearAvatar()
-    {
-        var picture = _boundAvatarPicture;
-        var texture = _boundAvatarTexture;
-        _boundAvatarPicture = null;
-        _boundAvatarTexture = null;
-        _avatarPressure.Release();
-        channel_avatar_overlay.Child = channel_avatar_placeholder;
-        if (picture is not null)
-        {
-            picture.Paintable = null!;
-            picture.Dispose();
-        }
-
-        texture?.Dispose();
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _avatarCancellation?.Cancel();
-            _avatarCancellation?.Dispose();
-            _avatarCancellation = null;
-            ClearAvatar();
-            _avatarPressure.Dispose();
-            RefreshLoadingChanged = null;
-        }
-
-        base.Dispose(disposing);
-    }
-
-    private static string? ExtractHandle(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return null;
-        var atIndex = url.IndexOf('@');
-        if (atIndex < 0) return null;
-        var handle = url[atIndex..].TrimEnd('/');
-        var slashIndex = handle.IndexOf('/');
-        return slashIndex > 0 ? handle[..slashIndex] : handle;
-    }
-
-    private static string? ExtractContactInfo(string? description)
-    {
-        if (string.IsNullOrWhiteSpace(description)) return null;
-
-        var lines = description.Split(['\r', '\n'],
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var contactLines = lines.Where(line => line.Contains("contact", StringComparison.OrdinalIgnoreCase) ||
-                                               line.Contains("business", StringComparison.OrdinalIgnoreCase) ||
-                                               line.Contains("inquir", StringComparison.OrdinalIgnoreCase) ||
-                                               line.Contains("email", StringComparison.OrdinalIgnoreCase) ||
-                                               (line.Contains('@') &&
-                                                (line.Contains(".com", StringComparison.OrdinalIgnoreCase) ||
-                                                 line.Contains(".org", StringComparison.OrdinalIgnoreCase) ||
-                                                 line.Contains(".net", StringComparison.OrdinalIgnoreCase)))).ToList();
-
-        return contactLines.Count > 0 ? string.Join("\n", contactLines) : null;
     }
 }

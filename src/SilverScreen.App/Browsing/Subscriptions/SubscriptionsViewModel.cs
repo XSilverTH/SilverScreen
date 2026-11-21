@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
+using SilverScreen.Account.Auth;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
@@ -57,6 +58,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private bool _hasMoreFeed;
     private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private bool _loadedAtLeastOnce;
+    private readonly INativeAuthService? _authService;
     private Action? _openWebLogin;
     private CancellationTokenSource? _refreshCts;
     private uint _refreshGeneration;
@@ -66,16 +68,18 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         IAuthenticatedSubscriptionsService subscriptionsService,
         IChannelService channelService,
         ISessionService sessionService,
-        Action? openWebLogin = null)
+        Action? openWebLogin = null,
+        INativeAuthService? authService = null)
     {
         _subscriptionsService = subscriptionsService ?? throw new ArgumentNullException(nameof(subscriptionsService));
         _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
         _openWebLogin = openWebLogin;
+        _authService = authService;
 
         _engine = new PagedFeedEngine(
             FetchCurrentFeedPageAsync,
-            (_, _, _) => MapState(State, _openWebLogin).Status,
+            (_, _, _) => MapState(State, _openWebLogin, _authService).Status,
             defaultTitle: "Subscriptions",
             clearOnRefresh: false);
 
@@ -99,7 +103,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         IChannelService channelService,
         ISessionService sessionService,
         bool subscribeSessionEvents,
-        Action? openWebLogin = null) : this(subscriptionsService, channelService, sessionService, openWebLogin)
+        Action? openWebLogin = null,
+        INativeAuthService? authService = null) : this(subscriptionsService, channelService, sessionService, openWebLogin, authService)
     {
         if (subscribeSessionEvents)
             sessionService.SessionChanged += OnSessionChanged;
@@ -133,7 +138,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine.Dispose();
     }
 
-    VideoListPresentationState IVideoListSource.State => MapState(State, _openWebLogin);
+    VideoListPresentationState IVideoListSource.State => MapState(State, _openWebLogin, _authService);
 
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged
     {
@@ -776,7 +781,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     }
 
     private static VideoListPresentationState MapState(SubscriptionsViewState state, Action? openWebLogin = null,
-        string? paginationError = null)
+        INativeAuthService? authService = null, string? paginationError = null)
     {
         var safePaginationError = string.IsNullOrWhiteSpace(paginationError ?? state.PaginationError)
             ? null
@@ -786,6 +791,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         {
             case AuthenticatedSubscriptionsStatus.AuthenticationRequired:
             case AuthenticatedSubscriptionsStatus.AuthenticationRejected:
+                Action? action = authService != null ? () => authService.StartAuthAsync().FireAndForget(Logger) : openWebLogin;
                 status = new VideoListStatus(
                     SessionGate.SubscriptionsSignedOutTitle,
                     state.Status == AuthenticatedSubscriptionsStatus.AuthenticationRejected
@@ -796,7 +802,7 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                     state.Status == AuthenticatedSubscriptionsStatus.AuthenticationRejected
                         ? SessionGate.SignInAgainActionLabel
                         : SessionGate.SignInActionLabel,
-                    openWebLogin);
+                    action);
                 break;
 
             case AuthenticatedSubscriptionsStatus.TemporaryBackendFailure:

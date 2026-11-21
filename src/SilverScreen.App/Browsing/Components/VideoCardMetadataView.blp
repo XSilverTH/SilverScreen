@@ -1,0 +1,70 @@
+using Gtk 4.0;
+
+Gtk.Overlay VideoCardMetadataView {
+  margin-start: 12;
+  margin-end: 12;
+  margin-top: 9;
+  margin-bottom: 10;
+
+  styles [
+    "video-metadata",
+  ]
+
+  child: Gtk.Box text {
+    orientation: vertical;
+    spacing: 2;
+    hexpand: true;
+
+    Gtk.Label title {
+      xalign: 0;
+      wrap: true;
+      max-width-chars: 30;
+      height-request: 38;
+
+      styles [
+        "video-title",
+      ]
+    }
+
+    Gtk.Box footer {
+      orientation: horizontal;
+      spacing: 8;
+      hexpand: true;
+
+      Gtk.Label channel {
+        xalign: 0;
+        hexpand: true;
+        wrap: false;
+        ellipsize: end;
+        focusable: true;
+
+        styles [
+          "dim-label",
+          "channel-link",
+        ]
+      }
+
+      Gtk.Label upload_date {
+        xalign: 1;
+        halign: end;
+        wrap: false;
+        visible: false;
+
+        styles [
+          "dim-label",
+        ]
+      }
+    }
+  };
+
+  [overlay]
+  Gtk.MenuButton menu {
+    icon-name: "view-more-symbolic";
+    halign: end;
+    valign: start;
+
+    styles [
+      "flat",
+    ]
+  }
+}
