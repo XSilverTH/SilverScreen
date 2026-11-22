@@ -123,19 +123,20 @@ public sealed class PlayerStreamDelayStateTests
 
     [Theory]
     // Light colors (should return true -> black text)
-    [InlineData(0.745, 0.761, 1.0, true)]   // Noctalia lavender #bec2ff
-    [InlineData(1.0, 1.0, 1.0, true)]       // Pure white
+    [InlineData(0.745, 0.761, 1.0, true)] // Noctalia lavender #bec2ff
+    [InlineData(1.0, 1.0, 1.0, true)] // Pure white
     [InlineData(0.965, 0.827, 0.176, true)] // Yellow #f6d32d
     [InlineData(0.976, 0.753, 0.922, true)] // Light pink
     [InlineData(0.561, 0.941, 0.643, true)] // Mint green
     // Dark colors (should return false -> white text)
-    [InlineData(0.0, 0.0, 0.0, false)]      // Pure black
-    [InlineData(0.09, 0.09, 0.09, false)]   // Trough dark gray
-    [InlineData(0.208, 0.518, 0.894, false)]// Adwaita blue #3584e4
-    [InlineData(0.753, 0.110, 0.157, false)]// Adwaita red #c01c28
-    [InlineData(0.149, 0.635, 0.412, false)]// Adwaita green #26a269
-    [InlineData(0.569, 0.255, 0.675, false)]// Adwaita purple #9141ac
-    public void IsLightColor_CorrectlyDifferentiatesLightAndDarkColors(double r, double g, double b, bool expectedIsLight)
+    [InlineData(0.0, 0.0, 0.0, false)] // Pure black
+    [InlineData(0.09, 0.09, 0.09, false)] // Trough dark gray
+    [InlineData(0.208, 0.518, 0.894, false)] // Adwaita blue #3584e4
+    [InlineData(0.753, 0.110, 0.157, false)] // Adwaita red #c01c28
+    [InlineData(0.149, 0.635, 0.412, false)] // Adwaita green #26a269
+    [InlineData(0.569, 0.255, 0.675, false)] // Adwaita purple #9141ac
+    public void IsLightColor_CorrectlyDifferentiatesLightAndDarkColors(double r, double g, double b,
+        bool expectedIsLight)
     {
         var result = PlayerStreamDelayController.IsLightColor(r, g, b);
         Assert.Equal(expectedIsLight, result);

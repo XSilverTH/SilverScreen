@@ -1,4 +1,3 @@
-
 namespace SilverScreen.Tests.Player;
 
 public class PlayerCueGeometryTests

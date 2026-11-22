@@ -4,7 +4,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Player;
 
 namespace SilverScreen.Tests.Player;
 
@@ -649,17 +648,17 @@ public sealed class PlaybackSessionTests : IDisposable
 
     private sealed class TrackingCoordinator : IDisposable
     {
-        private readonly TrackingCookieProvider _cookieProvider = new();
         private readonly TrackingPresence _presence = new();
         private readonly TrackingTelemetry _telemetry = new();
 
         public TrackingCoordinator()
         {
-            Coordinator = new PlaybackCoordinator(_cookieProvider, _presence, _telemetry);
+            Coordinator = new PlaybackCoordinator(CookieProvider, _presence, _telemetry);
         }
 
         public PlaybackCoordinator Coordinator { get; }
-        public TrackingCookieProvider CookieProvider => _cookieProvider;
+        public TrackingCookieProvider CookieProvider { get; } = new();
+
         public List<PlaybackPresenceState> PresenceUpdates => _presence.SetCalls.Select(c => c.State).ToList();
         public List<(PlaybackRequest Request, PlaybackPresenceState State)> PresenceCalls => _presence.SetCalls;
 

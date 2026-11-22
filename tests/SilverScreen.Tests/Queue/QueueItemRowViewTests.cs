@@ -54,6 +54,6 @@ public sealed class QueueItemRowViewTests
     {
         var video = new VideoSummary(
             id.ToString(), title, "channel", TimeSpan.FromMinutes(1), "thumbnail", false);
-        return new QueueItem(id, video, DateTimeOffset.UtcNow);
+        return new QueueItem(id, video);
     }
 }

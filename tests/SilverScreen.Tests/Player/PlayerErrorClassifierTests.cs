@@ -1,4 +1,3 @@
-
 namespace SilverScreen.Tests.Player;
 
 public sealed class PlayerErrorClassifierTests

@@ -1,5 +1,4 @@
 using System.Net;
-using SilverScreen.Core.Domain;
 using SilverScreen.Infrastructure.Domain;
 
 namespace SilverScreen.Tests.Domain;

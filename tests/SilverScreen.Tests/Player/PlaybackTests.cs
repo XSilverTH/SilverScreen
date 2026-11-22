@@ -3,7 +3,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Shell;
 
 namespace SilverScreen.Tests.Player;
 

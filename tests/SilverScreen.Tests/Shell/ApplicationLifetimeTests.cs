@@ -1,5 +1,3 @@
-using SilverScreen.Shell;
-
 namespace SilverScreen.Tests.Shell;
 
 public sealed class ApplicationLifetimeTests

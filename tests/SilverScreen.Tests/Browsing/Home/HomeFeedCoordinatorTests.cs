@@ -2,8 +2,8 @@ using SilverScreen.Browsing.Components;
 using SilverScreen.Browsing.Home;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Browsing.Home;
+using SilverScreen.Core.Domain;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Browsing.Home;

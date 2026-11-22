@@ -1,5 +1,4 @@
 using SilverScreen.Browsing.Channel;
-using SilverScreen.Shell;
 
 namespace SilverScreen.Tests.Shell;
 

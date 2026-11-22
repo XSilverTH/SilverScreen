@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SilverScreen.Shell;
 
 namespace SilverScreen.Tests.Shell;
 

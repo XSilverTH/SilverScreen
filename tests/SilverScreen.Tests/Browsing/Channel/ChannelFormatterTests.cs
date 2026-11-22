@@ -33,7 +33,8 @@ public class ChannelFormatterTests
     [Fact]
     public void ExtractContactInfo_FiltersMatchingLines()
     {
-        var description = "Welcome to my channel!\nFor business inquir: biz@example.com\nFollow me on Twitter\nContact: 555-1234";
+        var description =
+            "Welcome to my channel!\nFor business inquir: biz@example.com\nFollow me on Twitter\nContact: 555-1234";
         var result = ChannelFormatter.ExtractContactInfo(description);
         Assert.NotNull(result);
         Assert.Contains("biz@example.com", result);

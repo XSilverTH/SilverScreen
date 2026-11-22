@@ -492,7 +492,7 @@ public sealed class LibMpvPlayerTests
         using var player = new LibMpvPlayer(native, action => action());
         player.HandleFileLoaded();
 
-        var stats = player.GetPlaybackStats(true);
+        var stats = player.GetPlaybackStats();
         Assert.NotNull(stats);
         Assert.Equal(3, stats.Tracks.Count);
 
