@@ -50,7 +50,7 @@ public sealed class QueueService : IQueueService
 
     public QueueItem Add(VideoSummary video)
     {
-        var item = new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now);
+        var item = new QueueItem(Guid.NewGuid(), video);
         lock (_lock)
         {
             _items.Add(item);
@@ -117,7 +117,7 @@ public sealed class QueueService : IQueueService
         {
             _items.Clear();
             foreach (var video in videos)
-                _items.Add(new QueueItem(Guid.NewGuid(), video, DateTimeOffset.Now));
+                _items.Add(new QueueItem(Guid.NewGuid(), video));
             count = _items.Count;
         }
 

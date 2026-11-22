@@ -80,7 +80,7 @@ public sealed partial class LibMpvPlayer : IDisposable
     }
 
     internal LibMpvPlayer(ILibMpvNativeApi native, Action<Action> dispatch) : this(
-        new Lazy<ILibMpvNativeApi>(() => native), dispatch, false)
+        new Lazy<ILibMpvNativeApi>(() => native), dispatch)
     {
     }
 
@@ -116,7 +116,6 @@ public sealed partial class LibMpvPlayer : IDisposable
             }
             catch
             {
-                // ignored
             }
 
         _commands.Writer.TryComplete();
@@ -126,7 +125,6 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
         catch
         {
-            // ignored
         }
 
         if (_handle != 0) Native.Wakeup(_handle);
@@ -136,7 +134,6 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
         catch
         {
-            // ignored
         }
 
         nint renderContext;
@@ -569,7 +566,8 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
     }
 
-    [GeneratedRegex(@"Waiting\s+(?<seconds>\d+(?:[.,]\d+)?)\s+seconds\s+for\s+the\s+stream\s+to\s+become\s+available", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"Waiting\s+(?<seconds>\d+(?:[.,]\d+)?)\s+seconds\s+for\s+the\s+stream\s+to\s+become\s+available",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex StreamWaitRegex();
 
     internal static bool TryParseStreamDelay(string prefix, string text, out TimeSpan delay)
@@ -583,11 +581,10 @@ public sealed partial class LibMpvPlayer : IDisposable
                 var secondsSpan = match.Groups["seconds"].ValueSpan;
                 Span<char> normalized = stackalloc char[secondsSpan.Length];
                 for (var i = 0; i < secondsSpan.Length; i++)
-                {
                     normalized[i] = secondsSpan[i] == ',' ? '.' : secondsSpan[i];
-                }
 
-                if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) &&
+                    seconds > 0)
                 {
                     delay = TimeSpan.FromSeconds(seconds);
                     return true;
@@ -608,9 +605,7 @@ public sealed partial class LibMpvPlayer : IDisposable
         if (string.IsNullOrWhiteSpace(text)) return;
 
         if (TryParseStreamDelay(prefix, text, out var streamDelay))
-        {
             Dispatch(() => StreamDelayDetected?.Invoke(this, streamDelay));
-        }
 
         if (message.LogLevel <= LibMpvLogLevel.Error ||
             (message.LogLevel <= LibMpvLogLevel.Warn && (prefix == "ytdl_hook" || text.Contains("ERROR"))))
@@ -812,6 +807,7 @@ public sealed partial class LibMpvPlayer : IDisposable
             Check(Native.SetPropertyFlag(_handle, "cookies", false));
             Check(Native.SetPropertyString(_handle, "cookies-file", string.Empty));
         }
+
         Check(Native.SetPropertyString(_handle, "keep-open",
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
         Check(Native.SetPropertyString(_handle, "ytdl-format",
@@ -1398,7 +1394,6 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
         catch
         {
-            // ignored
         }
     }
 

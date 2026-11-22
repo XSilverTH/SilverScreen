@@ -206,7 +206,7 @@ public static partial class YtDlpFormatSelector
         }
     }
 
-    public static int? ParseTargetHeight(string? quality)
+    private static int? ParseTargetHeight(string? quality)
     {
         if (string.IsNullOrWhiteSpace(quality))
             return null;
