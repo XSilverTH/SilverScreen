@@ -1,13 +1,8 @@
 using Adw;
-using Gtk;
-using SilverScreen.Account.Auth;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Search;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
-using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
-using SilverScreen.Player;
 using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 using HeaderBar = Adw.HeaderBar;
@@ -19,16 +14,6 @@ namespace SilverScreen.Shell.Header;
 /// </summary>
 public partial class ShellHeaderBarView : ViewBase<HeaderBar>
 {
-    public NavigationBackButtonView BackButton { get; }
-    public AccountHeaderButtonView AccountButton { get; }
-    public SearchHeaderButtonView SearchButton { get; }
-    public NowPlayingHeaderBarView NowPlaying { get; }
-    public QueueHeaderButtonView QueueButton { get; }
-    public RefreshHeaderButtonView RefreshButton { get; }
-    public DependencyWarningButtonView DepsButton { get; }
-
-    public ViewSwitcher ViewSwitcher => view_switcher;
-
     public ShellHeaderBarView(
         INavigationService navigationService,
         IPlaybackModeRoutingService playback,
@@ -51,7 +36,7 @@ public partial class ShellHeaderBarView : ViewBase<HeaderBar>
     {
     }
 
-    public ShellHeaderBarView(
+    private ShellHeaderBarView(
         NavigationBackButtonView backButton,
         AccountHeaderButtonView accountButton,
         SearchHeaderButtonView searchButton,
@@ -80,12 +65,14 @@ public partial class ShellHeaderBarView : ViewBase<HeaderBar>
         Widget.PackEnd(DepsButton.Widget);
     }
 
-    /// <summary>Attaches the shell navigation view stack to the header's Adw.ViewSwitcher.</summary>
-    public void AttachViewStack(ViewStack viewStack)
-    {
-        ArgumentNullException.ThrowIfNull(viewStack);
-        view_switcher.Stack = viewStack;
-    }
+    private NavigationBackButtonView BackButton { get; }
+    private AccountHeaderButtonView AccountButton { get; }
+    private SearchHeaderButtonView SearchButton { get; }
+    private NowPlayingHeaderBarView NowPlaying { get; }
+    public QueueHeaderButtonView QueueButton { get; }
+    private RefreshHeaderButtonView RefreshButton { get; }
+    private DependencyWarningButtonView DepsButton { get; }
+    public ViewSwitcher ViewSwitcher => view_switcher;
 
     /// <summary>Controls visibility of the title view switcher during responsive breakpoint shifts.</summary>
     public void SetTitleWidgetRevealed(bool revealed)

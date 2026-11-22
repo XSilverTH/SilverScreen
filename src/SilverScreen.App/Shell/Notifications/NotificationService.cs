@@ -16,28 +16,6 @@ public sealed class NotificationService : INotificationService
     /// <summary>Gets a value indicating whether a ToastOverlay is currently attached.</summary>
     public bool IsOverlayAttached => _toastOverlay is not null;
 
-    /// <summary>
-    ///     Attaches an active <see cref="ToastOverlay"/> to display notifications.
-    /// </summary>
-    public void AttachToastOverlay(ToastOverlay overlay)
-    {
-        ArgumentNullException.ThrowIfNull(overlay);
-        _toastOverlay = overlay;
-        Logger.Debug("Attached ToastOverlay to NotificationService");
-    }
-
-    /// <summary>
-    ///     Detaches the current <see cref="ToastOverlay"/>, preventing further notifications from being displayed on closed views.
-    /// </summary>
-    public void DetachToastOverlay(ToastOverlay? overlay = null)
-    {
-        if (overlay is null || ReferenceEquals(_toastOverlay, overlay))
-        {
-            _toastOverlay = null;
-            Logger.Debug("Detached ToastOverlay from NotificationService");
-        }
-    }
-
     /// <inheritdoc />
     public void ShowToast(string message)
     {
@@ -82,5 +60,26 @@ public sealed class NotificationService : INotificationService
 
             return false;
         });
+    }
+
+    /// <summary>
+    ///     Attaches an active <see cref="ToastOverlay" /> to display notifications.
+    /// </summary>
+    public void AttachToastOverlay(ToastOverlay overlay)
+    {
+        ArgumentNullException.ThrowIfNull(overlay);
+        _toastOverlay = overlay;
+        Logger.Debug("Attached ToastOverlay to NotificationService");
+    }
+
+    /// <summary>
+    ///     Detaches the current <see cref="ToastOverlay" />, preventing further notifications from being displayed on closed
+    ///     views.
+    /// </summary>
+    public void DetachToastOverlay(ToastOverlay? overlay = null)
+    {
+        if (overlay is not null && !ReferenceEquals(_toastOverlay, overlay)) return;
+        _toastOverlay = null;
+        Logger.Debug("Detached ToastOverlay from NotificationService");
     }
 }

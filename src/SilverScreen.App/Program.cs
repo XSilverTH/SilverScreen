@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 if (args.Length > 0 && args.Contains("--auth")) return RunAuthHelper();

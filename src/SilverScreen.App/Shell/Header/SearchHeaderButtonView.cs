@@ -1,7 +1,7 @@
 using Gtk;
 using SilverScreen.Browsing.Search;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
+using Object = GObject.Object;
 
 namespace SilverScreen.Shell.Header;
 
@@ -32,9 +32,12 @@ public partial class SearchHeaderButtonView : ViewBase<MenuButton>
         Lifetime.Track(() => search_popover.OnNotify += OnNotify, () => search_popover.OnNotify -= OnNotify);
     }
 
-    private void OnClosed(Popover sender, EventArgs args) => _searchPopover.OnClosed();
+    private void OnClosed(Popover sender, EventArgs args)
+    {
+        _searchPopover.OnClosed();
+    }
 
-    private void OnNotify(GObject.Object sender, GObject.Object.NotifySignalArgs args)
+    private void OnNotify(Object sender, Object.NotifySignalArgs args)
     {
         if (args.Pspec.GetName() == "visible" && search_popover.GetVisible())
             _searchPopover.OnOpened();

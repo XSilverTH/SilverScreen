@@ -1,3 +1,5 @@
+using Adw;
+
 namespace SilverScreen.Shell.Notifications;
 
 /// <summary>
@@ -13,5 +15,5 @@ public interface INotificationService
     /// <summary>
     ///     Shows an existing Libadwaita toast instance, marshalling to the main thread.
     /// </summary>
-    void ShowToast(Adw.Toast toast);
+    void ShowToast(Toast toast);
 }

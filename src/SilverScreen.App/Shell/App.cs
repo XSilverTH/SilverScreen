@@ -10,7 +10,6 @@ using SilverScreen.Browsing.Search;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
-using SilverScreen.Player;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
 using Window = Gtk.Window;

@@ -2,8 +2,6 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Player;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Shell.Header;
@@ -14,8 +12,8 @@ namespace SilverScreen.Shell.Header;
 public partial class NowPlayingHeaderBarView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<NowPlayingHeaderBarView>();
-    private readonly IPlaybackModeRoutingService _playback;
     private readonly INavigationService _navigationService;
+    private readonly IPlaybackModeRoutingService _playback;
     private readonly IPreferencesService _preferences;
 
     public NowPlayingHeaderBarView(

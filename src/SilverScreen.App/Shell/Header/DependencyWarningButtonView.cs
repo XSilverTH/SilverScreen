@@ -27,7 +27,8 @@ public partial class DependencyWarningButtonView : ViewBase<MenuButton>
         Widget.Visible = true;
 
         var popoverContent = Box.New(Orientation.Vertical, 12);
-        popoverContent.MarginTop = popoverContent.MarginBottom = popoverContent.MarginStart = popoverContent.MarginEnd = 16;
+        popoverContent.MarginTop =
+            popoverContent.MarginBottom = popoverContent.MarginStart = popoverContent.MarginEnd = 16;
 
         var heading = Label.New("Runtime setup needed");
         heading.AddCssClass("heading");

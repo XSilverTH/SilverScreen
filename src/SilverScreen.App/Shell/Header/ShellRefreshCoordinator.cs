@@ -2,8 +2,8 @@ namespace SilverScreen.Shell.Header;
 
 public sealed class ShellRefreshCoordinator : IShellRefreshCoordinator
 {
-    private Func<Task>? _refreshHandler;
     private Func<bool>? _isLoadingHandler;
+    private Func<Task>? _refreshHandler;
 
     public bool IsLoading => _isLoadingHandler?.Invoke() ?? false;
 

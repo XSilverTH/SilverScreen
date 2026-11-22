@@ -66,19 +66,19 @@ public sealed class NavigationService : INavigationService, IDisposable
 {
     private const string ShellStackName = "shell";
     private readonly Stack<NavigationEntry> _backStack = new();
-
-    private Stack? _mainStack;
     private readonly Dictionary<NavigationPage, NavigationPageRegistration> _registry = new();
-    private ViewStack? _viewStack;
     private readonly Dictionary<string, NavigationPage> _viewStackNameToPage = new(StringComparer.Ordinal);
     private bool _disposed;
     private bool _isNavigating;
+
+    private Stack? _mainStack;
+    private ViewStack? _viewStack;
 
     public NavigationService() : this(null, null)
     {
     }
 
-    public NavigationService(Stack? mainStack, ViewStack? viewStack)
+    private NavigationService(Stack? mainStack, ViewStack? viewStack)
     {
         _mainStack = mainStack;
         _viewStack = viewStack;
@@ -91,14 +91,10 @@ public sealed class NavigationService : INavigationService, IDisposable
         RegisterPage(NavigationPage.Player, "player", false);
     }
 
-    public NavigationPage CurrentPage => CurrentEntry.Page;
     public object? CurrentParameter => CurrentEntry.Parameter;
-    public NavigationEntry CurrentEntry { get; private set; } = new(NavigationPage.Home);
 
     public NavigationPage? PreviousPage => _backStack.Count > 0 ? _backStack.Peek().Page : null;
     public object? PreviousParameter => _backStack.Count > 0 ? _backStack.Peek().Parameter : null;
-    public NavigationEntry? PreviousEntry => _backStack.Count > 0 ? _backStack.Peek() : null;
-    public bool CanGoBack => _backStack.Count > 0;
 
     public void Dispose()
     {
@@ -111,52 +107,12 @@ public sealed class NavigationService : INavigationService, IDisposable
         _viewStackNameToPage.Clear();
     }
 
+    public NavigationPage CurrentPage => CurrentEntry.Page;
+    public NavigationEntry CurrentEntry { get; private set; } = new(NavigationPage.Home);
+    public NavigationEntry? PreviousEntry => _backStack.Count > 0 ? _backStack.Peek() : null;
+    public bool CanGoBack => _backStack.Count > 0;
+
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
-
-    public void AttachMainStack(Stack? mainStack)
-    {
-        _mainStack = mainStack;
-        SyncCurrentPageStackVisibility();
-    }
-
-    public void AttachViewStack(ViewStack? viewStack)
-    {
-        _viewStack = viewStack;
-        SyncCurrentPageStackVisibility();
-    }
-
-    public void AttachStacks(Stack? mainStack, ViewStack? viewStack)
-    {
-        _mainStack = mainStack;
-        _viewStack = viewStack;
-        SyncCurrentPageStackVisibility();
-    }
-
-    private void SyncCurrentPageStackVisibility()
-    {
-        if (!_registry.TryGetValue(CurrentEntry.Page, out var entry)) return;
-        if (entry.IsShellPage)
-        {
-            if (_mainStack is not null &&
-                !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
-                _mainStack.VisibleChildName = ShellStackName;
-
-            if (_viewStack is not null &&
-                !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
-                _viewStack.VisibleChildName = entry.StackName;
-        }
-        else
-        {
-            if (_mainStack is not null &&
-                !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
-                _mainStack.VisibleChildName = entry.StackName;
-        }
-    }
-
-    public bool CanNavigateTo(NavigationPage page)
-    {
-        return !_disposed && _registry.ContainsKey(page);
-    }
 
     public bool NavigateTo(NavigationPage page, object? parameter = null)
     {
@@ -185,6 +141,44 @@ public sealed class NavigationService : INavigationService, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         return _backStack.TryPop(out var target) && NavigateInternal(target, false, true);
+    }
+
+    public void AttachMainStack(Stack? mainStack)
+    {
+        _mainStack = mainStack;
+        SyncCurrentPageStackVisibility();
+    }
+
+    public void AttachViewStack(ViewStack? viewStack)
+    {
+        _viewStack = viewStack;
+        SyncCurrentPageStackVisibility();
+    }
+
+    private void SyncCurrentPageStackVisibility()
+    {
+        if (!_registry.TryGetValue(CurrentEntry.Page, out var entry)) return;
+        if (entry.IsShellPage)
+        {
+            if (_mainStack is not null &&
+                !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
+                _mainStack.VisibleChildName = ShellStackName;
+
+            if (_viewStack is not null &&
+                !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                _viewStack.VisibleChildName = entry.StackName;
+        }
+        else
+        {
+            if (_mainStack is not null &&
+                !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                _mainStack.VisibleChildName = entry.StackName;
+        }
+    }
+
+    public bool CanNavigateTo(NavigationPage page)
+    {
+        return !_disposed && _registry.ContainsKey(page);
     }
 
     public void SyncFromViewStack(string? childName)

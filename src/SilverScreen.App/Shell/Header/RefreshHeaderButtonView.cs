@@ -1,7 +1,6 @@
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Shell.Header;

@@ -15,9 +15,9 @@ namespace SilverScreen.Shell.Header;
 public partial class AccountHeaderButtonView : ViewBase<MenuButton>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountHeaderButtonView>();
-    private readonly AccountViewModel _viewModel;
-    private readonly IThumbnailService _thumbnails;
     private readonly NativeMemoryPressure _avatarPressure = new();
+    private readonly IThumbnailService _thumbnails;
+    private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
     private string? _loadedAvatarUrl;
@@ -38,20 +38,28 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
         Render();
     }
 
-    private void OnPropertyChanged(object? sender, PropertyChangedEventArgs e) =>
-        Lifetime.Idle(() => { if (!IsDisposed) Render(); return false; });
+    private void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        Lifetime.Idle(() =>
+        {
+            if (!IsDisposed) Render();
+            return false;
+        });
+    }
 
     private void Render()
     {
         var hasManual = _viewModel.HasManualSession;
         var status = !hasManual ? AccountProfilePresentationStatus.SignedOut : _viewModel.ProfileStatus;
-        account_status_stack.VisibleChildName = status switch {
+        account_status_stack.VisibleChildName = status switch
+        {
             AccountProfilePresentationStatus.Ready => "avatar",
             AccountProfilePresentationStatus.Checking => "checking",
             AccountProfilePresentationStatus.Rejected or AccountProfilePresentationStatus.Unavailable => "warning",
             _ => "signed_out"
         };
-        Widget.TooltipText = status switch {
+        Widget.TooltipText = status switch
+        {
             AccountProfilePresentationStatus.Ready => $"YouTube account: {_viewModel.DisplayName}",
             AccountProfilePresentationStatus.Checking => "Checking YouTube account",
             AccountProfilePresentationStatus.Rejected => "YouTube session expired — sign in again",
@@ -61,7 +69,8 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
         var isReady = status == AccountProfilePresentationStatus.Ready;
         account_avatar.Text = isReady ? _viewModel.DisplayName : string.Empty;
         account_avatar.ShowInitials = isReady;
-        if (isReady && !string.IsNullOrWhiteSpace(_viewModel.AvatarUrl)) LoadAvatarAsync(_viewModel.AvatarUrl).FireAndForget(Logger);
+        if (isReady && !string.IsNullOrWhiteSpace(_viewModel.AvatarUrl))
+            LoadAvatarAsync(_viewModel.AvatarUrl).FireAndForget(Logger);
         else ClearAvatar();
     }
 
@@ -69,26 +78,53 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
     {
         if (string.Equals(_loadedAvatarUrl, avatarUrl, StringComparison.Ordinal)) return;
         _loadedAvatarUrl = avatarUrl;
-        try { _avatarCancellation?.Cancel(); } catch (Exception) { }
+        try
+        {
+            await _avatarCancellation?.CancelAsync()!;
+        }
+        catch (Exception)
+        {
+        }
+
         _avatarCancellation?.Dispose();
-        var ct = (_avatarCancellation = new()).Token;
+        var ct = (_avatarCancellation = new CancellationTokenSource()).Token;
         Pixbuf? pixbuf = null;
-        try {
+        try
+        {
             var thumbnail = await _thumbnails.GetThumbnailAsync(avatarUrl, ct).ConfigureAwait(false);
             if (thumbnail is not null)
-                pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 48, 48, true), ct).ConfigureAwait(false);
-        } catch (Exception ex) { if (ex is not OperationCanceledException) Logger.Warning(ex, "Failed avatar load"); return; }
-        if (pixbuf is null || IsDisposed || ct.IsCancellationRequested) { pixbuf?.Dispose(); return; }
+                pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 48, 48, true), ct)
+                    .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException) Logger.Warning(ex, "Failed avatar load");
+            return;
+        }
+
+        if (pixbuf is null || IsDisposed || ct.IsCancellationRequested)
+        {
+            pixbuf?.Dispose();
+            return;
+        }
+
         var decoded = pixbuf;
-        Lifetime.Idle(() => {
-            try {
+        Lifetime.Idle(() =>
+        {
+            try
+            {
                 if (IsDisposed || ct.IsCancellationRequested) return false;
                 var texture = Texture.NewForPixbuf(decoded);
                 account_avatar.CustomImage = texture;
                 _avatarTexture?.Dispose();
                 _avatarTexture = texture;
                 _avatarPressure.Track(48 * 48 * 4);
-            } finally { decoded.Dispose(); }
+            }
+            finally
+            {
+                decoded.Dispose();
+            }
+
             return false;
         });
     }
@@ -96,12 +132,30 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
     private void ClearAvatar()
     {
         _loadedAvatarUrl = null;
-        try { _avatarCancellation?.Cancel(); } catch (Exception) { }
-        _avatarCancellation?.Dispose(); _avatarCancellation = null;
+        try
+        {
+            _avatarCancellation?.Cancel();
+        }
+        catch (Exception)
+        {
+        }
+
+        _avatarCancellation?.Dispose();
+        _avatarCancellation = null;
         account_avatar.CustomImage = null!;
-        _avatarTexture?.Dispose(); _avatarTexture = null;
+        _avatarTexture?.Dispose();
+        _avatarTexture = null;
         _avatarPressure.Release();
     }
 
-    protected override void Dispose(bool disposing) { if (disposing) { ClearAvatar(); _avatarPressure.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            ClearAvatar();
+            _avatarPressure.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }
