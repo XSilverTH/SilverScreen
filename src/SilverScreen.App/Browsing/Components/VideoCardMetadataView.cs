@@ -2,7 +2,6 @@ using System.Globalization;
 using Gdk;
 using Gtk;
 using SilverScreen.Core.Domain;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 using Constants = Gdk.Constants;
 
@@ -12,9 +11,6 @@ public partial class VideoCardMetadataView : ViewBase<Overlay>
 {
     private readonly INavigationService _navigation;
     private VideoSummary? _video;
-
-    public MenuButton MenuButton => menu;
-    public event Action? ContextMenuRequested;
 
     public VideoCardMetadataView(INavigationService navigation)
     {
@@ -32,6 +28,9 @@ public partial class VideoCardMetadataView : ViewBase<Overlay>
             c => c.OnKeyPressed -= OnChannelKeyPressed);
     }
 
+    public MenuButton MenuButton => menu;
+    public event Action? ContextMenuRequested;
+
     public void Bind(VideoSummary video)
     {
         _video = video;
@@ -42,7 +41,8 @@ public partial class VideoCardMetadataView : ViewBase<Overlay>
         if (video.PublishedAt is { } publishedAt)
         {
             upload_date.SetText(VideoCardFormatting.FormatUploadAge(publishedAt, DateTimeOffset.Now));
-            upload_date.TooltipText = $"Published: {publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}";
+            upload_date.TooltipText =
+                $"Published: {publishedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.CurrentCulture)}";
             upload_date.Visible = true;
         }
         else if (video.ApproximateUploadDate is { } uploadDate)
@@ -99,8 +99,6 @@ public partial class VideoCardMetadataView : ViewBase<Overlay>
         if (_video is { ChannelUrl: { } url, ChannelName: { } name } &&
             !string.IsNullOrWhiteSpace(url) &&
             !url.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
-        {
             _navigation.NavigateToChannel(url, name);
-        }
     }
 }

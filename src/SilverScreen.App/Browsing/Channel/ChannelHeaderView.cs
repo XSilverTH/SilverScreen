@@ -8,13 +8,13 @@ public partial class ChannelHeaderView : ViewBase<Revealer, ChannelViewModel>
 {
     private const double CollapseThreshold = 50.0, TopRevealThreshold = 1.0, TopHoverZoneThreshold = 40.0;
     private const long LayoutStabilizationMs = 350;
+    private readonly ChannelControlsBarView _controlsBar;
 
     private readonly ChannelProfileCardView _profileCard;
-    private readonly ChannelControlsBarView _controlsBar;
-    private Adjustment? _vadjustment;
     private bool _isHeaderCollapsed, _isUserScrollingUp;
     private long _lastHeaderStateChangeTicks, _lastScrollDownTicks, _lastUserScrollTicks;
     private double _lastScrollY;
+    private Adjustment? _vadjustment;
 
     public ChannelHeaderView(IThumbnailService thumbnails, Func<int>? getBatchSize = null)
     {
@@ -46,8 +46,16 @@ public partial class ChannelHeaderView : ViewBase<Revealer, ChannelViewModel>
         var motionController = EventControllerMotion.New();
         motionController.SetPropagationPhase(PropagationPhase.Capture);
         Lifetime.Attach(scrolledWindow, motionController,
-            c => { c.OnEnter += (s, e) => CheckHoverReveal(e.Y); c.OnMotion += (s, e) => CheckHoverReveal(e.Y); },
-            c => { c.OnEnter -= (s, e) => CheckHoverReveal(e.Y); c.OnMotion -= (s, e) => CheckHoverReveal(e.Y); });
+            c =>
+            {
+                c.OnEnter += (_, e) => CheckHoverReveal(e.Y);
+                c.OnMotion += (_, e) => CheckHoverReveal(e.Y);
+            },
+            c =>
+            {
+                c.OnEnter -= (_, e) => CheckHoverReveal(e.Y);
+                c.OnMotion -= (_, e) => CheckHoverReveal(e.Y);
+            });
     }
 
     public void SetHeaderCollapsed(bool collapsed)
@@ -72,6 +80,7 @@ public partial class ChannelHeaderView : ViewBase<Revealer, ChannelViewModel>
                 _lastUserScrollTicks = _lastScrollDownTicks = Environment.TickCount64;
                 break;
         }
+
         return false;
     }
 
@@ -96,6 +105,7 @@ public partial class ChannelHeaderView : ViewBase<Revealer, ChannelViewModel>
             var userMovingUp = currentY < _lastScrollY || (_isUserScrollingUp && now - _lastUserScrollTicks < 500);
             if (reachesTop && userMovingUp) SetHeaderCollapsed(false);
         }
+
         _lastScrollY = currentY;
     }
 

@@ -34,11 +34,18 @@ public partial class SubscriptionsView : ViewBase<Box, SubscriptionsViewModel>
 
     public event EventHandler<bool>? RefreshLoadingChanged;
 
-    public int GetBatchSize() => _videoList.GetBatchSize();
+    public int GetBatchSize()
+    {
+        return _videoList.GetBatchSize();
+    }
 
-    public Task RefreshAsync() => _videoList.RefreshAsync();
+    public Task RefreshAsync()
+    {
+        return _videoList.RefreshAsync();
+    }
 
-    protected override void BindViewModel(SubscriptionsViewModel viewModel, BindingScope<SubscriptionsViewModel> bindings)
+    protected override void BindViewModel(SubscriptionsViewModel viewModel,
+        BindingScope<SubscriptionsViewModel> bindings)
     {
         _channelBar.ViewModel = viewModel;
         bindings.Bind(

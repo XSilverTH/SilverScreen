@@ -3,8 +3,8 @@ using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Browsing;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -18,8 +18,8 @@ public partial class VideoListView : ViewBase<Bin>
     private const uint RefreshScrollStabilizationMilliseconds = 16;
     private static readonly ILogger Logger = Log.ForContext<VideoListView>();
     private readonly ConditionalWeakTable<ListItem, VideoCardView> _cardsByListItem = new();
-    private readonly IVideoListSource _source;
     private readonly VideoCardServices _services;
+    private readonly IVideoListSource _source;
     private readonly SignalListItemFactory _videoFactory;
     private readonly StringList _videoIds;
     private readonly Dictionary<string, VideoSummary> _videosById = [];

@@ -1,9 +1,9 @@
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 
 namespace SilverScreen.Browsing.Search;

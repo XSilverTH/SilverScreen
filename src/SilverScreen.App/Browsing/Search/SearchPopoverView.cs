@@ -3,7 +3,6 @@ using Gtk;
 using Pango;
 using Serilog;
 using SilverScreen.Core.Common;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -12,10 +11,10 @@ namespace SilverScreen.Browsing.Search;
 public partial class SearchPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
-    private readonly Action _popdownAction;
-    private readonly Action<string>? _submitCallback;
     private readonly INavigationService? _navigationService;
     private readonly INotificationService? _notificationService;
+    private readonly Action _popdownAction;
+    private readonly Action<string>? _submitCallback;
     private readonly SearchViewModel _viewModel;
     private string[] _currentSuggestions = [];
     private string _originalTypedQuery = string.Empty;

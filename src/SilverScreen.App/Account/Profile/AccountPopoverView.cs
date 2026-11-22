@@ -2,16 +2,15 @@ using Adw;
 using Gtk;
 using SilverScreen.Account.Auth;
 using SilverScreen.Core.Domain;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Account.Profile;
 
 public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
 {
-    private readonly AccountStatusPageView _statusPage;
-    private readonly AccountSignedInCardView _signedInCard;
     private readonly AccountManualSessionEditorView _manualEditor;
+    private readonly AccountSignedInCardView _signedInCard;
+    private readonly AccountStatusPageView _statusPage;
     private bool _editing;
 
     public AccountPopoverView(

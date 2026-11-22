@@ -9,20 +9,17 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Components;
 
-public partial class VideoCardThumbnailView : ViewBase<Overlay>
+public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : ViewBase<Overlay>
 {
     private const int CardWidth = 336, ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardThumbnailView>();
-    private readonly IThumbnailService _thumbnails;
     private readonly NativeMemoryPressure _thumbnailPressure = new();
+    private readonly IThumbnailService _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
-    private CancellationTokenSource? _thumbnailCancellation;
     private string _thumbnailAlternativeText = string.Empty;
-
-    public VideoCardThumbnailView(IThumbnailService thumbnails) =>
-        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
+    private CancellationTokenSource? _thumbnailCancellation;
 
     public void Bind(VideoSummary video, CancellationToken ct = default)
     {
@@ -32,7 +29,9 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         SetWatchProgress(video.PlaybackProgress?.WatchedFraction);
         var generation = ++_bindingGeneration;
-        _thumbnailCancellation = ct.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(ct) : new();
+        _thumbnailCancellation = ct.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : new CancellationTokenSource();
         LoadThumbnailAsync(video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
     }
 
@@ -43,14 +42,15 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         SetWatchProgress(null);
         _thumbnailAlternativeText = string.Empty;
         _thumbnailCancellation?.Cancel();
-        _thumbnailCancellation?.Dispose(); _thumbnailCancellation = null;
+        _thumbnailCancellation?.Dispose();
+        _thumbnailCancellation = null;
         ClearThumbnail();
     }
 
     private void SetWatchProgress(double? fraction)
     {
         watched_progress.SetVisible(fraction is > 0);
-        watched_progress.Fraction = fraction is > 0 ? fraction!.Value : 0;
+        watched_progress.Fraction = fraction is > 0 ? fraction.Value : 0;
     }
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken ct)
@@ -60,10 +60,19 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         {
             var result = await _thumbnails.GetThumbnailAsync(video, ct).ConfigureAwait(false);
             if (result is null) return;
-            pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true), ct).ConfigureAwait(false);
+            pixbuf = await Task
+                .Run(() => Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true), ct)
+                .ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex) { Logger.Warning(ex, "Failed to load thumbnail for video"); return; }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to load thumbnail for video");
+            return;
+        }
 
         var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
         Functions.IdleAdd(0, () =>
@@ -79,15 +88,26 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
                     _boundPicture.HeightRequest = ThumbnailHeight;
                     _boundPicture.Hexpand = _boundPicture.Vexpand = true;
                 }
-                else _boundPicture.Paintable = texture;
+                else
+                {
+                    _boundPicture.Paintable = texture;
+                }
+
                 _boundPicture.AlternativeText = _thumbnailAlternativeText;
                 Widget.Child = _boundPicture;
                 _boundTexture?.Dispose();
                 _boundTexture = texture;
                 _thumbnailPressure.Track((long)CardWidth * ThumbnailHeight * 4);
             }
-            catch (Exception ex) { Logger.Warning(ex, "Failed to render thumbnail texture for video"); }
-            finally { decodedPixbuf.Dispose(); }
+            catch (Exception ex)
+            {
+                Logger.Warning(ex, "Failed to render thumbnail texture for video");
+            }
+            finally
+            {
+                decodedPixbuf.Dispose();
+            }
+
             return false;
         });
     }
@@ -104,7 +124,14 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { Unbind(); _boundPicture?.Dispose(); _boundPicture = null; _thumbnailPressure.Dispose(); }
+        if (disposing)
+        {
+            Unbind();
+            _boundPicture?.Dispose();
+            _boundPicture = null;
+            _thumbnailPressure.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

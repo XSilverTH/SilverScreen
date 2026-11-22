@@ -1,7 +1,7 @@
 using Gtk;
 using Serilog;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
 using XSTH.Blueprint.Helpers;
 
@@ -10,17 +10,15 @@ namespace SilverScreen.Queue;
 public partial class QueueView : ViewBase<Box, QueueViewModel>
 {
     private static readonly ILogger Logger = Log.ForContext<QueueView>();
+    private readonly Action? _closeRequested;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Dictionary<string, QueueItem> _itemsById = [];
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
     private readonly IThumbnailService _thumbnails;
     private readonly Action<int>? _trackJumpRequested;
-    private readonly Action? _closeRequested;
     private readonly QueueViewModel _viewModel;
     private QueueItem[] _displayedItems = [];
-
-    public event EventHandler? CloseRequested;
 
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails,
         Action? closeRequested = null, Action<int>? trackJumpRequested = null)
@@ -43,6 +41,8 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
 
         ViewModel = viewModel;
     }
+
+    public event EventHandler? CloseRequested;
 
     protected override void BindViewModel(QueueViewModel viewModel, BindingScope<QueueViewModel> bindings)
     {

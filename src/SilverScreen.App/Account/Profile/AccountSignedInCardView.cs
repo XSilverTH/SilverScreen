@@ -9,23 +9,24 @@ using Functions = GLib.Functions;
 
 namespace SilverScreen.Account.Profile;
 
-public partial class AccountSignedInCardView : ViewBase<Box, AccountViewModel>
+public partial class AccountSignedInCardView(IThumbnailService thumbnails) : ViewBase<Box, AccountViewModel>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountSignedInCardView>();
     private readonly NativeMemoryPressure _avatarPressure = new();
-    private readonly IThumbnailService _thumbnails;
+    private readonly IThumbnailService _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
     private string? _avatarUrl;
-
-    public AccountSignedInCardView(IThumbnailService thumbnails) =>
-        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
 
     protected override void BindViewModel(AccountViewModel viewModel, BindingScope<AccountViewModel> bindings)
     {
         bindings.Bind(nameof(AccountViewModel.DisplayName), this,
             static vm => vm.DisplayName,
-            static (view, name) => { view.signed_in_display_name.SetText(name); view.signed_in_avatar.Text = name; });
+            static (view, name) =>
+            {
+                view.signed_in_display_name.SetText(name);
+                view.signed_in_avatar.Text = name;
+            });
 
         bindings.Bind(nameof(AccountViewModel.AvatarUrl), this,
             static vm => vm.AvatarUrl,
@@ -51,10 +52,18 @@ public partial class AccountSignedInCardView : ViewBase<Box, AccountViewModel>
         {
             var thumbnail = await _thumbnails.GetThumbnailAsync(avatarUrl, ct).ConfigureAwait(false);
             if (thumbnail is null) return;
-            pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 128, 128, true), ct).ConfigureAwait(false);
+            pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 128, 128, true), ct)
+                .ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception) { Logger.Debug("Failed to load account avatar"); return; }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            Logger.Debug("Failed to load account avatar");
+            return;
+        }
 
         var decodedPixbuf = pixbuf;
         if (IsDisposed || ct.IsCancellationRequested || decodedPixbuf is null)
@@ -67,7 +76,8 @@ public partial class AccountSignedInCardView : ViewBase<Box, AccountViewModel>
         {
             try
             {
-                if (IsDisposed || ct.IsCancellationRequested || !string.Equals(_avatarUrl, avatarUrl, StringComparison.Ordinal))
+                if (IsDisposed || ct.IsCancellationRequested ||
+                    !string.Equals(_avatarUrl, avatarUrl, StringComparison.Ordinal))
                     return false;
 
                 var texture = Texture.NewForPixbuf(decodedPixbuf);
@@ -76,14 +86,25 @@ public partial class AccountSignedInCardView : ViewBase<Box, AccountViewModel>
                 _avatarTexture = texture;
                 _avatarPressure.Track(48 * 48 * 4);
             }
-            finally { decodedPixbuf.Dispose(); }
+            finally
+            {
+                decodedPixbuf.Dispose();
+            }
+
             return false;
         });
     }
 
     private void ClearAvatar()
     {
-        try { _avatarCancellation?.Cancel(); } catch (Exception) { }
+        try
+        {
+            _avatarCancellation?.Cancel();
+        }
+        catch (Exception)
+        {
+        }
+
         _avatarCancellation?.Dispose();
         _avatarCancellation = null;
         signed_in_avatar.CustomImage = null!;
@@ -92,11 +113,19 @@ public partial class AccountSignedInCardView : ViewBase<Box, AccountViewModel>
         _avatarPressure.Release();
     }
 
-    private void OnSignOutClicked(Button sender, EventArgs args) => ViewModel?.ClearSessionAsync().FireAndForget(Logger);
+    private void OnSignOutClicked(Button sender, EventArgs args)
+    {
+        ViewModel?.ClearSessionAsync().FireAndForget(Logger);
+    }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { ClearAvatar(); _avatarPressure.Dispose(); }
+        if (disposing)
+        {
+            ClearAvatar();
+            _avatarPressure.Dispose();
+        }
+
         base.Dispose(disposing);
     }
 }

@@ -32,16 +32,20 @@ public partial class ChannelView : ViewBase<Box, ChannelViewModel>
         ViewModel = viewModel;
     }
 
+    public bool IsLoading => _videoList.IsLoading;
+    public Adjustment? Vadjustment => _videoList.Vadjustment;
+
     protected override void BindViewModel(ChannelViewModel viewModel, BindingScope<ChannelViewModel> bindings)
     {
         _header.ViewModel = viewModel;
     }
 
-    public bool IsLoading => _videoList.IsLoading;
-    public Adjustment? Vadjustment => _videoList.Vadjustment;
     public event EventHandler<bool>? RefreshLoadingChanged;
 
-    public int GetBatchSize() => _videoList.GetBatchSize();
+    public int GetBatchSize()
+    {
+        return _videoList.GetBatchSize();
+    }
 
     public async Task RefreshAsync()
     {

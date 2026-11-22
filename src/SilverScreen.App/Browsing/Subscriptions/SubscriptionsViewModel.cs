@@ -4,11 +4,11 @@ using Serilog;
 using SilverScreen.Account.Auth;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing;
-using SilverScreen.Core.Domain;
+using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 
 namespace SilverScreen.Browsing.Subscriptions;
 
@@ -39,12 +39,14 @@ public sealed record SubscriptionsViewState(
 public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<SubscriptionsViewModel>();
+    private readonly INativeAuthService? _authService;
     private readonly IChannelService _channelService;
     private readonly List<VideoSummary> _channelVideos = [];
     private readonly List<SubscribedChannel> _channels = [];
     private readonly PagedFeedEngine _engine;
     private readonly List<VideoSummary> _feedVideos = [];
     private readonly Lock _lock = new();
+    private readonly Action? _openWebLogin;
     private readonly ISessionService _sessionService;
 
     private readonly IAuthenticatedSubscriptionsService _subscriptionsService;
@@ -58,8 +60,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private bool _hasMoreFeed;
     private int _lastRequestedCount = VideoFeedConstants.DefaultPageSize;
     private bool _loadedAtLeastOnce;
-    private readonly INativeAuthService? _authService;
-    private Action? _openWebLogin;
     private CancellationTokenSource? _refreshCts;
     private uint _refreshGeneration;
     private SubscribedChannel? _selectedChannel;
@@ -104,7 +104,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         ISessionService sessionService,
         bool subscribeSessionEvents,
         Action? openWebLogin = null,
-        INativeAuthService? authService = null) : this(subscriptionsService, channelService, sessionService, openWebLogin, authService)
+        INativeAuthService? authService = null) : this(subscriptionsService, channelService, sessionService,
+        openWebLogin, authService)
     {
         if (subscribeSessionEvents)
             sessionService.SessionChanged += OnSessionChanged;
@@ -312,13 +313,6 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
     private event EventHandler<VideoListPresentationState>? VideoListStateChanged;
 
     public event EventHandler<SubscriptionsViewState>? StateChanged;
-
-    public IVideoListSource GetVideoListSource(Action? openWebLogin = null)
-    {
-        if (openWebLogin != null)
-            _openWebLogin = openWebLogin;
-        return this;
-    }
 
     public Task LoadAsync(int count = VideoFeedConstants.DefaultPageSize)
     {
@@ -791,7 +785,9 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         {
             case AuthenticatedSubscriptionsStatus.AuthenticationRequired:
             case AuthenticatedSubscriptionsStatus.AuthenticationRejected:
-                Action? action = authService != null ? () => authService.StartAuthAsync().FireAndForget(Logger) : openWebLogin;
+                var action = authService != null
+                    ? () => authService.StartAuthAsync().FireAndForget(Logger)
+                    : openWebLogin;
                 status = new VideoListStatus(
                     SessionGate.SubscriptionsSignedOutTitle,
                     state.Status == AuthenticatedSubscriptionsStatus.AuthenticationRejected

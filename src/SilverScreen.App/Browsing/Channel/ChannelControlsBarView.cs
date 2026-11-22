@@ -59,7 +59,9 @@ public partial class ChannelControlsBarView : ViewBase<Box, ChannelViewModel>
             var count = _getBatchSize?.Invoke() ?? VideoFeedConstants.DefaultPageSize;
             await ViewModel.SetSortSelection(selected, count);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to update channel sort selection");

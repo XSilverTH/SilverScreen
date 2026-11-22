@@ -5,10 +5,12 @@ namespace SilverScreen.Browsing.Components;
 
 internal static class VideoCardFormatting
 {
-    public static string FormatDuration(TimeSpan duration) =>
-        duration.TotalHours >= 1
+    public static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
             ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
             : $"{duration.Minutes}:{duration.Seconds:00}";
+    }
 
     public static string FormatUploadAge(DateOnly uploadDate, DateOnly today)
     {
@@ -30,11 +32,14 @@ internal static class VideoCardFormatting
         if (elapsed <= TimeSpan.Zero || elapsed < TimeSpan.FromMinutes(1)) return "Just now";
         if (elapsed < TimeSpan.FromHours(1)) return FormatWholeUnits((int)elapsed.TotalMinutes, "minute");
         if (elapsed < TimeSpan.FromDays(1)) return FormatWholeUnits((int)elapsed.TotalHours, "hour");
-        return FormatUploadAge(DateOnly.FromDateTime(publishedAt.LocalDateTime), DateOnly.FromDateTime(now.LocalDateTime));
+        return FormatUploadAge(DateOnly.FromDateTime(publishedAt.LocalDateTime),
+            DateOnly.FromDateTime(now.LocalDateTime));
     }
 
-    private static string FormatWholeUnits(int count, string unit) =>
-        count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
+    private static string FormatWholeUnits(int count, string unit)
+    {
+        return count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
+    }
 
     public static string FormatCardTooltip(VideoSummary video)
     {
