@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Linq;
 using Adw;
 using Gtk;
 using Serilog;
@@ -108,9 +110,25 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Videos.Length == 0) return Task.FromResult("No videos to play.");
+
+        try
+        {
+            _ = MpvCommandBuilder.GetPlaybackUrls(request);
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to resolve playback URLs for request");
+            return Task.FromResult(DiagnosticSanitizer.Sanitize(exception.Message));
+        }
+
+        if (!_player.IsAvailable)
+            return Task.FromResult(_player.AvailabilityError ?? RuntimeDependencyGuidance.LibMpvUnavailable);
+
         Functions.IdleAdd(0, () =>
         {
             if (IsDisposed) return false;
+            EndSession(true);
+            _session.Start(request);
             _syncingQueue = true;
             try { _queueService.Replace(request.Videos); } finally { _syncingQueue = false; }
             _queueViewModel.SetCurrentPlayingIndex(0);
@@ -179,7 +197,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnSessionFailed(string detail)
     {
         Logger.Error("Embedded playback failed: {Detail}", detail);
-        _failedVideo = _session.CurrentVideo;
+        _failedVideo = _session.CurrentVideo ?? _loadedRequest?.Videos.FirstOrDefault() ?? _lastPlaybackRequest?.Videos.FirstOrDefault();
         _overlay.SyncSessionFailed(detail, _failedVideo);
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -196,10 +214,60 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnQueueChanged(object? sender, EventArgs e)
     {
-        if (_syncingQueue) return;
-        var count = _queueService.Items.Count;
-        var idx = _session.CurrentPlaylistIndex;
-        _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1, player_queue_split_view.ShowSidebar);
+        Functions.IdleAdd(0, () =>
+        {
+            if (IsDisposed || _syncingQueue || _session.Request is null) return false;
+
+            var currentVideos = _session.Request.Videos;
+            var newItems = _queueService.Items;
+            var newVideos = newItems.Select(i => i.Video).ToImmutableArray();
+
+            if (newVideos.SequenceEqual(currentVideos)) return false;
+
+            if (newVideos.Length > currentVideos.Length &&
+                newVideos.Take(currentVideos.Length).SequenceEqual(currentVideos))
+            {
+                for (var i = currentVideos.Length; i < newVideos.Length; i++)
+                {
+                    var video = newVideos[i];
+                    var url = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id);
+                    if (!string.IsNullOrWhiteSpace(url))
+                        _player.AppendPlaylistItem(url);
+                }
+            }
+            else if (newVideos.Length == currentVideos.Length - 1)
+            {
+                var removedIndex = -1;
+                for (var i = 0; i < newVideos.Length; i++)
+                    if (currentVideos[i].Id != newVideos[i].Id)
+                    {
+                        removedIndex = i;
+                        break;
+                    }
+
+                if (removedIndex < 0)
+                    removedIndex = currentVideos.Length - 1;
+
+                _player.RemovePlaylistItem(removedIndex);
+            }
+            else if (newVideos.Length == currentVideos.Length)
+            {
+                if (QueuePlaylistMove.TryTranslate(currentVideos, newVideos, out var fromIndex, out var toIndex))
+                    _player.MovePlaylistItem(fromIndex, toIndex);
+            }
+
+            _session.UpdateQueue(newVideos);
+            if (_session.Request is { } updatedRequest)
+            {
+                _player.UpdatePlaylistRequest(updatedRequest);
+                _loadedRequest = updatedRequest;
+            }
+
+            var count = newVideos.Length;
+            var idx = _session.CurrentPlaylistIndex;
+            _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1, player_queue_split_view.ShowSidebar);
+            return false;
+        });
     }
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)

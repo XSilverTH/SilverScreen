@@ -266,7 +266,7 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
 
         Logger.Information(
-            "Loading playback request for with {Count} item(s) at quality {Quality}", request.Videos.Length, _quality);
+            "Loading playback request with {Count} item(s) at quality {Quality}", request.Videos.Length, _quality);
         PublishState();
 
         Enqueue(LoadCurrentRequest);
@@ -802,6 +802,16 @@ public sealed partial class LibMpvPlayer : IDisposable
         var rawOptions = BuildYtdlRawOptions(cookieFilePath,
             preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled);
         Check(Native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        {
+            Check(Native.SetPropertyFlag(_handle, "cookies", true));
+            Check(Native.SetPropertyString(_handle, "cookies-file", cookieFilePath));
+        }
+        else
+        {
+            Check(Native.SetPropertyFlag(_handle, "cookies", false));
+            Check(Native.SetPropertyString(_handle, "cookies-file", string.Empty));
+        }
         Check(Native.SetPropertyString(_handle, "keep-open",
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
         Check(Native.SetPropertyString(_handle, "ytdl-format",

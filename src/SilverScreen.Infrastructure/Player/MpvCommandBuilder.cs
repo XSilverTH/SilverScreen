@@ -38,14 +38,19 @@ public static class MpvCommandBuilder
         if (options.Fullscreen)
             arguments.Add("--fs");
 
+        var ytdlRawOptions = new List<string>();
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {
             arguments.Add("--cookies");
             arguments.Add($"--cookies-file={cookieFilePath}");
+            ytdlRawOptions.Add($"cookies={cookieFilePath}");
         }
 
         if (options.MarkWatchedVideos)
-            arguments.Add("--ytdl-raw-options=mark-watched=");
+            ytdlRawOptions.Add("mark-watched=");
+
+        if (ytdlRawOptions.Count > 0)
+            arguments.Add($"--ytdl-raw-options={string.Join(',', ytdlRawOptions)}");
 
         var ytdlFormat = BuildYtdlFormat(options.VideoQuality, options.PreferredCodec);
         if (ytdlFormat is not null)

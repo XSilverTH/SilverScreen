@@ -88,6 +88,22 @@ public sealed class LibMpvPlayerTests
         Assert.Contains("cookies=/tmp/cookies.txt", rawOptions);
         Assert.Contains("mark-watched=", rawOptions);
         Assert.DoesNotContain("write-auto-subs", rawOptions);
+        Assert.Contains(("cookies", true), native.FlagProperties);
+        Assert.Contains(native.StringProperties, p => p.Name == "cookies-file" && p.Value == "/tmp/cookies.txt");
+    }
+
+    [Fact]
+    public void LoadWithoutCookieFileDisablesMpvCookies()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), new AppPreferences(), null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.FlagProperties.Any(p => p.Name == "cookies" && !p.Value),
+            TimeSpan.FromSeconds(2)));
+        Assert.Contains(native.StringProperties, p => p.Name == "cookies-file" && p.Value == string.Empty);
     }
 
 

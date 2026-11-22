@@ -156,6 +156,21 @@ public sealed class MpvCommandBuilderTests
 
         Assert.Contains("--cookies", command.Arguments);
         Assert.Contains($"--cookies-file={cookiePath}", command.Arguments);
+        Assert.Contains($"--ytdl-raw-options=cookies={cookiePath}", command.Arguments);
+    }
+
+    [Fact]
+    public void Build_WithCookieFilePathAndMarkWatched_CombinesYtdlRawOptions()
+    {
+        const string cookiePath = "/tmp/silverscreen/cookies.txt";
+        var request = new PlaybackRequest([CreateVideo("abc12345678")]);
+        var options = new PlaybackOptions { MarkWatchedVideos = true };
+
+        var command = MpvCommandBuilder.Build(request, options, cookiePath);
+
+        Assert.Contains("--cookies", command.Arguments);
+        Assert.Contains($"--cookies-file={cookiePath}", command.Arguments);
+        Assert.Contains($"--ytdl-raw-options=cookies={cookiePath},mark-watched=", command.Arguments);
     }
 
     [Fact]

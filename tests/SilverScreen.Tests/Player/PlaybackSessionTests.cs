@@ -71,6 +71,27 @@ public sealed class PlaybackSessionTests : IDisposable
     }
 
     [Fact]
+    public void Start_WithCookieProvider_LeasesCookieFileAndExposesCookieFilePath()
+    {
+        const string cookiePath = "/tmp/test-cookies.txt";
+        var isDisposed = false;
+        _coordinator.CookieProvider.CookieFileFactory = () =>
+            new CookieFileLease(cookiePath, onDisposed: () => isDisposed = true);
+
+        Assert.Null(_session.CookieFilePath);
+
+        var request = new PlaybackRequest([CreateVideo("dQw4w9WgXcQ", "Never Gonna Give You Up")]);
+        _session.Start(request);
+
+        Assert.Equal(cookiePath, _session.CookieFilePath);
+
+        _session.EndSession();
+
+        Assert.Null(_session.CookieFilePath);
+        Assert.True(isDisposed);
+    }
+
+    [Fact]
     public void UpdatePlayback_UpdatesCoordinator_AndAdvancesPlaylistOnVideoChange()
     {
         var v1 = CreateVideo("dQw4w9WgXcQ", "Video 1");
@@ -638,6 +659,7 @@ public sealed class PlaybackSessionTests : IDisposable
         }
 
         public PlaybackCoordinator Coordinator { get; }
+        public TrackingCookieProvider CookieProvider => _cookieProvider;
         public List<PlaybackPresenceState> PresenceUpdates => _presence.SetCalls.Select(c => c.State).ToList();
         public List<(PlaybackRequest Request, PlaybackPresenceState State)> PresenceCalls => _presence.SetCalls;
 
@@ -830,9 +852,11 @@ public sealed class PlaybackSessionTests : IDisposable
 
     private sealed class TrackingCookieProvider : ICookieFileProvider
     {
+        public Func<CookieFileLease?>? CookieFileFactory { get; set; }
+
         public CookieFileLease? CreateCookieFile()
         {
-            return null;
+            return CookieFileFactory?.Invoke();
         }
     }
 }
