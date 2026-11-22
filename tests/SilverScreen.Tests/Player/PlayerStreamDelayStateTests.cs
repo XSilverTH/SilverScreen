@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using SilverScreen.Player.Controllers;
 
 namespace SilverScreen.Tests.Player;
 

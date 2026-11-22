@@ -6,7 +6,6 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Player.Controllers;
 using SilverScreen.Shell;
 
 namespace SilverScreen.Player;

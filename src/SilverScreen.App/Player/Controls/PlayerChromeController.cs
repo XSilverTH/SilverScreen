@@ -1,0 +1,163 @@
+using Gtk;
+using XSTH.Blueprint.Helpers;
+
+namespace SilverScreen.Player.Controls;
+
+internal sealed class PlayerChromeController : IDisposable
+{
+    private const long ControlsIdleDelayMilliseconds = 1_500;
+    private const uint ControlsVisibilityCheckMilliseconds = 100;
+    private readonly Box _centerControls;
+    private readonly Widget _headerBar;
+    private readonly DisposeScope _lifetime = new();
+    private readonly Action? _onActivity;
+    private readonly Action<bool>? _onControlsVisibilityChanged;
+    private readonly Action<double, double>? _onPointerMoved;
+    private readonly Widget _playerControls;
+    private readonly Widget _viewWidget;
+    private uint _hideControlsTimeoutSource;
+    private long _lastActivityMilliseconds;
+    private double _lastPointerX = double.NaN;
+    private double _lastPointerY = double.NaN;
+
+    public PlayerChromeController(
+        Widget viewWidget,
+        Widget headerBar,
+        Box centerControls,
+        Widget playerControls,
+        Func<bool> hasOpenPopover,
+        Action? onActivity = null,
+        Action<double, double>? onPointerMoved = null,
+        Action<bool>? onControlsVisibilityChanged = null)
+    {
+        _viewWidget = viewWidget;
+        _headerBar = headerBar;
+        _centerControls = centerControls;
+        _playerControls = playerControls;
+
+        _onActivity = onActivity;
+        _onPointerMoved = onPointerMoved;
+        _onControlsVisibilityChanged = onControlsVisibilityChanged;
+        var motionController = EventControllerMotion.New();
+        motionController.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_viewWidget, motionController,
+            c => c.OnMotion += OnMotion,
+            c => c.OnMotion -= OnMotion);
+
+        var clickGesture = GestureClick.New();
+        clickGesture.Button = 0;
+        clickGesture.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_viewWidget, clickGesture,
+            c => c.OnPressed += OnPressed,
+            c => c.OnPressed -= OnPressed);
+
+        RegisterActivity();
+
+        _lifetime.Timeout(ControlsVisibilityCheckMilliseconds, () =>
+        {
+            if (ControlsVisible &&
+                !hasOpenPopover() &&
+                Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
+                SetControlsVisible(false);
+
+            return true;
+        });
+    }
+
+    private bool ControlsVisible { get; set; } = true;
+
+    public void Dispose()
+    {
+        if (_lifetime.IsDisposed) return;
+        if (_hideControlsTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideControlsTimeoutSource);
+            _hideControlsTimeoutSource = 0;
+        }
+
+        _lifetime.Dispose();
+    }
+
+    public void RegisterActivity()
+    {
+        if (_lifetime.IsDisposed) return;
+        _lastActivityMilliseconds = Environment.TickCount64;
+        _onActivity?.Invoke();
+        SetControlsVisible(true);
+    }
+
+    private void RegisterPointerActivity(double x, double y)
+    {
+        if (_lifetime.IsDisposed) return;
+        if (Math.Abs(x - _lastPointerX) < 0.2 && Math.Abs(y - _lastPointerY) < 0.2) return;
+        _lastPointerX = x;
+        _lastPointerY = y;
+        RegisterActivity();
+        _onPointerMoved?.Invoke(x, y);
+    }
+
+    private void SetControlsVisible(bool visible)
+    {
+        if (ControlsVisible == visible) return;
+        ControlsVisible = visible;
+
+        if (_hideControlsTimeoutSource != 0)
+        {
+            _lifetime.Cancel(_hideControlsTimeoutSource);
+            _hideControlsTimeoutSource = 0;
+        }
+
+        if (visible)
+        {
+            SetControlVisibleImmediate(_headerBar, true);
+            SetControlVisibleImmediate(_centerControls, true);
+            SetControlVisibleImmediate(_playerControls, true);
+        }
+        else
+        {
+            SetControlFadingOut(_headerBar);
+            SetControlFadingOut(_centerControls);
+            SetControlFadingOut(_playerControls);
+
+            _hideControlsTimeoutSource = _lifetime.Timeout(250, () =>
+            {
+                _hideControlsTimeoutSource = 0;
+                if (_lifetime.IsDisposed || ControlsVisible) return false;
+
+                _headerBar.SetVisible(false);
+                _centerControls.SetVisible(false);
+                _playerControls.SetVisible(false);
+                return false;
+            });
+        }
+
+        _onControlsVisibilityChanged?.Invoke(visible);
+        if (!visible) _viewWidget.GrabFocus();
+    }
+
+    private static void SetControlVisibleImmediate(Widget control, bool visible)
+    {
+        control.SetVisible(visible);
+        control.SetSensitive(visible);
+        if (visible)
+            control.RemoveCssClass("player-chrome-hidden");
+        else
+            control.AddCssClass("player-chrome-hidden");
+    }
+
+    private static void SetControlFadingOut(Widget control)
+    {
+        control.SetSensitive(false);
+        control.AddCssClass("player-chrome-hidden");
+    }
+
+    private void OnMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
+    {
+        RegisterPointerActivity(args.X, args.Y);
+    }
+
+    private void OnPressed(GestureClick sender, GestureClick.PressedSignalArgs args)
+    {
+        RegisterActivity();
+    }
+}

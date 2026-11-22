@@ -1,0 +1,620 @@
+using Gtk;
+using SilverScreen.Infrastructure.Player;
+using XSTH.Blueprint.Helpers;
+using Point = Graphene.Point;
+
+namespace SilverScreen.Player.Timeline;
+
+/// <summary>
+///     Pure timeline/playback-position state: scrubbing lifecycle, seek reconciliation,
+///     chapter hit-testing, and time formatting.
+///     Composed by <see cref="PlayerTimelineController" />.
+/// </summary>
+public class PlayerTimelineState(
+    uint seekThrottleIntervalMs = PlayerTimelineState.DefaultSeekThrottleIntervalMilliseconds,
+    long reconciliationLatchMs = PlayerTimelineState.DefaultReconciliationLatchMilliseconds,
+    double seekToleranceSeconds = PlayerTimelineState.DefaultSeekReconciliationToleranceSeconds,
+    Func<long>? tickCountProvider = null)
+{
+    private const uint DefaultSeekThrottleIntervalMilliseconds = 120;
+    private const long DefaultReconciliationLatchMilliseconds = 400;
+    private const double DefaultSeekReconciliationToleranceSeconds = 1.5;
+
+    private readonly Func<long> _getTickCount = tickCountProvider ?? (() => Environment.TickCount64);
+
+    public bool IsScrubbing { get; private set; }
+    public TimeSpan PlaybackPosition { get; private set; }
+    public TimeSpan Duration { get; private set; }
+    public IReadOnlyList<LibMpvChapter> Chapters { get; private set; } = [];
+    public bool HasMedia { get; private set; }
+    public TimeSpan ScrubStartPosition { get; private set; }
+    public double LatestScrubPositionSeconds { get; private set; }
+    public double PendingSeekTargetSeconds { get; private set; } = -1;
+    public long ReconciliationLatchExpiry { get; private set; }
+
+    public long LastThrottledSeekTime { get; private set; }
+    public bool IsLive { get; private set; }
+    public TimeSpan? ExpectedDuration { get; private set; }
+
+    public void SetExpectedMedia(TimeSpan? expectedDuration, bool isLive)
+    {
+        ExpectedDuration = expectedDuration;
+        IsLive = isLive;
+        if (expectedDuration is { } duration && duration > TimeSpan.Zero) Duration = duration;
+    }
+
+    // --- Timeline State Management & Seeking Reconciliation ---
+
+    public void SetDuration(TimeSpan duration)
+    {
+        Duration = duration;
+    }
+
+    public void SetChapters(IReadOnlyList<LibMpvChapter> chapters)
+    {
+        Chapters = chapters;
+    }
+
+    public void SetPositionDirect(TimeSpan position)
+    {
+        PlaybackPosition = position;
+    }
+
+    public bool UpdatePlaybackState(
+        bool hasMedia,
+        TimeSpan position,
+        TimeSpan duration,
+        IReadOnlyList<LibMpvChapter> chapters,
+        out bool positionAccepted)
+    {
+        HasMedia = hasMedia;
+        Duration = duration;
+        Chapters = chapters;
+
+        if (IsScrubbing)
+        {
+            positionAccepted = false;
+            return false;
+        }
+
+        var now = _getTickCount();
+        var withinLatch = now < ReconciliationLatchExpiry;
+        var isCloseToPending = PendingSeekTargetSeconds >= 0 &&
+                               Math.Abs(position.TotalSeconds - PendingSeekTargetSeconds) <= seekToleranceSeconds;
+
+        if (withinLatch && !isCloseToPending)
+        {
+            positionAccepted = false;
+            return false;
+        }
+
+        if (isCloseToPending)
+        {
+            ReconciliationLatchExpiry = 0;
+            PendingSeekTargetSeconds = -1;
+        }
+
+        PlaybackPosition = position;
+        positionAccepted = true;
+        return true;
+    }
+
+    public void RegisterSeek(double targetSeconds)
+    {
+        PendingSeekTargetSeconds = targetSeconds;
+        ReconciliationLatchExpiry = _getTickCount() + reconciliationLatchMs;
+    }
+
+    public void Reset()
+    {
+        IsScrubbing = false;
+        PlaybackPosition = TimeSpan.Zero;
+        Duration = TimeSpan.Zero;
+        Chapters = [];
+        HasMedia = false;
+        ScrubStartPosition = TimeSpan.Zero;
+        LatestScrubPositionSeconds = 0;
+        PendingSeekTargetSeconds = -1;
+        ReconciliationLatchExpiry = 0;
+        LastThrottledSeekTime = 0;
+        IsLive = false;
+        ExpectedDuration = null;
+    }
+
+    // --- Scrubbing Lifecycle ---
+
+    public void BeginScrub(double initialTimelineValue)
+    {
+        IsScrubbing = true;
+        ScrubStartPosition = PlaybackPosition;
+        LatestScrubPositionSeconds = initialTimelineValue;
+    }
+
+    public void UpdateScrub(double targetSeconds)
+    {
+        LatestScrubPositionSeconds = targetSeconds;
+    }
+
+    public TimeSpan CalculateScrubDelta(TimeSpan targetTime)
+    {
+        return targetTime - ScrubStartPosition;
+    }
+
+    public TimeSpan CancelScrub()
+    {
+        if (!IsScrubbing) return PlaybackPosition;
+        IsScrubbing = false;
+        PlaybackPosition = ScrubStartPosition;
+        return ScrubStartPosition;
+    }
+
+    public double EndScrub(double finalTimelineValue)
+    {
+        IsScrubbing = false;
+        RegisterSeek(finalTimelineValue);
+        PlaybackPosition = TimeSpan.FromSeconds(finalTimelineValue);
+        return finalTimelineValue;
+    }
+
+    public bool ShouldDispatchThrottledSeek(out uint delayMilliseconds)
+    {
+        var now = _getTickCount();
+        var elapsed = now - LastThrottledSeekTime;
+        if (elapsed >= seekThrottleIntervalMs)
+        {
+            LastThrottledSeekTime = now;
+            delayMilliseconds = 0;
+            return true;
+        }
+
+        delayMilliseconds = Math.Max(10u, (uint)(seekThrottleIntervalMs - elapsed));
+        return false;
+    }
+
+    public void RecordThrottledSeekDispatched()
+    {
+        LastThrottledSeekTime = _getTickCount();
+    }
+
+    // --- Chapter Hit-Testing ---
+
+    public LibMpvChapter? GetChapterAt(TimeSpan position)
+    {
+        return GetChapterAt(position, Chapters);
+    }
+
+    public static LibMpvChapter? GetChapterAt(TimeSpan position, IReadOnlyList<LibMpvChapter> chapters)
+    {
+        LibMpvChapter? match = null;
+        foreach (var chapter in chapters)
+            if (chapter.Start <= position)
+                match = chapter;
+            else
+                break;
+        return match;
+    }
+
+    public static double CalculateChapterMarkerPosition(
+        TimeSpan chapterStart,
+        TimeSpan duration,
+        int trackStart,
+        int trackWidth,
+        int hostWidth,
+        int markerWidth = 20)
+    {
+        var trackPos = PlayerTimelineGeometry.GetTrackPosition(chapterStart, duration, trackStart, trackWidth);
+        return Math.Clamp(Math.Round(trackPos - markerWidth / 2d), 0, Math.Max(0, hostWidth - markerWidth));
+    }
+
+    // --- Scrub Cue Badge Geometry ---
+
+    public static double CalculateScrubCueBadgePosition(
+        double pointerX,
+        double cueWidth,
+        double hostWidth,
+        double margin = 8.0)
+    {
+        if (cueWidth <= 0) cueWidth = 80;
+        return Math.Clamp(pointerX - cueWidth / 2d, margin, Math.Max(margin, hostWidth - cueWidth - margin));
+    }
+
+    // --- Time Formatting & Progress Fraction Math ---
+
+    public static string FormatTime(TimeSpan value)
+    {
+        var seconds = Math.Max(0, (long)Math.Floor(value.TotalSeconds));
+        var duration = TimeSpan.FromSeconds(seconds);
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:D2}:{duration.Seconds:D2}"
+            : $"{duration.Minutes}:{duration.Seconds:D2}";
+    }
+
+    public static string FormatDelta(TimeSpan delta)
+    {
+        var sign = delta < TimeSpan.Zero ? "-" : "+";
+        var abs = delta.Duration();
+        return abs.TotalHours >= 1
+            ? $"{sign}{(int)abs.TotalHours}:{abs.Minutes:D2}:{abs.Seconds:D2}"
+            : $"{sign}{(int)abs.TotalMinutes}:{abs.Seconds:D2}";
+    }
+
+    public static string FormatDurationLabel(TimeSpan duration, bool isLive = false)
+    {
+        if (isLive) return "Live";
+        return duration <= TimeSpan.Zero ? "--:--" : FormatTime(duration);
+    }
+
+    public static double CalculateProgressFraction(TimeSpan position, TimeSpan duration)
+    {
+        return duration <= TimeSpan.Zero ? 0.0 : Math.Clamp(position.TotalSeconds / duration.TotalSeconds, 0.0, 1.0);
+    }
+}
+
+internal sealed class PlayerTimelineController : IDisposable
+{
+    private readonly Label _durationLabel;
+
+    private readonly DisposeScope _lifetime = new();
+    private readonly Label _positionLabel;
+    private readonly Action _registerActivity;
+    private readonly Label _scrubChapterLabel;
+    private readonly Box _scrubCue;
+    private readonly Label _scrubDeltaLabel;
+    private readonly Label _scrubTimeLabel;
+    private readonly Action<double, bool> _seekAbsolute;
+
+    private readonly Scale _timeline;
+    private readonly Overlay _timelineOverlay;
+    private uint _throttledSeekSource;
+    private bool _updatingControls;
+
+    public PlayerTimelineController(
+        Scale timeline,
+        Overlay timelineOverlay,
+        Box scrubCue,
+        Label scrubTimeLabel,
+        Label scrubDeltaLabel,
+        Label scrubChapterLabel,
+        Label positionLabel,
+        Label durationLabel,
+        Action<double, bool> seekAbsolute,
+        Action registerActivity,
+        PlayerTimelineState? state = null)
+    {
+        _timeline = timeline;
+        _timelineOverlay = timelineOverlay;
+        _scrubCue = scrubCue;
+        _scrubTimeLabel = scrubTimeLabel;
+        _scrubDeltaLabel = scrubDeltaLabel;
+        _scrubChapterLabel = scrubChapterLabel;
+        _positionLabel = positionLabel;
+        _durationLabel = durationLabel;
+        _seekAbsolute = seekAbsolute;
+        _registerActivity = registerActivity;
+        State = state ?? new PlayerTimelineState();
+
+        var timelineMotionController = EventControllerMotion.New();
+        _lifetime.Attach(_timelineOverlay, timelineMotionController,
+            c =>
+            {
+                c.OnMotion += OnTimelineMotion;
+                c.OnLeave += OnTimelineLeave;
+            },
+            c =>
+            {
+                c.OnMotion -= OnTimelineMotion;
+                c.OnLeave -= OnTimelineLeave;
+            });
+
+        var timelineDragGesture = GestureDrag.New();
+        timelineDragGesture.Button = 1;
+        timelineDragGesture.SetPropagationPhase(PropagationPhase.Capture);
+        _lifetime.Attach(_timeline, timelineDragGesture,
+            c =>
+            {
+                c.OnDragBegin += OnTimelineDragBegin;
+                c.OnDragUpdate += OnTimelineDragUpdate;
+                c.OnDragEnd += OnTimelineDragEnd;
+            },
+            c =>
+            {
+                c.OnDragBegin -= OnTimelineDragBegin;
+                c.OnDragUpdate -= OnTimelineDragUpdate;
+                c.OnDragEnd -= OnTimelineDragEnd;
+            });
+
+        _lifetime.Track(
+            () => _timeline.OnValueChanged += OnTimelineValueChanged,
+            () => _timeline.OnValueChanged -= OnTimelineValueChanged);
+    }
+
+    public bool IsScrubbing => State.IsScrubbing;
+
+    public TimeSpan PlaybackPosition => State.PlaybackPosition;
+
+    private PlayerTimelineState State { get; }
+
+    public void Dispose()
+    {
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
+        CancelThrottledSeek();
+    }
+
+    public void UpdatePosition(LibMpvPlaybackState state)
+    {
+        if (_lifetime.IsDisposed) return;
+
+        _updatingControls = true;
+        try
+        {
+            if (state.Duration > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(state.Duration));
+                _timeline.SetRange(0, state.Duration.TotalSeconds);
+                _timeline.SetSensitive(state is { IsSeekable: true, IsLoading: false });
+            }
+            else if (State.IsLive)
+            {
+                _durationLabel.SetText("Live");
+                _timeline.SetRange(0, 0);
+                _timeline.SetSensitive(false);
+            }
+            else if (State.ExpectedDuration is { } expected && expected > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(expected));
+                _timeline.SetRange(0, expected.TotalSeconds);
+                _timeline.SetSensitive(false);
+            }
+            else
+            {
+                _durationLabel.SetText(state.IsLoading
+                    ? "--:--"
+                    : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive));
+                _timeline.SetRange(0, 0);
+                _timeline.SetSensitive(false);
+            }
+
+            var effectiveDuration = state.Duration > TimeSpan.Zero
+                ? state.Duration
+                : State.ExpectedDuration ?? TimeSpan.Zero;
+
+            if (!State.UpdatePlaybackState(state.HasMedia, state.Position, effectiveDuration, state.Chapters,
+                    out var accepted) || !accepted) return;
+
+            if (state.IsLoading && state.Position <= TimeSpan.Zero)
+                _positionLabel.SetText(State.IsLive ? "Live" : "--:--");
+            else
+                _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
+
+            var maxSeconds = effectiveDuration.TotalSeconds;
+            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, maxSeconds)));
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    public void SeekAbsolute(double position, bool exact = true)
+    {
+        State.RegisterSeek(position);
+        _seekAbsolute(position, exact);
+    }
+
+    public void CancelScrubbing()
+    {
+        if (!IsScrubbing) return;
+        var restoredPosition = State.CancelScrub();
+        CancelThrottledSeek();
+        _positionLabel.RemoveCssClass("player-time-scrubbing");
+        _timeline.RemoveCssClass("dragging");
+        _scrubCue.SetVisible(false);
+        _updatingControls = true;
+        try
+        {
+            _timeline.SetValue(restoredPosition.TotalSeconds);
+            _positionLabel.SetText(PlayerTimelineState.FormatTime(restoredPosition));
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    public void Reset()
+    {
+        CancelScrubbing();
+        State.Reset();
+        _scrubCue.SetVisible(false);
+        _updatingControls = true;
+        try
+        {
+            _timeline.SetRange(0, 0);
+            _timeline.SetValue(0);
+            _timeline.SetSensitive(false);
+            _positionLabel.SetText("--:--");
+            _durationLabel.SetText("--:--");
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    public void SetExpectedMedia(TimeSpan? expectedDuration, bool isLive)
+    {
+        State.SetExpectedMedia(expectedDuration, isLive);
+        _updatingControls = true;
+        try
+        {
+            if (isLive)
+            {
+                _durationLabel.SetText("Live");
+                _positionLabel.SetText("Live");
+                _timeline.SetRange(0, 0);
+            }
+            else if (expectedDuration is { } duration && duration > TimeSpan.Zero)
+            {
+                _durationLabel.SetText(PlayerTimelineState.FormatTime(duration));
+                _positionLabel.SetText("--:--");
+                _timeline.SetRange(0, duration.TotalSeconds);
+            }
+            else
+            {
+                _durationLabel.SetText("--:--");
+                _positionLabel.SetText("--:--");
+                _timeline.SetRange(0, 0);
+            }
+
+            _timeline.SetValue(0);
+            _timeline.SetSensitive(false);
+        }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
+
+    private void OnTimelineMotion(EventControllerMotion sender, EventControllerMotion.MotionSignalArgs args)
+    {
+        if (_lifetime.IsDisposed || !State.HasMedia || State.Duration <= TimeSpan.Zero || !_timeline.GetSensitive())
+        {
+            _scrubCue.SetVisible(false);
+            return;
+        }
+
+        _registerActivity();
+        UpdateScrubCue(args.X);
+    }
+
+    private void OnTimelineLeave(object? sender, EventArgs args)
+    {
+        if (!IsScrubbing)
+            _scrubCue.SetVisible(false);
+    }
+
+    private void UpdateScrubCue(double pointerX)
+    {
+        var currentPosition = IsScrubbing ? TimeSpan.FromSeconds(_timeline.GetValue()) : State.PlaybackPosition;
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(
+            _timeline,
+            _timelineOverlay,
+            currentPosition,
+            State.Duration);
+
+        var targetTime =
+            PlayerTimelineGeometry.GetPositionAtCoordinate(pointerX, trackStart, trackWidth, State.Duration);
+
+        var cueWidth = _scrubCue.GetAllocatedWidth();
+        var hostWidth = _timelineOverlay.GetAllocatedWidth();
+        var badgeX = PlayerTimelineState.CalculateScrubCueBadgePosition(pointerX, cueWidth, hostWidth);
+        _scrubCue.MarginStart = (int)Math.Round(badgeX);
+
+        _scrubTimeLabel.SetText(PlayerTimelineState.FormatTime(targetTime));
+
+        if (IsScrubbing)
+        {
+            var delta = State.CalculateScrubDelta(targetTime);
+            _scrubDeltaLabel.SetText(PlayerTimelineState.FormatDelta(delta));
+            _scrubDeltaLabel.SetVisible(true);
+        }
+        else
+        {
+            _scrubDeltaLabel.SetVisible(false);
+        }
+
+        var chapter = State.GetChapterAt(targetTime);
+        if (chapter is not null && !string.IsNullOrWhiteSpace(chapter.Title))
+        {
+            _scrubChapterLabel.SetText(chapter.Title);
+            _scrubChapterLabel.SetVisible(true);
+        }
+        else
+        {
+            _scrubChapterLabel.SetVisible(false);
+        }
+
+        _scrubCue.SetVisible(true);
+    }
+
+    private double ConvertScaleXToOverlayX(double scaleX)
+    {
+        var point = new Point { X = (float)scaleX, Y = 0 };
+        return _timeline.ComputePoint(_timelineOverlay, point, out var transformed)
+            ? transformed.X
+            : scaleX;
+    }
+
+    private void OnTimelineDragBegin(GestureDrag sender, GestureDrag.DragBeginSignalArgs args)
+    {
+        if (_lifetime.IsDisposed || !State.HasMedia || !_timeline.GetSensitive() || State.Duration <= TimeSpan.Zero)
+            return;
+
+        State.BeginScrub(_timeline.GetValue());
+        _positionLabel.AddCssClass("player-time-scrubbing");
+        _timeline.AddCssClass("dragging");
+        _registerActivity();
+        UpdateScrubCue(ConvertScaleXToOverlayX(args.StartX));
+    }
+
+    private void OnTimelineDragUpdate(GestureDrag sender, GestureDrag.DragUpdateSignalArgs args)
+    {
+        if (!IsScrubbing) return;
+        _registerActivity();
+        sender.GetStartPoint(out var startX, out _);
+        UpdateScrubCue(ConvertScaleXToOverlayX(startX + args.OffsetX));
+    }
+
+    private void OnTimelineDragEnd(GestureDrag sender, GestureDrag.DragEndSignalArgs args)
+    {
+        if (!IsScrubbing) return;
+        _positionLabel.RemoveCssClass("player-time-scrubbing");
+        _timeline.RemoveCssClass("dragging");
+        _scrubCue.SetVisible(false);
+        CancelThrottledSeek();
+
+        var finalPosition = _timeline.GetValue();
+        State.EndScrub(finalPosition);
+        _seekAbsolute(finalPosition, true);
+        _positionLabel.SetText(PlayerTimelineState.FormatTime(State.PlaybackPosition));
+        _registerActivity();
+    }
+
+    private void OnTimelineValueChanged(object? sender, EventArgs args)
+    {
+        if (_updatingControls || !_timeline.GetSensitive()) return;
+
+        var targetSeconds = _timeline.GetValue();
+        State.SetPositionDirect(TimeSpan.FromSeconds(targetSeconds));
+        _positionLabel.SetText(PlayerTimelineState.FormatTime(State.PlaybackPosition));
+
+        if (IsScrubbing)
+        {
+            State.UpdateScrub(targetSeconds);
+            if (State.ShouldDispatchThrottledSeek(out var delay) && _throttledSeekSource == 0)
+                SeekAbsolute(State.LatestScrubPositionSeconds, false);
+            else if (_throttledSeekSource == 0)
+                _throttledSeekSource = _lifetime.Timeout(delay, () =>
+                {
+                    _throttledSeekSource = 0;
+                    if (_lifetime.IsDisposed || !IsScrubbing) return false;
+                    State.RecordThrottledSeekDispatched();
+                    SeekAbsolute(State.LatestScrubPositionSeconds, false);
+                    return false;
+                });
+        }
+        else
+        {
+            SeekAbsolute(targetSeconds);
+            _registerActivity();
+        }
+    }
+
+    private void CancelThrottledSeek()
+    {
+        if (_throttledSeekSource == 0) return;
+        _lifetime.Cancel(_throttledSeekSource);
+        _throttledSeekSource = 0;
+    }
+}

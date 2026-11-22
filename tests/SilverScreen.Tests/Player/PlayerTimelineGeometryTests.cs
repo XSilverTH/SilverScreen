@@ -1,4 +1,3 @@
-using SilverScreen.Player.Controllers;
 
 namespace SilverScreen.Tests.Player;
 

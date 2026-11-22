@@ -1,0 +1,216 @@
+using Cairo;
+using Gtk;
+using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
+using XSTH.Blueprint.Helpers;
+using static GLib.Functions;
+using Object = GObject.Object;
+
+namespace SilverScreen.Player.Prompts;
+
+/// <summary>
+///     Lightweight presentation controller that binds SponsorBlock segment rendering
+///     and skip prompt UI to the underlying <see cref="PlaybackSession" /> state and events.
+/// </summary>
+internal sealed class PlayerSponsorBlockController : IDisposable
+{
+    private const uint SkipPromptDurationMilliseconds = PlayerSponsorBlockState.DefaultSkipPromptDurationMilliseconds;
+    private readonly DisposeScope _lifetime = new();
+    private readonly IPreferencesService _preferences;
+    private readonly PlaybackSession _session;
+    private readonly Button _skipButton;
+    private readonly Label _skipLabel;
+    private readonly Revealer _skipRevealer;
+    private readonly Scale _timeline;
+    private readonly DrawingArea _timelineDrawingArea;
+    private readonly Overlay _timelineOverlay;
+    private uint _promptHideSource;
+    private string? _skipButtonColorClass;
+
+    public PlayerSponsorBlockController(
+        PlaybackSession session,
+        IPreferencesService preferences,
+        Scale timeline,
+        Overlay timelineOverlay,
+        Revealer skipRevealer,
+        Button skipButton,
+        Label skipLabel)
+    {
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _timeline = timeline;
+        _timelineOverlay = timelineOverlay;
+        _skipRevealer = skipRevealer;
+        _skipButton = skipButton;
+        _skipLabel = skipLabel;
+
+        _skipRevealer.SetVisible(false);
+        _skipRevealer.RevealChild = false;
+        _lifetime.Track(
+            () => _skipRevealer.OnNotify += OnSkipRevealerNotify,
+            () => _skipRevealer.OnNotify -= OnSkipRevealerNotify);
+
+        _timelineDrawingArea = DrawingArea.New();
+        _timelineDrawingArea.SetCanTarget(false);
+        _timelineDrawingArea.Halign = Align.Fill;
+        _timelineDrawingArea.Valign = Align.Fill;
+        _timelineDrawingArea.SetDrawFunc(DrawTimeline);
+        _timelineOverlay.AddOverlay(_timelineDrawingArea);
+
+        _lifetime.Track(() => _session.SponsorBlockSegmentsChanged += OnSegmentsChanged,
+            () => _session.SponsorBlockSegmentsChanged -= OnSegmentsChanged);
+        _lifetime.Track(() => _session.SponsorBlockPromptChanged += OnPromptChanged,
+            () => _session.SponsorBlockPromptChanged -= OnPromptChanged);
+        _lifetime.Track(() => _session.SessionEnded += OnSessionEnded, () => _session.SessionEnded -= OnSessionEnded);
+        _lifetime.Track(() => _session.Failed += OnSessionFailed, () => _session.Failed -= OnSessionFailed);
+    }
+
+    public void Dispose()
+    {
+        if (_lifetime.IsDisposed) return;
+        _lifetime.Dispose();
+        HideManualPrompt();
+        _timelineOverlay.RemoveOverlay(_timelineDrawingArea);
+        _timelineDrawingArea.Dispose();
+    }
+
+    public void Redraw()
+    {
+        if (!_lifetime.IsDisposed)
+            _timelineDrawingArea.QueueDraw();
+    }
+
+    private void OnSegmentsChanged(IReadOnlyList<SponsorBlockSegment> segments)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_lifetime.IsDisposed) return false;
+            _timelineDrawingArea.QueueDraw();
+            return false;
+        });
+    }
+
+    private void OnPromptChanged(SponsorBlockSegment? segment)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_lifetime.IsDisposed) return false;
+            if (segment is not null)
+                ShowManualPrompt(segment);
+            else
+                HideManualPrompt();
+            return false;
+        });
+    }
+
+    private void OnSessionEnded()
+    {
+        IdleAdd(0, () =>
+        {
+            if (_lifetime.IsDisposed) return false;
+            HideManualPrompt();
+            _timelineDrawingArea.QueueDraw();
+            return false;
+        });
+    }
+
+    private void OnSessionFailed(string detail)
+    {
+        IdleAdd(0, () =>
+        {
+            if (_lifetime.IsDisposed) return false;
+            HideManualPrompt();
+            _timelineDrawingArea.QueueDraw();
+            return false;
+        });
+    }
+
+    private void DrawTimeline(DrawingArea drawingArea, Context context, int width, int height)
+    {
+        var preferences = _preferences.GetPreferences();
+        if (!preferences.SponsorBlockSegmentDisplayEnabled || width <= 0 || height <= 0)
+            return;
+
+        var duration = _session.LastPlaybackState?.Duration > TimeSpan.Zero
+            ? _session.LastPlaybackState.Duration
+            : _session.CurrentVideo?.Duration ?? TimeSpan.Zero;
+
+        if (duration <= TimeSpan.Zero) return;
+
+        var position = _session.LastPlaybackState?.Position ?? TimeSpan.Zero;
+        var (trackStart, trackWidth) = PlayerTimelineGeometry.GetTrack(_timeline, drawingArea, position, duration);
+        if (trackWidth <= 0) return;
+
+        const double rangeHeight = 10;
+        var rangeY = Math.Max(0, (height - rangeHeight) / 2);
+
+        foreach (var segment in _session.SponsorBlockSegments)
+        {
+            if (segment.Start >= duration) continue;
+            var start = PlayerTimelineGeometry.GetTrackPosition(segment.Start, duration, trackStart, trackWidth);
+            var end = PlayerTimelineGeometry.GetTrackPosition(segment.End, duration, trackStart, trackWidth);
+            var color = SponsorBlockCategories.GetColor(segment.Category);
+            context.SetSourceRgba(color.Red / 255.0, color.Green / 255.0, color.Blue / 255.0, color.Opacity);
+            context.Rectangle(start, rangeY, Math.Max(2, end - start), rangeHeight);
+            context.Fill();
+        }
+    }
+
+    private void OnSkipRevealerNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "child-revealed" && _skipRevealer is { ChildRevealed: false, RevealChild: false })
+            _skipRevealer.SetVisible(false);
+    }
+
+    private void ShowManualPrompt(SponsorBlockSegment segment)
+    {
+        var category = PlayerSponsorBlockState.GetSponsorBlockCategoryLabel(segment.Category);
+        _skipLabel.SetText($"Skip {category}");
+        _skipButton.SetTooltipText($"Skip {category} (Enter)");
+        SetSkipButtonColor(segment.Category);
+        _skipRevealer.SetVisible(true);
+        _skipRevealer.RevealChild = true;
+        ClearPromptTimeout();
+        _promptHideSource = _lifetime.Timeout(SkipPromptDurationMilliseconds, () =>
+        {
+            _promptHideSource = 0;
+            if (_lifetime.IsDisposed) return false;
+            _skipRevealer.RevealChild = false;
+            _session.DismissSponsorBlockPrompt();
+
+            return false;
+        });
+    }
+
+    private void HideManualPrompt()
+    {
+        ClearPromptTimeout();
+
+        if (_lifetime.IsDisposed) return;
+        _skipRevealer.RevealChild = false;
+        if (!_skipRevealer.ChildRevealed) _skipRevealer.SetVisible(false);
+        ClearSkipButtonColor();
+    }
+
+    private void ClearPromptTimeout()
+    {
+        if (_promptHideSource == 0) return;
+        _lifetime.Cancel(_promptHideSource);
+        _promptHideSource = 0;
+    }
+
+    private void SetSkipButtonColor(string category)
+    {
+        ClearSkipButtonColor();
+        var colorClass = PlayerSponsorBlockState.GetSponsorBlockButtonColorClass(category);
+        _skipButton.AddCssClass(colorClass);
+        _skipButtonColorClass = colorClass;
+    }
+
+    private void ClearSkipButtonColor()
+    {
+        if (_skipButtonColorClass is null) return;
+        _skipButton.RemoveCssClass(_skipButtonColorClass);
+        _skipButtonColorClass = null;
+    }
+}

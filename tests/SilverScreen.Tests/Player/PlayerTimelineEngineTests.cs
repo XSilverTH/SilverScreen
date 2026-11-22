@@ -1,7 +1,6 @@
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Player.Controllers;
 
 namespace SilverScreen.Tests.Player;
 

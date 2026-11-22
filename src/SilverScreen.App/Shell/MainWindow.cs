@@ -9,7 +9,6 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Player;
-using SilverScreen.Player.Views;
 using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;

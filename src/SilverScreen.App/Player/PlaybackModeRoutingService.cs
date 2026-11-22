@@ -1,7 +1,6 @@
 using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Player.Views;
 
 namespace SilverScreen.Player;
 
