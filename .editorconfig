@@ -17,3 +17,8 @@ resharper_parameter_only_used_for_precondition_check_local_highlighting = none
 
 [*.cs]
 dotnet_diagnostic.CA1416.severity = none
+resharper_empty_general_catch_clause_highlighting = none
+resharper_convert_to_auto_property_when_possible_highlighting = none
+resharper_switch_statement_missing_some_enum_cases_no_default_highlighting = none
+resharper_switch_statement_for_enum_misses_default_section_highlighting = none
+resharper_switch_statement_handles_some_known_enum_values_with_default_highlighting = none
