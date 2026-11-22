@@ -6,19 +6,14 @@ namespace SilverScreen.Player.Status;
 /// <summary>
 ///     Pure state tracking and progress calculation for stream delay countdowns.
 /// </summary>
-public sealed class PlayerStreamDelayState
+public sealed class PlayerStreamDelayState(Func<long>? timestampProvider = null)
 {
-    private readonly Func<long> _timestampProvider;
+    private readonly Func<long> _timestampProvider = timestampProvider ?? Stopwatch.GetTimestamp;
     private long _startTimestamp;
     private TimeSpan _totalDelay;
 
     public bool IsActive { get; private set; }
     public TimeSpan TotalDelay => _totalDelay;
-
-    public PlayerStreamDelayState(Func<long>? timestampProvider = null)
-    {
-        _timestampProvider = timestampProvider ?? (() => Stopwatch.GetTimestamp());
-    }
 
     public void Start(TimeSpan delay)
     {

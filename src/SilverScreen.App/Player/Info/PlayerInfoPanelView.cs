@@ -3,7 +3,6 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 using Object = GObject.Object;
 
@@ -16,15 +15,13 @@ namespace SilverScreen.Player.Info;
 public partial class PlayerInfoPanelView : ViewBase<Overlay>
 {
     private static readonly ILogger Logger = Log.ForContext<PlayerInfoPanelView>();
+    private readonly Action? _closed;
+    private readonly Func<string, bool> _linkActivated;
 
     private readonly PlayerVideoInfoLoader _loader;
     private readonly INavigationService _navigation;
-    private readonly Func<string, bool> _linkActivated;
-    private readonly Action? _closed;
     private bool _bottomEdgeActive;
     private VideoSummary? _currentVideo;
-
-    public bool IsOpen { get; private set; }
 
     public PlayerInfoPanelView(
         IYouTubeMediaResolver mediaResolver,
@@ -47,7 +44,9 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         SetInfoContent(null);
     }
 
-    public void Show(VideoSummary video)
+    public bool IsOpen { get; private set; }
+
+    private void Show(VideoSummary video)
     {
         if (IsDisposed) return;
         _currentVideo = video;
@@ -63,8 +62,14 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         player_info_channel_label.SetText(video.ChannelName);
         player_info_close_button.GrabFocus();
 
-        if (_loader.LoadedDetails is { } details) SetInfoContent(details);
-        else if (_loader.LoadedError is { } error) ShowError(error);
+        if (_loader.LoadedDetails is { } details)
+        {
+            SetInfoContent(details);
+        }
+        else if (_loader.LoadedError is { } error)
+        {
+            ShowError(error);
+        }
         else
         {
             player_info_status_label.SetText("Loading video details…");
@@ -110,7 +115,10 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         _currentVideo = video;
         if (!IsOpen) SetInfoContent(null);
         if (video is not null)
-            _loader.LoadAsync(video.Id, () => { if (IsOpen && _loader.LoadedDetails is { } d) SetInfoContent(d); }).FireAndForget();
+            _loader.LoadAsync(video.Id, () =>
+            {
+                if (IsOpen && _loader.LoadedDetails is { } d) SetInfoContent(d);
+            }).FireAndForget();
     }
 
     public void UpdatePointer(double x, double y, double width, double height, bool hasMedia)
@@ -132,10 +140,25 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         Widget.CanTarget = inZone;
     }
 
-    private void OnBackdropClicked(object? sender, EventArgs args) => Close();
-    private void OnCloseButtonClicked(object? sender, EventArgs args) => Close();
-    private void OnCueButtonClicked(object? sender, EventArgs args) { if (_currentVideo is { } v) Show(v); }
-    private bool OnDescriptionLinkActivated(Label sender, Label.ActivateLinkSignalArgs args) => _linkActivated(args.Uri);
+    private void OnBackdropClicked(object? sender, EventArgs args)
+    {
+        Close();
+    }
+
+    private void OnCloseButtonClicked(object? sender, EventArgs args)
+    {
+        Close();
+    }
+
+    private void OnCueButtonClicked(object? sender, EventArgs args)
+    {
+        if (_currentVideo is { } v) Show(v);
+    }
+
+    private bool OnDescriptionLinkActivated(Label sender, Label.ActivateLinkSignalArgs args)
+    {
+        return _linkActivated(args.Uri);
+    }
 
     private void OnChannelButtonClicked(object? sender, EventArgs args)
     {
@@ -147,13 +170,15 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
 
     private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && player_info_revealer is { ChildRevealed: false, RevealChild: false })
+        if (args.Pspec.GetName() == "child-revealed" &&
+            player_info_revealer is { ChildRevealed: false, RevealChild: false })
             player_info_revealer.SetVisible(false);
     }
 
     private void OnCueRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
-        if (args.Pspec.GetName() == "child-revealed" && player_info_cue_revealer is { ChildRevealed: false, RevealChild: false })
+        if (args.Pspec.GetName() == "child-revealed" && player_info_cue_revealer is
+                { ChildRevealed: false, RevealChild: false })
             player_info_cue_revealer.SetVisible(false);
     }
 
@@ -168,22 +193,25 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
     {
         player_info_title_label.SetText(details?.Title ?? _currentVideo?.Title ?? "Video details");
         player_info_channel_label.SetText(details?.ChannelName ?? _currentVideo?.ChannelName ?? string.Empty);
-        player_info_stats_label.SetText(details is not null ? PlayerVideoInfoLoader.FormatStats(details) : string.Empty);
-        player_info_status_label.SetText(details is null ? "Move to the bottom edge to reveal video details." : "This video has no description.");
+        player_info_stats_label.SetText(details is not null
+            ? PlayerVideoInfoLoader.FormatStats(details)
+            : string.Empty);
+        player_info_status_label.SetText(details is null
+            ? "Move to the bottom edge to reveal video details."
+            : "This video has no description.");
         player_info_status_label.SetVisible(details is null || string.IsNullOrWhiteSpace(details.Description));
-        player_info_description_scroller.SetVisible(details is not null && !string.IsNullOrWhiteSpace(details.Description));
-        if (details is not null)
+        player_info_description_scroller.SetVisible(details is not null &&
+                                                    !string.IsNullOrWhiteSpace(details.Description));
+        if (details is null) return;
+        var description = details.Description ?? string.Empty;
+        try
         {
-            var description = details.Description ?? string.Empty;
-            try
-            {
-                player_info_description.SetMarkup(PlayerVideoInfoLoader.FormatMarkup(description));
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning(ex, "Failed to render video description markup; falling back to plain text");
-                player_info_description.SetText(description);
-            }
+            player_info_description.SetMarkup(PlayerVideoInfoLoader.FormatMarkup(description));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to render video description markup; falling back to plain text");
+            player_info_description.SetText(description);
         }
     }
 }

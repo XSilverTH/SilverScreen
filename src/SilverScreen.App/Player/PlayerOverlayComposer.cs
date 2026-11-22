@@ -3,7 +3,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.RichText;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player;
@@ -13,31 +12,8 @@ namespace SilverScreen.Player;
 /// </summary>
 internal sealed class PlayerOverlayComposer : IDisposable
 {
-    private readonly DisposeScope _lifetime = new();
-    private readonly PlaybackSession _session;
     private readonly PlayerDependencies _dependencies;
-
-    public PlayerSurfaceView Surface { get; }
-    public PlayerLoadingView Loading { get; }
-    public PlayerErrorView Error { get; }
-    public PlayerHeaderBarView HeaderBar { get; }
-    public PlayerCenterControlsView CenterControls { get; }
-    public PlayerReactionsView Reactions { get; }
-    public PlayerTimelineView Timeline { get; }
-    public PlayerControlsBarView ControlsBar { get; }
-    public PlayerStatsView Stats { get; }
-    public PlayerInfoPanelView InfoPanel { get; }
-    public PlayerCommentsCueView CommentsCue { get; }
-    public PlayerPromptStackView PromptStack { get; }
-    public PlayerOsdView Osd { get; }
-    public PlayerChromeController Chrome { get; }
-    public PlayerShortcutController Shortcuts { get; }
-
-    public LibMpvPlaybackState? LastState { get; private set; }
-    public bool IsPaused => LastState?.IsPaused ?? true;
-    public double Volume => LastState?.Volume ?? 100.0;
-    public bool IsMuted => LastState?.IsMuted ?? false;
-    public double Speed => LastState?.Speed ?? 1.0;
+    private readonly DisposeScope _lifetime = new();
 
     public PlayerOverlayComposer(
         Overlay overlay,
@@ -54,7 +30,6 @@ internal sealed class PlayerOverlayComposer : IDisposable
         Action openComments,
         Func<bool> isCommentsOpen)
     {
-        _session = session;
         _dependencies = dependencies;
         Surface = _lifetime.Own(new PlayerSurfaceView());
         Surface.AttachPlayer(player);
@@ -73,7 +48,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
         Timeline.Attach(player, () => Chrome?.RegisterActivity());
 
         ControlsBar = _lifetime.Own(new PlayerControlsBarView(navigation, Timeline, Reactions));
-        ControlsBar.AttachSubtitleController(preferences, trackId => player.SelectSubtitleTrack(trackId));
+        ControlsBar.AttachSubtitleController(preferences, player.SelectSubtitleTrack);
 
         Stats = _lifetime.Own(new PlayerStatsView());
         Stats.AttachPlayer(player);
@@ -82,7 +57,10 @@ internal sealed class PlayerOverlayComposer : IDisposable
             dependencies.MediaResolver,
             navigation,
             linkRouter.Activate,
-            () => { if (session.HasMedia) Surface.GrabFocus(); }));
+            () =>
+            {
+                if (session.HasMedia) Surface.GrabFocus();
+            }));
 
         CommentsCue = _lifetime.Own(new PlayerCommentsCueView());
 
@@ -162,6 +140,33 @@ internal sealed class PlayerOverlayComposer : IDisposable
             preferences);
     }
 
+    public PlayerSurfaceView Surface { get; }
+    public PlayerLoadingView Loading { get; }
+    public PlayerErrorView Error { get; }
+    public PlayerHeaderBarView HeaderBar { get; }
+    private PlayerCenterControlsView CenterControls { get; }
+    private PlayerReactionsView Reactions { get; }
+    public PlayerTimelineView Timeline { get; }
+    public PlayerControlsBarView ControlsBar { get; }
+    public PlayerStatsView Stats { get; }
+    public PlayerInfoPanelView InfoPanel { get; }
+    public PlayerCommentsCueView CommentsCue { get; }
+    public PlayerPromptStackView PromptStack { get; }
+    public PlayerOsdView Osd { get; }
+    public PlayerChromeController Chrome { get; }
+    public PlayerShortcutController Shortcuts { get; }
+
+    private LibMpvPlaybackState? LastState { get; set; }
+    public bool IsPaused => LastState?.IsPaused ?? true;
+    public double Volume => LastState?.Volume ?? 100.0;
+    public bool IsMuted => LastState?.IsMuted ?? false;
+    public double Speed => LastState?.Speed ?? 1.0;
+
+    public void Dispose()
+    {
+        _lifetime.Dispose();
+    }
+
     public void SyncState(LibMpvPlaybackState state, bool hasQueue, bool canPrev, bool canNext, bool isQueueOpen)
     {
         LastState = state;
@@ -189,7 +194,8 @@ internal sealed class PlayerOverlayComposer : IDisposable
     {
         Loading.Reset();
         Error.ShowError(detail, failedVideo);
-        ControlsBar.SetMetadata(Error.CurrentErrorInfo?.Title ?? "Playback Error", Error.CurrentErrorInfo?.Message ?? detail, null);
+        ControlsBar.SetMetadata(Error.CurrentErrorInfo?.Title ?? "Playback Error",
+            Error.CurrentErrorInfo?.Message ?? detail, null);
     }
 
     public void SyncSessionEnded()
@@ -203,11 +209,8 @@ internal sealed class PlayerOverlayComposer : IDisposable
         CommentsCue.Hide();
     }
 
-    private void OnSessionSeekRequested(double positionSeconds, bool exact) =>
-        Timeline.SeekAbsolute(positionSeconds, exact);
-
-    public void Dispose()
+    private void OnSessionSeekRequested(double positionSeconds, bool exact)
     {
-        _lifetime.Dispose();
+        Timeline.SeekAbsolute(positionSeconds, exact);
     }
 }

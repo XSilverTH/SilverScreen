@@ -1,6 +1,6 @@
 using System.Globalization;
+using GLib;
 using Serilog;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Player.RichText;
@@ -18,6 +18,11 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
 
     public YouTubeVideoDetails? LoadedDetails { get; private set; }
     public string? LoadedError { get; private set; }
+
+    public void Dispose()
+    {
+        Reset();
+    }
 
     public void Reset()
     {
@@ -53,7 +58,7 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
             result = new YouTubeVideoDetailsResult(null, false, "Video details could not be loaded.");
         }
 
-        GLib.Functions.IdleAdd(0, () =>
+        Functions.IdleAdd(0, () =>
         {
             if (currentGen != _generation) return false;
             if (result is { IsSuccess: true, Details: { } details })
@@ -86,11 +91,8 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
         return string.Join(" · ", parts);
     }
 
-    public static string FormatMarkup(string description) =>
-        RichLabelMarkup.Build(description);
-
-    public void Dispose()
+    public static string FormatMarkup(string description)
     {
-        Reset();
+        return RichLabelMarkup.Build(description);
     }
 }

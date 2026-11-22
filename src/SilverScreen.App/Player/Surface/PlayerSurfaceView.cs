@@ -10,13 +10,10 @@ namespace SilverScreen.Player.Surface;
 public partial class PlayerSurfaceView : ViewBase<GraphicsOffload>
 {
     private LibMpvPlayer? _player;
-    private bool _rendererReady;
     private int _surfacePixelHeight;
     private int _surfacePixelWidth;
 
-    public bool IsRendererReady => _rendererReady;
-    public GLArea Surface => player_surface;
-    public (int Width, int Height) SurfaceDimensions => (_surfacePixelWidth, _surfacePixelHeight);
+    public bool IsRendererReady { get; private set; }
 
     public event EventHandler? Realized;
     public event EventHandler? Unrealized;
@@ -63,7 +60,7 @@ public partial class PlayerSurfaceView : ViewBase<GraphicsOffload>
         if (_player is not null)
         {
             _player.InitializeRenderer();
-            _rendererReady = true;
+            IsRendererReady = true;
         }
 
         Realized?.Invoke(this, EventArgs.Empty);
@@ -73,7 +70,7 @@ public partial class PlayerSurfaceView : ViewBase<GraphicsOffload>
     {
         player_surface.MakeCurrent();
         _player?.ShutdownRenderer();
-        _rendererReady = false;
+        IsRendererReady = false;
         _surfacePixelWidth = 0;
         _surfacePixelHeight = 0;
         Unrealized?.Invoke(this, EventArgs.Empty);
@@ -81,7 +78,7 @@ public partial class PlayerSurfaceView : ViewBase<GraphicsOffload>
 
     private bool OnSurfaceRender(GLArea sender, GLArea.RenderSignalArgs args)
     {
-        if (IsDisposed || !_rendererReady || _player is null)
+        if (IsDisposed || !IsRendererReady || _player is null)
             return false;
 
         var width = _surfacePixelWidth > 0

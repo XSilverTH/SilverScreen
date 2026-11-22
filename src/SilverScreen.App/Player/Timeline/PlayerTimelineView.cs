@@ -14,7 +14,6 @@ public partial class PlayerTimelineView : ViewBase<Box>
 
     public Scale TimelineScale => player_timeline;
     public Overlay TimelineOverlay => player_timeline_overlay;
-    public TimeSpan PlaybackPosition => _timelineController?.PlaybackPosition ?? TimeSpan.Zero;
     public bool IsScrubbing => _timelineController?.IsScrubbing ?? false;
 
     public void Attach(LibMpvPlayer player, Action registerActivity)
@@ -31,14 +30,14 @@ public partial class PlayerTimelineView : ViewBase<Box>
             player_scrub_chapter_label,
             player_position_label,
             player_duration_label,
-            (pos, exact) => player.SeekAbsolute(pos, exact),
+            player.SeekAbsolute,
             registerActivity));
 
         _chapterOverlay = Lifetime.Own(new PlayerChapterOverlay(
             player_timeline_overlay,
             player_timeline,
             () => _timelineController.PlaybackPosition,
-            pos => player.SeekAbsolute(pos, true),
+            pos => player.SeekAbsolute(pos),
             registerActivity));
     }
 

@@ -3,7 +3,6 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
-using SilverScreen.Shell;
 
 namespace SilverScreen.Player.RichText;
 
@@ -34,6 +33,7 @@ internal sealed class PlayerLinkRouter(
             externalRequested ?? (_ => { }))
     {
     }
+
     public bool Activate(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri))

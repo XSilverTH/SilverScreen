@@ -14,7 +14,9 @@ public partial class PlayerHeaderBarView : ViewBase<HeaderBar>
     public void SetFullscreen(bool isFullscreen)
     {
         player_fullscreen_button.SetIconName(isFullscreen ? "view-restore-symbolic" : "view-fullscreen-symbolic");
-        player_fullscreen_button.SetTooltipText(isFullscreen ? "Exit fullscreen (F / Escape)" : "Toggle fullscreen (F)");
+        player_fullscreen_button.SetTooltipText(isFullscreen
+            ? "Exit fullscreen (F / Escape)"
+            : "Toggle fullscreen (F)");
     }
 
     private void OnBackButtonClicked(object? sender, EventArgs args)

@@ -74,12 +74,6 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         _timelineDrawingArea.Dispose();
     }
 
-    public void Redraw()
-    {
-        if (!_lifetime.IsDisposed)
-            _timelineDrawingArea.QueueDraw();
-    }
-
     private void OnSegmentsChanged(IReadOnlyList<SponsorBlockSegment> segments)
     {
         IdleAdd(0, () =>

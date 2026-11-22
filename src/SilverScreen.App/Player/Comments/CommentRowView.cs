@@ -6,18 +6,16 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentRowView : ViewBase<Bin>
+public partial class CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated)
+    : ViewBase<Bin>
 {
-    private readonly Func<string, bool> _linkActivated;
-    private readonly Action<string> _repliesToggleRequested;
-    private string? _boundCommentId;
+    private readonly Func<string, bool> _linkActivated =
+        linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
 
-    public CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated)
-    {
-        _repliesToggleRequested =
-            repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
-        _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
-    }
+    private readonly Action<string> _repliesToggleRequested =
+        repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
+
+    private string? _boundCommentId;
 
     private bool OnCommentTextActivateLink(Label sender, Label.ActivateLinkSignalArgs args)
     {

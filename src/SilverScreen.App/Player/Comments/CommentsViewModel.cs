@@ -53,8 +53,6 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotify
 
     public CommentsViewState State { get; private set; } = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
     public void Dispose()
     {
         if (_disposed)
@@ -69,6 +67,8 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotify
         _topLevelCommentIds.Clear();
         _expandedCommentIds.Clear();
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public event EventHandler<CommentsViewState>? StateChanged;
 

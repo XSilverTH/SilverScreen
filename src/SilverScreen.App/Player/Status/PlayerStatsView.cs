@@ -7,7 +7,10 @@ namespace SilverScreen.Player.Status;
 
 internal sealed class PlayerStatsProvider(LibMpvPlayer player) : IPlayerStatsProvider
 {
-    public PlaybackStats? GetPlaybackStats(bool includeTracks = false) => player.GetPlaybackStats(includeTracks);
+    public PlaybackStats? GetPlaybackStats(bool includeTracks = false)
+    {
+        return player.GetPlaybackStats(includeTracks);
+    }
 }
 
 /// <summary>
@@ -25,9 +28,18 @@ public partial class PlayerStatsView : ViewBase<Revealer>
             new PlayerStatsController(new PlayerStatsProvider(player), Widget, player_stats_label));
     }
 
-    public bool HandleKeyPress(uint keyVal) => _statsController?.HandleKeyPress(keyVal) ?? false;
+    public bool HandleKeyPress(uint keyVal)
+    {
+        return _statsController?.HandleKeyPress(keyVal) ?? false;
+    }
 
-    public void Toggle() => _statsController?.Toggle();
+    public void Toggle()
+    {
+        _statsController?.Toggle();
+    }
 
-    public void Close() => _statsController?.Close();
+    public void Close()
+    {
+        _statsController?.Close();
+    }
 }

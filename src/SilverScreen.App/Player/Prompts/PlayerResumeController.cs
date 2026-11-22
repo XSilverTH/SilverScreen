@@ -122,27 +122,6 @@ internal sealed class PlayerResumeController : IDisposable
         });
     }
 
-    /// <summary>
-    ///     Offers a jump back to <paramref name="returnPosition" /> (where playback was
-    ///     before a timestamp link seek) using the resume prompt UI. Consuming the
-    ///     prompt seeks back; it is not a repeat of the original jump.
-    /// </summary>
-    public void ShowSeekPrompt(TimeSpan returnPosition)
-    {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            _seekPromptPosition = returnPosition;
-            _resumeLabel.SetText($"Back to {PlayerTimelineState.FormatTime(returnPosition)}");
-            _resumeButton.SetTooltipText($"Return to {PlayerTimelineState.FormatTime(returnPosition)} (Enter)");
-            _resumeRevealer.SetVisible(true);
-            _resumeRevealer.RevealChild = true;
-            _restartRevealer.RevealChild = false;
-            SchedulePromptHide(false);
-            return false;
-        });
-    }
-
     private void SchedulePromptHide(bool dismissSessionPrompt = true)
     {
         ClearPromptTimeout();

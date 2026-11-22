@@ -9,7 +9,6 @@ namespace SilverScreen.Player.Status;
 /// </summary>
 public partial class PlayerErrorView : ViewBase<StatusPage>
 {
-    public bool HasError => Widget.GetVisible();
     public PlayerErrorInfo? CurrentErrorInfo { get; private set; }
 
     public event EventHandler? RetryRequested;

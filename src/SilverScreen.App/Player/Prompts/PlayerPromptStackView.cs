@@ -10,9 +10,8 @@ namespace SilverScreen.Player.Prompts;
 /// </summary>
 public partial class PlayerPromptStackView : ViewBase<Box>
 {
-    private PlaybackSession? _session;
     private PlayerResumeController? _resumeController;
-    private PlayerSponsorBlockController? _sponsorBlockController;
+    private PlaybackSession? _session;
 
     public event EventHandler<TimeSpan>? SeekRequested;
 
@@ -24,7 +23,7 @@ public partial class PlayerPromptStackView : ViewBase<Box>
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
 
-        _sponsorBlockController = Lifetime.Own(new PlayerSponsorBlockController(
+        Lifetime.Own(new PlayerSponsorBlockController(
             session,
             preferences,
             timeline,
@@ -52,24 +51,20 @@ public partial class PlayerPromptStackView : ViewBase<Box>
         return false;
     }
 
-    public void SkipActiveSponsorSegment()
+    private void SkipActiveSponsorSegment()
     {
         _session?.TrySkipManualSegment();
     }
 
-    public void ConsumeResumePrompt()
+    private void ConsumeResumePrompt()
     {
         if (_resumeController is not null && _resumeController.TryConsumeSeekPrompt(out var pos))
-        {
             SeekRequested?.Invoke(this, pos);
-        }
         else if (_session is { ResumePosition: var resumePos } && resumePos > TimeSpan.Zero && _session.TryResume())
-        {
             SeekRequested?.Invoke(this, resumePos);
-        }
     }
 
-    public void ConsumeRestartPrompt()
+    private void ConsumeRestartPrompt()
     {
         _session?.TryRestart();
     }
@@ -82,14 +77,20 @@ public partial class PlayerPromptStackView : ViewBase<Box>
             player_restart_revealer.GetVisible());
     }
 
-    private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args) =>
+    private void OnSponsorBlockSkipButtonClicked(object? sender, EventArgs args)
+    {
         SkipActiveSponsorSegment();
+    }
 
-    private void OnResumeButtonClicked(object? sender, EventArgs args) =>
+    private void OnResumeButtonClicked(object? sender, EventArgs args)
+    {
         ConsumeResumePrompt();
+    }
 
-    private void OnRestartButtonClicked(object? sender, EventArgs args) =>
+    private void OnRestartButtonClicked(object? sender, EventArgs args)
+    {
         ConsumeRestartPrompt();
+    }
 
     private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {

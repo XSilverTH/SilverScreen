@@ -142,9 +142,13 @@ internal static class PlayerShortcutWiring
                 composer.Osd.ShowSeek((int)pos.TotalSeconds);
             }
             else if (session.TryResume())
+            {
                 composer.Osd.ShowResumed();
+            }
             else if (session.TrySkipManualSegment())
+            {
                 composer.Osd.ShowSkippedSponsor();
+            }
         });
 
         shortcuts.UpdateBindings(preferences.GetPreferences().Shortcuts);

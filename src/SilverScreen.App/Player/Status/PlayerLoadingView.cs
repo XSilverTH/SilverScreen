@@ -11,8 +11,6 @@ public partial class PlayerLoadingView : ViewBase<Box>
 {
     private PlayerStreamDelayController? _streamDelayController;
 
-    public bool IsLoading => player_loading_indicator.GetVisible();
-
     public void AttachPlayer(LibMpvPlayer player)
     {
         _streamDelayController = Lifetime.Own(

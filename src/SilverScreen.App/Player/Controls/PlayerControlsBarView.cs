@@ -4,8 +4,8 @@ using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
+using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controls;
 
@@ -17,28 +17,16 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 {
     private static readonly string[] DefaultQualities = ["Best", "1080p", "720p", "480p", "360p", "240p", "144p"];
     private static readonly ILogger Logger = Log.ForContext<PlayerControlsBarView>();
-    private readonly INavigationService _navigation;
     private readonly List<string> _availableQualities = ["Best"];
+    private readonly INavigationService _navigation;
     private string? _channelUrl;
     private string? _currentQualityVideoId;
     private CancellationTokenSource? _qualityCancellation;
     private int _qualityGeneration;
+    private PlayerSubtitleController? _subtitleController;
     private bool _suppressQualityNotification;
     private bool _suppressSpeedNotification;
     private bool _suppressVolumeNotification;
-    private PlayerSubtitleController? _subtitleController;
-
-    public PlayerTimelineView Timeline { get; }
-    public PlayerReactionsView Reactions { get; }
-    public bool IsPopoverOpen => player_volume_popover.GetVisible() || player_settings_popover.GetVisible();
-
-    public event EventHandler? PreviousQueueClicked;
-    public event EventHandler? NextQueueClicked;
-    public event EventHandler<bool>? QueueToggled;
-    public event EventHandler<double>? VolumeChanged;
-    public event EventHandler<double>? SpeedChanged;
-    public event EventHandler<string>? QualitySelected;
-    public event EventHandler<string>? SubtitleToggled;
 
     public PlayerControlsBarView(
         INavigationService navigation,
@@ -52,23 +40,53 @@ public partial class PlayerControlsBarView : ViewBase<Box>
         player_timeline_host.Append(Timeline.Widget);
     }
 
-    public void AttachSubtitleController(IPreferencesService preferences, Action<long> selectTrack) =>
+    private PlayerTimelineView Timeline { get; }
+    private PlayerReactionsView Reactions { get; }
+    public bool IsPopoverOpen => player_volume_popover.GetVisible() || player_settings_popover.GetVisible();
+
+    public bool IsQueueActive => player_queue_button.Active;
+
+    public event EventHandler? PreviousQueueClicked;
+    public event EventHandler? NextQueueClicked;
+    public event EventHandler<bool>? QueueToggled;
+    public event EventHandler<double>? VolumeChanged;
+    public event EventHandler<double>? SpeedChanged;
+    public event EventHandler<string>? QualitySelected;
+    public event EventHandler<string>? SubtitleToggled;
+
+    public void AttachSubtitleController(IPreferencesService preferences, Action<long> selectTrack)
+    {
         _subtitleController = Lifetime.Own(new PlayerSubtitleController(
             preferences, player_subtitle_dropdown, player_subtitle_model, player_subtitle_button, selectTrack));
+    }
 
-    public void UpdateSubtitleTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks, bool suppress = false) =>
+    public void UpdateSubtitleTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks, bool suppress = false)
+    {
         _subtitleController?.UpdateTracks(tracks, suppress);
+    }
 
-    public string ShowPreferredSubtitle() => _subtitleController?.ShowPreferredSubtitle() ?? string.Empty;
-    public bool IsQueueActive => player_queue_button.Active;
-    public void ToggleQueue() => player_queue_button.Active = !player_queue_button.Active;
-    public void SetQueueActive(bool active) => player_queue_button.Active = active;
+    public string ShowPreferredSubtitle()
+    {
+        return _subtitleController?.ShowPreferredSubtitle() ?? string.Empty;
+    }
+
+    public void ToggleQueue()
+    {
+        player_queue_button.Active = !player_queue_button.Active;
+    }
+
+    public void SetQueueActive(bool active)
+    {
+        player_queue_button.Active = active;
+    }
 
     public void SetMetadata(string title, string channelName, string? channelUrl)
     {
         _channelUrl = channelUrl;
         player_title_label.SetText(string.IsNullOrWhiteSpace(title) ? "Nothing playing" : title);
-        player_channel_label.SetText(string.IsNullOrWhiteSpace(channelName) ? "Choose a video to preview the embedded player." : channelName);
+        player_channel_label.SetText(string.IsNullOrWhiteSpace(channelName)
+            ? "Choose a video to preview the embedded player."
+            : channelName);
         player_channel_button.Sensitive = !string.IsNullOrWhiteSpace(channelUrl);
     }
 
@@ -115,10 +133,12 @@ public partial class PlayerControlsBarView : ViewBase<Box>
         var generation = ++_qualityGeneration;
         resolver.GetQualityTracksAsync(videoId, cancellation.Token).ContinueWith(task =>
         {
-            if (task.IsCompletedSuccessfully && !cancellation.IsCancellationRequested && generation == _qualityGeneration)
-                GLib.Functions.IdleAdd(0, () =>
+            if (task.IsCompletedSuccessfully && !cancellation.IsCancellationRequested &&
+                generation == _qualityGeneration)
+                Functions.IdleAdd(0, () =>
                 {
-                    if (IsDisposed || cancellation.IsCancellationRequested || generation != _qualityGeneration) return false;
+                    if (IsDisposed || cancellation.IsCancellationRequested || generation != _qualityGeneration)
+                        return false;
                     ApplyQualityTracks(task.Result, targetQuality);
                     return false;
                 });
@@ -136,12 +156,14 @@ public partial class PlayerControlsBarView : ViewBase<Box>
                 _availableQualities.Add(q);
 
         player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
-        var index = _availableQualities.FindIndex(q => string.Equals(q, targetQuality, StringComparison.OrdinalIgnoreCase));
+        var index = _availableQualities.FindIndex(q =>
+            string.Equals(q, targetQuality, StringComparison.OrdinalIgnoreCase));
         player_quality_dropdown.SetSelected((uint)Math.Max(0, index));
         _suppressQualityNotification = false;
     }
 
-    private void UpdateVolumeIcon(double volume) =>
+    private void UpdateVolumeIcon(double volume)
+    {
         player_volume_button.SetIconName(volume switch
         {
             <= 0 => "audio-volume-muted-symbolic",
@@ -149,6 +171,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
             < 66 => "audio-volume-medium-symbolic",
             _ => "audio-volume-high-symbolic"
         });
+    }
 
     private void OnChannelButtonClicked(object? sender, EventArgs args)
     {
@@ -156,17 +179,31 @@ public partial class PlayerControlsBarView : ViewBase<Box>
             _navigation.NavigateToChannel(_channelUrl, player_channel_label.GetText());
     }
 
-    private void OnPreviousQueueButtonClicked(object? sender, EventArgs args) => PreviousQueueClicked?.Invoke(this, EventArgs.Empty);
-    private void OnQueueButtonToggled(object? sender, EventArgs args) => QueueToggled?.Invoke(this, player_queue_button.Active);
-    private void OnNextQueueButtonClicked(object? sender, EventArgs args) => NextQueueClicked?.Invoke(this, EventArgs.Empty);
+    private void OnPreviousQueueButtonClicked(object? sender, EventArgs args)
+    {
+        PreviousQueueClicked?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnQueueButtonToggled(object? sender, EventArgs args)
+    {
+        QueueToggled?.Invoke(this, player_queue_button.Active);
+    }
+
+    private void OnNextQueueButtonClicked(object? sender, EventArgs args)
+    {
+        NextQueueClicked?.Invoke(this, EventArgs.Empty);
+    }
+
     private void OnSubtitleButtonClicked(object? sender, EventArgs args)
     {
         var subtitle = ShowPreferredSubtitle();
         SubtitleToggled?.Invoke(this, subtitle);
     }
 
-    private void OnSubtitleDropdownNotify(object? sender, EventArgs args) =>
+    private void OnSubtitleDropdownNotify(object? sender, EventArgs args)
+    {
         _subtitleController?.OnSelectionChanged();
+    }
 
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
     {
@@ -198,6 +235,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
             _qualityCancellation?.Dispose();
             _qualityCancellation = null;
         }
+
         base.Dispose(disposing);
     }
 }

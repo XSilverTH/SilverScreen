@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
 using Serilog;
 using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
-using SilverScreen.Shell;
 
 namespace SilverScreen.Player;
 

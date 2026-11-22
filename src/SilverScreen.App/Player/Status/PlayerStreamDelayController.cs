@@ -1,8 +1,11 @@
-using Cairo;
+using Adw;
 using Gtk;
+using Pango;
 using SilverScreen.Infrastructure.Player;
 using XSTH.Blueprint.Helpers;
 using static GLib.Functions;
+using Context = Cairo.Context;
+using Functions = PangoCairo.Functions;
 using Object = GObject.Object;
 
 namespace SilverScreen.Player.Status;
@@ -14,13 +17,13 @@ namespace SilverScreen.Player.Status;
 internal sealed class PlayerStreamDelayController : IDisposable
 {
     private const uint TickIntervalMilliseconds = 33; // ~30 FPS
-    private readonly DisposeScope _lifetime = new();
     private readonly DrawingArea _drawingArea;
+    private readonly DisposeScope _lifetime = new();
     private readonly Revealer _revealer;
     private readonly PlayerStreamDelayState _state;
-    private uint _tickSource;
     private double _currentFraction;
     private string _currentLabelText = string.Empty;
+    private uint _tickSource;
 
     public PlayerStreamDelayController(
         LibMpvPlayer player,
@@ -113,23 +116,17 @@ internal sealed class PlayerStreamDelayController : IDisposable
         _currentLabelText = PlayerStreamDelayState.FormatLabel(remainingSeconds);
         _drawingArea.QueueDraw();
 
-        if (isComplete)
-        {
-            _tickSource = 0;
-            _revealer.RevealChild = false;
-            return false;
-        }
-
-        return true;
+        if (!isComplete) return true;
+        _tickSource = 0;
+        _revealer.RevealChild = false;
+        return false;
     }
 
     private void CancelTimer()
     {
-        if (_tickSource != 0)
-        {
-            _lifetime.Cancel(_tickSource);
-            _tickSource = 0;
-        }
+        if (_tickSource == 0) return;
+        _lifetime.Cancel(_tickSource);
+        _tickSource = 0;
     }
 
     private void DrawDelayBar(DrawingArea area, Context cr, int width, int height)
@@ -137,14 +134,6 @@ internal sealed class PlayerStreamDelayController : IDisposable
         if (width <= 0 || height <= 0) return;
 
         var radius = height / 2.0;
-
-        void PathPill()
-        {
-            cr.NewSubPath();
-            cr.Arc(width - radius, radius, radius, -Math.PI / 2.0, Math.PI / 2.0);
-            cr.Arc(radius, radius, radius, Math.PI / 2.0, 3 * Math.PI / 2.0);
-            cr.ClosePath();
-        }
 
         // 1. Trough background and border
         PathPill();
@@ -158,7 +147,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         var fillWidth = width * Math.Clamp(_currentFraction, 0.0, 1.0);
         double fillR = 0.21, fillG = 0.52, fillB = 0.89, fillA = 1.0;
         var hasBg = area.GetStyleContext().LookupColor("accent_bg_color", out var accentBg);
-        if (hasBg && accentBg is not null)
+        if (hasBg)
         {
             fillR = accentBg.Red;
             fillG = accentBg.Green;
@@ -169,7 +158,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         {
             try
             {
-                var adwRgba = Adw.StyleManager.GetDefault().AccentColorRgba;
+                var adwRgba = StyleManager.GetDefault().AccentColorRgba;
                 fillR = adwRgba.Red;
                 fillG = adwRgba.Green;
                 fillB = adwRgba.Blue;
@@ -197,7 +186,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         if (string.IsNullOrEmpty(text)) return;
 
         var layout = area.CreatePangoLayout(text);
-        var fontDesc = Pango.FontDescription.FromString("Sans Bold 9");
+        var fontDesc = FontDescription.FromString("Sans Bold 9");
         layout.SetFontDescription(fontDesc);
         layout.GetPixelSize(out var textWidth, out var textHeight);
         var textX = (width - textWidth) / 2.0;
@@ -211,26 +200,33 @@ internal sealed class PlayerStreamDelayController : IDisposable
         cr.Clip();
         cr.SetSourceRgba(1.0, 1.0, 1.0, 0.95);
         cr.MoveTo(textX, textY);
-        PangoCairo.Functions.ShowLayout(cr, layout);
+        Functions.ShowLayout(cr, layout);
         cr.Restore();
 
         // Filled region (left of fillWidth): black on light colors, white on dark colors
-        if (fillWidth > 0)
+        if (!(fillWidth > 0)) return;
+        cr.Save();
+        PathPill();
+        cr.Clip();
+        cr.Rectangle(0, 0, fillWidth, height);
+        cr.Clip();
+
+        if (IsLightColor(fillR, fillG, fillB))
+            cr.SetSourceRgba(0.0, 0.0, 0.0, 0.95);
+        else
+            cr.SetSourceRgba(1.0, 1.0, 1.0, 0.95);
+
+        cr.MoveTo(textX, textY);
+        Functions.ShowLayout(cr, layout);
+        cr.Restore();
+        return;
+
+        void PathPill()
         {
-            cr.Save();
-            PathPill();
-            cr.Clip();
-            cr.Rectangle(0, 0, fillWidth, height);
-            cr.Clip();
-
-            if (IsLightColor(fillR, fillG, fillB))
-                cr.SetSourceRgba(0.0, 0.0, 0.0, 0.95);
-            else
-                cr.SetSourceRgba(1.0, 1.0, 1.0, 0.95);
-
-            cr.MoveTo(textX, textY);
-            PangoCairo.Functions.ShowLayout(cr, layout);
-            cr.Restore();
+            cr.NewSubPath();
+            cr.Arc(width - radius, radius, radius, -Math.PI / 2.0, Math.PI / 2.0);
+            cr.Arc(radius, radius, radius, Math.PI / 2.0, 3 * Math.PI / 2.0);
+            cr.ClosePath();
         }
     }
 
@@ -240,13 +236,13 @@ internal sealed class PlayerStreamDelayController : IDisposable
     /// </summary>
     internal static bool IsLightColor(double r, double g, double b)
     {
+        var luminance = 0.2126 * ToLinear(r) + 0.7152 * ToLinear(g) + 0.0722 * ToLinear(b);
+        return luminance > 0.40;
+
         static double ToLinear(double c)
         {
             var clamped = Math.Clamp(c, 0.0, 1.0);
             return clamped <= 0.04045 ? clamped / 12.92 : Math.Pow((clamped + 0.055) / 1.055, 2.4);
         }
-
-        var luminance = 0.2126 * ToLinear(r) + 0.7152 * ToLinear(g) + 0.0722 * ToLinear(b);
-        return luminance > 0.40;
     }
 }
