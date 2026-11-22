@@ -1,4 +1,4 @@
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Notifications;
 
 /// <summary>
 ///     Contract for presenting user notifications and transient toast messages.

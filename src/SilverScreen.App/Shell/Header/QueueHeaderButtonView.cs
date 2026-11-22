@@ -4,7 +4,7 @@ using Gtk;
 using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Encapsulates the queue toggle button and count badge in the shell header bar.

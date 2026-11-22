@@ -1,4 +1,4 @@
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Coordinates refresh actions and loading states between shell header buttons and the active view stack page.

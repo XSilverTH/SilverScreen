@@ -3,7 +3,7 @@ using Serilog;
 using SilverScreen.Infrastructure.Common;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Encapsulates the runtime dependency setup warning button and popover.

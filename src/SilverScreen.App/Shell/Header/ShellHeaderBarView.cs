@@ -12,7 +12,7 @@ using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 using HeaderBar = Adw.HeaderBar;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Structural host container for the application's top Adw.HeaderBar and child widgets.

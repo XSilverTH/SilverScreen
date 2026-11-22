@@ -3,7 +3,7 @@ using Serilog;
 using SilverScreen.Core.Common;
 using Functions = GLib.Functions;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Notifications;
 
 /// <summary>
 ///     Thread-safe presentation notification service that marshals toast notifications to the Libadwaita ToastOverlay.

@@ -1,4 +1,4 @@
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 public sealed class ShellRefreshCoordinator : IShellRefreshCoordinator
 {

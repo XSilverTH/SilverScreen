@@ -4,7 +4,7 @@ using SilverScreen.Core.Common;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Encapsulates the shell refresh button and spinner for the active page.

@@ -13,7 +13,7 @@ using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Navigation;
 
 public partial class ShellNavigationHostView : ViewBase<ViewStack>
 {

@@ -6,7 +6,7 @@ using SilverScreen.Player;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Encapsulates the now-playing header bar controls: play/pause toggle and return-to-player button.

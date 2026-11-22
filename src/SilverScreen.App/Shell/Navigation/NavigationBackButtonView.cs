@@ -2,7 +2,7 @@ using Gtk;
 using SilverScreen.Browsing.Channel;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Navigation;
 
 /// <summary>
 ///     Encapsulates the shell header back navigation button with tooltip tracking.

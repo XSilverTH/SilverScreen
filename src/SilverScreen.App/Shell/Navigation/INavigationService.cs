@@ -1,4 +1,4 @@
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Navigation;
 
 /// <summary>
 ///     Contract for navigating between application pages, decoupling UI views from concrete shell stacks.

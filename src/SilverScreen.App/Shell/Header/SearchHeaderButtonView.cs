@@ -3,7 +3,7 @@ using SilverScreen.Browsing.Search;
 using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>
 ///     Encapsulates the search button and popover in the shell header bar.

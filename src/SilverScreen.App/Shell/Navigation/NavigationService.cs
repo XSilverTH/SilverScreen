@@ -2,7 +2,7 @@ using Adw;
 using Gtk;
 using SilverScreen.Browsing.Channel;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Navigation;
 
 /// <summary>
 ///     Identifies the navigable destinations within the application shell.

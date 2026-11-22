@@ -160,7 +160,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     public Task TogglePauseAsync() { _player.TogglePause(); IsPaused = !IsPaused; return Task.CompletedTask; }
     private void PresentPlayer() { _navigation.NavigateToPlayer(); if (_preferences.GetPreferences().OpenInFullscreen && Widget.GetRoot() is Window w) w.Fullscreen(); }
-    private void ReturnToShell() { _overlay.Shortcuts.Detach(); EndSession(true); if (Widget.GetRoot() is Window w) w.Unfullscreen(); if (!_navigation.GoBack()) _navigation.NavigateTo(SilverScreen.Shell.NavigationPage.Home); }
+    private void ReturnToShell() { _overlay.Shortcuts.Detach(); EndSession(true); if (Widget.GetRoot() is Window w) w.Unfullscreen(); if (!_navigation.GoBack()) _navigation.NavigateTo(NavigationPage.Home); }
     private bool ToggleFullscreen() { if (Widget.GetRoot() is not Window w) return false; var fs = !w.Fullscreened; if (fs) w.Fullscreen(); else w.Unfullscreen(); _overlay.HeaderBar.SetFullscreen(fs); return fs; }
     private void CloseComments() { Widget.ShowSidebar = false; if (_session.HasMedia) _overlay.Surface.GrabFocus(); }
     private void CloseQueue() { player_queue_split_view.ShowSidebar = false; if (_session.HasMedia) _overlay.Surface.GrabFocus(); }

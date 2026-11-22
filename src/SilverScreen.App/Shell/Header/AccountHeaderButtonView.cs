@@ -9,7 +9,7 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using XSTH.Blueprint.Helpers;
 
-namespace SilverScreen.Shell;
+namespace SilverScreen.Shell.Header;
 
 /// <summary>Encapsulates the account header button, status indicator, avatar, and popover host.</summary>
 public partial class AccountHeaderButtonView : ViewBase<MenuButton>
