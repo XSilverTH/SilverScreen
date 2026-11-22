@@ -1,0 +1,27 @@
+using Gtk 4.0;
+
+Button RefreshHeaderButtonView {
+  tooltip-text: "Refresh";
+  clicked => $OnClicked();
+
+  styles [
+    "flat",
+  ]
+
+  child: Stack home_refresh_stack {
+    StackPage {
+      name: "idle";
+
+      child: Image {
+        icon-name: "view-refresh-symbolic";
+        accessible-role: presentation;
+      };
+    }
+
+    StackPage {
+      name: "loading";
+
+      child: Spinner home_refresh_spinner {};
+    }
+  };
+}

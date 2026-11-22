@@ -5,6 +5,8 @@ using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using SilverScreen.Account.Profile;
+using SilverScreen.Browsing.Search;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
@@ -99,6 +101,9 @@ public partial class App
             _serviceProvider.GetRequiredService<RuntimeDependencyDiagnostics>(),
             _serviceProvider.GetRequiredService<INavigationService>(),
             _serviceProvider.GetRequiredService<INotificationService>(),
+            _serviceProvider.GetRequiredService<SearchViewModel>(),
+            _serviceProvider.GetRequiredService<AccountViewModel>(),
+            _serviceProvider.GetRequiredService<IShellRefreshCoordinator>(),
             () =>
             {
                 if (createdWindow is not null)

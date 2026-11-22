@@ -38,6 +38,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(HasManualSession));
             OnPropertyChanged(nameof(DisplayName));
             OnPropertyChanged(nameof(AvatarUrl));
+            OnPropertyChanged(nameof(PresentationStatus));
             StateChanged?.Invoke(this, EventArgs.Empty);
             RefreshProfile();
         }
@@ -45,6 +46,9 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     public AccountProfilePresentationStatus ProfileStatus { get; private set; } =
         AccountProfilePresentationStatus.SignedOut;
+
+    public AccountProfilePresentationStatus PresentationStatus =>
+        !HasManualSession ? AccountProfilePresentationStatus.SignedOut : ProfileStatus;
 
     public bool IsProfileChecking => ProfileStatus == AccountProfilePresentationStatus.Checking;
 
@@ -227,6 +231,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return;
         ProfileStatus = status;
         OnPropertyChanged(nameof(ProfileStatus));
+        OnPropertyChanged(nameof(PresentationStatus));
         OnPropertyChanged(nameof(IsProfileChecking));
         OnPropertyChanged(nameof(IsProfileRejected));
         OnPropertyChanged(nameof(IsProfileUnavailable));

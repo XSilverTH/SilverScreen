@@ -1,17 +1,10 @@
 using Adw;
 using Gdk;
 using Gio;
-using GObject;
 using Gtk;
 using Serilog;
 using SilverScreen.Account.Profile;
-using SilverScreen.Browsing.Channel;
-using SilverScreen.Browsing.Components;
-using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
-using SilverScreen.Browsing.Subscriptions;
-using SilverScreen.Core.Account.Session;
-using SilverScreen.Core.Domain;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
@@ -19,15 +12,9 @@ using SilverScreen.Player;
 using SilverScreen.Player.Views;
 using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
-using AboutDialog = Adw.AboutDialog;
 using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
-using Constants = Gdk.Constants;
-using Functions = GLib.Functions;
-using License = Gtk.License;
-using Object = GObject.Object;
 using PreferencesDialog = SilverScreen.Preferences.PreferencesDialog;
-using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
 
 namespace SilverScreen.Shell;
@@ -36,727 +23,109 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 {
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly AccountServices _account;
-
-    private readonly AccountPopoverView _accountPopover;
-    private readonly AccountViewModel _accountViewModel;
-    private readonly ChannelView _channel;
-    private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
-    private readonly ChannelViewModel _channelViewModel;
-    private readonly RuntimeDependencyDiagnostics _diagnostics;
     private readonly Action _disposeApplicationServices;
     private readonly EmbeddedPlayerView _embeddedPlayer;
-    private readonly VideoListView _history;
-    private readonly HistoryViewModel _historyViewModel;
-    private readonly VideoListView _home;
     private readonly INavigationService _navigationService;
     private readonly INotificationService _notificationService;
     private readonly PlaybackModeRoutingService _playback;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
-    private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
-    private readonly SearchPopoverView _searchPopover;
-    private readonly VideoListView _searchView;
-    private readonly SearchViewModel _searchViewModel;
-    private readonly SubscriptionsView _subscriptions;
-    private readonly SubscriptionsViewModel _subscriptionsViewModel;
+    private readonly ShellHeaderBarView _shellHeaderBar;
+    private readonly ShellNavigationHostView _navigationHost;
     private bool _closed;
 
-
     public MainWindow(
-        BrowsingServices browsing,
-        AccountServices account,
-        IPlaybackService playback,
-        PlayerDependencies player,
-        RuntimeDependencyDiagnostics diagnostics,
-        INavigationService navigationService,
-        INotificationService notificationService,
-        Action disposeApplicationServices,
+        BrowsingServices browsing, AccountServices account, IPlaybackService playback,
+        PlayerDependencies player, RuntimeDependencyDiagnostics diagnostics,
+        INavigationService navigationService, INotificationService notificationService,
+        SearchViewModel searchViewModel, AccountViewModel accountViewModel,
+        IShellRefreshCoordinator refreshCoordinator, Action disposeApplicationServices,
         string? initialQuery = null)
     {
         Logger.Debug("Initializing MainWindow");
-        _account = account;
-        _diagnostics = diagnostics;
-        _disposeApplicationServices = disposeApplicationServices;
-        _navigationService = navigationService;
-        _notificationService = notificationService;
-        if (_notificationService is NotificationService concreteNotify)
-            concreteNotify.AttachToastOverlay(toast_overlay);
+        (_account, _disposeApplicationServices, _navigationService, _notificationService) = (account, disposeApplicationServices, navigationService, notificationService);
+        if (_notificationService is NotificationService notify) notify.AttachToastOverlay(toast_overlay);
+
         _embeddedPlayer = new EmbeddedPlayerView(_navigationService, player);
         _playback = new PlaybackModeRoutingService(account.Preferences, playback, _embeddedPlayer);
         player_host.Append(_embeddedPlayer.Widget);
-        var cardServices = new VideoCardServices(
-            browsing.Thumbnails,
-            _navigationService,
-            _playback,
-            account.Queue,
-            _notificationService);
 
-        _channelViewModel = new ChannelViewModel(browsing.Channels);
-        _channel = new ChannelView(_channelViewModel, cardServices);
-        Lifetime.Track(() => _channel.RefreshLoadingChanged += OnChannelRefreshLoadingChanged,
-            () => _channel.RefreshLoadingChanged -= OnChannelRefreshLoadingChanged);
-        channel_host.Append(_channel.Widget);
-
-        _home = new VideoListView(browsing.HomeFeed.GetVideoListSource(OpenWebLogin), cardServices);
-        Lifetime.Track(() => _home.RefreshLoadingChanged += OnHomeRefreshLoadingChanged,
-            () => _home.RefreshLoadingChanged -= OnHomeRefreshLoadingChanged);
-
-        _historyViewModel = new HistoryViewModel(browsing.History, account.Session, OpenWebLogin);
-        _history = new VideoListView(_historyViewModel, cardServices);
-        Lifetime.Track(() => _history.RefreshLoadingChanged += OnHistoryRefreshLoadingChanged,
-            () => _history.RefreshLoadingChanged -= OnHistoryRefreshLoadingChanged);
-
-        _subscriptionsViewModel = new SubscriptionsViewModel(
-            browsing.Subscriptions,
-            browsing.Channels,
-            account.Session,
-            true,
-            OpenWebLogin,
-            account.Auth);
-        _subscriptions = new SubscriptionsView(_subscriptionsViewModel, cardServices);
-        Lifetime.Track(() => _subscriptions.RefreshLoadingChanged += OnSubscriptionsRefreshLoadingChanged,
-            () => _subscriptions.RefreshLoadingChanged -= OnSubscriptionsRefreshLoadingChanged);
-        subscriptions_host.Append(_subscriptions.Widget);
-        history_host.Append(_history.Widget);
-        home_host.Append(_home.Widget);
-        UpdateHomeRefreshButton(_home.IsLoading);
-        _searchViewModel = new SearchViewModel(browsing.Search, _playback, browsing.SearchSuggestions);
-        _searchViewModel.OpenChannelRequested = channelTarget =>
-        {
-            OpenChannelAsync(new VideoSummary("", "", channelTarget, TimeSpan.Zero, "", false, "", null, null,
-                channelTarget.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-                    ? channelTarget
-                    : $"https://www.youtube.com/{channelTarget.TrimStart('/')}"));
-            return Task.CompletedTask;
-        };
-        _searchPopover = new SearchPopoverView(_searchViewModel, OnSearchSubmitted, search_popover.Popdown);
-        search_popover.Child = _searchPopover.Widget;
-        Lifetime.Track(() => search_popover.OnClosed += OnSearchPopoverClosed,
-            () => search_popover.OnClosed -= OnSearchPopoverClosed);
-        Lifetime.Track(() => search_popover.OnNotify += OnSearchPopoverNotify,
-            () => search_popover.OnNotify -= OnSearchPopoverNotify);
-
-        _searchView = new VideoListView(_searchViewModel, cardServices);
-        Lifetime.Track(() => _searchView.RefreshLoadingChanged += OnSearchRefreshLoadingChanged,
-            () => _searchView.RefreshLoadingChanged -= OnSearchRefreshLoadingChanged);
-        search_host.Append(_searchView.Widget);
         _queueViewModel = new QueueViewModel(account.Queue, _playback);
-        _queueView = new QueueView(_queueViewModel, browsing.Thumbnails, CloseQueue);
+        _queueView = new QueueView(_queueViewModel, browsing.Thumbnails);
+        _queueView.CloseRequested += (_, _) => queue_split_view.ShowSidebar = false;
+        _queueView.PlayFailed += (_, err) => _notificationService.ShowToast(err);
         queue_sidebar_host.Append(_queueView.Widget);
-        Lifetime.Track(() => _queueView.PlayFailed += OnQueuePlayFailed,
-            () => _queueView.PlayFailed -= OnQueuePlayFailed);
-        _accountViewModel = new AccountViewModel(account.AccountProfile, account.Session);
-        _accountPopover = new AccountPopoverView(
-            _accountViewModel,
-            browsing.Thumbnails,
-            OpenWebLogin,
-            UpdateAccountAppearance);
 
+        _shellHeaderBar = new ShellHeaderBarView(_navigationService, _playback, account, accountViewModel, searchViewModel, refreshCoordinator, diagnostics, _notificationService, _queueViewModel, browsing.Thumbnails);
+        toolbar_view.AddTopBar(_shellHeaderBar.Widget);
+        _shellHeaderBar.QueueButton.BindToSplitView(queue_split_view);
 
-        var startupPrefs = account.Preferences.GetPreferences();
-        if (startupPrefs is { WindowWidth: > 0, WindowHeight: > 0 })
-            Widget.SetDefaultSize(startupPrefs.WindowWidth, startupPrefs.WindowHeight);
-        if (startupPrefs.WindowMaximized)
-            Widget.Maximize();
+        _navigationHost = new ShellNavigationHostView(browsing, account, _navigationService, _playback, _notificationService, searchViewModel, refreshCoordinator, initialQuery);
+        navigation_host.Append(_navigationHost.Widget);
+
+        _shellHeaderBar.ViewSwitcher.Stack = view_switcher_bar.Stack = _navigationHost.ViewStack;
+        breakpoint.OnApply += (_, _) => _shellHeaderBar.SetTitleWidgetRevealed(false);
+        breakpoint.OnUnapply += (_, _) => _shellHeaderBar.SetTitleWidgetRevealed(true);
+
+        var prefs = account.Preferences.GetPreferences();
+        if (prefs is { WindowWidth: > 0, WindowHeight: > 0 }) Widget.SetDefaultSize(prefs.WindowWidth, prefs.WindowHeight);
+        if (prefs.WindowMaximized) Widget.Maximize();
 
         SetupDesktopBackShortcuts();
-        if (_navigationService is NavigationService concreteNav)
-        {
-            concreteNav.AttachStacks(main_stack, view_stack);
-            concreteNav.Initialize();
-            concreteNav.RegisterPage(
-                NavigationPage.Home,
-                "home",
-                onEnter: ClearBrowsingHistory);
-            concreteNav.RegisterPage(
-                NavigationPage.Subscriptions,
-                "subscriptions",
-                onEnter: ClearBrowsingHistory);
-            concreteNav.RegisterPage(
-                NavigationPage.History,
-                "history",
-                onEnter: ClearBrowsingHistory);
-            concreteNav.RegisterPage(
-                NavigationPage.Search,
-                "search",
-                onEnter: RestoreSearchBrowsingState,
-                onLeave: CaptureSearchBrowsingState);
-            concreteNav.RegisterPage(
-                NavigationPage.Channel,
-                "channel",
-                onEnter: RestoreChannelBrowsingState,
-                onLeave: CaptureChannelBrowsingState);
-        }
-        Lifetime.Track(() => _navigationService.PageChanged += OnNavigationPageChanged,
-            () => _navigationService.PageChanged -= OnNavigationPageChanged);
-        account_popover.Child = _accountPopover.Widget;
-        Lifetime.Track(() => _playback.PlaybackStateChanged += OnPlaybackStateChanged,
-            () => _playback.PlaybackStateChanged -= OnPlaybackStateChanged);
-        queue_button.BindProperty("active", queue_split_view, "show-sidebar",
-            BindingFlags.Bidirectional | BindingFlags.SyncCreate);
+        if (_navigationService is NavigationService concreteNav) { concreteNav.AttachMainStack(main_stack); concreteNav.Initialize(); }
+
+        Lifetime.Track(() => _navigationService.PageChanged += OnNavigationPageChanged, () => _navigationService.PageChanged -= OnNavigationPageChanged);
         RegisterApplicationActions();
-        Lifetime.Track(() => _queueViewModel.StateChanged += OnQueueStateChanged,
-            () => _queueViewModel.StateChanged -= OnQueueStateChanged);
-        UpdateQueueButton(_queueViewModel.State);
-        UpdateNowPlayingBar();
-        Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest,
-            () => Widget.OnCloseRequest -= OnCloseRequest);
-        ReportStartupDependencyWarnings();
-        if (!string.IsNullOrWhiteSpace(initialQuery))
-            Functions.IdleAdd(0, () =>
-            {
-                if (!_closed) OnSearchSubmitted(initialQuery);
-                return false;
-            });
+        Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest, () => Widget.OnCloseRequest -= OnCloseRequest);
     }
 
     private void SetupDesktopBackShortcuts()
     {
-        var keyController = EventControllerKey.New();
-        keyController.SetPropagationPhase(PropagationPhase.Bubble);
-        Lifetime.Attach(Widget, keyController,
-            c => c.OnKeyPressed += OnKeyPressed,
-            c => c.OnKeyPressed -= OnKeyPressed);
+        var key = EventControllerKey.New();
+        key.SetPropagationPhase(PropagationPhase.Bubble);
+        Lifetime.Attach(Widget, key, c => c.OnKeyPressed += OnKeyPressed, c => c.OnKeyPressed -= OnKeyPressed);
 
-        var mouseController = GestureClick.New();
-        mouseController.SetButton(0);
-        Lifetime.Attach(Widget, mouseController,
-            c => c.OnPressed += OnMousePressed,
-            c => c.OnPressed -= OnMousePressed);
+        var mouse = GestureClick.New();
+        mouse.SetButton(0);
+        Lifetime.Attach(Widget, mouse, c => c.OnPressed += OnMousePressed, c => c.OnPressed -= OnMousePressed);
     }
 
-    private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)
-    {
-        if (Widget.GetFocus() is Editable or TextView)
-            return false;
-
-        if ((args.State & ModifierType.AltMask) != 0 && args.Keyval == Constants.KEY_Left)
-            if (_navigationService.CanGoBack)
-            {
-                OnNavigationBackButtonClicked();
-                return true;
-            }
-
-        if (args.Keyval != Constants.KEY_Escape || _navigationService.CurrentPage == NavigationPage.Player)
-            return false;
-        if (!_navigationService.CanGoBack) return false;
-        OnNavigationBackButtonClicked();
-        return true;
-    }
+    private bool OnKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args) =>
+        Widget.GetFocus() is not (Editable or TextView) &&
+        (((args.State & ModifierType.AltMask) != 0 && args.Keyval == Gdk.Constants.KEY_Left) ||
+         (args.Keyval == Gdk.Constants.KEY_Escape && _navigationService.CurrentPage != NavigationPage.Player)) &&
+        _navigationService.CanGoBack && _navigationService.GoBack();
 
     private void OnMousePressed(GestureClick sender, GestureClick.PressedSignalArgs args)
     {
-        if (sender.GetCurrentButton() != 8) return;
-        if (!_navigationService.CanGoBack) return;
-        OnNavigationBackButtonClicked();
-        sender.SetState(EventSequenceState.Claimed);
-    }
-
-    private void OnSearchPopoverClosed(Popover sender, EventArgs args)
-    {
-        _searchPopover.OnClosed();
-    }
-
-    private void OnSearchPopoverNotify(Object sender, Object.NotifySignalArgs args)
-    {
-        if (args.Pspec.GetName() == "visible" && search_popover.GetVisible())
-            _searchPopover.OnOpened();
-    }
-
-
-    private void OpenChannelAsync(VideoSummary video)
-    {
-        if (string.IsNullOrWhiteSpace(video.ChannelUrl) ||
-            video.ChannelUrl.Contains("UC0000000000000000000000", StringComparison.OrdinalIgnoreCase))
-        {
-            Logger.Warning("Cannot open channel with missing or placeholder URL for video");
-            return;
-        }
-
-        if (_navigationService.CurrentPage == NavigationPage.Player)
-            Widget.Unfullscreen();
-
-        _navigationService.NavigateToChannel(video.ChannelUrl, video.ChannelName);
-    }
-
-    private void OnSearchSubmitted(string query)
-    {
-        var trimmed = query.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed) || SearchViewModel.IsDirectVideoUrl(trimmed) ||
-            SearchViewModel.IsChannelTarget(trimmed))
-        {
-            SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
-            return;
-        }
-
-        _navigationService.NavigateToSearch(trimmed);
-        SubmitSearchAsync(trimmed, _searchView.GetBatchSize()).FireAndForget(Logger);
-    }
-
-    private async Task SubmitSearchAsync(string query, int batchSize)
-    {
-        var notice = await _searchViewModel.SubmitAsync(query, batchSize).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(notice))
-            ShowToast(notice);
-    }
-
-    private void OnNavigationBackButtonClicked(object? sender = null, EventArgs? args = null)
-    {
-        if (!_navigationService.GoBack()) _navigationService.NavigateTo(NavigationPage.Home);
-    }
-
-    private void OpenEmbeddedPlayer()
-    {
-        _navigationService.NavigateToPlayer();
-        if (_account.Preferences.GetPreferences().OpenInFullscreen)
-            Widget.Fullscreen();
-    }
-
-    private void ReportStartupDependencyWarnings()
-    {
-        var warnings = _diagnostics.GetStartupWarnings();
-        if (warnings.Count == 0)
-            return;
-
-        Logger.Warning("Runtime setup needed: {Warnings}", string.Join(" ", warnings));
-
-        var popoverContent = Box.New(Orientation.Vertical, 12);
-        popoverContent.MarginTop = 16;
-        popoverContent.MarginBottom = 16;
-        popoverContent.MarginStart = 16;
-        popoverContent.MarginEnd = 16;
-
-        var heading = Label.New("Runtime setup needed");
-        heading.AddCssClass("heading");
-        heading.Xalign = 0;
-        popoverContent.Append(heading);
-
-        foreach (var warning in warnings)
-        {
-            var warningLabel = Label.New(warning);
-            warningLabel.Wrap = true;
-            warningLabel.MaxWidthChars = 48;
-            warningLabel.Xalign = 0;
-            popoverContent.Append(warningLabel);
-        }
-
-        var preferencesButton = Button.NewWithLabel("Open Preferences");
-        preferencesButton.OnClicked += (_, _) =>
-        {
-            deps_popover.Popdown();
-            ShowPreferences();
-        };
-        popoverContent.Append(preferencesButton);
-
-        deps_popover.Child = popoverContent;
-        deps_button.Visible = true;
-    }
-
-    private void OnHomeRefreshButtonClicked(object? sender, EventArgs args)
-    {
-        switch (_navigationService.CurrentPage)
-        {
-            case NavigationPage.Channel:
-                _channel.RefreshAsync().FireAndForget(Logger);
-                break;
-            case NavigationPage.History:
-                _history.RefreshAsync().FireAndForget(Logger);
-                break;
-            case NavigationPage.Subscriptions:
-                _subscriptions.RefreshAsync().FireAndForget(Logger);
-                break;
-            case NavigationPage.Search:
-                _searchView.RefreshAsync().FireAndForget(Logger);
-                break;
-            default:
-                _home.RefreshAsync().FireAndForget(Logger);
-                break;
-        }
-    }
-
-    private void OnHomeRefreshLoadingChanged(object? sender, bool isLoading)
-    {
-        if (!_closed && _navigationService.CurrentPage == NavigationPage.Home)
-            UpdateHomeRefreshButton(_home.IsLoading);
-    }
-
-    private void OnChannelRefreshLoadingChanged(object? sender, bool isLoading)
-    {
-        if (!_closed && _navigationService.CurrentPage == NavigationPage.Channel)
-            UpdateHomeRefreshButton(_channel.IsLoading);
-    }
-
-    private void ClearBrowsingHistory()
-    {
-        _searchBrowsingStates.Clear();
-        _channelBrowsingStates.Clear();
-    }
-
-    private void CaptureSearchBrowsingState()
-    {
-        var entry = _navigationService.CurrentEntry;
-        _searchBrowsingStates[entry] = new SearchBrowsingState(
-            _searchViewModel.CaptureNavigationState(),
-            _searchView.Vadjustment?.Value ?? 0);
-    }
-
-    private void RestoreSearchBrowsingState()
-    {
-        var entry = _navigationService.CurrentEntry;
-        if (_searchBrowsingStates.TryGetValue(entry, out var browsingState))
-        {
-            _searchViewModel.RestoreNavigationState(browsingState.ViewModel);
-            RestoreScrollPosition(_searchView.Vadjustment, browsingState.ScrollValue);
-            return;
-        }
-
-        _searchViewModel.Reset();
-    }
-
-    private void CaptureChannelBrowsingState()
-    {
-        var entry = _navigationService.CurrentEntry;
-        _channelBrowsingStates[entry] = new ChannelBrowsingState(
-            _channelViewModel.CaptureNavigationState(),
-            _channel.Vadjustment?.Value ?? 0);
-    }
-
-    private void RestoreChannelBrowsingState()
-    {
-        var entry = _navigationService.CurrentEntry;
-        if (_channelBrowsingStates.TryGetValue(entry, out var browsingState))
-        {
-            _channelViewModel.RestoreNavigationState(browsingState.ViewModel);
-            RestoreScrollPosition(_channel.Vadjustment, browsingState.ScrollValue);
-            return;
-        }
-
-        _channelViewModel.Clear();
-        if (entry.Parameter is ChannelNavigationArgs channelArgs)
-        {
-            _channelViewModel.OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? string.Empty, _channel.GetBatchSize())
-                .FireAndForget(Logger);
-        }
-    }
-
-    private static void RestoreScrollPosition(Adjustment? adjustment, double value)
-    {
-        Functions.IdleAdd(0, () =>
-        {
-            if (adjustment is null)
-                return false;
-
-            var maximum = Math.Max(adjustment.Lower, adjustment.Upper - adjustment.PageSize);
-            adjustment.SetValue(Math.Clamp(value, adjustment.Lower, maximum));
-            return false;
-        });
-    }
-
-
-    private void OnHistoryRefreshLoadingChanged(object? sender, bool isLoading)
-    {
-        if (!_closed && _navigationService.CurrentPage == NavigationPage.History)
-            UpdateHomeRefreshButton(_history.IsLoading);
-    }
-
-    private void OnSubscriptionsRefreshLoadingChanged(object? sender, bool isLoading)
-    {
-        if (!_closed && _navigationService.CurrentPage == NavigationPage.Subscriptions)
-            UpdateHomeRefreshButton(_subscriptions.IsLoading);
-    }
-
-    private void OnSearchRefreshLoadingChanged(object? sender, bool isLoading)
-    {
-        if (!_closed && _navigationService.CurrentPage == NavigationPage.Search)
-            UpdateHomeRefreshButton(_searchView.IsLoading);
-    }
-
-    private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
-    {
-        if (_closed) return;
-        if (_navigationService is NavigationService concreteNav)
-            concreteNav.SyncFromViewStack(view_stack.VisibleChildName);
+        if (sender.GetCurrentButton() == 8 && _navigationService.CanGoBack) { _navigationService.GoBack(); sender.SetState(EventSequenceState.Claimed); }
     }
 
     private void OnNavigationPageChanged(object? sender, NavigationPageChangedEventArgs e)
     {
         if (_closed) return;
-        UpdateBackButton();
-        UpdateNowPlayingBar();
-
-
-        var childChanged = e.CurrentPage != e.PreviousPage;
-        switch (e.CurrentPage)
-        {
-            case NavigationPage.Channel:
-                UpdateHomeRefreshButton(_channel.IsLoading);
-                break;
-            case NavigationPage.History:
-                UpdateHomeRefreshButton(_history.IsLoading);
-                if (childChanged)
-                    _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
-                break;
-            case NavigationPage.Subscriptions:
-                UpdateHomeRefreshButton(_subscriptions.IsLoading);
-                if (childChanged)
-                    _subscriptionsViewModel.LoadAsync(_subscriptions.GetBatchSize()).FireAndForget(Logger);
-                break;
-            case NavigationPage.Search:
-                UpdateHomeRefreshButton(_searchView.IsLoading);
-                break;
-            case NavigationPage.Home:
-                UpdateHomeRefreshButton(_home.IsLoading);
-                break;
-            case NavigationPage.Player:
-                break;
-        }
-    }
-
-    private void UpdateHomeRefreshButton(bool isLoading)
-    {
-        home_refresh_button.Sensitive = !isLoading;
-        home_refresh_stack.VisibleChildName = isLoading ? "loading" : "idle";
-        home_refresh_spinner.Spinning = isLoading;
+        if (e.CurrentPage == NavigationPage.Player && _account.Preferences.GetPreferences().OpenInFullscreen) Widget.Fullscreen();
+        else if (e.PreviousPage == NavigationPage.Player) Widget.Unfullscreen();
     }
 
     private void RegisterApplicationActions()
     {
-        var preferencesAction = Lifetime.Own(SimpleAction.New("preferences", null));
-        preferencesAction.OnActivate += (_, _) => ShowPreferences();
-        Widget.AddAction(preferencesAction);
-
-        var aboutAction = Lifetime.Own(SimpleAction.New("about", null));
-        aboutAction.OnActivate += (_, _) => PresentAboutDialog();
-        Widget.AddAction(aboutAction);
-
-        var quitAction = Lifetime.Own(SimpleAction.New("quit", null));
-        quitAction.OnActivate += (_, _) => Widget.Close();
-        Widget.AddAction(quitAction);
-    }
-
-    private void ShowPreferences()
-    {
-        var preferencesDialogWrapper = new PreferencesDialog(_account.Preferences);
-        preferencesDialogWrapper.SaveFailed += OnPreferencesSaveFailed;
-        preferencesDialogWrapper.Widget.Present(Widget);
-    }
-
-    private void OnPreferencesSaveFailed(object? sender, string message)
-    {
-        ShowToast(message);
-    }
-
-    private void PresentAboutDialog()
-    {
-        var dialog = AboutDialog.New();
-        dialog.ApplicationIcon = ApplicationMetadata.IconName;
-        dialog.ApplicationName = ApplicationMetadata.ApplicationName;
-        dialog.Version = ApplicationMetadata.Version;
-        dialog.DeveloperName = ApplicationMetadata.DeveloperName;
-        dialog.Developers = [ApplicationMetadata.DeveloperName];
-        dialog.Comments = "A GTK 4 and Libadwaita desktop app for YouTube.";
-        dialog.Copyright = ApplicationMetadata.Copyright;
-        dialog.LicenseType = License.Gpl30;
-        dialog.Website = ApplicationMetadata.SourceUrl;
-        dialog.IssueUrl = ApplicationMetadata.IssueUrl;
-        dialog.Present(Widget);
-    }
-
-
-    private void OnQueueStateChanged(object? sender, QueuePresentationState state)
-    {
-        Functions.IdleAdd(0, () =>
-        {
-            if (!_closed)
-                UpdateQueueButton(state);
-
-            return false;
-        });
-    }
-
-    private void UpdateQueueButton(QueuePresentationState state)
-    {
-        queue_button.Visible = true;
-        queue_button_label.SetText(state.Items.Count.ToString());
-    }
-
-    private void CloseQueue()
-    {
-        queue_button.Active = false;
-    }
-
-    /// <summary>
-    ///     Shows a transient toast for one-shot failures (play, paste, queue, save).
-    ///     Delegates directly to <see cref="INotificationService"/>; safe to call from any thread.
-    /// </summary>
-    private void ShowToast(string message)
-    {
-        _notificationService.ShowToast(message);
-    }
-
-    private void UpdateBackButton()
-    {
-        var visible = _navigationService.CurrentPage is NavigationPage.Search or NavigationPage.Channel &&
-                      _navigationService.CanGoBack;
-        navigation_back_button.Visible = visible;
-        navigation_back_button.TooltipText = visible ? GetBackButtonTooltip() : "Back";
-    }
-
-    private string GetBackButtonTooltip()
-    {
-        var previous = _navigationService.PreviousEntry;
-        if (previous is null)
-            return "Back";
-
-        var destination = previous.Page switch
-        {
-            NavigationPage.Home => "Home",
-            NavigationPage.Subscriptions => "Subscriptions",
-            NavigationPage.History => "History",
-            NavigationPage.Search when previous.Parameter is string query &&
-                                       !string.IsNullOrWhiteSpace(query) => $"Search results for “{query}”",
-            NavigationPage.Search => "Search",
-            NavigationPage.Channel when previous.Parameter is ChannelNavigationArgs channel &&
-                                        !string.IsNullOrWhiteSpace(channel.Name) => channel.Name,
-            NavigationPage.Channel => "Channel",
-            _ => "the previous page"
-        };
-
-        return $"Back to {destination}";
-    }
-
-
-    private void OnNowPlayingToggleClicked(object? sender = null, EventArgs? args = null)
-    {
-        _playback.TogglePauseAsync().FireAndForget(Logger);
-    }
-
-    private void OnNowPlayingReturnButtonClicked(object? sender = null, EventArgs? args = null)
-    {
-        OpenEmbeddedPlayer();
-    }
-
-    private void OnPlaybackStateChanged(object? sender, EventArgs e)
-    {
-        if (IsDisposed) return;
-        try
-        {
-            Lifetime.Idle(() =>
-            {
-                if (!IsDisposed && !_closed)
-                    UpdateNowPlayingBar();
-
-                return false;
-            });
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-    }
-
-    private void UpdateNowPlayingBar()
-    {
-        var hasMedia = _playback.HasMedia;
-        var notInPlayer = _navigationService.CurrentPage != NavigationPage.Player;
-        var show = hasMedia && notInPlayer;
-
-        now_playing_box.Visible = show;
-        if (!show) return;
-        var isPaused = _playback.IsPaused;
-        now_playing_toggle.IconName = isPaused
-            ? "media-playback-start-symbolic"
-            : "media-playback-pause-symbolic";
-        now_playing_toggle.TooltipText = isPaused ? "Play" : "Pause";
-    }
-
-
-    private void OnQueuePlayFailed(object? sender, string error)
-    {
-        ShowToast(error);
-    }
-
-    private void OpenWebLogin()
-    {
-        account_button.Popover?.Popdown();
-        StartNativeAuthAsync().FireAndForget(Logger);
-    }
-
-    private async Task StartNativeAuthAsync()
-    {
-        try
-        {
-            var success = await _account.Auth.StartAuthAsync().ConfigureAwait(false);
-            if (!success)
-            {
-            }
-        }
-        catch (SessionPersistenceException)
-        {
-            Functions.IdleAdd(0, () =>
-            {
-                ShowToast("Could not save the YouTube session because the system keyring is unavailable.");
-                return false;
-            });
-        }
-        catch (Exception exception)
-        {
-            Logger.Error(exception, "Failed to run native auth");
-            Functions.IdleAdd(0, () =>
-            {
-                ShowToast("An error occurred during sign-in.");
-                return false;
-            });
-        }
-    }
-
-    private void UpdateAccountAppearance(
-        AccountProfilePresentationStatus status,
-        bool hasManualSession,
-        string displayName,
-        Texture? avatar)
-    {
-        account_status_stack.VisibleChildName = status switch
-        {
-            AccountProfilePresentationStatus.Ready => "avatar",
-            AccountProfilePresentationStatus.Checking => "checking",
-            AccountProfilePresentationStatus.Rejected or AccountProfilePresentationStatus.Unavailable => "warning",
-            _ => "signed_out"
-        };
-        account_button.TooltipText = status switch
-        {
-            AccountProfilePresentationStatus.Ready => $"YouTube account: {displayName}",
-            AccountProfilePresentationStatus.Checking => "Checking YouTube account",
-            AccountProfilePresentationStatus.Rejected => "YouTube session expired — sign in again",
-            AccountProfilePresentationStatus.Unavailable => "Couldn’t verify YouTube account — retry",
-            _ => hasManualSession ? "YouTube account" : "Sign in to YouTube"
-        };
-        account_avatar.Text = status == AccountProfilePresentationStatus.Ready ? displayName : string.Empty;
-        account_avatar.ShowInitials = status == AccountProfilePresentationStatus.Ready;
-        account_avatar.CustomImage = status == AccountProfilePresentationStatus.Ready ? avatar! : null!;
+        void Add(string name, Action act) { var a = Lifetime.Own(SimpleAction.New(name, null)); a.OnActivate += (_, _) => act(); Widget.AddAction(a); }
+        Add("preferences", () => { var d = new PreferencesDialog(_account.Preferences); d.SaveFailed += (_, msg) => _notificationService.ShowToast(msg); d.Widget.Present(Widget); });
+        Add("about", () => ApplicationMetadata.PresentAboutDialog(Widget));
+        Add("quit", Widget.Close);
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)
     {
         if (_closed) return false;
         _closed = true;
-
-        var prefs = _account.Preferences.GetPreferences();
-        var isMaximized = Widget.Maximized;
-        prefs.WindowMaximized = isMaximized;
-        if (!isMaximized)
-        {
-            var width = Widget.GetWidth();
-            var height = Widget.GetHeight();
-            if (width > 0 && height > 0)
-            {
-                prefs.WindowWidth = width;
-                prefs.WindowHeight = height;
-            }
-        }
-
-        _account.Preferences.SavePreferences(prefs);
+        var p = _account.Preferences.GetPreferences();
+        p.WindowMaximized = Widget.Maximized;
+        if (!Widget.Maximized && Widget.GetWidth() is var w and > 0 && Widget.GetHeight() is var h and > 0)
+            (p.WindowWidth, p.WindowHeight) = (w, h);
+        _account.Preferences.SavePreferences(p);
         Dispose();
-
         return false;
     }
 
@@ -764,32 +133,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     {
         if (disposing)
         {
-            if (_notificationService is NotificationService concreteNotify)
-                concreteNotify.DetachToastOverlay(toast_overlay);
+            if (_notificationService is NotificationService notify) notify.DetachToastOverlay(toast_overlay);
             (_navigationService as IDisposable)?.Dispose();
-            _subscriptions.Dispose();
-            _subscriptionsViewModel.Dispose();
-            _searchView.Dispose();
-            _searchPopover.Dispose();
-            _searchViewModel.Dispose();
-            _history.Dispose();
-            _historyViewModel.Dispose();
-            _channel.Dispose();
-            _channelViewModel.Dispose();
-            _home.Dispose();
-            _queueView.Dispose();
-            _account.Auth.Dispose();
-            _accountPopover.Dispose();
-            _embeddedPlayer.Dispose();
-            _queueViewModel.Dispose();
-            _accountViewModel.Dispose();
+            _shellHeaderBar.Dispose(); _navigationHost.Dispose(); _queueView.Dispose(); _queueViewModel.Dispose(); _embeddedPlayer.Dispose();
             _disposeApplicationServices();
         }
-
         base.Dispose(disposing);
     }
-
-    private sealed record SearchBrowsingState(SearchNavigationState ViewModel, double ScrollValue);
-
-    private sealed record ChannelBrowsingState(ChannelNavigationState ViewModel, double ScrollValue);
 }

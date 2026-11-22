@@ -1,0 +1,21 @@
+using Gtk 4.0;
+
+ToggleButton QueueHeaderButtonView {
+  tooltip-text: "Queue (Middle-click a video card to queue)";
+
+  styles [
+    "flat",
+    "queue-indicator",
+  ]
+
+  child: Label queue_button_label {
+    styles [
+      "queue-count",
+    ]
+
+    halign: center;
+    valign: center;
+    width-request: 24;
+    height-request: 24;
+  };
+}

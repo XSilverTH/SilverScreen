@@ -1,0 +1,67 @@
+using Gtk 4.0;
+
+Gtk.Box AccountStatusPageView {
+  orientation: vertical;
+  spacing: 8;
+  width-request: 320;
+
+  styles [
+    "account-sign-in-actions",
+  ]
+
+  Gtk.Label status_title {
+    xalign: 0;
+    visible: false;
+
+    styles [
+      "heading",
+    ]
+  }
+
+  Gtk.Label status_description {
+    xalign: 0;
+    wrap: true;
+    max-width-chars: 40;
+    visible: false;
+
+    styles [
+      "dim-label",
+    ]
+  }
+
+  Gtk.Button retry_button {
+    clicked => $OnRetryClicked();
+    label: "Retry";
+    halign: fill;
+    visible: false;
+
+    styles [
+      "suggested-action",
+    ]
+  }
+
+  Gtk.Button google_button {
+    clicked => $OnGoogleSignInClicked();
+    label: "Sign in with Google";
+    halign: fill;
+    visible: true;
+
+    styles [
+      "suggested-action",
+    ]
+  }
+
+  Gtk.Button manual_button {
+    clicked => $OnManualCookiesClicked();
+    label: "Use cookies.txt";
+    halign: fill;
+    visible: true;
+  }
+
+  Gtk.Button sign_out_button {
+    clicked => $OnSignOutClicked();
+    label: "Sign out";
+    halign: end;
+    visible: false;
+  }
+}

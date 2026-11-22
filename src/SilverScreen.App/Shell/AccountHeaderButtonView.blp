@@ -1,0 +1,50 @@
+using Gtk 4.0;
+using Adw 1;
+
+MenuButton AccountHeaderButtonView {
+  tooltip-text: "Account";
+
+  styles [
+    "flat",
+    "circular",
+  ]
+
+  child: Gtk.Stack account_status_stack {
+    transition-type: none;
+
+    Gtk.StackPage {
+      name: "avatar";
+      child: Adw.Avatar account_avatar {
+        size: 24;
+        text: "YouTube";
+        show-initials: true;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "checking";
+      child: Gtk.Image {
+        icon-name: "process-working-symbolic";
+        pixel-size: 18;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "warning";
+      child: Gtk.Image {
+        icon-name: "dialog-warning-symbolic";
+        pixel-size: 18;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "signed_out";
+      child: Gtk.Image {
+        icon-name: "avatar-default-symbolic";
+        pixel-size: 18;
+      };
+    }
+  };
+
+  popover: Popover account_popover {};
+}

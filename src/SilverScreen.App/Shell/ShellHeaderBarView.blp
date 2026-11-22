@@ -1,0 +1,32 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu app_menu {
+  item {
+    label: "Preferences";
+    action: "win.preferences";
+  }
+
+  item {
+    label: "About SilverScreen";
+    action: "win.about";
+  }
+
+  item {
+    label: "Quit";
+    action: "win.quit";
+  }
+}
+
+Adw.HeaderBar ShellHeaderBarView {
+  title-widget: Adw.ViewSwitcher view_switcher {
+    policy: wide;
+  };
+
+  [end]
+  MenuButton app_menu_button {
+    icon-name: "open-menu-symbolic";
+    tooltip-text: "Main Menu";
+    menu-model: app_menu;
+  }
+}

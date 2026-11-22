@@ -1,0 +1,65 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ViewStack ShellNavigationHostView {
+  hexpand: true;
+  vexpand: true;
+  hhomogeneous: false;
+  vhomogeneous: false;
+  notify => $OnViewStackNotify();
+
+  Adw.ViewStackPage {
+    name: "home";
+    title: "Home";
+    icon-name: "go-home-symbolic";
+
+    child: Gtk.Box home_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+
+  Adw.ViewStackPage {
+    name: "subscriptions";
+    title: "Subscriptions";
+    icon-name: "emblem-favorite-symbolic";
+
+    child: Gtk.Box subscriptions_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+
+  Adw.ViewStackPage {
+    name: "history";
+    title: "History";
+    icon-name: "document-open-recent-symbolic";
+
+    child: Gtk.Box history_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+
+  Adw.ViewStackPage {
+    name: "channel";
+    title: "Channel";
+    visible: false;
+
+    child: Gtk.Box channel_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+
+  Adw.ViewStackPage {
+    name: "search";
+    title: "Search";
+    visible: false;
+
+    child: Gtk.Box search_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+}

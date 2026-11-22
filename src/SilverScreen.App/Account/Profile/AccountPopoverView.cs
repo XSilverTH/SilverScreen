@@ -1,298 +1,78 @@
 using Adw;
-using Gdk;
-using GdkPixbuf;
 using Gtk;
-using Serilog;
+using SilverScreen.Account.Auth;
 using SilverScreen.Core.Domain;
-using SilverScreen.Core.Common;
+using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Account.Profile;
 
-public partial class AccountPopoverView : ViewBase<Bin>
+public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
 {
-    private static readonly ILogger Logger = Log.ForContext<AccountPopoverView>();
-    private readonly NativeMemoryPressure _avatarPressure = new();
-    private readonly Action _openWebLogin;
-    private readonly Action<AccountProfilePresentationStatus, bool, string, Texture?> _sessionAppearanceChanged;
-    private readonly IThumbnailService _thumbnails;
-    private readonly AccountViewModel _viewModel;
-    private CancellationTokenSource? _avatarCancellation;
-    private Texture? _avatarTexture;
-    private string? _avatarUrl;
+    private readonly AccountStatusPageView _statusPage;
+    private readonly AccountSignedInCardView _signedInCard;
+    private readonly AccountManualSessionEditorView _manualEditor;
     private bool _editing;
 
     public AccountPopoverView(
-        AccountViewModel viewModel,
         IThumbnailService thumbnails,
-        Action openWebLogin,
-        Action<AccountProfilePresentationStatus, bool, string, Texture?> sessionAppearanceChanged)
+        INativeAuthService authService,
+        INotificationService notifications)
     {
-        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
-        _openWebLogin = openWebLogin;
-        _sessionAppearanceChanged = sessionAppearanceChanged;
-        Lifetime.Track(() => _viewModel.StateChanged += OnStateChanged,
-            () => _viewModel.StateChanged -= OnStateChanged);
-        Lifetime.Track(() => Widget.OnUnmap += OnWidgetUnmap, () => Widget.OnUnmap -= OnWidgetUnmap);
-        Render();
+        _statusPage = Lifetime.Own(new AccountStatusPageView(authService, notifications));
+        _signedInCard = Lifetime.Own(new AccountSignedInCardView(thumbnails));
+        _manualEditor = Lifetime.Own(new AccountManualSessionEditorView());
+
+        status_host.Child = _statusPage.Widget;
+        signed_in_host.Child = _signedInCard.Widget;
+        manual_host.Child = _manualEditor.Widget;
+
+        _statusPage.OpenManualEditorRequested += (_, _) => ShowManualEditor();
+        _manualEditor.EditingCompleted += (_, _) => ExitManualEditor();
+        Lifetime.Track(() => Widget.OnUnmap += OnUnmap, () => Widget.OnUnmap -= OnUnmap);
     }
 
-    private void OnStateChanged(object? sender, EventArgs args)
+    protected override void BindViewModel(AccountViewModel viewModel, BindingScope<AccountViewModel> bindings)
     {
-        if (IsDisposed) return;
-        try
-        {
-            Lifetime.Idle(() =>
-            {
-                if (!IsDisposed)
-                    Render();
+        _statusPage.ViewModel = viewModel;
+        _signedInCard.ViewModel = viewModel;
+        _manualEditor.ViewModel = viewModel;
 
-                return false;
-            });
-        }
-        catch (ObjectDisposedException)
-        {
-        }
+        bindings.Bind(nameof(AccountViewModel.PresentationStatus), this,
+            static vm => vm.PresentationStatus,
+            static (view, _) => view.UpdateStack());
     }
 
-    private void Render()
+    private void UpdateStack()
     {
-        var hasManualSession = _viewModel.HasManualSession;
-        var status = !hasManualSession
-            ? AccountProfilePresentationStatus.SignedOut
-            : _viewModel.ProfileStatus;
-        UpdateAvatar(status == AccountProfilePresentationStatus.Ready ? _viewModel.AvatarUrl : null);
-        _sessionAppearanceChanged(status, hasManualSession, _viewModel.DisplayName, _avatarTexture);
         if (_editing)
         {
             account_stack.VisibleChildName = "manual";
-            manual_heading.SetText(hasManualSession
-                ? "Replace with manual session"
-                : "Add manual session");
             return;
         }
 
-        if (status == AccountProfilePresentationStatus.Ready)
-        {
-            var displayName = _viewModel.DisplayName;
-            signed_in_avatar.Text = displayName;
-            signed_in_display_name.SetText(displayName);
-            account_stack.VisibleChildName = "signed_in";
-        }
-        else
-        {
-            account_stack.VisibleChildName = status switch
-            {
-                AccountProfilePresentationStatus.Checking => "checking",
-                AccountProfilePresentationStatus.Rejected => "rejected",
-                AccountProfilePresentationStatus.Unavailable => "unavailable",
-                _ => "signed_out"
-            };
-        }
+        var isReady = ViewModel?.PresentationStatus == AccountProfilePresentationStatus.Ready;
+        account_stack.VisibleChildName = isReady ? "signed_in" : "status";
     }
 
-    private void UpdateAvatar(string? avatarUrl)
+    private void ShowManualEditor()
     {
-        if (string.Equals(_avatarUrl, avatarUrl, StringComparison.Ordinal))
-            return;
-
-        _avatarUrl = avatarUrl;
-        _avatarCancellation?.Cancel();
-        _avatarCancellation?.Dispose();
-        _avatarCancellation = null;
-        signed_in_avatar.CustomImage = null!;
-        _avatarTexture?.Dispose();
-        _avatarTexture = null;
-
-        if (string.IsNullOrWhiteSpace(avatarUrl))
-            return;
-
-        _avatarCancellation = new CancellationTokenSource();
-        LoadAvatarAsync(avatarUrl, _avatarCancellation.Token).FireAndForget(Logger);
-    }
-
-    private async Task LoadAvatarAsync(string avatarUrl, CancellationToken cancellationToken)
-    {
-        Pixbuf? pixbuf;
-        try
-        {
-            var thumbnail = await _thumbnails.GetThumbnailAsync(avatarUrl, cancellationToken).ConfigureAwait(false);
-            if (thumbnail is null)
-                return;
-
-            pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 128, 128, true),
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception)
-        {
-            Logger.Debug("Failed to load account avatar");
-            return;
-        }
-
-        var decodedPixbuf = pixbuf;
-        if (IsDisposed || cancellationToken.IsCancellationRequested)
-        {
-            decodedPixbuf?.Dispose();
-            return;
-        }
-
-        var pixbufForIdle = decodedPixbuf;
-        var scheduled = false;
-        try
-        {
-            Lifetime.Idle(() =>
-            {
-                try
-                {
-                    if (IsDisposed || cancellationToken.IsCancellationRequested || !string.Equals(_avatarUrl, avatarUrl,
-                            StringComparison.Ordinal))
-                        return false;
-
-                    var pixbufForTexture = pixbufForIdle ??
-                                           throw new InvalidOperationException(
-                                               "Avatar image decode returned no pixbuf.");
-                    var texture = Texture.NewForPixbuf(pixbufForTexture);
-                    pixbufForTexture.Dispose();
-                    pixbufForIdle = null;
-                    signed_in_avatar.CustomImage = texture;
-                    _avatarTexture?.Dispose();
-                    _avatarTexture = texture;
-                    _avatarPressure.Track(48 * 48 * 4);
-                    _sessionAppearanceChanged(
-                        _viewModel.ProfileStatus,
-                        _viewModel.HasManualSession,
-                        _viewModel.DisplayName,
-                        texture);
-                }
-                finally
-                {
-                    pixbufForIdle?.Dispose();
-                }
-
-                return false;
-            });
-            scheduled = true;
-        }
-        catch (ObjectDisposedException)
-        {
-            if (!scheduled)
-                decodedPixbuf?.Dispose();
-        }
-    }
-
-    private void OpenManualEditor()
-    {
-        ClearBuffer(manual_editor);
         _editing = true;
-        manual_error_label.SetVisible(false);
-        Render();
+        _manualEditor.Reset();
+        account_stack.VisibleChildName = "manual";
     }
 
-    private void OnWebLoginClicked(object? sender, EventArgs args)
+    private void ExitManualEditor()
     {
-        _openWebLogin();
+        _editing = false;
+        UpdateStack();
     }
 
-    private void OnOpenManualEditorClicked(object? sender, EventArgs args)
+    private void OnUnmap(Widget sender, EventArgs args)
     {
-        OpenManualEditor();
-    }
-
-    private void OnRetryProfileClicked(object? sender, EventArgs args)
-    {
-        _viewModel.RefreshProfile();
-    }
-
-
-    private async void OnClearButtonClicked(object? sender, EventArgs args)
-    {
-        try
-        {
-            ClearBuffer(manual_editor);
-            await _viewModel.ClearSessionAsync();
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e, "Failed to clear session");
-        }
-    }
-
-    private void OnWidgetUnmap(Widget sender, EventArgs args)
-    {
-        ClearBuffer(manual_editor);
         if (!_editing) return;
         _editing = false;
-        manual_error_label.SetVisible(false);
-        Render();
-    }
-
-    private void OnManualCancelButtonClicked(object? sender, EventArgs args)
-    {
-        _editing = false;
-        manual_error_label.SetVisible(false);
-        ClearBuffer(manual_editor);
-        Render();
-    }
-
-    private async void OnManualSaveButtonClicked(object? sender, EventArgs args)
-    {
-        try
-        {
-            if (!await _viewModel.SaveManualSessionAsync(GetText(manual_editor)))
-            {
-                manual_error_label.SetText(_viewModel.ManualSessionError ?? "Could not save the session. Try again.");
-                manual_error_label.SetVisible(true);
-                return;
-            }
-
-            ClearBuffer(manual_editor);
-            manual_error_label.SetVisible(false);
-            _editing = false;
-            Render();
-        }
-        catch (Exception e)
-        {
-            Logger.Error(e, "Failed to save manual session");
-        }
-    }
-
-    private static string GetText(TextView textView)
-    {
-        var buffer = textView.Buffer ??
-                     throw new InvalidOperationException("Manual session editor text buffer was not initialized.");
-        buffer.GetBounds(out var start, out var end);
-        return buffer.GetText(start, end, true);
-    }
-
-    private static void ClearBuffer(TextView textView)
-    {
-        var buffer = textView.Buffer;
-
-        buffer?.SetText(string.Empty, 0);
-    }
-
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            ClearBuffer(manual_editor);
-            _avatarCancellation?.Cancel();
-            _avatarCancellation?.Dispose();
-            _avatarCancellation = null;
-            signed_in_avatar.CustomImage = null!;
-            _avatarTexture?.Dispose();
-            _avatarTexture = null;
-            _avatarPressure.Dispose();
-            _viewModel.Dispose();
-        }
-
-        base.Dispose(disposing);
+        _manualEditor.Reset();
+        UpdateStack();
     }
 }

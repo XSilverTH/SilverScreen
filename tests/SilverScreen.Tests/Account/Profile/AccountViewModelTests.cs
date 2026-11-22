@@ -138,6 +138,32 @@ public sealed class AccountViewModelTests
         Assert.False(vm.HasManualSession);
     }
 
+    [Fact]
+    public async Task PresentationStatus_WithoutManualSession_IsSignedOut()
+    {
+        using var vm = new AccountViewModel(_profileService, _sessionService);
+
+        Assert.False(vm.HasManualSession);
+        Assert.Equal(AccountProfilePresentationStatus.SignedOut, vm.PresentationStatus);
+    }
+
+    [Fact]
+    public async Task PresentationStatus_WithManualSession_MatchesProfileStatusAndFiresPropertyChanged()
+    {
+        var propertiesChanged = new List<string?>();
+        _profileService.Results.Enqueue(Task.FromResult(
+            new AccountProfileResult(AccountProfileLoadStatus.Success, new AccountProfile("Verified account"))));
+        using var vm = new AccountViewModel(_profileService, _sessionService);
+        vm.PropertyChanged += (_, e) => propertiesChanged.Add(e.PropertyName);
+
+        var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+        var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
+
+        Assert.True(await vm.SaveManualSessionAsync(validCookies));
+        Assert.Equal(AccountProfilePresentationStatus.Ready, vm.PresentationStatus);
+        Assert.Contains(nameof(AccountViewModel.PresentationStatus), propertiesChanged);
+    }
+
     private sealed class FakeProfileService : IAccountProfileService
     {
         public Queue<Task<AccountProfileResult>> Results { get; } = new();

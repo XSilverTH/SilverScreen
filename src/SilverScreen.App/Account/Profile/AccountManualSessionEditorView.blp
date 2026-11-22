@@ -1,0 +1,71 @@
+using Gtk 4.0;
+
+Gtk.Box AccountManualSessionEditorView {
+  orientation: vertical;
+  spacing: 10;
+
+  Gtk.Label manual_heading {
+    xalign: 0;
+
+    styles [
+      "heading",
+    ]
+  }
+
+  Gtk.Label {
+    label: "Paste Netscape cookies.txt content exported from a browser. SilverScreen stores it in your desktop Secret Service keyring, writes temporary subprocess cookie files with user-only permissions, and removes them when practical.";
+    xalign: 0;
+    wrap: true;
+
+    styles [
+      "dim-label",
+    ]
+  }
+
+  Gtk.ScrolledWindow {
+    hexpand: true;
+    width-request: 440;
+    height-request: 180;
+
+    Gtk.TextView manual_editor {
+      monospace: true;
+      wrap-mode: char;
+      height-request: 180;
+    }
+  }
+
+  Gtk.Label manual_error_label {
+    visible: false;
+    xalign: 0;
+    wrap: true;
+
+    styles [
+      "error",
+    ]
+  }
+
+  Gtk.Box manual_editor_actions {
+    orientation: horizontal;
+    spacing: 6;
+    halign: end;
+
+    Gtk.Button manual_cancel_button {
+      clicked => $OnCancelClicked();
+      label: "Cancel";
+      halign: fill;
+
+      styles [
+        "flat",
+      ]
+    }
+
+    Gtk.Button manual_save_button {
+      clicked => $OnSaveClicked();
+      label: "Save session";
+
+      styles [
+        "suggested-action",
+      ]
+    }
+  }
+}

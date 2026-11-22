@@ -24,4 +24,20 @@ internal static class ApplicationMetadata
             ? assembly.GetName().Version?.ToString() ?? "Unknown"
             : informationalVersion;
     }
+
+    internal static void PresentAboutDialog(Gtk.Window parent)
+    {
+        var d = Adw.AboutDialog.New();
+        d.ApplicationIcon = IconName;
+        d.ApplicationName = ApplicationName;
+        d.Version = Version;
+        d.DeveloperName = DeveloperName;
+        d.Developers = [DeveloperName];
+        d.Comments = "A GTK 4 and Libadwaita desktop app for YouTube.";
+        d.Copyright = Copyright;
+        d.LicenseType = Gtk.License.Gpl30;
+        d.Website = SourceUrl;
+        d.IssueUrl = IssueUrl;
+        d.Present(parent);
+    }
 }

@@ -9,7 +9,7 @@ internal sealed class PlaybackModeRoutingService(
     IPreferencesService preferencesService,
     IPlaybackService externalMpvPlayback,
     IEmbeddedPlayerPresenter embeddedPlayer)
-    : IPlaybackService
+    : IPlaybackModeRoutingService
 {
     private static readonly ILogger Logger = Log.ForContext<PlaybackModeRoutingService>();
     public bool HasMedia => embeddedPlayer.HasMedia;

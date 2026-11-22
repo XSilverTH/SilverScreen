@@ -1,0 +1,12 @@
+using Gtk 4.0;
+
+MenuButton SearchHeaderButtonView {
+  tooltip-text: "Search";
+  icon-name: "system-search-symbolic";
+
+  styles [
+    "flat",
+  ]
+
+  popover: Popover search_popover {};
+}

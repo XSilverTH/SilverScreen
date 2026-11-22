@@ -1,0 +1,26 @@
+using Gtk 4.0;
+
+Box NowPlayingHeaderBarView {
+  visible: false;
+  spacing: 6;
+
+  Button now_playing_toggle {
+    icon-name: "media-playback-pause-symbolic";
+    tooltip-text: "Pause";
+    clicked => $OnNowPlayingToggleClicked();
+
+    styles [
+      "flat",
+    ]
+  }
+
+  Button now_playing_return_button {
+    icon-name: "video-x-generic-symbolic";
+    tooltip-text: "Return to Player";
+    clicked => $OnNowPlayingReturnButtonClicked();
+
+    styles [
+      "flat",
+    ]
+  }
+}

@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Account.Auth;
+using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Home;
+using SilverScreen.Browsing.Search;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
@@ -124,6 +126,13 @@ public static class ApplicationServiceCollectionExtensions
             provider.GetRequiredService<IQueueService>(),
             provider.GetRequiredService<INativeAuthService>()));
         services.AddSingleton<PlayerDependencies>();
+        services.AddSingleton<ShellRefreshCoordinator>();
+        services.AddSingleton<IShellRefreshCoordinator>(static provider =>
+            provider.GetRequiredService<ShellRefreshCoordinator>());
+        services.AddSingleton<SearchViewModel>();
+        services.AddSingleton(static provider => new AccountViewModel(
+            provider.GetRequiredService<IAccountProfileService>(),
+            provider.GetRequiredService<ISessionService>()));
         return services;
     }
 }

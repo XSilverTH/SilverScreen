@@ -1,0 +1,14 @@
+using Gtk 4.0;
+
+MenuButton DependencyWarningButtonView {
+  visible: false;
+  tooltip-text: "Runtime setup needed (show details)";
+  label: "Setup needed";
+  icon-name: "dialog-warning-symbolic";
+
+  styles [
+    "pill",
+  ]
+
+  popover: Popover deps_popover {};
+}

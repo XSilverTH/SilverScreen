@@ -3,6 +3,7 @@ using Gtk;
 using Pango;
 using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Shell;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -12,7 +13,9 @@ public partial class SearchPopoverView : ViewBase<Box>
 {
     private static readonly ILogger Logger = Log.ForContext<SearchPopoverView>();
     private readonly Action _popdownAction;
-    private readonly Action<string> _submitCallback;
+    private readonly Action<string>? _submitCallback;
+    private readonly INavigationService? _navigationService;
+    private readonly INotificationService? _notificationService;
     private readonly SearchViewModel _viewModel;
     private string[] _currentSuggestions = [];
     private string _originalTypedQuery = string.Empty;
@@ -22,11 +25,32 @@ public partial class SearchPopoverView : ViewBase<Box>
 
     public SearchPopoverView(
         SearchViewModel viewModel,
+        INavigationService navigationService,
+        INotificationService notificationService,
+        Action popdownAction)
+        : this(viewModel, null, navigationService, notificationService, popdownAction)
+    {
+    }
+
+    public SearchPopoverView(
+        SearchViewModel viewModel,
         Action<string> submitCallback,
+        Action popdownAction)
+        : this(viewModel, submitCallback, null, null, popdownAction)
+    {
+    }
+
+    private SearchPopoverView(
+        SearchViewModel viewModel,
+        Action<string>? submitCallback,
+        INavigationService? navigationService,
+        INotificationService? notificationService,
         Action popdownAction)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _submitCallback = submitCallback ?? throw new ArgumentNullException(nameof(submitCallback));
+        _submitCallback = submitCallback;
+        _navigationService = navigationService;
+        _notificationService = notificationService;
         _popdownAction = popdownAction ?? throw new ArgumentNullException(nameof(popdownAction));
 
         suggestions_scroll.CanFocus = false;
@@ -81,7 +105,25 @@ public partial class SearchPopoverView : ViewBase<Box>
         if (SearchViewModel.IsDirectVideoUrl(trimmed)) search_entry.SetText(string.Empty);
 
         Logger.Debug("Search submitted from popover");
-        _submitCallback(trimmed);
+        if (_submitCallback is not null)
+        {
+            _submitCallback(trimmed);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
+
+        if (!SearchViewModel.IsDirectVideoUrl(trimmed) && !SearchViewModel.IsChannelTarget(trimmed))
+            _navigationService?.NavigateToSearch(trimmed);
+
+        SubmitSearchAsync(trimmed).FireAndForget(Logger);
+    }
+
+    private async Task SubmitSearchAsync(string query)
+    {
+        var notice = await _viewModel.SubmitAsync(query).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(notice))
+            _notificationService?.ShowToast(notice);
     }
 
     private bool OnSearchKeyPressed(EventControllerKey sender, EventControllerKey.KeyPressedSignalArgs args)

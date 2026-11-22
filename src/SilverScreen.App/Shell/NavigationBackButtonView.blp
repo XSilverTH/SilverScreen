@@ -1,0 +1,12 @@
+using Gtk 4.0;
+
+Button NavigationBackButtonView {
+  icon-name: "go-previous-symbolic";
+  tooltip-text: "Back";
+  visible: false;
+  clicked => $OnClicked();
+
+  styles [
+    "flat",
+  ]
+}

@@ -113,29 +113,43 @@ public sealed class NavigationService : INavigationService, IDisposable
 
     public event EventHandler<NavigationPageChangedEventArgs>? PageChanged;
 
+    public void AttachMainStack(Stack? mainStack)
+    {
+        _mainStack = mainStack;
+        SyncCurrentPageStackVisibility();
+    }
+
+    public void AttachViewStack(ViewStack? viewStack)
+    {
+        _viewStack = viewStack;
+        SyncCurrentPageStackVisibility();
+    }
+
     public void AttachStacks(Stack? mainStack, ViewStack? viewStack)
     {
         _mainStack = mainStack;
         _viewStack = viewStack;
+        SyncCurrentPageStackVisibility();
+    }
 
-        if (_registry.TryGetValue(CurrentEntry.Page, out var entry))
+    private void SyncCurrentPageStackVisibility()
+    {
+        if (!_registry.TryGetValue(CurrentEntry.Page, out var entry)) return;
+        if (entry.IsShellPage)
         {
-            if (entry.IsShellPage)
-            {
-                if (_mainStack is not null &&
-                    !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
-                    _mainStack.VisibleChildName = ShellStackName;
+            if (_mainStack is not null &&
+                !string.Equals(_mainStack.VisibleChildName, ShellStackName, StringComparison.Ordinal))
+                _mainStack.VisibleChildName = ShellStackName;
 
-                if (_viewStack is not null &&
-                    !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
-                    _viewStack.VisibleChildName = entry.StackName;
-            }
-            else
-            {
-                if (_mainStack is not null &&
-                    !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
-                    _mainStack.VisibleChildName = entry.StackName;
-            }
+            if (_viewStack is not null &&
+                !string.Equals(_viewStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                _viewStack.VisibleChildName = entry.StackName;
+        }
+        else
+        {
+            if (_mainStack is not null &&
+                !string.Equals(_mainStack.VisibleChildName, entry.StackName, StringComparison.Ordinal))
+                _mainStack.VisibleChildName = entry.StackName;
         }
     }
 

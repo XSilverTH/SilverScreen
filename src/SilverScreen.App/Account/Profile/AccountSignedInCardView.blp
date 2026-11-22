@@ -1,0 +1,52 @@
+using Gtk 4.0;
+using Adw 1;
+
+Gtk.Box AccountSignedInCardView {
+  orientation: horizontal;
+  spacing: 12;
+  width-request: 208;
+
+  styles [
+    "account-card",
+  ]
+
+  Adw.Avatar signed_in_avatar {
+    size: 48;
+    text: "YouTube";
+    show-initials: true;
+
+    styles [
+      "account-avatar",
+    ]
+  }
+
+  Adw.Bin {
+    hexpand: true;
+    valign: center;
+
+    Gtk.Label signed_in_display_name {
+      xalign: 0;
+      ellipsize: end;
+
+      styles [
+        "account-display-name",
+      ]
+    }
+  }
+
+  Gtk.Button signed_in_sign_out_button {
+    clicked => $OnSignOutClicked();
+    tooltip-text: "Sign out";
+    valign: center;
+
+    styles [
+      "circular",
+      "account-sign-out-button",
+    ]
+
+    child: Gtk.Image {
+      icon-name: "system-log-out-symbolic";
+      accessible-role: presentation;
+    };
+  }
+}
