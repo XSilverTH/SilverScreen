@@ -58,7 +58,20 @@ public sealed class FilePreferencesService : IPreferencesService
 
     private static AppPreferences Clone(AppPreferences preferences)
     {
-        return preferences with { Shortcuts = preferences.Shortcuts with { } };
+        var libraryDir = string.IsNullOrWhiteSpace(preferences.LibraryDirectory)
+            ? AppPreferences.GetDefaultLibraryDirectory()
+            : preferences.LibraryDirectory.Trim();
+        var maxConcurrent = Math.Clamp(
+            preferences.MaxConcurrentDownloads,
+            AppPreferences.MinConcurrentDownloads,
+            AppPreferences.MaxConcurrentDownloadsLimit);
+
+        return preferences with
+        {
+            Shortcuts = preferences.Shortcuts with { },
+            LibraryDirectory = libraryDir,
+            MaxConcurrentDownloads = maxConcurrent
+        };
     }
 
     private void WriteAtomically(AppPreferences preferences)
@@ -106,7 +119,7 @@ public sealed class FilePreferencesService : IPreferencesService
                     4096,
                     FileOptions.SequentialScan);
                 var preferences = JsonSerializer.Deserialize(stream, PreferencesJsonContext.Default.AppPreferences);
-                if (preferences is not null) return preferences;
+                if (preferences is not null) return Clone(preferences);
             }
         }
         catch (Exception ex)

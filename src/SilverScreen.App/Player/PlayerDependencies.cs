@@ -1,5 +1,6 @@
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
@@ -44,4 +45,6 @@ public sealed record PlayerDependencies(
     IYouTubeCommentService Comments,
     IYouTubeMediaResolver MediaResolver,
     IQueueService Queue,
-    IThumbnailService Thumbnails);
+    IThumbnailService Thumbnails,
+    ILibraryService? Library = null,
+    IDownloadService? Downloads = null);

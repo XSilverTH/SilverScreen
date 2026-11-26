@@ -4,13 +4,17 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
+using SilverScreen.Downloads;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Comments;
+using SilverScreen.Player.Controls;
 using SilverScreen.Player.RichText;
 using SilverScreen.Queue;
+using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Object = GObject.Object;
@@ -34,9 +38,12 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 {
     private static readonly ILogger Logger = Log.ForContext<EmbeddedPlayerView>();
     private readonly CommentsView _commentsView;
+    private readonly IDownloadService? _downloads;
+    private readonly ILibraryService? _library;
     private readonly IYouTubeMediaResolver _mediaResolver;
 
     private readonly INavigationService _navigation;
+    private readonly INotificationService? _notifications;
     private readonly PlayerOverlayComposer _overlay;
     private readonly LibMpvPlayer _player;
     private readonly IPreferencesService _preferences;
@@ -49,13 +56,19 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private PlaybackRequest? _loadedRequest;
     private bool _syncingQueue;
 
-    public EmbeddedPlayerView(INavigationService navigation, PlayerDependencies dependencies)
+    public EmbeddedPlayerView(
+        INavigationService navigation,
+        PlayerDependencies dependencies,
+        INotificationService? notifications = null)
     {
         _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
         ArgumentNullException.ThrowIfNull(dependencies);
         _preferences = dependencies.Preferences;
         _mediaResolver = dependencies.MediaResolver;
         _queueService = dependencies.Queue;
+        _library = dependencies.Library;
+        _downloads = dependencies.Downloads;
+        _notifications = notifications;
 
         _player = Lifetime.Own(new LibMpvPlayer(a => GtkUiDispatch.Run(() => !IsDisposed, a)));
         var desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, PresentPlayer));
@@ -67,8 +80,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _overlay = Lifetime.Own(new PlayerOverlayComposer(
             player_overlay, Widget, _player, _session, _navigation, _preferences, dependencies, linkRouter,
             ReturnToShell, ToggleFullscreen, CloseComments, () => Widget.ShowSidebar = true, () => Widget.ShowSidebar));
+        _overlay.HeaderBar.ConfigureDownloads(_preferences, _downloads, _notifications);
 
-        _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this)));
+        _queueViewModel = Lifetime.Own(new QueueViewModel(dependencies.Queue, new EmbeddedPlayerPlaybackService(this),
+            dependencies.Preferences, dependencies.Downloads, notifications));
         var queueView = Lifetime.Own(new QueueView(_queueViewModel, dependencies.Thumbnails, CloseQueue, idx =>
         {
             if (_session.Request is { } req && idx >= 0 && idx < req.Videos.Length) _player.PlayPlaylistIndex(idx);
@@ -89,6 +104,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Videos.Length == 0) return Task.FromResult("No videos to play.");
+
+        request = ResolveUnsetLocalPaths(request);
 
         try
         {
@@ -128,8 +145,11 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             _overlay.Chrome.RegisterActivity();
             _overlay.ControlsBar.SetVolume(100);
             _overlay.ControlsBar.SetSpeed(1);
+            var firstLocalEntry = _library?.TryGetPlayableEntry(first.Id);
             _overlay.ControlsBar.LoadQualityTracks(first.Id, _mediaResolver,
-                _preferences.GetPreferences().Quality.ToPersistedString());
+                _preferences.GetPreferences().Quality.ToPersistedString(),
+                firstLocalEntry, !string.IsNullOrWhiteSpace(first.LocalFilePath));
+            _overlay.HeaderBar.UpdateCurrentVideo(first);
             _overlay.Loading.SetLoading(true);
             _overlay.ControlsBar.SetQueueControls(request.Videos.Length > 1, false, request.Videos.Length > 1,
                 player_queue_split_view.ShowSidebar);
@@ -157,6 +177,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _overlay.Surface.Realized += (_, _) => OnSurfaceRealized();
         _overlay.Surface.PlaybackFailed += OnPlaybackFailed;
         _overlay.ControlsBar.QueueToggled += (_, open) => player_queue_split_view.ShowSidebar = open;
+        _overlay.ControlsBar.QualityOptionSelected += (_, option) => SwitchCurrentVideoQuality(option);
         _overlay.Error.RetryRequested += (_, _) =>
         {
             if (_lastPlaybackRequest is not null) PresentAsync(_lastPlaybackRequest);
@@ -252,6 +273,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     {
         _queueViewModel.SetCurrentPlayingIndex(playlistIndex);
         _overlay.SyncSessionVideo(video, _preferences.GetPreferences().Quality.ToPersistedString());
+        _overlay.HeaderBar.UpdateCurrentVideo(video);
         _commentsView.SetVideo(video.Id);
         if (Widget.ShowSidebar) _commentsView.EnsureLoaded();
     }
@@ -273,6 +295,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
     private void OnSessionEnded()
     {
         _overlay.SyncSessionEnded();
+        _overlay.HeaderBar.UpdateCurrentVideo(null);
         _loadedRequest = null;
         _queueViewModel.SetCurrentPlayingIndex(-1);
         _commentsView.SetVideo(null);
@@ -298,7 +321,10 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
                 for (var i = currentVideos.Length; i < newVideos.Length; i++)
                 {
                     var video = newVideos[i];
-                    var url = video.WatchUrl ?? PlaybackRequest.BuildWatchUrl(video.Id);
+                    var url = video.LocalFilePath
+                              ?? _library?.TryGetPlayableEntry(video.Id)?.ResolveFilePath(_library.LibraryDirectory)
+                              ?? video.WatchUrl
+                              ?? PlaybackRequest.BuildWatchUrl(video.Id);
                     if (!string.IsNullOrWhiteSpace(url))
                         _player.AppendPlaylistItem(url);
                 }
@@ -365,6 +391,77 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         var idx = _session.CurrentPlaylistIndex;
         _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1,
             player_queue_split_view.ShowSidebar);
+    }
+
+    private PlaybackRequest ResolveUnsetLocalPaths(PlaybackRequest request)
+    {
+        if (_library is null || request.Videos.IsDefaultOrEmpty)
+            return request;
+
+        var updated = new VideoSummary[request.Videos.Length];
+        var changed = false;
+        for (var i = 0; i < request.Videos.Length; i++)
+        {
+            var video = request.Videos[i];
+            if (string.IsNullOrWhiteSpace(video.LocalFilePath) &&
+                _library.TryGetPlayableEntry(video.Id) is { } entry)
+            {
+                updated[i] = entry.ToPlayableVideoSummary(_library.LibraryDirectory);
+                changed = true;
+            }
+            else
+            {
+                updated[i] = video;
+            }
+        }
+
+        return changed ? request with { Videos = ImmutableArray.Create(updated) } : request;
+    }
+
+    private void SwitchCurrentVideoQuality(QualitySelectionOption option)
+    {
+        if (_session.Request is null || _session.CurrentVideo is not { } current)
+            return;
+
+        var index = _session.CurrentPlaylistIndex;
+        if (index < 0 || index >= _session.Request.Videos.Length)
+            return;
+
+        string? nextLocalPath = null;
+        if (option.IsOffline)
+        {
+            nextLocalPath = _library?.TryGetPlayableEntry(current.Id)?.ResolveFilePath(_library.LibraryDirectory);
+            if (string.IsNullOrWhiteSpace(nextLocalPath))
+                return;
+        }
+
+        if (!string.Equals(current.LocalFilePath, nextLocalPath, StringComparison.Ordinal))
+        {
+            var videos = _session.Request.Videos.ToArray();
+            videos[index] = current with { LocalFilePath = nextLocalPath };
+            var updatedRequest = new PlaybackRequest(ImmutableArray.Create(videos), index);
+            _syncingQueue = true;
+            try
+            {
+                _queueService.Replace(updatedRequest.Videos);
+            }
+            finally
+            {
+                _syncingQueue = false;
+            }
+
+            _session.UpdateQueue(updatedRequest.Videos);
+            _player.UpdatePlaylistRequest(updatedRequest);
+            _loadedRequest = updatedRequest;
+        }
+
+        _overlay.ControlsBar.LoadQualityTracks(
+            current.Id,
+            _mediaResolver,
+            option.Quality,
+            _library?.TryGetPlayableEntry(current.Id),
+            option.IsOffline);
+        _player.SetQuality(option.Quality);
     }
 
     private sealed class EmbeddedPlayerPlaybackService(EmbeddedPlayerView player) : IPlaybackService

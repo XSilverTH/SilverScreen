@@ -8,6 +8,7 @@ using Serilog;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
@@ -115,7 +116,9 @@ public partial class App
                     _windowGuard.Clear(createdWindow);
                 _serviceLifetime!.WindowClosed();
             },
-            _initialQuery);
+            _initialQuery,
+            _serviceProvider.GetRequiredService<ILibraryService>(),
+            _serviceProvider.GetRequiredService<IDownloadService>());
         _initialQuery = null;
         var mainWindow = mainWindowWrapper.Widget;
         createdWindow = mainWindow;

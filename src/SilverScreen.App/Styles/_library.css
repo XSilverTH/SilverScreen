@@ -1,0 +1,13 @@
+/* Library and Download Queue styles */
+
+.library-missing-badge {
+    background-color: alpha(@error_bg_color, 0.9);
+    color: @error_fg_color;
+}
+
+.download-job-row {
+    background-color: @card_bg_color;
+    border: 1px solid alpha(@borders, 0.72);
+    border-radius: 12px;
+    padding: 10px 12px;
+}

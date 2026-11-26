@@ -1,0 +1,217 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.Dialog DownloadOptionsDialog {
+  title: "Download";
+  content-width: 480;
+  follows-content-size: true;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-end-title-buttons: false;
+      show-start-title-buttons: false;
+
+      [start]
+      Gtk.Button cancel_button {
+        label: "Cancel";
+        clicked => $OnCancelClicked();
+      }
+
+      [end]
+      Gtk.Button confirm_button {
+        label: "Download";
+        clicked => $OnConfirmClicked();
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: Gtk.ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      max-content-height: 620;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 16;
+        margin-start: 16;
+        margin-end: 16;
+        margin-top: 12;
+        margin-bottom: 16;
+
+        Gtk.Label target_summary_label {
+          xalign: 0;
+          ellipsize: end;
+          visible: false;
+
+          styles [
+            "caption",
+            "dim-label",
+          ]
+        }
+
+        Adw.PreferencesGroup preset_name_group {
+          visible: false;
+
+          Adw.EntryRow preset_name_row {
+            title: "Preset name";
+            changed => $OnPresetNameChanged();
+          }
+        }
+
+        Adw.PreferencesGroup {
+          title: "Destination";
+
+          Adw.ComboRow destination_row {
+            title: "Save to";
+            notify => $OnDestinationChanged();
+
+            model: Gtk.StringList {
+              strings: [
+                "Library",
+                "Choose folder…",
+              ];
+            };
+          }
+
+          Adw.ActionRow custom_folder_row {
+            title: "Folder";
+            subtitle: "No folder selected";
+            visible: false;
+
+            [suffix]
+            Gtk.Button browse_folder_button {
+              label: "Browse…";
+              valign: center;
+              clicked => $OnBrowseFolderClicked();
+            }
+          }
+        }
+
+        Adw.PreferencesGroup {
+          title: "Format";
+
+          Adw.ComboRow media_mode_row {
+            title: "Mode";
+            notify => $OnMediaModeChanged();
+
+            model: Gtk.StringList {
+              strings: [
+                "Video + Audio",
+                "Audio only",
+              ];
+            };
+          }
+
+          Adw.ComboRow quality_row {
+            title: "Quality";
+
+            model: Gtk.StringList {
+              strings: [
+                "Best",
+                "4320p",
+                "2160p",
+                "1440p",
+                "1080p",
+                "720p",
+                "480p",
+                "360p",
+                "240p",
+                "144p",
+              ];
+            };
+          }
+
+          Adw.ComboRow codec_row {
+            title: "Preferred video codec";
+
+            model: Gtk.StringList {
+              strings: [
+                "No preference",
+                "AV1",
+                "VP9",
+                "H.264",
+              ];
+            };
+          }
+
+          Adw.ComboRow container_row {
+            title: "Container";
+            notify => $OnContainerChanged();
+
+            model: Gtk.StringList container_model {
+              strings: [
+                "Auto",
+                "MP4",
+                "MKV",
+                "WebM",
+              ];
+            };
+          }
+        }
+
+        Adw.PreferencesGroup {
+          title: "Subtitles & Metadata";
+
+          Adw.ComboRow subtitle_mode_row {
+            title: "Subtitles";
+            notify => $OnSubtitleModeChanged();
+
+            model: Gtk.StringList {
+              strings: [
+                "Off",
+                "Embedded",
+                "Sidecar (.srt)",
+              ];
+            };
+          }
+
+          Adw.EntryRow subtitle_lang_row {
+            title: "Subtitle languages (e.g. en,ja)";
+            visible: false;
+          }
+
+          Adw.SwitchRow embed_metadata_row {
+            title: "Embed metadata";
+            active: true;
+          }
+
+          Adw.SwitchRow embed_thumbnail_row {
+            title: "Embed thumbnail";
+            active: true;
+          }
+        }
+
+        Adw.PreferencesGroup sponsorblock_group {
+          title: "SponsorBlock";
+
+          Adw.ComboRow sponsorblock_row {
+            title: "Sponsor segments";
+            subtitle: "Uses categories configured in Preferences";
+
+            model: Gtk.StringList {
+              strings: [
+                "Mark as chapters",
+                "Strip segments",
+                "Off",
+              ];
+            };
+          }
+        }
+
+        Gtk.Box save_preset_footer {
+          orientation: horizontal;
+          halign: start;
+
+          Gtk.Button save_preset_button {
+            label: "Save as preset…";
+            clicked => $OnSaveAsPresetClicked();
+          }
+        }
+      };
+    };
+  };
+}

@@ -182,6 +182,84 @@ Adw.PreferencesDialog PreferencesDialog {
   }
 
   Adw.PreferencesPage {
+    title: "Downloads";
+    icon-name: "folder-download-symbolic";
+
+    Adw.PreferencesGroup {
+      title: "Library and Queue";
+
+      Adw.ActionRow library_folder_row {
+        title: "Library folder";
+        subtitle: "";
+
+        [suffix]
+        Gtk.Button library_folder_reset_button {
+          icon-name: "edit-undo-symbolic";
+          tooltip-text: "Reset to default folder";
+          valign: center;
+          clicked => $OnResetLibraryFolderClicked();
+
+          styles [
+            "flat",
+          ]
+        }
+
+        [suffix]
+        Gtk.Button library_folder_browse_button {
+          label: "Browse…";
+          valign: center;
+          clicked => $OnBrowseLibraryFolderClicked();
+        }
+      }
+
+      Adw.SpinRow max_concurrent_downloads_row {
+        title: "Maximum concurrent downloads";
+        notify => $OnRowNotify();
+
+        adjustment: Gtk.Adjustment {
+          lower: 1;
+          upper: 8;
+          step-increment: 1;
+          value: 2;
+        };
+      }
+
+      Adw.SwitchRow show_custom_download_row {
+        title: "Show “Custom…” in download menus";
+        subtitle: "Allow opening custom options alongside presets";
+        notify => $OnRowNotify();
+      }
+    }
+
+    Adw.PreferencesGroup download_presets_group {
+      title: "Presets";
+      description: "Saved download configurations for one-click or menu access";
+
+      [header-suffix]
+      Gtk.Button add_preset_button {
+        clicked => $OnAddPresetClicked();
+        tooltip-text: "Add download preset";
+
+        styles [
+          "flat",
+        ]
+
+        child: Gtk.Box {
+          spacing: 6;
+
+          Gtk.Image {
+            icon-name: "list-add-symbolic";
+          }
+
+          Gtk.Label {
+            label: "Add preset";
+          }
+        };
+      }
+    }
+  }
+
+  Adw.PreferencesPage {
     title: "Sponsorblock";
     icon-name: "media-seek-forward-symbolic";
 

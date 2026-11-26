@@ -3,6 +3,7 @@ using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
@@ -35,7 +36,8 @@ internal sealed class PlaybackSession : IDisposable
         IVideoEngagementService videoEngagement,
         IYouTubeRatingService youtubeRating,
         ISessionService session,
-        DesktopMediaIntegration? desktopMedia = null)
+        DesktopMediaIntegration? desktopMedia = null,
+        ILibraryService? library = null)
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
@@ -45,6 +47,7 @@ internal sealed class PlaybackSession : IDisposable
         _youtubeRating = youtubeRating ?? throw new ArgumentNullException(nameof(youtubeRating));
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _desktopMedia = desktopMedia;
+        _library = library;
 
         _preferences.PreferencesChanged += OnPreferencesChanged;
     }
@@ -60,7 +63,8 @@ internal sealed class PlaybackSession : IDisposable
             dependencies.VideoEngagement,
             dependencies.YouTubeRating,
             dependencies.Session,
-            desktopMedia)
+            desktopMedia,
+            dependencies.Library)
     {
     }
 
@@ -128,6 +132,7 @@ internal sealed class PlaybackSession : IDisposable
     private readonly ISponsorBlockService _sponsorBlock;
     private readonly IVideoEngagementService _videoEngagement;
     private readonly IYouTubeRatingService _youtubeRating;
+    private readonly ILibraryService? _library;
     private bool _hadSeek;
     private bool _handledResumeForCurrentVideo;
     private bool _playbackProgressLoaded;
@@ -428,7 +433,23 @@ internal sealed class PlaybackSession : IDisposable
                 .ToArray();
 
             if (categories.Length > 0)
+            {
+                if (!string.IsNullOrWhiteSpace(video.LocalFilePath) &&
+                    _library?.TryGetPlayableEntry(video.Id) is { SponsorBlockSegments.Length: > 0 } localEntry)
+                {
+                    var categorySet = categories.ToHashSet(StringComparer.Ordinal);
+                    var cached = localEntry.SponsorBlockSegments
+                        .Where(s => categorySet.Contains(s.Category))
+                        .ToArray();
+                    if (cached.Length > 0)
+                    {
+                        SponsorBlockSegments = cached;
+                        SponsorBlockSegmentsChanged?.Invoke(cached);
+                    }
+                }
+
                 FetchSponsorBlockAsync(video.Id, categories, version, cts.Token).FireAndForget(Logger);
+            }
         }
 
         FetchEngagementAsync(video.Id, version, cts.Token).FireAndForget(Logger);
@@ -612,6 +633,9 @@ internal sealed class PlaybackSession : IDisposable
 
         if (_disposed || cancellationToken.IsCancellationRequested || version != _loadVersion ||
             !string.Equals(CurrentVideo?.Id, videoId, StringComparison.Ordinal))
+            return;
+
+        if (segments.Count == 0 && SponsorBlockSegments.Count > 0 && !string.IsNullOrWhiteSpace(CurrentVideo?.LocalFilePath))
             return;
 
         SponsorBlockSegments = segments;

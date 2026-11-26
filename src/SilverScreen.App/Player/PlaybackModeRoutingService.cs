@@ -1,13 +1,19 @@
+using System.Collections.Immutable;
 using Serilog;
+using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Player;
 
 internal sealed class PlaybackModeRoutingService(
     IPreferencesService preferencesService,
     IPlaybackService externalMpvPlayback,
-    IEmbeddedPlayerPresenter embeddedPlayer)
+    IEmbeddedPlayerPresenter embeddedPlayer,
+    ILibraryService? libraryService = null,
+    INotificationService? notifications = null)
     : IPlaybackModeRoutingService
 {
     private static readonly ILogger Logger = Log.ForContext<PlaybackModeRoutingService>();
@@ -16,11 +22,12 @@ internal sealed class PlaybackModeRoutingService(
 
     public Task<string> PlayAsync(PlaybackRequest request)
     {
+        var resolved = ResolveLibraryCopies(request);
         var backend = preferencesService.GetPreferences().PlaybackBackendKind;
         Logger.Debug("Starting playback for video using {Backend}", backend);
         return PlaybackBackends.IsEmbedded(backend)
-            ? embeddedPlayer.PresentAsync(request)
-            : externalMpvPlayback.PlayAsync(request);
+            ? embeddedPlayer.PresentAsync(resolved)
+            : externalMpvPlayback.PlayAsync(resolved);
     }
 
     public event EventHandler? PlaybackStateChanged
@@ -40,10 +47,55 @@ internal sealed class PlaybackModeRoutingService(
     /// </summary>
     public Task<string> PlayAlternateAsync(PlaybackRequest request)
     {
+        var resolved = ResolveLibraryCopies(request);
         var backend = preferencesService.GetPreferences().PlaybackBackendKind;
         Logger.Debug("Starting playback for video with alternate {Backend}", backend);
         return PlaybackBackends.IsEmbedded(backend)
-            ? externalMpvPlayback.PlayAsync(request)
-            : embeddedPlayer.PresentAsync(request);
+            ? externalMpvPlayback.PlayAsync(resolved)
+            : embeddedPlayer.PresentAsync(resolved);
+    }
+
+    private PlaybackRequest ResolveLibraryCopies(PlaybackRequest request)
+    {
+        if (libraryService is null || request.Videos.IsDefaultOrEmpty)
+            return request;
+
+        var prefs = preferencesService.GetPreferences();
+        var updated = new VideoSummary[request.Videos.Length];
+        LibraryEntry? startEntry = null;
+        var changed = false;
+
+        for (var i = 0; i < request.Videos.Length; i++)
+        {
+            var video = request.Videos[i];
+            if (!string.IsNullOrWhiteSpace(video.LocalFilePath))
+            {
+                updated[i] = video;
+                if (i == request.EffectiveStartIndex)
+                    startEntry = libraryService.TryGetPlayableEntry(video.Id);
+                continue;
+            }
+
+            var entry = libraryService.TryGetPlayableEntry(video.Id);
+            if (entry is not null)
+            {
+                updated[i] = entry.ToPlayableVideoSummary(libraryService.LibraryDirectory);
+                changed = true;
+                if (i == request.EffectiveStartIndex)
+                    startEntry = entry;
+            }
+            else
+            {
+                updated[i] = video;
+            }
+        }
+
+        if (startEntry is not null &&
+            QualityMismatchHelper.TryGetMismatchMessage(startEntry, prefs.Quality, out var mismatchMessage))
+        {
+            notifications?.ShowToast(mismatchMessage);
+        }
+
+        return changed ? request with { Videos = ImmutableArray.Create(updated) } : request;
     }
 }

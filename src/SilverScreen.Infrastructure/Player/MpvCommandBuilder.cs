@@ -38,26 +38,31 @@ public static class MpvCommandBuilder
         if (options.Fullscreen)
             arguments.Add("--fs");
 
-        var ytdlRawOptions = new List<string>();
-        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        var hasRemoteTargets = playbackUrls.Any(static url => !IsLocalFileTarget(url));
+        if (hasRemoteTargets)
         {
-            arguments.Add("--cookies");
-            arguments.Add($"--cookies-file={cookieFilePath}");
-            ytdlRawOptions.Add($"cookies={cookieFilePath}");
+            var ytdlRawOptions = new List<string>();
+            if (!string.IsNullOrWhiteSpace(cookieFilePath))
+            {
+                arguments.Add("--cookies");
+                arguments.Add($"--cookies-file={cookieFilePath}");
+                ytdlRawOptions.Add($"cookies={cookieFilePath}");
+            }
+
+            if (options.MarkWatchedVideos)
+                ytdlRawOptions.Add("mark-watched=");
+
+            if (ytdlRawOptions.Count > 0)
+                arguments.Add($"--ytdl-raw-options={string.Join(',', ytdlRawOptions)}");
+
+            var ytdlFormat = BuildYtdlFormat(options.VideoQuality, options.PreferredCodec);
+            if (ytdlFormat is not null)
+                arguments.Add($"--ytdl-format={ytdlFormat}");
+
+            if (!string.IsNullOrWhiteSpace(options.YtDlpExecutablePath))
+                arguments.Add($"--script-opts=ytdl_hook-ytdl_path={options.YtDlpExecutablePath}");
         }
 
-        if (options.MarkWatchedVideos)
-            ytdlRawOptions.Add("mark-watched=");
-
-        if (ytdlRawOptions.Count > 0)
-            arguments.Add($"--ytdl-raw-options={string.Join(',', ytdlRawOptions)}");
-
-        var ytdlFormat = BuildYtdlFormat(options.VideoQuality, options.PreferredCodec);
-        if (ytdlFormat is not null)
-            arguments.Add($"--ytdl-format={ytdlFormat}");
-
-        if (!string.IsNullOrWhiteSpace(options.YtDlpExecutablePath))
-            arguments.Add($"--script-opts=ytdl_hook-ytdl_path={options.YtDlpExecutablePath}");
         arguments.Add(options.AutoAdvanceNextVideo ? "--keep-open=yes" : "--keep-open=always");
         if (!string.IsNullOrWhiteSpace(inputIpcServerPath))
             arguments.Add($"--input-ipc-server={inputIpcServerPath}");
@@ -70,6 +75,11 @@ public static class MpvCommandBuilder
         return new MpvPlaybackCommand(options.MpvExecutablePath, arguments);
     }
 
+    public static bool IsLocalFileTarget(string? target)
+    {
+        return !string.IsNullOrWhiteSpace(target) && Path.IsPathFullyQualified(target);
+    }
+
     public static IReadOnlyList<string> GetPlaybackUrls(PlaybackRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -78,10 +88,21 @@ public static class MpvCommandBuilder
             throw new InvalidOperationException(PlaybackRequest.EmptyQueueMessage);
 
         var playbackUrls = new List<string>(request.Videos.Length);
-        foreach (var playbackUrl in request.Videos.Select(video => string.IsNullOrWhiteSpace(video.WatchUrl)
-                     ? PlaybackRequest.BuildWatchUrl(video.Id)
-                     : video.WatchUrl))
+        foreach (var video in request.Videos)
         {
+            if (!string.IsNullOrWhiteSpace(video.LocalFilePath))
+            {
+                if (!Path.IsPathFullyQualified(video.LocalFilePath))
+                    throw new InvalidOperationException("Local playback path must be an absolute path.");
+
+                playbackUrls.Add(video.LocalFilePath);
+                continue;
+            }
+
+            var playbackUrl = string.IsNullOrWhiteSpace(video.WatchUrl)
+                ? PlaybackRequest.BuildWatchUrl(video.Id)
+                : video.WatchUrl;
+
             if (string.IsNullOrWhiteSpace(playbackUrl))
                 throw new InvalidOperationException("No playable URL is available.");
 

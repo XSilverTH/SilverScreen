@@ -14,6 +14,7 @@ using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
 using SilverScreen.Core.Preferences;
@@ -27,6 +28,7 @@ using SilverScreen.Infrastructure.Browsing.Search;
 using SilverScreen.Infrastructure.Browsing.Subscriptions;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.Domain;
+using SilverScreen.Infrastructure.Downloads;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Infrastructure.Player.Comments;
 using SilverScreen.Infrastructure.Preferences;
@@ -104,6 +106,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeRatingService, YoutubeApiRatingService>();
         services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddSingleton<IThumbnailService, ThumbnailCacheService>();
+        services.AddSingleton<ILibraryService, JsonLibraryService>();
+        services.AddSingleton<DownloadCoordinatorService>();
+        services.AddSingleton<IDownloadService>(static provider =>
+            provider.GetRequiredService<DownloadCoordinatorService>());
         services.AddSingleton<YtDlpMediaResolver>();
         services.AddSingleton<IYouTubeMediaResolver>(static provider =>
             provider.GetRequiredService<YtDlpMediaResolver>());

@@ -1,0 +1,143 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.Bin LibraryView {
+  hexpand: true;
+  vexpand: true;
+
+  Gtk.ScrolledWindow scrolled_window {
+    hexpand: true;
+    vexpand: true;
+    hscrollbar-policy: never;
+
+    child: Gtk.Box {
+      orientation: vertical;
+      spacing: 20;
+      margin-start: 20;
+      margin-end: 20;
+      margin-top: 16;
+      margin-bottom: 24;
+
+      Gtk.Box downloads_section {
+        orientation: vertical;
+        spacing: 10;
+        visible: false;
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 12;
+
+          Gtk.Label downloads_heading {
+            label: "Downloads";
+            xalign: 0;
+            hexpand: true;
+
+            styles [
+              "title-3",
+            ]
+          }
+
+          Gtk.Button clear_finished_button {
+            label: "Clear finished";
+            visible: false;
+            clicked => $OnClearFinishedClicked();
+
+            styles [
+              "flat",
+            ]
+          }
+        }
+
+        Gtk.Box downloads_list {
+          orientation: vertical;
+          spacing: 8;
+        }
+      }
+
+      Gtk.Box {
+        orientation: vertical;
+        spacing: 12;
+        vexpand: true;
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 12;
+
+          Gtk.Box {
+            orientation: vertical;
+            spacing: 2;
+            hexpand: true;
+
+            Gtk.Label {
+              label: "Library";
+              xalign: 0;
+
+              styles [
+                "title-3",
+              ]
+            }
+
+            Gtk.Label library_summary_label {
+              label: "0 items";
+              xalign: 0;
+
+              styles [
+                "caption",
+                "dim-label",
+              ]
+            }
+          }
+
+          Gtk.DropDown filter_dropdown {
+            valign: center;
+            notify => $OnFilterChanged();
+
+            model: Gtk.StringList {
+              strings: [
+                "All",
+                "Videos",
+                "Audio",
+              ];
+            };
+          }
+
+          Gtk.SearchEntry search_entry {
+            placeholder-text: "Search library…";
+            valign: center;
+            width-request: 220;
+            search-changed => $OnSearchChanged();
+          }
+        }
+
+        Gtk.Stack library_content_stack {
+          hexpand: true;
+          vexpand: true;
+
+          Gtk.StackPage {
+            name: "empty";
+
+            child: Adw.StatusPage library_empty_page {
+              icon-name: "folder-download-symbolic";
+              title: "Your Library is empty";
+              description: "Download videos to browse and watch them offline";
+              hexpand: true;
+              vexpand: true;
+            };
+          }
+
+          Gtk.StackPage {
+            name: "grid";
+
+            child: Gtk.GridView library_grid {
+              hexpand: true;
+              vexpand: true;
+              min-columns: 1;
+              max-columns: 8;
+              single-click-activate: false;
+            };
+          }
+        }
+      }
+    };
+  }
+}

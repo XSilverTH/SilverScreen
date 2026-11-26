@@ -35,4 +35,17 @@ Adw.HeaderBar PlayerHeaderBarView {
       "player-overlay-button",
     ]
   }
+
+  [end]
+  Gtk.Button player_download_button {
+    icon-name: "folder-download-symbolic";
+    tooltip-text: "Download video";
+    visible: false;
+    clicked => $OnDownloadButtonClicked();
+
+    styles [
+      "flat",
+      "player-overlay-button",
+    ]
+  }
 }

@@ -817,28 +817,40 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
 
         var urls = MpvCommandBuilder.GetPlaybackUrls(request);
-        var rawOptions = BuildYtdlRawOptions(cookieFilePath,
-            preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled,
-            preferences.PreferredSubtitleLanguage);
-        Check(Native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
-        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+        var hasRemoteTargets = urls.Any(static url => !MpvCommandBuilder.IsLocalFileTarget(url));
+        if (hasRemoteTargets)
         {
-            Check(Native.SetPropertyFlag(_handle, "cookies", true));
-            Check(Native.SetPropertyString(_handle, "cookies-file", cookieFilePath));
+            var rawOptions = BuildYtdlRawOptions(cookieFilePath,
+                preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled,
+                preferences.PreferredSubtitleLanguage);
+            Check(Native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
+            if (!string.IsNullOrWhiteSpace(cookieFilePath))
+            {
+                Check(Native.SetPropertyFlag(_handle, "cookies", true));
+                Check(Native.SetPropertyString(_handle, "cookies-file", cookieFilePath));
+            }
+            else
+            {
+                Check(Native.SetPropertyFlag(_handle, "cookies", false));
+                Check(Native.SetPropertyString(_handle, "cookies-file", string.Empty));
+            }
+
+            Check(Native.SetPropertyString(_handle, "ytdl-format",
+                MpvCommandBuilder.BuildYtdlFormat(quality, preferences.PreferredCodec) ?? string.Empty));
+            if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
+                Check(Native.SetPropertyString(_handle, "script-opts",
+                    $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));
         }
         else
         {
+            Check(Native.SetPropertyString(_handle, "ytdl-raw-options", string.Empty));
             Check(Native.SetPropertyFlag(_handle, "cookies", false));
             Check(Native.SetPropertyString(_handle, "cookies-file", string.Empty));
+            Check(Native.SetPropertyString(_handle, "ytdl-format", string.Empty));
         }
 
         Check(Native.SetPropertyString(_handle, "keep-open",
             preferences.AutoAdvanceNextVideo ? "yes" : "always"));
-        Check(Native.SetPropertyString(_handle, "ytdl-format",
-            MpvCommandBuilder.BuildYtdlFormat(quality, preferences.PreferredCodec) ?? string.Empty));
-        if (!string.IsNullOrWhiteSpace(preferences.YtDlpExecutablePath))
-            Check(Native.SetPropertyString(_handle, "script-opts",
-                $"ytdl_hook-ytdl_path={preferences.YtDlpExecutablePath}"));
         Check(Native.SetPropertyFlag(_handle, "pause", false));
         Check(Native.Command(_handle, "loadfile", urls[0], "replace"));
         foreach (var url in urls.Skip(1)) Check(Native.Command(_handle, "loadfile", url, "append-play"));

@@ -78,7 +78,6 @@ internal sealed class PlayerOverlayComposer : IDisposable
         CenterControls.ForwardRequested += (_, _) => player.SeekRelative(10);
         ControlsBar.VolumeChanged += (_, vol) => player.SetVolume(vol);
         ControlsBar.SpeedChanged += (_, spd) => player.SetSpeed(spd);
-        ControlsBar.QualitySelected += (_, q) => player.SetQuality(q);
         ControlsBar.PreviousQueueClicked += (_, _) => player.MovePlaylist(false);
         ControlsBar.NextQueueClicked += (_, _) => player.MovePlaylist(true);
         ControlsBar.SubtitleToggled += (_, sub) =>
@@ -117,7 +116,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
             HeaderBar.Widget,
             CenterControls.Widget,
             ControlsBar.Widget,
-            () => ControlsBar.IsPopoverOpen || InfoPanel.IsOpen,
+            () => ControlsBar.IsPopoverOpen || InfoPanel.IsOpen || HeaderBar.IsPopoverOpen,
             () => Timeline.LayoutChapters(),
             (x, y) =>
             {
@@ -198,7 +197,9 @@ internal sealed class PlayerOverlayComposer : IDisposable
         InfoPanel.SetVideo(video);
         ControlsBar.SetMetadata(video.Title, video.ChannelName, video.ChannelUrl);
         Timeline.SetExpectedMedia(video.Duration, video.Duration <= TimeSpan.Zero);
-        ControlsBar.LoadQualityTracks(video.Id, _dependencies.MediaResolver, targetQuality);
+        var localEntry = _dependencies.Library?.TryGetPlayableEntry(video.Id);
+        var isPlayingLocal = !string.IsNullOrWhiteSpace(video.LocalFilePath);
+        ControlsBar.LoadQualityTracks(video.Id, _dependencies.MediaResolver, targetQuality, localEntry, isPlayingLocal);
     }
 
     public void SyncSessionFailed(string detail, VideoSummary? failedVideo)

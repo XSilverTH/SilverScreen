@@ -1,0 +1,135 @@
+using Gtk 4.0;
+
+Gtk.Box DownloadJobRowView {
+  orientation: horizontal;
+  spacing: 12;
+  hexpand: true;
+
+  styles [
+    "download-job-row",
+  ]
+
+  Gtk.Box thumb_frame {
+    width-request: 96;
+    height-request: 54;
+    valign: center;
+    overflow: hidden;
+
+    styles [
+      "queue-thumbnail",
+    ]
+
+    Gtk.Image placeholder {
+      icon-name: "folder-download-symbolic";
+      pixel-size: 24;
+      halign: center;
+      valign: center;
+      hexpand: true;
+      vexpand: true;
+      accessible-role: presentation;
+    }
+  }
+
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 4;
+    hexpand: true;
+    valign: center;
+
+    Gtk.Box {
+      orientation: horizontal;
+      spacing: 8;
+
+      Gtk.Label title_label {
+        xalign: 0;
+        hexpand: true;
+        ellipsize: end;
+
+        styles [
+          "heading",
+        ]
+      }
+    }
+
+    Gtk.ProgressBar progress_bar {
+      hexpand: true;
+      show-text: false;
+    }
+
+    Gtk.Label status_label {
+      xalign: 0;
+      ellipsize: end;
+
+      styles [
+        "caption",
+        "dim-label",
+      ]
+    }
+  }
+
+  Gtk.Box {
+    orientation: horizontal;
+    spacing: 4;
+    valign: center;
+
+    Gtk.Button pause_button {
+      icon-name: "media-playback-pause-symbolic";
+      tooltip-text: "Pause download";
+      visible: false;
+      clicked => $OnPauseClicked();
+
+      styles [
+        "flat",
+        "square",
+      ]
+    }
+
+    Gtk.Button resume_button {
+      icon-name: "media-playback-start-symbolic";
+      tooltip-text: "Resume download";
+      visible: false;
+      clicked => $OnResumeClicked();
+
+      styles [
+        "flat",
+        "square",
+      ]
+    }
+
+    Gtk.Button retry_button {
+      icon-name: "view-refresh-symbolic";
+      tooltip-text: "Retry download";
+      visible: false;
+      clicked => $OnRetryClicked();
+
+      styles [
+        "flat",
+        "square",
+      ]
+    }
+
+    Gtk.Button cancel_button {
+      icon-name: "process-stop-symbolic";
+      tooltip-text: "Cancel download";
+      visible: false;
+      clicked => $OnCancelClicked();
+
+      styles [
+        "flat",
+        "square",
+      ]
+    }
+
+    Gtk.Button remove_button {
+      icon-name: "window-close-symbolic";
+      tooltip-text: "Dismiss";
+      visible: false;
+      clicked => $OnRemoveClicked();
+
+      styles [
+        "flat",
+        "square",
+      ]
+    }
+  }
+}

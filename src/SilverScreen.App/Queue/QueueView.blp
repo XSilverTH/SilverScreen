@@ -129,15 +129,42 @@ Gtk.Box QueueView {
       };
     }
 
-    Gtk.Button queue_clear_button {
-      clicked => $OnClearButtonClicked();
-      label: "Clear";
+    Gtk.Box {
+      orientation: horizontal;
+      spacing: 8;
+      halign: fill;
 
-      styles [
-        "flat",
-      ]
+      Gtk.Button queue_download_button {
+        clicked => $OnDownloadAllButtonClicked();
+        tooltip-text: "Download all videos in queue";
+        visible: false;
+        hexpand: true;
 
-      halign: center;
+        child: Gtk.Box {
+          halign: center;
+          spacing: 6;
+
+          Gtk.Image {
+            icon-name: "folder-download-symbolic";
+            accessible-role: presentation;
+          }
+
+          Gtk.Label {
+            label: "Download all";
+          }
+        };
+      }
+
+      Gtk.Button queue_clear_button {
+        clicked => $OnClearButtonClicked();
+        label: "Clear";
+
+        styles [
+          "flat",
+        ]
+
+        halign: center;
+      }
     }
   }
 }

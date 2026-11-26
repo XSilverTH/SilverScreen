@@ -42,6 +42,17 @@ Adw.ViewStack ShellNavigationHostView {
   }
 
   Adw.ViewStackPage {
+    name: "library";
+    title: "Library";
+    icon-name: "folder-download-symbolic";
+
+    child: Gtk.Box library_host {
+      hexpand: true;
+      vexpand: true;
+    };
+  }
+
+  Adw.ViewStackPage {
     name: "channel";
     title: "Channel";
     visible: false;

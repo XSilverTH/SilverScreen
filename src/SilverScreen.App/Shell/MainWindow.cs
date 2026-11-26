@@ -4,8 +4,10 @@ using Gtk;
 using Serilog;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Infrastructure.Common;
+using SilverScreen.Infrastructure.Downloads;
 using SilverScreen.Queue;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
@@ -39,7 +41,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         INavigationService navigationService, INotificationService notificationService,
         SearchViewModel searchViewModel, AccountViewModel accountViewModel,
         IShellRefreshCoordinator refreshCoordinator, Action disposeApplicationServices,
-        string? initialQuery = null)
+        string? initialQuery = null,
+        ILibraryService? library = null,
+        IDownloadService? downloads = null)
         : this(
             browsing,
             account,
@@ -52,7 +56,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             accountViewModel,
             refreshCoordinator,
             disposeApplicationServices,
-            initialQuery)
+            initialQuery,
+            library,
+            downloads)
     {
     }
 
@@ -62,7 +68,9 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         INavigationService navigationService, INotificationService notificationService,
         SearchViewModel searchViewModel, AccountViewModel accountViewModel,
         IShellRefreshCoordinator refreshCoordinator, Action disposeApplicationServices,
-        string? initialQuery = null)
+        string? initialQuery = null,
+        ILibraryService? library = null,
+        IDownloadService? downloads = null)
     {
         Logger.Debug("Initializing MainWindow");
         ArgumentNullException.ThrowIfNull(playback);
@@ -78,9 +86,12 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         var playback1 = new PlaybackModeRoutingService(
             account.Preferences,
             new LazyPlaybackService(playback),
-            _embeddedPlayerPresenter);
+            _embeddedPlayerPresenter,
+            library,
+            _notificationService);
 
-        _queueViewModel = new QueueViewModel(account.Queue, playback1);
+        _queueViewModel = new QueueViewModel(account.Queue, playback1, account.Preferences, downloads,
+            _notificationService);
         _queueView = new QueueView(_queueViewModel, browsing.Thumbnails);
         _queueView.CloseRequested += (_, _) => queue_split_view.ShowSidebar = false;
         _queueView.PlayFailed += (_, err) => _notificationService.ShowToast(err);
@@ -93,8 +104,18 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         _shellHeaderBar.QueueButton.BindToSplitView(queue_split_view);
 
         _navigationHost = new ShellNavigationHostView(browsing, account, _navigationService, playback1,
-            _notificationService, searchViewModel, refreshCoordinator, initialQuery);
+            _notificationService, searchViewModel, refreshCoordinator, initialQuery, library, downloads);
         navigation_host.Append(_navigationHost.Widget);
+
+        if (downloads is DownloadCoordinatorService coordinator)
+        {
+            Lifetime.Track(
+                () => coordinator.JobCompleted += OnDownloadJobCompleted,
+                () => coordinator.JobCompleted -= OnDownloadJobCompleted);
+            Lifetime.Track(
+                () => coordinator.JobFailed += OnDownloadJobFailed,
+                () => coordinator.JobFailed -= OnDownloadJobFailed);
+        }
 
         _shellHeaderBar.ViewSwitcher.Stack = view_switcher_bar.Stack = _navigationHost.ViewStack;
         breakpoint.OnApply += (_, _) => _shellHeaderBar.SetTitleWidgetRevealed(false);
@@ -124,7 +145,7 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             return _embeddedPlayer;
 
         App.EnsurePlayerStylesInstalled();
-        var embedded = new EmbeddedPlayerView(_navigationService, _playerDependencies.Value);
+        var embedded = new EmbeddedPlayerView(_navigationService, _playerDependencies.Value, _notificationService);
         _embeddedPlayer = embedded;
         _embeddedPlayerPresenter.Attach(embedded);
         player_host.Append(embedded.Widget);
@@ -190,6 +211,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             a.OnActivate += (_, _) => act();
             Widget.AddAction(a);
         }
+    }
+
+    private void OnDownloadJobCompleted(object? sender, DownloadJobEventArgs e)
+    {
+        var dest = e.Job.Options.DestinationKind == DownloadDestinationKind.Library
+            ? "Library"
+            : e.Job.TargetDirectory;
+        _notificationService.ShowToast($"Downloaded “{e.Job.Video.Title}” to {dest}");
+    }
+
+    private void OnDownloadJobFailed(object? sender, DownloadJobEventArgs e)
+    {
+        _notificationService.ShowToast($"Download failed for “{e.Job.Video.Title}”");
     }
 
     private bool OnCloseRequest(Window sender, EventArgs args)

@@ -12,6 +12,7 @@ public enum NavigationPage
     Home,
     Subscriptions,
     History,
+    Library,
     Search,
     Channel,
     Player
@@ -86,6 +87,7 @@ public sealed class NavigationService : INavigationService, IDisposable
         RegisterPage(NavigationPage.Home, "home");
         RegisterPage(NavigationPage.Subscriptions, "subscriptions");
         RegisterPage(NavigationPage.History, "history");
+        RegisterPage(NavigationPage.Library, "library");
         RegisterPage(NavigationPage.Search, "search");
         RegisterPage(NavigationPage.Channel, "channel");
         RegisterPage(NavigationPage.Player, "player", false);
@@ -308,7 +310,7 @@ public sealed class NavigationService : INavigationService, IDisposable
 
     private static bool IsShellRoot(NavigationPage page)
     {
-        return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History;
+        return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History or NavigationPage.Library;
     }
 
     public bool TryGetPage(string stackName, out NavigationPage page)

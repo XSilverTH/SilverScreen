@@ -17,10 +17,10 @@ public partial class VideoCardView : ViewBase<Bin>
     public VideoCardView(VideoCardServices services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        _thumbnail = Lifetime.Own(new VideoCardThumbnailView(services.Thumbnails));
+        _thumbnail = Lifetime.Own(new VideoCardThumbnailView(services.Thumbnails, services.Library));
         _metadata = Lifetime.Own(new VideoCardMetadataView(services.Navigation));
         _contextMenu = Lifetime.Own(new VideoCardContextMenu(services.Navigation, services.Playback, services.Queue,
-            services.Notifications));
+            services.Notifications, services.Downloads, services.Preferences));
 
         card.Append(_thumbnail.Widget);
         card.Append(_metadata.Widget);

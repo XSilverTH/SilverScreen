@@ -7,7 +7,9 @@ using SilverScreen.Browsing.History;
 using SilverScreen.Browsing.Search;
 using SilverScreen.Browsing.Subscriptions;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
+using SilverScreen.Downloads;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 using Task = System.Threading.Tasks.Task;
@@ -27,7 +29,12 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
     private VideoListView? _history;
     private HistoryViewModel? _historyViewModel;
     private readonly VideoListView _home;
+    private LibraryView? _libraryView;
+    private readonly ILibraryService? _library;
+    private readonly IDownloadService? _downloads;
     private readonly INavigationService _navigationService;
+    private readonly INotificationService _notificationService;
+    private readonly IPlaybackService _playback;
     private readonly IShellRefreshCoordinator _refreshCoordinator;
     private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
     private VideoListView? _searchView;
@@ -43,16 +50,22 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
         INotificationService notificationService,
         SearchViewModel searchViewModel,
         IShellRefreshCoordinator refreshCoordinator,
-        string? initialQuery = null)
+        string? initialQuery = null,
+        ILibraryService? library = null,
+        IDownloadService? downloads = null)
     {
         _browsing = browsing ?? throw new ArgumentNullException(nameof(browsing));
         _account = account ?? throw new ArgumentNullException(nameof(account));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _playback = playback ?? throw new ArgumentNullException(nameof(playback));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _refreshCoordinator = refreshCoordinator ?? throw new ArgumentNullException(nameof(refreshCoordinator));
         _searchViewModel = searchViewModel ?? throw new ArgumentNullException(nameof(searchViewModel));
+        _library = library;
+        _downloads = downloads;
 
         _cardServices = new VideoCardServices(browsing.Thumbnails, _navigationService, playback, account.Queue,
-            notificationService);
+            notificationService, library, downloads, account.Preferences);
 
         _home = Lifetime.Own(new VideoListView(
             browsing.HomeFeed.GetVideoListSource(() => account.Auth.StartAuthAsync().FireAndForget(Logger)),
@@ -76,6 +89,7 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
             concreteNav.RegisterPage(NavigationPage.Home, "home", onEnter: ClearBrowsingHistory);
             concreteNav.RegisterPage(NavigationPage.Subscriptions, "subscriptions", onEnter: ClearBrowsingHistory);
             concreteNav.RegisterPage(NavigationPage.History, "history", onEnter: ClearBrowsingHistory);
+            concreteNav.RegisterPage(NavigationPage.Library, "library", onEnter: ClearBrowsingHistory);
             concreteNav.RegisterPage(NavigationPage.Search, "search", onEnter: RestoreSearchBrowsingState,
                 onLeave: CaptureSearchBrowsingState);
             concreteNav.RegisterPage(NavigationPage.Channel, "channel", onEnter: RestoreChannelBrowsingState,
@@ -107,6 +121,20 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
         NavigationPage.Search => _searchView?.IsLoading ?? false,
         _ => _home.IsLoading
     };
+
+    private LibraryView? EnsureLibraryView()
+    {
+        if (_libraryView is not null)
+            return _libraryView;
+        if (_downloads is null || _library is null)
+            return null;
+
+        var view = Lifetime.Own(new LibraryView(_downloads, _library, _browsing.Thumbnails, _navigationService,
+            _playback, _account.Queue, _notificationService));
+        library_host.Append(view.Widget);
+        _libraryView = view;
+        return view;
+    }
 
     private ChannelView EnsureChannelView()
     {
@@ -185,6 +213,9 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
                     var subscriptions = EnsureSubscriptionsView();
                     _subscriptionsViewModel!.LoadAsync(subscriptions.GetBatchSize()).FireAndForget(Logger);
                     break;
+                case NavigationPage.Library:
+                    EnsureLibraryView();
+                    break;
                 case NavigationPage.Search:
                     EnsureSearchView();
                     break;
@@ -208,6 +239,7 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
             NavigationPage.Channel => EnsureChannelView().RefreshAsync(),
             NavigationPage.History => EnsureHistoryView().RefreshAsync(),
             NavigationPage.Subscriptions => EnsureSubscriptionsView().RefreshAsync(),
+            NavigationPage.Library => EnsureLibraryView()?.RefreshAsync() ?? Task.CompletedTask,
             NavigationPage.Search => EnsureSearchView().RefreshAsync(),
             _ => _home.RefreshAsync()
         };

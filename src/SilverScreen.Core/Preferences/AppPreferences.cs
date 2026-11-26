@@ -1,11 +1,30 @@
 using System.Text.Json.Serialization;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Downloads;
 using VideoQualityEnum = SilverScreen.Core.Preferences.VideoQuality;
 
 namespace SilverScreen.Core.Preferences;
 
 public sealed record AppPreferences
 {
+    public const int DefaultMaxConcurrentDownloads = 2;
+    public const int MinConcurrentDownloads = 1;
+    public const int MaxConcurrentDownloadsLimit = 8;
+
+    public static string GetDefaultLibraryDirectory()
+    {
+        var videosDir = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        if (string.IsNullOrWhiteSpace(videosDir))
+        {
+            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            videosDir = string.IsNullOrWhiteSpace(userHome)
+                ? Path.GetTempPath()
+                : Path.Combine(userHome, "Videos");
+        }
+
+        return Path.Combine(videosDir, "SilverScreen");
+    }
+
     [JsonPropertyName("Theme")]
     [JsonConverter(typeof(ThemeModeConverter))]
     public ThemeMode ThemeMode { get; set; } = ThemeMode.System;
@@ -44,4 +63,9 @@ public sealed record AppPreferences
 
     public EquatableArray<string> SponsorBlockCategories { get; set; } =
         [.. Player.SponsorBlockCategories.All];
+
+    public string LibraryDirectory { get; set; } = GetDefaultLibraryDirectory();
+    public int MaxConcurrentDownloads { get; set; } = DefaultMaxConcurrentDownloads;
+    public bool ShowCustomDownloadOption { get; set; } = true;
+    public EquatableArray<DownloadPreset> DownloadPresets { get; set; } = EquatableArray<DownloadPreset>.Empty;
 }

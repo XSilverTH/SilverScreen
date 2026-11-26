@@ -1,12 +1,15 @@
 using System.Globalization;
 using Gtk;
 using Serilog;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Controls;
+
+public sealed record QualitySelectionOption(string Quality, bool IsOffline);
 
 /// <summary>
 ///     Encapsulates the bottom controls bar, including video metadata, queue navigation,
@@ -16,10 +19,12 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 {
     private static readonly string[] DefaultQualities = ["Best", "1080p", "720p", "480p", "360p", "240p", "144p"];
     private static readonly ILogger Logger = Log.ForContext<PlayerControlsBarView>();
-    private readonly List<string> _availableQualities = ["Best"];
+    private readonly List<QualitySelectionOption> _qualityOptions = [new("Best", false)];
     private readonly INavigationService _navigation;
     private string? _channelUrl;
     private string? _currentQualityVideoId;
+    private bool _currentQualityIsLocal;
+    private string? _currentLocalLabel;
     private (bool Visible, bool CanPrevious, bool CanNext, bool IsQueueOpen)? _lastQueueControls;
     private double _lastSpeed = double.NaN;
     private double _lastVolume = double.NaN;
@@ -55,6 +60,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     public event EventHandler<double>? VolumeChanged;
     public event EventHandler<double>? SpeedChanged;
     public event EventHandler<string>? QualitySelected;
+    public event EventHandler<QualitySelectionOption>? QualityOptionSelected;
     public event EventHandler<string>? SubtitleToggled;
 
     public void AttachSubtitleController(IPreferencesService preferences, Action<long> selectTrack)
@@ -125,17 +131,33 @@ public partial class PlayerControlsBarView : ViewBase<Box>
         _suppressSpeedNotification = false;
     }
 
-    public void LoadQualityTracks(string videoId, IYouTubeMediaResolver resolver, string targetQuality)
+    public void LoadQualityTracks(
+        string videoId,
+        IYouTubeMediaResolver resolver,
+        string targetQuality,
+        LibraryEntry? localEntry = null,
+        bool isPlayingLocal = false)
     {
-        if (string.Equals(_currentQualityVideoId, videoId, StringComparison.Ordinal)) return;
+        var localLabel = localEntry?.QualityLabel;
+        if (string.Equals(_currentQualityVideoId, videoId, StringComparison.Ordinal) &&
+            _currentQualityIsLocal == isPlayingLocal &&
+            string.Equals(_currentLocalLabel, localLabel, StringComparison.Ordinal))
+            return;
+
         _currentQualityVideoId = videoId;
+        _currentQualityIsLocal = isPlayingLocal;
+        _currentLocalLabel = localLabel;
         _qualityCancellation?.Cancel();
         _qualityCancellation?.Dispose();
         _qualityCancellation = null;
 
+        if (localEntry is not null)
+            ApplyQualityTracks([], targetQuality, localEntry, isPlayingLocal);
+
         if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
         {
-            ApplyQualityTracks([], targetQuality);
+            if (localEntry is null)
+                ApplyQualityTracks([], targetQuality, null, false);
             return;
         }
 
@@ -148,24 +170,62 @@ public partial class PlayerControlsBarView : ViewBase<Box>
                 generation == _qualityGeneration)
                 GtkUiDispatch.Run(
                     () => !IsDisposed && !cancellation.IsCancellationRequested && generation == _qualityGeneration,
-                    () => ApplyQualityTracks(task.Result, targetQuality));
+                    () => ApplyQualityTracks(task.Result, targetQuality, localEntry, isPlayingLocal));
         }, TaskScheduler.Default);
     }
 
-    private void ApplyQualityTracks(IReadOnlyList<string> tracks, string targetQuality)
+    private void ApplyQualityTracks(
+        IReadOnlyList<string> tracks,
+        string targetQuality,
+        LibraryEntry? localEntry,
+        bool isPlayingLocal)
     {
         _suppressQualityNotification = true;
-        _availableQualities.Clear();
-        _availableQualities.Add("Best");
-        var list = tracks.Count > 0 ? tracks : DefaultQualities.Skip(1);
-        foreach (var q in list)
-            if (!_availableQualities.Contains(q, StringComparer.OrdinalIgnoreCase))
-                _availableQualities.Add(q);
+        _qualityOptions.Clear();
+        var displayLabels = new List<string>();
 
-        player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. _availableQualities]);
-        var index = _availableQualities.FindIndex(q =>
-            string.Equals(q, targetQuality, StringComparison.OrdinalIgnoreCase));
-        player_quality_dropdown.SetSelected((uint)Math.Max(0, index));
+        if (localEntry is not null)
+        {
+            var offlineQuality = localEntry.MediaMode == DownloadMediaMode.AudioOnly
+                ? "Audio"
+                : localEntry.QualityLabel;
+            _qualityOptions.Add(new QualitySelectionOption(offlineQuality, true));
+            displayLabels.Add($"{offlineQuality} (Offline)");
+
+            if (tracks.Count > 0)
+            {
+                _qualityOptions.Add(new QualitySelectionOption("Best", false));
+                displayLabels.Add("Best (Online)");
+                foreach (var q in tracks)
+                {
+                    if (_qualityOptions.Any(o => !o.IsOffline && string.Equals(o.Quality, q, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    _qualityOptions.Add(new QualitySelectionOption(q, false));
+                    displayLabels.Add($"{q} (Online)");
+                }
+            }
+        }
+        else
+        {
+            _qualityOptions.Add(new QualitySelectionOption("Best", false));
+            displayLabels.Add("Best");
+            var list = tracks.Count > 0 ? tracks : DefaultQualities.Skip(1);
+            foreach (var q in list)
+            {
+                if (_qualityOptions.Any(o => string.Equals(o.Quality, q, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                _qualityOptions.Add(new QualitySelectionOption(q, false));
+                displayLabels.Add(q);
+            }
+        }
+
+        player_quality_model.Splice(0, player_quality_model.GetNItems(), [.. displayLabels]);
+
+        var selectedIndex = isPlayingLocal && localEntry is not null
+            ? 0
+            : _qualityOptions.FindIndex(o =>
+                !o.IsOffline && string.Equals(o.Quality, targetQuality, StringComparison.OrdinalIgnoreCase));
+        player_quality_dropdown.SetSelected((uint)Math.Max(0, selectedIndex));
         _suppressQualityNotification = false;
     }
 
@@ -237,9 +297,12 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     private void OnQualityDropdownNotify(object? sender, EventArgs args)
     {
         if (_suppressQualityNotification) return;
-        var selected = player_quality_dropdown.GetSelected();
-        var item = player_quality_model.GetString(selected);
-        if (!string.IsNullOrEmpty(item)) QualitySelected?.Invoke(this, item);
+        var selected = (int)player_quality_dropdown.GetSelected();
+        if (selected < 0 || selected >= _qualityOptions.Count) return;
+
+        var option = _qualityOptions[selected];
+        QualityOptionSelected?.Invoke(this, option);
+        QualitySelected?.Invoke(this, option.Quality);
     }
 
     protected override void Dispose(bool disposing)

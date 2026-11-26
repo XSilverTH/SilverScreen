@@ -1,8 +1,12 @@
 using System.Collections.Immutable;
 using System.ComponentModel;
 using Serilog;
+using SilverScreen.Core.Domain;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
+using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Queue;
 
@@ -27,12 +31,29 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     private bool _isLaunching;
     private QueuePresentationState _state;
 
-    public QueueViewModel(IQueueService queue, IPlaybackService playback)
+    public QueueViewModel(
+        IQueueService queue,
+        IPlaybackService playback,
+        IPreferencesService? preferences = null,
+        IDownloadService? downloads = null,
+        INotificationService? notifications = null)
     {
         _queue = queue;
         _playback = playback;
+        Preferences = preferences;
+        Downloads = downloads;
+        Notifications = notifications;
         _state = Snapshot();
         _queue.Changed += OnQueueChanged;
+    }
+
+    public IPreferencesService? Preferences { get; }
+    public IDownloadService? Downloads { get; }
+    public INotificationService? Notifications { get; }
+
+    public IReadOnlyList<VideoSummary> GetQueuedVideos()
+    {
+        return _queue.Items.Select(static item => item.Video).ToArray();
     }
 
     public QueuePresentationState State

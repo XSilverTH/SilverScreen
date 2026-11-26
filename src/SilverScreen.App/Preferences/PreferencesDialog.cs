@@ -2,8 +2,10 @@ using Adw;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Downloads;
 using XSTH.Blueprint.Helpers;
 using Dialog = Adw.Dialog;
 using Functions = Gdk.Functions;
@@ -16,8 +18,11 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
+    private readonly List<ActionRow> _presetRows = [];
+    private readonly IPreferencesService _preferencesService;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
+    private string _libraryDirectory = AppPreferences.GetDefaultLibraryDirectory();
     private string? _lastValidatedMpvPath;
     private string? _lastValidatedYtDlpPath;
     private bool _loading;
@@ -25,6 +30,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     public PreferencesDialog(IPreferencesService preferencesService)
     {
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
         _viewModel = new PreferencesViewModel(preferencesService);
         _sponsorBlockCategoryRows = new Dictionary<string, SwitchRow>
         {
@@ -110,6 +116,15 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ApplyShortcuts(state.Shortcuts);
             foreach (var (category, row) in _sponsorBlockCategoryRows)
                 row.Active = state.SponsorBlockCategories.Contains(category, StringComparer.Ordinal);
+            _libraryDirectory = state.LibraryDirectory;
+            library_folder_row.Subtitle = state.LibraryDirectory;
+            library_folder_reset_button.Sensitive = !string.Equals(
+                state.LibraryDirectory,
+                AppPreferences.GetDefaultLibraryDirectory(),
+                StringComparison.Ordinal);
+            max_concurrent_downloads_row.SetValue(state.MaxConcurrentDownloads);
+            show_custom_download_row.Active = state.ShowCustomDownloadOption;
+            RebuildPresetRows(state.DownloadPresets);
             UpdatePathStatus();
         }
         finally
@@ -400,8 +415,127 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
                 .. _sponsorBlockCategoryRows
                     .Where(pair => pair.Value.Active)
                     .Select(pair => pair.Key)
-            ]
+            ],
+            LibraryDirectory = _libraryDirectory,
+            MaxConcurrentDownloads = Math.Clamp((int)Math.Round(max_concurrent_downloads_row.GetValue()),
+                AppPreferences.MinConcurrentDownloads, AppPreferences.MaxConcurrentDownloadsLimit),
+            ShowCustomDownloadOption = show_custom_download_row.Active
         };
+    }
+
+    private void RebuildPresetRows(EquatableArray<DownloadPreset> presets)
+    {
+        foreach (var row in _presetRows)
+            download_presets_group.Remove(row);
+        _presetRows.Clear();
+
+        if (presets.Length == 0)
+        {
+            var emptyRow = ActionRow.New();
+            emptyRow.Title = "No presets saved";
+            emptyRow.Subtitle = "Add a preset here or click “Save as preset…” in the download dialog";
+            emptyRow.Sensitive = false;
+            download_presets_group.Add(emptyRow);
+            _presetRows.Add(emptyRow);
+            return;
+        }
+
+        foreach (var preset in presets)
+        {
+            var row = ActionRow.New();
+            row.Title = preset.Name;
+            row.Subtitle = preset.Options.FormatSummary();
+
+            var editBtn = Button.NewFromIconName("document-edit-symbolic");
+            editBtn.TooltipText = "Edit preset";
+            editBtn.Valign = Align.Center;
+            editBtn.AddCssClass("flat");
+            editBtn.AddCssClass("square");
+            editBtn.OnClicked += (_, _) => OpenPresetEditor(preset);
+
+            var deleteBtn = Button.NewFromIconName("user-trash-symbolic");
+            deleteBtn.TooltipText = "Delete preset";
+            deleteBtn.Valign = Align.Center;
+            deleteBtn.AddCssClass("flat");
+            deleteBtn.AddCssClass("square");
+            deleteBtn.OnClicked += (_, _) => DeletePreset(preset.Id);
+
+            row.AddSuffix(editBtn);
+            row.AddSuffix(deleteBtn);
+            download_presets_group.Add(row);
+            _presetRows.Add(row);
+        }
+    }
+
+    private void OnBrowseLibraryFolderClicked(object? sender, EventArgs args)
+    {
+        var chooser = FileChooserNative.New(
+            "Choose Library folder",
+            Widget.GetRoot() as Gtk.Window,
+            FileChooserAction.SelectFolder,
+            "_Select",
+            "_Cancel");
+        chooser.OnResponse += (_, response) =>
+        {
+            try
+            {
+                if (response.ResponseId != (int)ResponseType.Accept) return;
+                var path = chooser.GetFile()?.GetPath();
+                if (string.IsNullOrWhiteSpace(path)) return;
+                _libraryDirectory = path;
+                Save();
+            }
+            finally
+            {
+                chooser.Dispose();
+            }
+        };
+        chooser.Show();
+    }
+
+    private void OnResetLibraryFolderClicked(object? sender, EventArgs args)
+    {
+        _libraryDirectory = AppPreferences.GetDefaultLibraryDirectory();
+        Save();
+    }
+
+    private void OnAddPresetClicked(object? sender, EventArgs args)
+    {
+        OpenPresetEditor(null);
+    }
+
+    private void OpenPresetEditor(DownloadPreset? existing)
+    {
+        var dialog = DownloadOptionsDialog.ForPreset(_preferencesService, existing, saved =>
+        {
+            var list = new List<DownloadPreset>(_viewModel.EditorState.DownloadPresets);
+            var idx = list.FindIndex(p => string.Equals(p.Id, saved.Id, StringComparison.Ordinal));
+            if (idx >= 0)
+                list[idx] = saved;
+            else
+                list.Add(saved);
+
+            var nextState = CreateEditorState() with
+            {
+                DownloadPresets = new EquatableArray<DownloadPreset>([.. list])
+            };
+            var result = _viewModel.Save(nextState);
+            ApplyEditorState(result.State);
+        });
+        dialog.Widget.Present(Widget);
+    }
+
+    private void DeletePreset(string presetId)
+    {
+        var list = _viewModel.EditorState.DownloadPresets
+            .Where(p => !string.Equals(p.Id, presetId, StringComparison.Ordinal))
+            .ToArray();
+        var nextState = CreateEditorState() with
+        {
+            DownloadPresets = new EquatableArray<DownloadPreset>(list)
+        };
+        var result = _viewModel.Save(nextState);
+        ApplyEditorState(result.State);
     }
 
     private PlayerShortcutBindings CreateShortcutBindings()

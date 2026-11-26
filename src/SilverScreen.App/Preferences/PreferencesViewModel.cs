@@ -1,4 +1,6 @@
 using Serilog;
+using SilverScreen.Core.Common;
+using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Preferences;
@@ -33,6 +35,10 @@ public sealed record PreferencesEditorState
         [.. Core.Player.SponsorBlockCategories.All];
 
     public string PreferredSubtitleLanguage { get; init; } = string.Empty;
+    public string LibraryDirectory { get; init; } = AppPreferences.GetDefaultLibraryDirectory();
+    public int MaxConcurrentDownloads { get; init; } = AppPreferences.DefaultMaxConcurrentDownloads;
+    public bool ShowCustomDownloadOption { get; init; } = true;
+    public EquatableArray<DownloadPreset> DownloadPresets { get; init; } = EquatableArray<DownloadPreset>.Empty;
 }
 
 public sealed record PreferencesSaveResult(
@@ -138,7 +144,11 @@ public sealed class PreferencesViewModel
             WindowHeight = preferences.WindowHeight,
             WindowMaximized = preferences.WindowMaximized,
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
-            PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage
+            PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage,
+            LibraryDirectory = preferences.LibraryDirectory,
+            MaxConcurrentDownloads = preferences.MaxConcurrentDownloads,
+            ShowCustomDownloadOption = preferences.ShowCustomDownloadOption,
+            DownloadPresets = preferences.DownloadPresets
         };
     }
 
@@ -168,7 +178,11 @@ public sealed class PreferencesViewModel
             WindowHeight = state.WindowHeight,
             WindowMaximized = state.WindowMaximized,
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
-            PreferredSubtitleLanguage = state.PreferredSubtitleLanguage
+            PreferredSubtitleLanguage = state.PreferredSubtitleLanguage,
+            LibraryDirectory = state.LibraryDirectory,
+            MaxConcurrentDownloads = state.MaxConcurrentDownloads,
+            ShowCustomDownloadOption = state.ShowCustomDownloadOption,
+            DownloadPresets = state.DownloadPresets
         };
     }
 

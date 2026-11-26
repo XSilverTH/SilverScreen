@@ -1,9 +1,13 @@
+using Gio;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
+using SilverScreen.Downloads;
 using XSTH.Blueprint.Helpers;
+using Action = System.Action;
+using Task = System.Threading.Tasks.Task;
 
 namespace SilverScreen.Queue;
 
@@ -20,6 +24,8 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
     private readonly Action<int>? _trackJumpRequested;
     private readonly QueueViewModel _viewModel;
     private QueueItem[] _displayedItems = [];
+    private SimpleActionGroup? _downloadActionGroup;
+    private PopoverMenu? _downloadPopover;
 
     public QueueView(QueueViewModel viewModel, IThumbnailService thumbnails,
         Action? closeRequested = null, Action<int>? trackJumpRequested = null)
@@ -65,6 +71,21 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
         _viewModel.Clear();
     }
 
+    private void OnDownloadAllButtonClicked(object? sender, EventArgs args)
+    {
+        if (_viewModel.Preferences is null || _viewModel.Downloads is null)
+            return;
+
+        DownloadActionHelper.HandleButtonTrigger(
+            queue_download_button,
+            _viewModel.GetQueuedVideos,
+            _viewModel.Preferences,
+            _viewModel.Downloads,
+            _viewModel.Notifications,
+            ref _downloadPopover,
+            ref _downloadActionGroup);
+    }
+
     public event EventHandler<string>? PlayFailed;
 
     private void OnPlayButtonClicked(object? sender, EventArgs args)
@@ -102,6 +123,8 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
         queue_empty_page.Visible = !state.IsVisible;
         queue_scrolled_window.Visible = state.IsVisible;
         queue_footer.Visible = state.IsVisible && _trackJumpRequested is null;
+        queue_download_button.Visible = state.IsVisible && _viewModel.Downloads is not null &&
+                                        _viewModel.Preferences is not null;
         queue_play_button.Sensitive = state.CanPlay;
         queue_play_stack.VisibleChildName = state.IsLaunching ? "launching" : "idle";
         queue_play_spinner.Spinning = state.IsLaunching;
@@ -264,6 +287,17 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
     {
         if (disposing)
         {
+            if (_downloadPopover is not null)
+            {
+                _downloadPopover.Popdown();
+                _downloadPopover.Unparent();
+                _downloadPopover.Dispose();
+                _downloadPopover = null;
+            }
+
+            _downloadActionGroup?.Dispose();
+            _downloadActionGroup = null;
+
             foreach (var row in _rowsByCell.Values)
                 row.Dispose();
 
