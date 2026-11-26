@@ -833,14 +833,14 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
                         status = new VideoListStatus(
                             SessionGate.SubscriptionsEmptyTitle,
                             SessionGate.SubscriptionsEmptyMessage,
-                            "emblem-favorite-symbolic");
+                            "subscriptions-symbolic");
                 }
                 else
                 {
                     status = new VideoListStatus(
                         "Subscriptions",
                         string.Empty,
-                        "emblem-favorite-symbolic");
+                        "subscriptions-symbolic");
                 }
 
                 break;
