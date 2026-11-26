@@ -1,9 +1,14 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
+using SilverScreen.Infrastructure.YouTube;
+using SilverScreen.Shell;
+using YoutubeAPI;
+using PlaybackTrackingInfo = YoutubeAPI.Models.Videos.PlaybackTrackingInfo;
 
 namespace SilverScreen.Tests.Player;
 
@@ -203,6 +208,96 @@ public sealed class YouTubePlaybackTelemetryTests
                                         QueryValue(uri, "st") == "20" && QueryValue(uri, "et") == "32");
     }
 
+    [Fact]
+    public async Task PlaybackTrackingInfoAvoidsWatchHtmlScrape()
+    {
+        var handler = new TrackingHandler();
+        var tracking = new PlaybackTrackingInfo(
+            new Uri("https://s.youtube.com/api/stats/playback?docid=abc123_X-yZ&from=api"),
+            new Uri("https://s.youtube.com/api/stats/watchtime?docid=abc123_X-yZ&from=api"));
+
+        using var service = new YouTubePlaybackTelemetryService(
+            new MutablePreferencesService(true),
+            new ManualSessionService(),
+            _ => handler,
+            playbackTrackingProvider: (_, _) => Task.FromResult<PlaybackTrackingInfo?>(tracking));
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        telemetry.UpdateState(State(11, true));
+
+        var beacons = await handler.WaitForBeaconsAsync(2);
+
+        Assert.Equal(0, handler.WatchRequestCount);
+        Assert.All(beacons, beacon => Assert.Equal("api", QueryValue(beacon, "from")));
+        Assert.Contains(beacons, beacon => beacon.AbsolutePath == "/api/stats/playback");
+        Assert.Contains(beacons, beacon =>
+            beacon.AbsolutePath == "/api/stats/watchtime" &&
+            QueryValue(beacon, "st") == "0" && QueryValue(beacon, "et") == "11");
+    }
+
+    [Fact]
+    public async Task IncompleteOrNonHttpsPlaybackTrackingFallsBackToWatchHtmlScrape()
+    {
+        var handler = new TrackingHandler();
+        var incomplete = new PlaybackTrackingInfo(
+            new Uri("http://s.youtube.com/api/stats/playback?from=insecure"),
+            new Uri("https://s.youtube.com/api/stats/watchtime?from=api"));
+
+        using var service = new YouTubePlaybackTelemetryService(
+            new MutablePreferencesService(true),
+            new ManualSessionService(),
+            _ => handler,
+            playbackTrackingProvider: (_, _) => Task.FromResult<PlaybackTrackingInfo?>(incomplete));
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        telemetry.UpdateState(State(8, true));
+
+        var beacons = await handler.WaitForBeaconsAsync(2);
+
+        Assert.Equal(1, handler.WatchRequestCount);
+        Assert.All(beacons, beacon => Assert.Equal("yt", QueryValue(beacon, "ns")));
+        Assert.All(beacons, beacon => Assert.Null(QueryValue(beacon, "from")));
+    }
+
+    [Fact]
+    public async Task FailingClientProviderFallsBackToWatchHtmlScrape()
+    {
+        var handler = new TrackingHandler();
+        using var service = new YouTubePlaybackTelemetryService(
+            new MutablePreferencesService(true),
+            new ManualSessionService(),
+            _ => handler,
+            clientProvider: new ThrowingClientProvider());
+        using var telemetry = service.Start(CreateRequest());
+
+        telemetry.UpdateState(State(0, false));
+        telemetry.UpdateState(State(9, true));
+
+        var beacons = await handler.WaitForBeaconsAsync(2);
+
+        Assert.Equal(1, handler.WatchRequestCount);
+        Assert.Contains(beacons, beacon => beacon.AbsolutePath == "/api/stats/playback");
+        Assert.Contains(beacons, beacon => beacon.AbsolutePath == "/api/stats/watchtime");
+    }
+
+    [Fact]
+    public void DependencyInjectionResolvesTelemetryServiceWithClientProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSilverScreenServices(new ApplicationConfiguration());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+
+        var telemetry = provider.GetRequiredService<IYouTubePlaybackTelemetryService>();
+        Assert.IsType<YouTubePlaybackTelemetryService>(telemetry);
+    }
+
     private static PlaybackRequest CreateRequest()
     {
         return new PlaybackRequest([
@@ -306,6 +401,18 @@ public sealed class YouTubePlaybackTelemetryTests
         private readonly Lock _lock = new();
         private readonly List<string> _referrers = [];
         private int _expectedBeaconCount = 3;
+        private int _watchRequestCount;
+
+        public int WatchRequestCount
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _watchRequestCount;
+                }
+            }
+        }
 
         public IReadOnlyList<string> Referrers
         {
@@ -366,10 +473,13 @@ public sealed class YouTubePlaybackTelemetryTests
             lock (_lock)
             {
                 if (uri is { Host: "www.youtube.com", AbsolutePath: "/watch" })
+                {
+                    _watchRequestCount++;
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new StringContent(PlayerResponse)
                     });
+                }
 
                 _beacons.Add(uri);
                 if (request.Headers.Referrer is { } referrer) _referrers.Add(referrer.ToString());
@@ -416,6 +526,19 @@ public sealed class YouTubePlaybackTelemetryTests
             await _releaseBeacon.Task.WaitAsync(cancellationToken);
             Interlocked.Increment(ref _beaconCount);
             return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }
+    }
+
+    private sealed class ThrowingClientProvider : IYouTubeClientProvider
+    {
+        public YouTubeClient GetClient()
+        {
+            throw new InvalidOperationException("Simulated API failure");
+        }
+
+        public YouTubeClient GetAuthenticatedClient()
+        {
+            throw new InvalidOperationException("Simulated API failure");
         }
     }
 }

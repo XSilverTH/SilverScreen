@@ -7,6 +7,9 @@ using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.YouTube;
+using YoutubeAPI.Models.ValueTypes;
+using YoutubeAPI.Models.Videos;
 
 namespace SilverScreen.Infrastructure.Player;
 
@@ -18,7 +21,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     private const int MaxActiveSessions = 200;
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
+    private readonly IYouTubeClientProvider? _clientProvider;
     private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
+    private readonly Func<string, CancellationToken, Task<PlaybackTrackingInfo?>>? _playbackTrackingProvider;
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _sessionService;
     private readonly HashSet<TelemetrySession> _sessions = [];
@@ -31,11 +36,15 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     public YouTubePlaybackTelemetryService(
         IPreferencesService preferences,
         ISessionService sessionService,
-        Func<CookieContainer, HttpMessageHandler>? handlerFactory = null)
+        Func<CookieContainer, HttpMessageHandler>? handlerFactory = null,
+        IYouTubeClientProvider? clientProvider = null,
+        Func<string, CancellationToken, Task<PlaybackTrackingInfo?>>? playbackTrackingProvider = null)
     {
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
         _handlerFactory = handlerFactory;
+        _clientProvider = clientProvider;
+        _playbackTrackingProvider = playbackTrackingProvider;
         _preferences.PreferencesChanged += OnPreferencesChanged;
         _sessionService.SessionChanged += OnSessionChanged;
     }
@@ -526,6 +535,55 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 _cookies = cookies;
             }
 
+            var endpoints = await TryGetEndpointsFromTrackingInfoAsync(cancellationToken).ConfigureAwait(false);
+            if (!CanSend(cancellationToken))
+                return null;
+            if (endpoints is not null)
+                return endpoints;
+
+            return await TryGetEndpointsFromWatchPageAsync(client, cookies, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<TrackingEndpoints?> TryGetEndpointsFromTrackingInfoAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (owner._playbackTrackingProvider is { } provider)
+                {
+                    var provided = TrackingEndpoints.TryFromPlaybackTracking(
+                        await provider(videoId, cancellationToken).ConfigureAwait(false));
+                    if (provided is not null)
+                        return provided;
+                }
+
+                if (owner._clientProvider is { } clientProvider &&
+                    VideoId.TryParse(videoId, out var parsedVideoId))
+                {
+                    var video = await clientProvider.GetClient().Videos
+                        .GetAsync(parsedVideoId, cancellationToken)
+                        .ConfigureAwait(false);
+                    return TrackingEndpoints.TryFromPlaybackTracking(video.PlaybackTracking);
+                }
+
+                return null;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception,
+                    "Could not load YouTube playback tracking from Video API; falling back to watch page");
+                return null;
+            }
+        }
+
+        private async Task<TrackingEndpoints?> TryGetEndpointsFromWatchPageAsync(
+            HttpClient client,
+            CookieContainer? cookies,
+            CancellationToken cancellationToken)
+        {
             try
             {
                 var pageUri =
@@ -568,6 +626,16 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
     private sealed record TrackingEndpoints(Uri Playback, Uri Watchtime)
     {
+        public static TrackingEndpoints? TryFromPlaybackTracking(PlaybackTrackingInfo? tracking)
+        {
+            if (tracking is not { PlaybackUrl: { } playback, WatchtimeUrl: { } watchtime })
+                return null;
+
+            return IsHttpsUri(playback) && IsHttpsUri(watchtime)
+                ? new TrackingEndpoints(playback, watchtime)
+                : null;
+        }
+
         public static TrackingEndpoints? TryParse(string page)
         {
             var playerResponse = ExtractPlayerResponse(page);
@@ -642,7 +710,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             if (tracking.TryGetProperty(property, out var endpoint) &&
                 endpoint.TryGetProperty("baseUrl", out var baseUrl) &&
                 Uri.TryCreate(baseUrl.GetString(), UriKind.Absolute, out var parsedUrl) &&
-                string.Equals(parsedUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                IsHttpsUri(parsedUrl))
             {
                 url = parsedUrl;
                 return true;
@@ -650,6 +718,12 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
             url = null!;
             return false;
+        }
+
+        private static bool IsHttpsUri(Uri uri)
+        {
+            return uri.IsAbsoluteUri &&
+                   string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
         }
     }
 
