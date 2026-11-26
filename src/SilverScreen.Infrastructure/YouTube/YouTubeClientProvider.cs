@@ -5,6 +5,7 @@ using System.Text;
 using Serilog;
 using Serilog.Events;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Infrastructure.Common;
 using YoutubeAPI;
 using YoutubeAPI.Exceptions;
 
@@ -25,7 +26,7 @@ public interface IYouTubeClientProvider
 ///     Cache keys are SHA256 hashes of the cookie content: raw cookies never appear as keys or in logs,
 ///     and only a truncated hash prefix is logged for diagnostics.
 /// </summary>
-public sealed class YouTubeClientProvider(ISessionService sessionService) : IYouTubeClientProvider, IDisposable
+public sealed class YouTubeClientProvider : IYouTubeClientProvider, IDisposable
 {
     private const int MaxCachedClients = 2;
     private const int LoggedHashPrefixLength = 12;
@@ -51,14 +52,27 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
     ];
 
     private static readonly ILogger Logger = Log.ForContext<YouTubeClientProvider>();
+    private readonly string _bootstrapCacheFilePath;
     private readonly Dictionary<string, LinkedListNode<CachedClient>> _clients = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
     private readonly LinkedList<CachedClient> _lru = new();
 
-    private readonly ISessionService _sessionService =
-        sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+    private readonly ISessionService _sessionService;
 
     private bool _disposed;
+
+    public YouTubeClientProvider(ISessionService sessionService)
+        : this(sessionService, null)
+    {
+    }
+
+    internal YouTubeClientProvider(ISessionService sessionService, string? bootstrapCacheFilePath)
+    {
+        _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _bootstrapCacheFilePath = string.IsNullOrWhiteSpace(bootstrapCacheFilePath)
+            ? PersistentCacheFile.GetCacheFilePath("innertube-bootstrap.json")
+            : bootstrapCacheFilePath;
+    }
 
     public void Dispose()
     {
@@ -166,7 +180,8 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
 
             client = new YouTubeClient(new YouTubeClientOptions
             {
-                Authentication = authentication
+                Authentication = authentication,
+                BootstrapCacheFilePath = _bootstrapCacheFilePath
             });
             _clients.Add(sessionKey,
                 _lru.AddLast(new CachedClient(sessionKey, client, authentication is not null)));

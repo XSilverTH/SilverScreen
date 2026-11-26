@@ -193,7 +193,17 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        SetProfileStatus(AccountProfilePresentationStatus.Checking);
+        var cachedProfile = _accountProfileService.TryGetCachedProfile();
+        if (cachedProfile is not null)
+        {
+            _profile = cachedProfile;
+            SetProfileStatus(AccountProfilePresentationStatus.Ready);
+        }
+        else
+        {
+            SetProfileStatus(AccountProfilePresentationStatus.Checking);
+        }
+
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(AvatarUrl));
         var cancellation = new CancellationTokenSource();
@@ -226,6 +236,11 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         DispatchToMainThread(() =>
         {
             if (_disposed || request.IsCancellationRequested || !ReferenceEquals(_profileCancellation, request))
+                return;
+
+            if (result is AccountProfileResult.TemporaryFailure &&
+                _profile is not null &&
+                ProfileStatus == AccountProfilePresentationStatus.Ready)
                 return;
 
             _profile = result is AccountProfileResult.Success(var profile) ? profile : null;

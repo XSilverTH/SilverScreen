@@ -3,6 +3,7 @@ using Serilog;
 using SilverScreen.Core.Account.Profile;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
 using YoutubeAPI.Exceptions;
 
@@ -12,17 +13,57 @@ namespace SilverScreen.Infrastructure.Account.Profile;
 public sealed class YoutubeApiAccountProfileService : IAccountProfileService, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiAccountProfileService>();
+    private readonly string _cacheFilePath;
     private readonly IYouTubeClientProvider _clientProvider;
+    private readonly Lock _cacheLock = new();
     private readonly ISessionService _sessionService;
+    private PersistedAccountProfile? _cachedEntry;
+    private bool _cacheLoaded;
     private bool _disposed;
 
     public YoutubeApiAccountProfileService(
         IYouTubeClientProvider clientProvider,
         ISessionService sessionService)
+        : this(clientProvider, sessionService, null)
+    {
+    }
+
+    internal YoutubeApiAccountProfileService(
+        IYouTubeClientProvider clientProvider,
+        ISessionService sessionService,
+        string? cacheFilePath)
     {
         _clientProvider = clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _cacheFilePath = string.IsNullOrWhiteSpace(cacheFilePath)
+            ? PersistentCacheFile.GetCacheFilePath("account-profile.json")
+            : cacheFilePath;
         _sessionService.SessionChanged += OnSessionChanged;
+    }
+
+    public AccountProfile? TryGetCachedProfile()
+    {
+        var sessionHash = PersistentCacheFile.TryGetActiveSessionHash(_sessionService);
+        if (sessionHash is null)
+            return null;
+
+        lock (_cacheLock)
+        {
+            if (!_cacheLoaded)
+            {
+                _cachedEntry = PersistentCacheFile.Read(
+                    _cacheFilePath,
+                    PersistentCacheJsonContext.Default.PersistedAccountProfile);
+                _cacheLoaded = true;
+            }
+
+            if (_cachedEntry is null ||
+                !string.Equals(_cachedEntry.SessionHash, sessionHash, StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(_cachedEntry.DisplayName))
+                return null;
+
+            return new AccountProfile(_cachedEntry.DisplayName, _cachedEntry.AvatarUrl);
+        }
     }
 
 
@@ -33,6 +74,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         if (!HasAuthenticatedSession(session, cookies))
         {
             Logger.Debug("Cannot fetch account profile without an authenticated YouTube session");
+            ClearCachedProfile();
             return new AccountProfileResult.AuthenticationRequired();
         }
 
@@ -52,6 +94,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             }
 
             var accountProfile = new AccountProfile(profile.DisplayName, profile.Avatar?.Url.ToString());
+            SaveCachedProfile(PersistentCacheFile.HashSessionCookies(cookies!.Content), accountProfile);
             Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)",
                 Stopwatch.GetElapsedTime(startTime).Milliseconds);
             return new AccountProfileResult.Success(accountProfile);
@@ -69,6 +112,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
             (exception is AuthenticationRequiredException or AuthenticationExpiredException)
         {
             LogProfileFailure(exception, "authentication rejection");
+            ClearCachedProfile();
             return new AccountProfileResult.AuthenticationRejected();
         }
         catch (YouTubeException exception)
@@ -134,7 +178,39 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                !string.IsNullOrWhiteSpace(cookies.Content);
     }
 
-    private static void OnSessionChanged(object? sender, EventArgs eventArgs)
+    private void SaveCachedProfile(string sessionHash, AccountProfile profile)
     {
+        var entry = new PersistedAccountProfile(
+            sessionHash,
+            profile.DisplayName,
+            profile.AvatarUrl,
+            DateTimeOffset.UtcNow);
+        lock (_cacheLock)
+        {
+            _cachedEntry = entry;
+            _cacheLoaded = true;
+        }
+
+        PersistentCacheFile.WriteAtomically(
+            _cacheFilePath,
+            entry,
+            PersistentCacheJsonContext.Default.PersistedAccountProfile);
+    }
+
+    private void ClearCachedProfile()
+    {
+        lock (_cacheLock)
+        {
+            _cachedEntry = null;
+            _cacheLoaded = true;
+        }
+
+        PersistentCacheFile.Delete(_cacheFilePath);
+    }
+
+    private void OnSessionChanged(object? sender, EventArgs eventArgs)
+    {
+        if (!HasAuthenticatedSession())
+            ClearCachedProfile();
     }
 }
