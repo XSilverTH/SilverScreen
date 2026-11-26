@@ -4,7 +4,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Player;
 
@@ -92,9 +91,7 @@ internal sealed class PlaybackModeRoutingService(
 
         if (startEntry is not null &&
             QualityMismatchHelper.TryGetMismatchMessage(startEntry, prefs.Quality, out var mismatchMessage))
-        {
             notifications?.ShowToast(mismatchMessage);
-        }
 
         return changed ? request with { Videos = ImmutableArray.Create(updated) } : request;
     }

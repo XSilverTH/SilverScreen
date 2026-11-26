@@ -11,20 +11,6 @@ public sealed record AppPreferences
     public const int MinConcurrentDownloads = 1;
     public const int MaxConcurrentDownloadsLimit = 8;
 
-    public static string GetDefaultLibraryDirectory()
-    {
-        var videosDir = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-        if (string.IsNullOrWhiteSpace(videosDir))
-        {
-            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            videosDir = string.IsNullOrWhiteSpace(userHome)
-                ? Path.GetTempPath()
-                : Path.Combine(userHome, "Videos");
-        }
-
-        return Path.Combine(videosDir, "SilverScreen");
-    }
-
     [JsonPropertyName("Theme")]
     [JsonConverter(typeof(ThemeModeConverter))]
     public ThemeMode ThemeMode { get; set; } = ThemeMode.System;
@@ -68,4 +54,18 @@ public sealed record AppPreferences
     public int MaxConcurrentDownloads { get; set; } = DefaultMaxConcurrentDownloads;
     public bool ShowCustomDownloadOption { get; set; } = true;
     public EquatableArray<DownloadPreset> DownloadPresets { get; set; } = EquatableArray<DownloadPreset>.Empty;
+
+    public static string GetDefaultLibraryDirectory()
+    {
+        var videosDir = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        if (string.IsNullOrWhiteSpace(videosDir))
+        {
+            var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            videosDir = string.IsNullOrWhiteSpace(userHome)
+                ? Path.GetTempPath()
+                : Path.Combine(userHome, "Videos");
+        }
+
+        return Path.Combine(videosDir, "SilverScreen");
+    }
 }

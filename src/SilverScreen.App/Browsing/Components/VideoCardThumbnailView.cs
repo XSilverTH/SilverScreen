@@ -5,7 +5,6 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Browsing.Components;

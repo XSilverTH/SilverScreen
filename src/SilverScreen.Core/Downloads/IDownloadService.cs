@@ -9,7 +9,8 @@ public interface IDownloadService
 
     event EventHandler? JobsChanged;
 
-    Task<DownloadEnqueueResult> EnqueueAsync(DownloadEnqueueRequest request, CancellationToken cancellationToken = default);
+    Task<DownloadEnqueueResult> EnqueueAsync(DownloadEnqueueRequest request,
+        CancellationToken cancellationToken = default);
 
     Task PauseAsync(Guid jobId);
 

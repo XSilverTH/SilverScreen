@@ -54,7 +54,6 @@ public sealed class SearchViewModel : IVideoListSource
             clearOnRefresh: true);
     }
 
-    public bool HasMore => _engine.HasMore;
     public string Summary => State.Status.Description ?? string.Empty;
 
     public Func<string, Task>? OpenChannelRequested { get; set; }
@@ -76,6 +75,8 @@ public sealed class SearchViewModel : IVideoListSource
             }
         }
     }
+
+    public bool HasMore => _engine.HasMore;
 
 
     public void Dispose()

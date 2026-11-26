@@ -64,7 +64,9 @@ public sealed record DownloadOptions
             ? "Library"
             : string.IsNullOrWhiteSpace(CustomFolderPath)
                 ? "Custom folder"
-                : Path.GetFileName(CustomFolderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) is { Length: > 0 } dirName
+                : Path.GetFileName(
+                        CustomFolderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) is
+                    { Length: > 0 } dirName
                     ? dirName
                     : CustomFolderPath);
 

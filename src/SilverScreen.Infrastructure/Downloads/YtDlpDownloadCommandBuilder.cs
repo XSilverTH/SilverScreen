@@ -126,7 +126,8 @@ public static class YtDlpDownloadCommandBuilder
             args.Add("--embed-metadata");
 
         if (options.EmbedThumbnail &&
-            !(options.MediaMode == DownloadMediaMode.VideoAndAudio && options.Container == DownloadContainerFormat.Webm))
+            !(options.MediaMode == DownloadMediaMode.VideoAndAudio &&
+              options.Container == DownloadContainerFormat.Webm))
             args.Add("--embed-thumbnail");
 
         // SponsorBlock flags apply only to external folder downloads; Library downloads keep
@@ -147,7 +148,8 @@ public static class YtDlpDownloadCommandBuilder
         }
 
         args.Add("--progress-template");
-        args.Add($"download:{ProgressPrefix}%(progress.status)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s");
+        args.Add(
+            $"download:{ProgressPrefix}%(progress.status)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s");
         args.Add("--print");
         args.Add($"after_move:{FinalFilePrefix}%(filepath)s|%(height)s|%(ext)s");
         args.Add("--print");

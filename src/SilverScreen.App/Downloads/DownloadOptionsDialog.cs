@@ -5,10 +5,10 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
 using AlertDialog = Adw.AlertDialog;
 using Dialog = Adw.Dialog;
+using Window = Gtk.Window;
 
 namespace SilverScreen.Downloads;
 
@@ -24,10 +24,10 @@ public partial class DownloadOptionsDialog : ViewBase<Dialog>
     ];
 
     private readonly IDownloadService? _downloadService;
-    private readonly INotificationService? _notifications;
-    private readonly Action<DownloadPreset>? _onSavePreset;
     private readonly string? _editingPresetId;
     private readonly bool _isPresetEditor;
+    private readonly INotificationService? _notifications;
+    private readonly Action<DownloadPreset>? _onSavePreset;
     private readonly IPreferencesService _preferencesService;
     private readonly IReadOnlyList<VideoSummary> _videos;
     private IReadOnlyList<DownloadContainerFormat> _activeContainers = DownloadContainerFormats.VideoContainers;
@@ -78,10 +78,10 @@ public partial class DownloadOptionsDialog : ViewBase<Dialog>
             downloadService,
             notifications,
             defaults,
-            isPresetEditor: false,
-            editingPresetId: null,
-            initialPresetName: null,
-            onSavePreset: null);
+            false,
+            null,
+            null,
+            null);
     }
 
     public static DownloadOptionsDialog ForPreset(
@@ -100,13 +100,13 @@ public partial class DownloadOptionsDialog : ViewBase<Dialog>
         return new DownloadOptionsDialog(
             [],
             preferencesService,
-            downloadService: null,
-            notifications: null,
+            null,
+            null,
             options,
-            isPresetEditor: true,
-            editingPresetId: existingPreset?.Id,
-            initialPresetName: existingPreset?.Name ?? string.Empty,
-            onSavePreset: onSavePreset);
+            true,
+            existingPreset?.Id,
+            existingPreset?.Name ?? string.Empty,
+            onSavePreset);
     }
 
     private void ConfigureMode(string? initialPresetName)
@@ -343,7 +343,7 @@ public partial class DownloadOptionsDialog : ViewBase<Dialog>
     {
         var chooser = FileChooserNative.New(
             "Choose download folder",
-            Widget.GetRoot() as Gtk.Window,
+            Widget.GetRoot() as Window,
             FileChooserAction.SelectFolder,
             "_Select",
             "_Cancel");
@@ -393,7 +393,10 @@ public partial class DownloadOptionsDialog : ViewBase<Dialog>
             var prefs = _preferencesService.GetPreferences();
             var preset = new DownloadPreset(Guid.NewGuid().ToString("N"), name, options);
             var updated = new List<DownloadPreset>(prefs.DownloadPresets) { preset };
-            _preferencesService.SavePreferences(prefs with { DownloadPresets = new EquatableArray<DownloadPreset>([.. updated]) });
+            _preferencesService.SavePreferences(prefs with
+            {
+                DownloadPresets = new EquatableArray<DownloadPreset>([.. updated])
+            });
             _notifications?.ShowToast($"Saved preset “{name}”");
         };
 

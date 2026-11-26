@@ -1,4 +1,5 @@
 using SilverScreen.Core.Common;
+using Xunit.Sdk;
 
 namespace SilverScreen.Tests.Common;
 
@@ -48,7 +49,7 @@ public sealed class YouTubeUrlParserTests
         {
             YouTubeUrlParseResult.Video(var id) => id,
             YouTubeUrlParseResult.Shorts(var id) => id,
-            _ => throw new Xunit.Sdk.XunitException($"Expected a playable video case but got {result.Value} for {input}.")
+            _ => throw new XunitException($"Expected a playable video case but got {result.Value} for {input}.")
         };
         Assert.Equal("dQw4w9WgXcQ", videoId);
         Assert.Equal("https://www.youtube.com/watch?v=dQw4w9WgXcQ", result.CanonicalWatchUrl);

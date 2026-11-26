@@ -175,7 +175,9 @@ public static class DownloadContainerFormats
 
         return mode == DownloadMediaMode.AudioOnly
             ? format.IsAudioContainer() ? format : DownloadContainerFormat.Auto
-            : !format.IsAudioContainer() ? format : DownloadContainerFormat.Auto;
+            : !format.IsAudioContainer()
+                ? format
+                : DownloadContainerFormat.Auto;
     }
 
     public static string ToPersistedString(this DownloadContainerFormat format)
@@ -316,7 +318,8 @@ public static class DownloadJobStatuses
 
         var trimmed = value.AsSpan().Trim();
         if (trimmed.Equals("Downloading", StringComparison.OrdinalIgnoreCase)) return DownloadJobStatus.Downloading;
-        if (trimmed.Equals("PostProcessing", StringComparison.OrdinalIgnoreCase)) return DownloadJobStatus.PostProcessing;
+        if (trimmed.Equals("PostProcessing", StringComparison.OrdinalIgnoreCase))
+            return DownloadJobStatus.PostProcessing;
         if (trimmed.Equals("Paused", StringComparison.OrdinalIgnoreCase)) return DownloadJobStatus.Paused;
         if (trimmed.Equals("Completed", StringComparison.OrdinalIgnoreCase)) return DownloadJobStatus.Completed;
         if (trimmed.Equals("Failed", StringComparison.OrdinalIgnoreCase)) return DownloadJobStatus.Failed;
@@ -344,7 +347,8 @@ public static class QualityMismatchHelper
         };
     }
 
-    public static string FormatQualityLabel(DownloadMediaMode mediaMode, VideoQuality requestedQuality, int? actualHeight)
+    public static string FormatQualityLabel(DownloadMediaMode mediaMode, VideoQuality requestedQuality,
+        int? actualHeight)
     {
         if (mediaMode == DownloadMediaMode.AudioOnly)
             return "Audio";
@@ -410,54 +414,94 @@ public static class QualityMismatchHelper
 
 public sealed class DownloadDestinationKindConverter : JsonConverter<DownloadDestinationKind>
 {
-    public override DownloadDestinationKind Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? DownloadDestinationKinds.Parse(reader.GetString()) : DownloadDestinationKind.Library;
+    public override DownloadDestinationKind Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? DownloadDestinationKinds.Parse(reader.GetString())
+            : DownloadDestinationKind.Library;
+    }
 
     public override void Write(Utf8JsonWriter writer, DownloadDestinationKind value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }
 
 public sealed class DownloadMediaModeConverter : JsonConverter<DownloadMediaMode>
 {
     public override DownloadMediaMode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? DownloadMediaModes.Parse(reader.GetString()) : DownloadMediaMode.VideoAndAudio;
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? DownloadMediaModes.Parse(reader.GetString())
+            : DownloadMediaMode.VideoAndAudio;
+    }
 
     public override void Write(Utf8JsonWriter writer, DownloadMediaMode value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }
 
 public sealed class DownloadContainerFormatConverter : JsonConverter<DownloadContainerFormat>
 {
-    public override DownloadContainerFormat Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? DownloadContainerFormats.Parse(reader.GetString()) : DownloadContainerFormat.Auto;
+    public override DownloadContainerFormat Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? DownloadContainerFormats.Parse(reader.GetString())
+            : DownloadContainerFormat.Auto;
+    }
 
     public override void Write(Utf8JsonWriter writer, DownloadContainerFormat value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }
 
 public sealed class DownloadSubtitleModeConverter : JsonConverter<DownloadSubtitleMode>
 {
-    public override DownloadSubtitleMode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? DownloadSubtitleModes.Parse(reader.GetString()) : DownloadSubtitleMode.None;
+    public override DownloadSubtitleMode Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? DownloadSubtitleModes.Parse(reader.GetString())
+            : DownloadSubtitleMode.None;
+    }
 
     public override void Write(Utf8JsonWriter writer, DownloadSubtitleMode value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }
 
 public sealed class SponsorBlockDownloadModeConverter : JsonConverter<SponsorBlockDownloadMode>
 {
-    public override SponsorBlockDownloadMode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? SponsorBlockDownloadModes.Parse(reader.GetString()) : SponsorBlockDownloadMode.MarkAsChapters;
+    public override SponsorBlockDownloadMode Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? SponsorBlockDownloadModes.Parse(reader.GetString())
+            : SponsorBlockDownloadMode.MarkAsChapters;
+    }
 
     public override void Write(Utf8JsonWriter writer, SponsorBlockDownloadMode value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }
 
 public sealed class DownloadJobStatusConverter : JsonConverter<DownloadJobStatus>
 {
     public override DownloadJobStatus Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String ? DownloadJobStatuses.Parse(reader.GetString()) : DownloadJobStatus.Queued;
+    {
+        return reader.TokenType == JsonTokenType.String
+            ? DownloadJobStatuses.Parse(reader.GetString())
+            : DownloadJobStatus.Queued;
+    }
 
     public override void Write(Utf8JsonWriter writer, DownloadJobStatus value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToPersistedString());
+    {
+        writer.WriteStringValue(value.ToPersistedString());
+    }
 }

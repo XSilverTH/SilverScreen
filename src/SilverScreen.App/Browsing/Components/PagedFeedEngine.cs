@@ -158,17 +158,6 @@ public class PagedFeedEngine : IVideoListSource
         }
     }
 
-    public bool HasMore
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _hasMore;
-            }
-        }
-    }
-
     public string? ContinuationToken
     {
         get
@@ -209,6 +198,17 @@ public class PagedFeedEngine : IVideoListSource
             lock (_lock)
             {
                 return _paginationError;
+            }
+        }
+    }
+
+    public bool HasMore
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _hasMore;
             }
         }
     }

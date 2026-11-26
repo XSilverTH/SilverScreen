@@ -191,7 +191,8 @@ public sealed class AccountViewModelTests
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
 
-        await Task.Run(() => _sessionService.SetManualSessionAsync(validCookies, SessionCookieFormat.NetscapeCookiesText));
+        await Task.Run(() =>
+            _sessionService.SetManualSessionAsync(validCookies, SessionCookieFormat.NetscapeCookiesText));
         Assert.True(Volatile.Read(ref dispatchCount) >= 1);
 
         var countAfterSession = Volatile.Read(ref dispatchCount);

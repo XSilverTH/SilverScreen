@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
@@ -5,7 +6,6 @@ using System.Text;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
-using System.Buffers;
 
 namespace SilverScreen.Infrastructure.Domain;
 
@@ -28,8 +28,9 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
         ".bmp"
     ];
 
-    private readonly bool _disposeHttpClient;
     private readonly CancellationTokenSource _disposeCts = new();
+
+    private readonly bool _disposeHttpClient;
 
     // Bounded LRU index: every add/hit path evicts oldest entries past _maxFileCount,
     // so in-memory growth stays flat no matter how many distinct thumbnails are requested.
@@ -362,7 +363,6 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
 
             List<CacheEntry>? entriesToAdd = null;
             if (Directory.Exists(CacheDirectory))
-            {
                 try
                 {
                     var now = DateTime.UtcNow;
@@ -413,11 +413,11 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
                         entriesToAdd = entries;
                     }
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                               or DirectoryNotFoundException)
                 {
                     initException = ex;
                 }
-            }
 
             if (entriesToAdd is { Count: > 0 })
                 lock (_lock)

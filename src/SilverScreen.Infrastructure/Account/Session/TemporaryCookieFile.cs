@@ -234,7 +234,7 @@ public static partial class TemporaryCookieFile
                             !IsDirectoryOrphanedOrStale(directory, prefix, age, now))
                             continue;
 
-                        if (!TryRemoveOwnedDirectory(directory, prefix, flushToDisk: false)) continue;
+                        if (!TryRemoveOwnedDirectory(directory, prefix, false)) continue;
                         removed++;
                         Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
                     }
@@ -416,7 +416,6 @@ public static partial class TemporaryCookieFile
             return false;
 
         if (OperatingSystem.IsLinux())
-        {
             try
             {
                 // Checking /proc/<pid> directly avoids Process.GetProcessById throwing
@@ -428,7 +427,6 @@ public static partial class TemporaryCookieFile
                 Logger.Debug(ex, "Could not inspect /proc/{Pid}; assuming alive as safeguard", pid);
                 return true;
             }
-        }
 
         try
         {

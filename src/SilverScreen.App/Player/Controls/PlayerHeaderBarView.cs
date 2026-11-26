@@ -1,4 +1,3 @@
-using Adw;
 using Gio;
 using Gtk;
 using SilverScreen.Core.Domain;
@@ -6,7 +5,6 @@ using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Downloads;
-using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
 using HeaderBar = Adw.HeaderBar;
 

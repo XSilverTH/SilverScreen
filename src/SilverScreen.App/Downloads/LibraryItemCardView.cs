@@ -10,8 +10,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Queue;
-using SilverScreen.Player;
-using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
 using Constants = Gdk.Constants;
 using Menu = Gio.Menu;
@@ -35,8 +33,8 @@ public partial class LibraryItemCardView : ViewBase<Bin>
     private readonly INotificationService _notifications;
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
-    private readonly IThumbnailService _thumbnails;
     private readonly NativeMemoryPressure _thumbnailPressure = new();
+    private readonly IThumbnailService _thumbnails;
 
     private int _bindingGeneration;
     private Picture? _boundPicture;
@@ -68,7 +66,8 @@ public partial class LibraryItemCardView : ViewBase<Bin>
 
         var rightClick = GestureClick.New();
         rightClick.Button = 3;
-        Lifetime.Attach(card, rightClick, c => c.OnPressed += OnCardRightClicked, c => c.OnPressed -= OnCardRightClicked);
+        Lifetime.Attach(card, rightClick, c => c.OnPressed += OnCardRightClicked,
+            c => c.OnPressed -= OnCardRightClicked);
 
         var channelClick = GestureClick.New();
         channelClick.Button = 1;
@@ -144,7 +143,7 @@ public partial class LibraryItemCardView : ViewBase<Bin>
         AddMenuAction("remove-index", () =>
         {
             if (_entry is { } e)
-                _library.RemoveAsync(e.Video.Id, deleteFileFromDisk: false).FireAndForget(Logger);
+                _library.RemoveAsync(e.Video.Id, false).FireAndForget(Logger);
         });
         AddMenuAction("delete-disk", () =>
         {
@@ -317,7 +316,9 @@ public partial class LibraryItemCardView : ViewBase<Bin>
 
         try
         {
-            var uri = new Uri(folder.EndsWith(Path.DirectorySeparatorChar) ? folder : folder + Path.DirectorySeparatorChar)
+            var uri = new Uri(folder.EndsWith(Path.DirectorySeparatorChar)
+                    ? folder
+                    : folder + Path.DirectorySeparatorChar)
                 .AbsoluteUri;
             UriLauncher.New(uri).LaunchAsync(window).FireAndForget(Logger);
         }
@@ -348,7 +349,7 @@ public partial class LibraryItemCardView : ViewBase<Bin>
         dialog.OnResponse += (_, args) =>
         {
             if (string.Equals(args.Response, "delete", StringComparison.Ordinal))
-                _library.RemoveAsync(entry.Video.Id, deleteFileFromDisk: true).FireAndForget(Logger);
+                _library.RemoveAsync(entry.Video.Id, true).FireAndForget(Logger);
         };
 
         dialog.Present(Widget);

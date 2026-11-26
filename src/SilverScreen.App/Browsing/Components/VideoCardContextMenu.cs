@@ -10,7 +10,6 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
 using SilverScreen.Downloads;
-using SilverScreen.Player;
 using Action = System.Action;
 using Menu = Gio.Menu;
 using Task = System.Threading.Tasks.Task;
@@ -21,17 +20,19 @@ public sealed class VideoCardContextMenu : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<VideoCardContextMenu>();
     private readonly SimpleActionGroup _actionGroup = SimpleActionGroup.New();
+
     private readonly (SimpleAction Action, SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> Handler)[]
         _baseActions;
-    private readonly List<SimpleAction> _dynamicDownloadActions = [];
+
     private readonly IDownloadService? _downloads;
+    private readonly List<SimpleAction> _dynamicDownloadActions = [];
     private readonly INavigationService _navigation;
     private readonly INotificationService _notifications;
     private readonly IPlaybackService _playback;
     private readonly IPreferencesService? _preferences;
     private readonly IQueueService _queue;
-    private Menu? _menuModel;
     private MenuButton? _menuButton;
+    private Menu? _menuModel;
     private Widget? _parentWidget;
     private PopoverMenu? _popoverMenu;
     private VideoSummary? _video;
@@ -180,7 +181,7 @@ public sealed class VideoCardContextMenu : IDisposable
                     _dynamicDownloadActions,
                     _actionGroup,
                     () => _video is { } v ? [v] : [],
-                    _parentWidget ?? (Widget?)_menuButton!,
+                    _parentWidget ?? _menuButton!,
                     _preferences,
                     _downloads,
                     _notifications);
@@ -194,15 +195,11 @@ public sealed class VideoCardContextMenu : IDisposable
                     if (_video is not { } v) return;
                     if (behavior == DownloadTriggerBehavior.ImmediatePreset &&
                         _preferences.GetPreferences().DownloadPresets is { Length: > 0 } presets)
-                    {
                         DownloadActionHelper.EnqueueAsync([v], presets[0].Options, presets[0].Name, _downloads,
                             _notifications).FireAndForget(Logger);
-                    }
-                    else if ((_parentWidget ?? (Widget?)_menuButton) is { } anchor)
-                    {
+                    else if ((_parentWidget ?? _menuButton) is { } anchor)
                         DownloadActionHelper.PresentOptionsDialog(anchor, [v], _preferences, _downloads,
                             _notifications);
-                    }
                 };
                 _actionGroup.AddAction(dlAction);
                 _dynamicDownloadActions.Add(dlAction);

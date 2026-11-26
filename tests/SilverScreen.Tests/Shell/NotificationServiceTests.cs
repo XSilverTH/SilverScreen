@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SilverScreen.Core.Player;
 
 namespace SilverScreen.Tests.Shell;
 
@@ -72,9 +73,9 @@ public sealed class NotificationServiceTests
 
         using var provider = services.BuildServiceProvider();
 
-        var lazyPlayback = provider.GetRequiredService<Lazy<global::SilverScreen.Core.Player.IPlaybackService>>();
-        var lazyPlayerDeps = provider.GetRequiredService<Lazy<global::SilverScreen.Player.PlayerDependencies>>();
-        var presence = provider.GetRequiredService<global::SilverScreen.Core.Player.IPlaybackPresenceService>();
+        var lazyPlayback = provider.GetRequiredService<Lazy<IPlaybackService>>();
+        var lazyPlayerDeps = provider.GetRequiredService<Lazy<PlayerDependencies>>();
+        var presence = provider.GetRequiredService<IPlaybackPresenceService>();
 
         Assert.False(lazyPlayback.IsValueCreated);
         Assert.False(lazyPlayerDeps.IsValueCreated);

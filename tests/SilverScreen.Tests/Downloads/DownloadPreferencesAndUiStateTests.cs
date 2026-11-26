@@ -91,7 +91,10 @@ public sealed class DownloadPreferencesAndUiStateTests
         Assert.True(QualityMismatchHelper.TryGetMismatchMessage(bestEntry, VideoQuality.P720, out var msg720));
         Assert.Contains("1080p", msg720);
 
-        var p720Entry = bestEntry with { RequestedQuality = VideoQuality.P720, ActualHeight = 720, QualityLabel = "720p" };
+        var p720Entry = bestEntry with
+        {
+            RequestedQuality = VideoQuality.P720, ActualHeight = 720, QualityLabel = "720p"
+        };
         Assert.False(QualityMismatchHelper.TryGetMismatchMessage(p720Entry, VideoQuality.P720, out _));
         Assert.True(QualityMismatchHelper.TryGetMismatchMessage(p720Entry, VideoQuality.P1080, out _));
         Assert.True(QualityMismatchHelper.TryGetMismatchMessage(p720Entry, VideoQuality.Best, out _));
@@ -111,7 +114,7 @@ public sealed class DownloadPreferencesAndUiStateTests
         var localCmd = MpvCommandBuilder.Build(
             new PlaybackRequest([localVideo]),
             new PlaybackOptions { VideoQuality = "1080p" },
-            cookieFilePath: "/tmp/cookies.txt");
+            "/tmp/cookies.txt");
 
         Assert.Equal("/tmp/video.mkv", localCmd.Arguments[^1]);
         Assert.DoesNotContain(localCmd.Arguments, a => a.StartsWith("--ytdl-", StringComparison.Ordinal));
@@ -136,7 +139,7 @@ public sealed class DownloadPreferencesAndUiStateTests
 
         Assert.NotNull(provider.GetRequiredService<ILibraryService>());
         Assert.NotNull(provider.GetRequiredService<IDownloadService>());
-        var deps = provider.GetRequiredService<global::SilverScreen.Player.PlayerDependencies>();
+        var deps = provider.GetRequiredService<PlayerDependencies>();
         Assert.NotNull(deps.Library);
         Assert.NotNull(deps.Downloads);
     }

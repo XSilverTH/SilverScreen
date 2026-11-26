@@ -206,7 +206,7 @@ internal static class MpvIpcPlaybackProtocol
             var hasData = false;
             var dataTokenType = JsonTokenType.None;
             double doubleValue = 0;
-            int intValue = 0;
+            var intValue = 0;
             var hasIntValue = false;
             var boolValue = false;
 

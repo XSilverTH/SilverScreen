@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
@@ -33,7 +34,10 @@ public sealed class RuntimeDependencyDiagnostics
 {
     private static readonly ILogger Logger = Log.ForContext<RuntimeDependencyDiagnostics>();
     private static readonly TimeSpan ProbeCacheTtl = TimeSpan.FromSeconds(30);
-    private readonly ConcurrentDictionary<(string Path, string SearchPath), (bool Available, long Timestamp)> _executableCache = new();
+
+    private readonly ConcurrentDictionary<(string Path, string SearchPath), (bool Available, long Timestamp)>
+        _executableCache = new();
+
     private readonly Func<string, bool> _isExecutableAvailable;
     private readonly Func<bool> _isLibMpvAvailable;
     private readonly Lock _libMpvCacheLock = new();
@@ -131,9 +135,9 @@ public sealed class RuntimeDependencyDiagnostics
     {
         var searchPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
         var key = (executablePath, searchPath);
-        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var now = Stopwatch.GetTimestamp();
         if (_executableCache.TryGetValue(key, out var cached) &&
-            System.Diagnostics.Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
+            Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
             return cached.Available;
 
         var available = _isExecutableAvailable(executablePath);
@@ -145,11 +149,11 @@ public sealed class RuntimeDependencyDiagnostics
 
     private bool IsLibMpvAvailableCached()
     {
-        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var now = Stopwatch.GetTimestamp();
         lock (_libMpvCacheLock)
         {
             if (_libMpvCache is { } cached &&
-                System.Diagnostics.Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
+                Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
                 return cached.Available;
         }
 

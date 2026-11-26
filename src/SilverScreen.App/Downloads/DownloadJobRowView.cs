@@ -5,7 +5,6 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Downloads;
@@ -76,33 +75,34 @@ public partial class DownloadJobRowView : ViewBase<Box>
                 .ConfigureAwait(false);
             if (pixbuf is null) return;
 
-            GtkUiDispatch.Run(() => !IsDisposed && string.Equals(_loadedThumbVideoId, video.Id, StringComparison.Ordinal), () =>
-            {
-                try
+            GtkUiDispatch.Run(
+                () => !IsDisposed && string.Equals(_loadedThumbVideoId, video.Id, StringComparison.Ordinal), () =>
                 {
-                    var texture = Texture.NewForPixbuf(pixbuf);
-                    if (_thumbPicture is null)
+                    try
                     {
-                        _thumbPicture = Picture.NewForPaintable(texture);
-                        _thumbPicture.ContentFit = ContentFit.Cover;
-                        _thumbPicture.WidthRequest = 96;
-                        _thumbPicture.HeightRequest = 54;
-                        thumb_frame.Remove(placeholder);
-                        thumb_frame.Append(_thumbPicture);
-                    }
-                    else
-                    {
-                        _thumbPicture.Paintable = texture;
-                    }
+                        var texture = Texture.NewForPixbuf(pixbuf);
+                        if (_thumbPicture is null)
+                        {
+                            _thumbPicture = Picture.NewForPaintable(texture);
+                            _thumbPicture.ContentFit = ContentFit.Cover;
+                            _thumbPicture.WidthRequest = 96;
+                            _thumbPicture.HeightRequest = 54;
+                            thumb_frame.Remove(placeholder);
+                            thumb_frame.Append(_thumbPicture);
+                        }
+                        else
+                        {
+                            _thumbPicture.Paintable = texture;
+                        }
 
-                    _thumbTexture?.Dispose();
-                    _thumbTexture = texture;
-                }
-                finally
-                {
-                    pixbuf.Dispose();
-                }
-            });
+                        _thumbTexture?.Dispose();
+                        _thumbTexture = texture;
+                    }
+                    finally
+                    {
+                        pixbuf.Dispose();
+                    }
+                });
         }
         catch
         {
@@ -134,7 +134,8 @@ public partial class DownloadJobRowView : ViewBase<Box>
                 if (job.TotalBytes is > 0 && job.DownloadedBytes is >= 0)
                 {
                     parts.Add($"{job.ProgressFraction * 100:0.#}%");
-                    parts.Add($"{DownloadActionHelper.FormatBytes(job.DownloadedBytes.Value)} / {DownloadActionHelper.FormatBytes(job.TotalBytes.Value)}");
+                    parts.Add(
+                        $"{DownloadActionHelper.FormatBytes(job.DownloadedBytes.Value)} / {DownloadActionHelper.FormatBytes(job.TotalBytes.Value)}");
                 }
                 else if (job.DownloadedBytes is > 0)
                 {

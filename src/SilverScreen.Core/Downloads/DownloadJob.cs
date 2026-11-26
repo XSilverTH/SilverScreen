@@ -26,22 +26,22 @@ public sealed record DownloadJob(
     DateTimeOffset? CompletedAt = null)
 {
     [JsonIgnore]
-    public bool IsActive => Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading or DownloadJobStatus.PostProcessing;
+    public bool IsActive =>
+        Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading or DownloadJobStatus.PostProcessing;
+
+    [JsonIgnore] public bool CanPause => Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading;
+
+    [JsonIgnore] public bool CanResume => Status == DownloadJobStatus.Paused;
 
     [JsonIgnore]
-    public bool CanPause => Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading;
+    public bool CanCancel => Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading
+        or DownloadJobStatus.PostProcessing or DownloadJobStatus.Paused;
+
+    [JsonIgnore] public bool CanRetry => Status is DownloadJobStatus.Failed or DownloadJobStatus.Canceled;
 
     [JsonIgnore]
-    public bool CanResume => Status == DownloadJobStatus.Paused;
-
-    [JsonIgnore]
-    public bool CanCancel => Status is DownloadJobStatus.Queued or DownloadJobStatus.Downloading or DownloadJobStatus.PostProcessing or DownloadJobStatus.Paused;
-
-    [JsonIgnore]
-    public bool CanRetry => Status is DownloadJobStatus.Failed or DownloadJobStatus.Canceled;
-
-    [JsonIgnore]
-    public bool IsFinished => Status is DownloadJobStatus.Completed or DownloadJobStatus.Failed or DownloadJobStatus.Canceled;
+    public bool IsFinished =>
+        Status is DownloadJobStatus.Completed or DownloadJobStatus.Failed or DownloadJobStatus.Canceled;
 }
 
 public sealed record DownloadEnqueueRequest(

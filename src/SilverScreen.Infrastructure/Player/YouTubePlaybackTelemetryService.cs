@@ -29,9 +29,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
     private readonly Lock _sharedClientLock = new();
+    private bool _disposed;
     private HttpClient? _sharedClient;
     private CookieContainer? _sharedCookies;
-    private bool _disposed;
 
     public YouTubePlaybackTelemetryService(
         IPreferencesService preferences,

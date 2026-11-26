@@ -15,12 +15,11 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
     private readonly Action<string> _repliesToggleRequested =
         repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
 
-    private string? _boundCommentId;
     private bool? _boundRepliesVisible;
     private int _boundReplyCount = -1;
     private string? _boundText;
 
-    internal string? BoundCommentId => _boundCommentId;
+    internal string? BoundCommentId { get; private set; }
 
     private bool OnCommentTextActivateLink(Label sender, Label.ActivateLinkSignalArgs args)
     {
@@ -29,7 +28,7 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
 
     private void OnRepliesButtonClicked(object? sender, EventArgs args)
     {
-        if (_boundCommentId is { } commentId)
+        if (BoundCommentId is { } commentId)
             _repliesToggleRequested(commentId);
     }
 
@@ -40,10 +39,10 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
 
     internal void Bind(YouTubeComment comment, int replyCount, bool repliesVisible, string? prebuiltMarkup)
     {
-        var sameContent = string.Equals(_boundCommentId, comment.Id, StringComparison.Ordinal) &&
+        var sameContent = string.Equals(BoundCommentId, comment.Id, StringComparison.Ordinal) &&
                           string.Equals(_boundText, comment.Text, StringComparison.Ordinal);
 
-        _boundCommentId = comment.Id;
+        BoundCommentId = comment.Id;
         if (!sameContent)
         {
             _boundText = comment.Text;
@@ -71,7 +70,7 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
 
     public void Unbind()
     {
-        _boundCommentId = null;
+        BoundCommentId = null;
         _boundText = null;
         _boundReplyCount = -1;
         _boundRepliesVisible = null;

@@ -9,22 +9,23 @@ using SilverScreen.Downloads;
 using XSTH.Blueprint.Helpers;
 using Dialog = Adw.Dialog;
 using Functions = Gdk.Functions;
+using Window = Gtk.Window;
 
 namespace SilverScreen.Preferences;
 
 public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 {
     private static readonly ILogger Logger = Log.ForContext<PreferencesDialog>();
+    private readonly IPreferencesService _preferencesService;
+    private readonly List<ActionRow> _presetRows = [];
     private readonly IReadOnlyDictionary<string, Button> _shortcutRows;
     private readonly Dictionary<string, string[]> _shortcutValues = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
-    private readonly List<ActionRow> _presetRows = [];
-    private readonly IPreferencesService _preferencesService;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
-    private string _libraryDirectory = AppPreferences.GetDefaultLibraryDirectory();
     private string? _lastValidatedMpvPath;
     private string? _lastValidatedYtDlpPath;
+    private string _libraryDirectory = AppPreferences.GetDefaultLibraryDirectory();
     private bool _loading;
     private CancellationTokenSource? _pathValidationCts;
 
@@ -471,7 +472,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     {
         var chooser = FileChooserNative.New(
             "Choose Library folder",
-            Widget.GetRoot() as Gtk.Window,
+            Widget.GetRoot() as Window,
             FileChooserAction.SelectFolder,
             "_Select",
             "_Cancel");

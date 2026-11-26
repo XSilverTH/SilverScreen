@@ -58,10 +58,10 @@ public sealed partial class LibMpvPlayer : IDisposable
     private nint _handle;
     private bool _initialized;
     private bool _isAvailable = true;
-    private string? _lastErrorMessage;
     private TimeSpan _lastEmittedPosition;
-    private long _lastTimePosEmitTimestamp;
+    private string? _lastErrorMessage;
     private string? _lastReportedHwdec;
+    private long _lastTimePosEmitTimestamp;
     private string? _mpvVersion;
     private (double Seconds, bool Exact)? _pendingSeek;
     private AppPreferences? _preferences;
@@ -1390,10 +1390,8 @@ public sealed partial class LibMpvPlayer : IDisposable
         var trimmed = language.AsSpan().Trim();
         var sb = new StringBuilder(trimmed.Length);
         foreach (var ch in trimmed)
-        {
             if (char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')
                 sb.Append(ch);
-        }
 
         return sb.Length > 0 ? sb.ToString() : null;
     }

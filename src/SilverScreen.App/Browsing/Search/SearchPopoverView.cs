@@ -3,7 +3,6 @@ using Gtk;
 using Pango;
 using Serilog;
 using SilverScreen.Core.Common;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 

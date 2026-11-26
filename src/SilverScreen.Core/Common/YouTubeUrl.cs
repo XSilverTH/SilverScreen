@@ -9,6 +9,13 @@ public union YouTubeUrlParseResult(
     YouTubeUrlParseResult.UnknownYouTube,
     YouTubeUrlParseResult.Invalid)
 {
+    public string? CanonicalWatchUrl => Value switch
+    {
+        Video(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
+        Shorts(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
+        _ => null
+    };
+
     public sealed record NotYouTube;
 
     public sealed record Video(string VideoId);
@@ -22,13 +29,6 @@ public union YouTubeUrlParseResult(
     public sealed record UnknownYouTube;
 
     public sealed record Invalid;
-
-    public string? CanonicalWatchUrl => Value switch
-    {
-        Video(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
-        Shorts(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
-        _ => null
-    };
 }
 
 public static class YouTubeUrlParser

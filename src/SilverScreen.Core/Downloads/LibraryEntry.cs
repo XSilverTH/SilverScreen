@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;

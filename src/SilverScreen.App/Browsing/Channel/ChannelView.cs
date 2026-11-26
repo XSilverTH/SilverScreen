@@ -1,6 +1,5 @@
 using Gtk;
 using SilverScreen.Browsing.Components;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Browsing.Channel;

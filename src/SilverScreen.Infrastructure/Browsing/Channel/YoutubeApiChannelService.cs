@@ -31,14 +31,14 @@ public sealed class YoutubeApiChannelService(
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
 
-    private readonly BoundedLruCache<string, CachedChannelMetadata> _metadataCache =
-        new(MaxCachedChannels, StringComparer.Ordinal, timeProvider);
-
     private readonly BoundedLruCache<(string ChannelKey, ChannelVideoSort Sort), CachedFirstPage> _firstPageCache =
         new(MaxCachedFirstPages, timeProvider: timeProvider);
 
     private readonly ConcurrentDictionary<(string ChannelKey, ChannelVideoSort Sort), Lazy<Task<ChannelPage>>>
         _inFlightFirstPages = new();
+
+    private readonly BoundedLruCache<string, CachedChannelMetadata> _metadataCache =
+        new(MaxCachedChannels, StringComparer.Ordinal, timeProvider);
 
     public async Task<ChannelPage> GetChannelAsync(
         string channelUrl,

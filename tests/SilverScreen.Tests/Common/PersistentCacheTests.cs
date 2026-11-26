@@ -22,7 +22,7 @@ public sealed class PersistentCacheTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+            Directory.Delete(_tempDir, true);
     }
 
     [Fact]
@@ -92,9 +92,14 @@ public sealed class PersistentCacheTests : IDisposable
         AccountProfile? cachedProfile,
         Task<AccountProfileResult> networkTask) : IAccountProfileService
     {
-        public AccountProfile? TryGetCachedProfile() => cachedProfile;
+        public AccountProfile? TryGetCachedProfile()
+        {
+            return cachedProfile;
+        }
 
-        public Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default) =>
-            networkTask;
+        public Task<AccountProfileResult> GetCurrentProfileAsync(CancellationToken cancellationToken = default)
+        {
+            return networkTask;
+        }
     }
 }

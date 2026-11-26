@@ -14,11 +14,11 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
 {
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiAccountProfileService>();
     private readonly string _cacheFilePath;
-    private readonly IYouTubeClientProvider _clientProvider;
     private readonly Lock _cacheLock = new();
+    private readonly IYouTubeClientProvider _clientProvider;
     private readonly ISessionService _sessionService;
-    private PersistedAccountProfile? _cachedEntry;
     private bool _cacheLoaded;
+    private PersistedAccountProfile? _cachedEntry;
     private bool _disposed;
 
     public YoutubeApiAccountProfileService(

@@ -10,7 +10,8 @@ public sealed class YtDlpDownloadCommandBuilderTests
     private const string YtDlpPath = "yt-dlp";
     private const string ValidVideoId = "dQw4w9WgXcQ";
 
-    private static DownloadJob CreateJob(DownloadOptions options, string videoId = ValidVideoId, string targetDir = "/tmp/downloads")
+    private static DownloadJob CreateJob(DownloadOptions options, string videoId = ValidVideoId,
+        string targetDir = "/tmp/downloads")
     {
         var video = new VideoSummary(videoId, "Test Video", "Test Channel", TimeSpan.FromMinutes(3), "", false);
         return new DownloadJob(
@@ -58,7 +59,8 @@ public sealed class YtDlpDownloadCommandBuilderTests
     [Theory]
     [InlineData(SponsorBlockDownloadMode.MarkAsChapters, "--sponsorblock-mark")]
     [InlineData(SponsorBlockDownloadMode.Strip, "--sponsorblock-remove")]
-    public void Build_CustomFolderDestination_AppliesSponsorBlockFlag(SponsorBlockDownloadMode mode, string expectedFlag)
+    public void Build_CustomFolderDestination_AppliesSponsorBlockFlag(SponsorBlockDownloadMode mode,
+        string expectedFlag)
     {
         var job = CreateJob(new DownloadOptions
         {
@@ -168,7 +170,7 @@ public sealed class YtDlpDownloadCommandBuilderTests
     [Fact]
     public void Build_NonYouTubeVideoId_ThrowsArgumentException()
     {
-        var job = CreateJob(new DownloadOptions(), videoId: "not-a-youtube-id");
+        var job = CreateJob(new DownloadOptions(), "not-a-youtube-id");
 
         Assert.Throws<ArgumentException>(() => YtDlpDownloadCommandBuilder.Build(job, YtDlpPath));
     }

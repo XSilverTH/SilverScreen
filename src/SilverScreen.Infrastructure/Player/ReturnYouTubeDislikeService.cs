@@ -25,8 +25,8 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
     private readonly BoundedLruCache<string, VideoEngagement> _cache = new(MaxCachedVideos, StringComparer.Ordinal);
-    private readonly bool _disposeHttpClient;
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, Lazy<Task<VideoEngagement?>>> _inFlight = new(StringComparer.Ordinal);
     private readonly IPreferencesService? _preferencesService;

@@ -31,6 +31,13 @@ public sealed class JsonLibraryService : ILibraryService, IDisposable
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
+    }
+
     public string LibraryDirectory
     {
         get
@@ -56,13 +63,6 @@ public sealed class JsonLibraryService : ILibraryService, IDisposable
     }
 
     public event EventHandler? LibraryChanged;
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _preferencesService.PreferencesChanged -= OnPreferencesChanged;
-    }
 
     public LibraryEntry? TryGetEntry(string videoId)
     {
@@ -131,7 +131,8 @@ public sealed class JsonLibraryService : ILibraryService, IDisposable
         return Task.CompletedTask;
     }
 
-    public Task RemoveAsync(string videoId, bool deleteFileFromDisk = false, CancellationToken cancellationToken = default)
+    public Task RemoveAsync(string videoId, bool deleteFileFromDisk = false,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(videoId))
             return Task.CompletedTask;

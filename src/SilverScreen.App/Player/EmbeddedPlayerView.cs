@@ -8,15 +8,11 @@ using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
-using SilverScreen.Downloads;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Player.Comments;
-using SilverScreen.Player.Controls;
 using SilverScreen.Player.RichText;
 using SilverScreen.Queue;
-using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 using Object = GObject.Object;
 using Window = Gtk.Window;
 

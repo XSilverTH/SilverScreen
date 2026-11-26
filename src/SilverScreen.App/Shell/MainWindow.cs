@@ -1,5 +1,6 @@
 using Gdk;
 using Gio;
+using GLib;
 using Gtk;
 using Serilog;
 using SilverScreen.Account.Profile;
@@ -13,6 +14,7 @@ using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
 using Constants = Gdk.Constants;
+using Functions = GLib.Functions;
 using PreferencesDialog = SilverScreen.Preferences.PreferencesDialog;
 using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
@@ -287,11 +289,11 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
 
         public Task<string> PresentAsync(PlaybackRequest request)
         {
-            if (_attached is not null || GLib.MainContext.Default().IsOwner())
+            if (_attached is not null || MainContext.Default().IsOwner())
                 return owner.EnsureEmbeddedPlayer().PresentAsync(request);
 
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            GLib.Functions.IdleAdd(0, () =>
+            Functions.IdleAdd(0, () =>
             {
                 if (owner._closed)
                 {

@@ -11,10 +11,10 @@ public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
     private readonly INativeAuthService _authService;
     private readonly INotificationService _notifications;
     private readonly IThumbnailService _thumbnails;
+    private bool _editing;
     private AccountManualSessionEditorView? _manualEditor;
     private AccountSignedInCardView? _signedInCard;
     private AccountStatusPageView? _statusPage;
-    private bool _editing;
 
     public AccountPopoverView(
         IThumbnailService thumbnails,

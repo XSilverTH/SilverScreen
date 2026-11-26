@@ -635,7 +635,8 @@ internal sealed class PlaybackSession : IDisposable
             !string.Equals(CurrentVideo?.Id, videoId, StringComparison.Ordinal))
             return;
 
-        if (segments.Count == 0 && SponsorBlockSegments.Count > 0 && !string.IsNullOrWhiteSpace(CurrentVideo?.LocalFilePath))
+        if (segments.Count == 0 && SponsorBlockSegments.Count > 0 &&
+            !string.IsNullOrWhiteSpace(CurrentVideo?.LocalFilePath))
             return;
 
         SponsorBlockSegments = segments;

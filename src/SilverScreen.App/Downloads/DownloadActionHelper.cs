@@ -1,4 +1,3 @@
-using System.Globalization;
 using Gio;
 using Gtk;
 using Serilog;
@@ -6,8 +5,6 @@ using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Preferences;
-using SilverScreen.Shell.Notifications;
-using Action = System.Action;
 using Menu = Gio.Menu;
 using Task = System.Threading.Tasks.Task;
 
@@ -201,11 +198,11 @@ public static class DownloadActionHelper
     public static string FormatBytes(long bytes)
     {
         if (bytes < 1024) return $"{bytes} B";
-        double kb = bytes / 1024.0;
+        var kb = bytes / 1024.0;
         if (kb < 1024) return $"{kb:0.#} KB";
-        double mb = kb / 1024.0;
+        var mb = kb / 1024.0;
         if (mb < 1024) return $"{mb:0.#} MB";
-        double gb = mb / 1024.0;
+        var gb = mb / 1024.0;
         return $"{gb:0.##} GB";
     }
 

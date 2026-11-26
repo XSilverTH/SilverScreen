@@ -172,14 +172,12 @@ public static partial class YtDlpFormatSelector
             ? SelectBestVideoStream(muxed, maxTargetHeight, false, preferredCodec)
             : null;
         if (selectedMuxed is not null)
-        {
             return new ResolvedMedia(
                 selectedMuxed.Url,
                 null,
                 preferredQuality,
                 GetStreamExpiry(selectedMuxed),
                 details);
-        }
 
         // No compliant stream is available, so relax the cap for the existing fallback behavior.
         if (videoOnly.Count > 0)
@@ -200,14 +198,12 @@ public static partial class YtDlpFormatSelector
         {
             selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight, true, preferredCodec);
             if (selectedMuxed is not null)
-            {
                 return new ResolvedMedia(
                     selectedMuxed.Url,
                     null,
                     preferredQuality,
                     GetStreamExpiry(selectedMuxed),
                     details);
-            }
         }
 
         var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats[0]);
@@ -353,8 +349,9 @@ public static partial class YtDlpFormatSelector
             if (best is null ||
                 codecMatch > bestCodecMatch ||
                 (codecMatch == bestCodecMatch && (height > bestHeight ||
-                 (height == bestHeight && (fps > bestFps ||
-                  (fps == bestFps && bitrate > bestBitrate))))))
+                                                  (height == bestHeight && (fps > bestFps ||
+                                                                            (fps == bestFps &&
+                                                                             bitrate > bestBitrate))))))
             {
                 best = candidate;
                 bestCodecMatch = codecMatch;

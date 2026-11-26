@@ -6,7 +6,6 @@ using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Core.Queue;
-using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Queue;
 
@@ -51,11 +50,6 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     public IDownloadService? Downloads { get; }
     public INotificationService? Notifications { get; }
 
-    public IReadOnlyList<VideoSummary> GetQueuedVideos()
-    {
-        return _queue.Items.Select(static item => item.Video).ToArray();
-    }
-
     public QueuePresentationState State
     {
         get => _state;
@@ -83,6 +77,12 @@ public sealed class QueueViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public IReadOnlyList<VideoSummary> GetQueuedVideos()
+    {
+        return _queue.Items.Select(static item => item.Video).ToArray();
+    }
+
     public event EventHandler<QueuePresentationState>? StateChanged;
 
     public void Move(Guid itemId, int destinationIndex)

@@ -7,7 +7,6 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using Task = System.Threading.Tasks.Task;

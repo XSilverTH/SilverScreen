@@ -41,8 +41,8 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
     private readonly ISponsorBlockService? _sponsorBlockService;
     private readonly IThumbnailService? _thumbnailService;
     private bool _disposed;
-    private long _lastProgressNotifyTick;
     private long _lastPersistTick;
+    private long _lastProgressNotifyTick;
 
     public DownloadCoordinatorService(
         IPreferencesService preferencesService,
@@ -81,21 +81,6 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
-    public IReadOnlyList<DownloadJob> Jobs
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return [.. _jobs];
-            }
-        }
-    }
-
-    public event EventHandler? JobsChanged;
-    public event EventHandler<DownloadJobEventArgs>? JobCompleted;
-    public event EventHandler<DownloadJobEventArgs>? JobFailed;
-
     public void Dispose()
     {
         Task[] running;
@@ -122,7 +107,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 }
             }
 
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
             _disposeCts.Cancel();
             running = [.. _activeTasks.Values];
         }
@@ -137,6 +122,19 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
 
         _disposeCts.Dispose();
     }
+
+    public IReadOnlyList<DownloadJob> Jobs
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _jobs];
+            }
+        }
+    }
+
+    public event EventHandler? JobsChanged;
 
     public Task<DownloadEnqueueResult> EnqueueAsync(
         DownloadEnqueueRequest request,
@@ -198,7 +196,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             }
 
             if (enqueued > 0)
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
         }
 
         if (enqueued > 0)
@@ -211,7 +209,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
         {
             (0, > 0) => "Selected video(s) cannot be downloaded or are already queued.",
             (1, 0) => $"Queued “{request.Videos[0].Title}” for download.",
-            ( > 1, 0) => $"Queued {enqueued} videos for download.",
+            (> 1, 0) => $"Queued {enqueued} videos for download.",
             _ => $"Queued {enqueued} videos ({skipped} skipped)."
         };
 
@@ -239,7 +237,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                     Eta = null,
                     StatusText = "Paused"
                 };
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
                 changed = true;
             }
             else if (_activeCts.TryGetValue(jobId, out var cts))
@@ -275,7 +273,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 ErrorMessage = null,
                 StatusText = "Queued"
             };
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
             changed = true;
         }
 
@@ -314,7 +312,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                     Eta = null,
                     StatusText = "Canceled"
                 };
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
                 changed = true;
             }
             else if (_activeCts.TryGetValue(jobId, out var cts))
@@ -359,7 +357,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 StatusText = "Queued",
                 CompletedAt = null
             };
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
             changed = true;
         }
 
@@ -382,7 +380,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             if (index >= 0 && !_jobs[index].IsActive)
             {
                 _jobs.RemoveAt(index);
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
                 changed = true;
             }
         }
@@ -401,7 +399,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             if (_disposed) return Task.CompletedTask;
             removed = _jobs.RemoveAll(static j => j.IsFinished);
             if (removed > 0)
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
         }
 
         if (removed > 0)
@@ -409,6 +407,9 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
 
         return Task.CompletedTask;
     }
+
+    public event EventHandler<DownloadJobEventArgs>? JobCompleted;
+    public event EventHandler<DownloadJobEventArgs>? JobFailed;
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
     {
@@ -432,13 +433,11 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 // Process oldest queued jobs first (queued items are inserted at 0, so scan from the back).
                 var nextIndex = -1;
                 for (var i = _jobs.Count - 1; i >= 0; i--)
-                {
                     if (_jobs[i].Status == DownloadJobStatus.Queued)
                     {
                         nextIndex = i;
                         break;
                     }
-                }
 
                 if (nextIndex < 0)
                     break;
@@ -457,7 +456,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             }
 
             if (toStart.Count > 0)
-                PersistQueueLocked(force: true);
+                PersistQueueLocked(true);
         }
 
         if (toStart.Count == 0)
@@ -516,7 +515,6 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             var stdoutTask = Task.Run(async () =>
             {
                 while (await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
-                {
                     if (YtDlpDownloadCommandBuilder.TryParseProgressLine(line, out var sample))
                     {
                         ApplyProgressSample(jobId, sample);
@@ -539,7 +537,6 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                     {
                         MarkPostProcessing(jobId);
                     }
-                }
             }, CancellationToken.None);
 
             var stderrTask = Task.Run(async () =>
@@ -605,7 +602,6 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             }
 
             if (isLibrary)
-            {
                 await FinalizeLibraryEntryAsync(
                     initialJob,
                     resolvedPath,
@@ -613,7 +609,6 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                     actualExt,
                     previousEntry,
                     sponsorBlockTask).ConfigureAwait(false);
-            }
 
             CompleteJob(jobId, resolvedPath);
         }
@@ -658,9 +653,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             var previousAbsPath = previousEntry.ResolveFilePath(libraryDir);
             if (!string.Equals(previousAbsPath, resolvedPath, StringComparison.Ordinal) &&
                 File.Exists(previousAbsPath))
-            {
                 TryDeleteFile(previousAbsPath);
-            }
         }
 
         var relativeThumbPath = await CacheLibraryThumbnailAsync(job.Video, libraryDir).ConfigureAwait(false);
@@ -706,7 +699,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             var ext = Path.GetExtension(result.LocalPath);
             if (string.IsNullOrWhiteSpace(ext)) ext = ".jpg";
             var destPath = Path.Combine(thumbsDir, $"{video.Id}{ext}");
-            File.Copy(result.LocalPath, destPath, overwrite: true);
+            File.Copy(result.LocalPath, destPath, true);
             return Path.GetRelativePath(libraryDir, destPath);
         }
         catch (Exception ex)
@@ -772,7 +765,8 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             };
 
             var now = Stopwatch.GetTimestamp();
-            if (nextStatus != job.Status || Stopwatch.GetElapsedTime(_lastProgressNotifyTick, now) >= ProgressNotifyInterval)
+            if (nextStatus != job.Status ||
+                Stopwatch.GetElapsedTime(_lastProgressNotifyTick, now) >= ProgressNotifyInterval)
             {
                 _lastProgressNotifyTick = now;
                 shouldNotify = true;
@@ -781,7 +775,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
             if (Stopwatch.GetElapsedTime(_lastPersistTick, now) >= QueuePersistInterval)
             {
                 _lastPersistTick = now;
-                PersistQueueLocked(force: false);
+                PersistQueueLocked(false);
             }
         }
 
@@ -807,7 +801,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 Eta = null,
                 StatusText = "Processing…"
             };
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
             changed = true;
         }
 
@@ -843,7 +837,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 Eta = null,
                 StatusText = targetStatus == DownloadJobStatus.Paused ? "Paused" : "Canceled"
             };
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
         }
 
         if (shouldCleanup)
@@ -873,7 +867,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 CompletedAt = DateTimeOffset.UtcNow
             };
             _jobs[index] = completed;
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
         }
 
         JobsChanged?.Invoke(this, EventArgs.Empty);
@@ -899,7 +893,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 ErrorMessage = errorMessage
             };
             _jobs[index] = failed;
-            PersistQueueLocked(force: true);
+            PersistQueueLocked(true);
         }
 
         JobsChanged?.Invoke(this, EventArgs.Empty);
@@ -1088,9 +1082,7 @@ public sealed class DownloadCoordinatorService : IDownloadService, IDisposable
                 if (name.Contains(idToken, StringComparison.Ordinal) &&
                     (name.Contains(".part", StringComparison.OrdinalIgnoreCase) ||
                      name.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)))
-                {
                     TryDeleteFile(file);
-                }
             }
         }
         catch (Exception ex)

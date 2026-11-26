@@ -6,7 +6,6 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using SilverScreen.Infrastructure.YouTube;
-using SilverScreen.Shell;
 using YoutubeAPI;
 using PlaybackTrackingInfo = YoutubeAPI.Models.Videos.PlaybackTrackingInfo;
 
@@ -269,7 +268,7 @@ public sealed class YouTubePlaybackTelemetryTests
             new MutablePreferencesService(true),
             new ManualSessionService(),
             _ => handler,
-            clientProvider: new ThrowingClientProvider());
+            new ThrowingClientProvider());
         using var telemetry = service.Start(CreateRequest());
 
         telemetry.UpdateState(State(0, false));

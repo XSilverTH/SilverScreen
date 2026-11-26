@@ -46,10 +46,19 @@
         <release version="0.3.0" date="2026-11-26">
             <description>
                 <ul>
-                    <li>Performance: speed up cold launch with persistent InnerTube bootstrap and account profile caching, deferred view initialization, and optimized UI virtualization and timers.</li>
-                    <li>Player: add a native stream-delay countdown progress bar, restore cookie forwarding and session initialization for embedded and external MPV playback, and fix subtitle selection, info panel toggle, seek events, and UTC upload-date parsing.</li>
-                    <li>Browsing &amp; Shell: decompose player, channel, subscriptions, video card, and shell views into modular widgets and fix avatar pixbuf lifecycle races.</li>
-                    <li>Privacy &amp; Logging: anonymize user, search, and video identifiers across logs and respect XDG_STATE_HOME.</li>
+                    <li>Performance: speed up cold launch with persistent InnerTube bootstrap and account profile
+                        caching, deferred view initialization, and optimized UI virtualization and timers.
+                    </li>
+                    <li>Player: add a native stream-delay countdown progress bar, restore cookie forwarding and session
+                        initialization for embedded and external MPV playback, and fix subtitle selection, info panel
+                        toggle, seek events, and UTC upload-date parsing.
+                    </li>
+                    <li>Browsing &amp; Shell: decompose player, channel, subscriptions, video card, and shell views into
+                        modular widgets and fix avatar pixbuf lifecycle races.
+                    </li>
+                    <li>Privacy &amp; Logging: anonymize user, search, and video identifiers across logs and respect
+                        XDG_STATE_HOME.
+                    </li>
                     <li>Platform: upgrade to .NET 11 and C# 15, update dependencies, and expand unit test coverage.</li>
                 </ul>
             </description>

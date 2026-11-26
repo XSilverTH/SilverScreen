@@ -7,8 +7,6 @@ using SilverScreen.Core.Domain;
 using SilverScreen.Core.Downloads;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Queue;
-using SilverScreen.Player;
-using SilverScreen.Shell.Notifications;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Downloads;
@@ -20,6 +18,8 @@ public partial class LibraryView : ViewBase<Bin>
     private readonly ConditionalWeakTable<ListItem, LibraryItemCardView> _cardsByListItem = new();
     private readonly Dictionary<Guid, DownloadJobRowView> _downloadRowsById = [];
     private readonly IDownloadService _downloads;
+    private readonly Dictionary<string, LibraryEntry> _entriesById = new(StringComparer.Ordinal);
+    private readonly StringList _entryIds;
     private readonly SignalListItemFactory _factory;
     private readonly ILibraryService _library;
     private readonly INavigationService _navigation;
@@ -27,8 +27,6 @@ public partial class LibraryView : ViewBase<Bin>
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
     private readonly IThumbnailService _thumbnails;
-    private readonly StringList _entryIds;
-    private readonly Dictionary<string, LibraryEntry> _entriesById = new(StringComparer.Ordinal);
     private LibraryEntry[] _displayedEntries = [];
 
     public LibraryView(
@@ -136,20 +134,16 @@ public partial class LibraryView : ViewBase<Bin>
         var keepIds = new HashSet<Guid>(jobs.Select(static j => j.Id));
         var staleIds = _downloadRowsById.Keys.Where(id => !keepIds.Contains(id)).ToArray();
         foreach (var staleId in staleIds)
-        {
             if (_downloadRowsById.Remove(staleId, out var staleRow))
             {
                 downloads_list.Remove(staleRow.Widget);
                 staleRow.Dispose();
             }
-        }
 
         // Rebuild order cleanly when jobs are inserted/reordered while reusing row widgets.
         foreach (var row in _downloadRowsById.Values)
-        {
             if (row.Widget.GetParent() is not null)
                 downloads_list.Remove(row.Widget);
-        }
 
         foreach (var job in jobs)
         {
@@ -219,14 +213,12 @@ public partial class LibraryView : ViewBase<Bin>
     {
         var changed = _displayedEntries.Length != nextEntries.Length;
         if (!changed)
-        {
             for (var i = 0; i < nextEntries.Length; i++)
                 if (!Equals(_displayedEntries[i], nextEntries[i]))
                 {
                     changed = true;
                     break;
                 }
-        }
 
         if (!changed)
             return;

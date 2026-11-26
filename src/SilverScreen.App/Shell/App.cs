@@ -1,6 +1,7 @@
 using Adw;
 using Gdk;
 using Gio;
+using GLib;
 using GObject;
 using Gtk;
 using Microsoft.Extensions.DependencyInjection;
@@ -143,7 +144,7 @@ public partial class App
             return;
         }
 
-        if (GLib.MainContext.Default().IsOwner())
+        if (MainContext.Default().IsOwner())
         {
             ApplyThemeCore(theme);
             return;

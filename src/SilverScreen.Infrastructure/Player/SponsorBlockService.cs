@@ -27,10 +27,12 @@ public sealed class SponsorBlockService : ISponsorBlockService, IDisposable
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
     private static readonly Uri SkipSegmentsEndpoint = new("https://sponsor.ajay.app/api/skipSegments");
     private readonly BoundedLruCache<string, IReadOnlyList<SponsorBlockSegment>> _cache;
-    private readonly bool _disposeHttpClient;
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly bool _disposeHttpClient;
     private readonly HttpClient _httpClient;
-    private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<SponsorBlockSegment>>>> _inFlight = new(StringComparer.Ordinal);
+
+    private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<SponsorBlockSegment>>>> _inFlight =
+        new(StringComparer.Ordinal);
 
     public SponsorBlockService() : this(CreateDefaultHttpClient(), true)
     {

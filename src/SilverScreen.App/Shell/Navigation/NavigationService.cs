@@ -310,7 +310,8 @@ public sealed class NavigationService : INavigationService, IDisposable
 
     private static bool IsShellRoot(NavigationPage page)
     {
-        return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History or NavigationPage.Library;
+        return page is NavigationPage.Home or NavigationPage.Subscriptions or NavigationPage.History
+            or NavigationPage.Library;
     }
 
     public bool TryGetPage(string stackName, out NavigationPage page)

@@ -8,12 +8,12 @@ namespace SilverScreen.Tests.Downloads;
 
 public sealed class DownloadCoordinatorServiceTests : IDisposable
 {
-    private readonly string _tempRoot;
-    private readonly string _prefsPath;
-    private readonly string _libraryDir;
     private readonly string _externalDir;
-    private readonly string _queuePath;
     private readonly string _fakeYtDlpPath;
+    private readonly string _libraryDir;
+    private readonly string _prefsPath;
+    private readonly string _queuePath;
+    private readonly string _tempRoot;
 
     public DownloadCoordinatorServiceTests()
     {
@@ -50,24 +50,24 @@ public sealed class DownloadCoordinatorServiceTests : IDisposable
     public async Task EnqueueAsync_LibraryAndExternalDestinations_IndexesOnlyLibraryAndDeletesSupersededFile()
     {
         WriteFakeYtDlp("""
-            TARGET_DIR=""
-            EXT="mp4"
-            URL=""
-            while [[ $# -gt 0 ]]; do
-              case "$1" in
-                -P) TARGET_DIR="$2"; shift 2 ;;
-                --merge-output-format) EXT="$2"; shift 2 ;;
-                *) URL="$1"; shift ;;
-              esac
-            done
-            VID="${URL##*v=}"
-            OUT="$TARGET_DIR/Test [$VID].$EXT"
-            echo "SILVER_TARGET|$OUT|1080|$EXT"
-            echo "SILVER_DL|downloading|50|100|100|1000|1" >&2
-            printf 'media-content' > "$OUT"
-            echo "SILVER_DL|finished|100|100|100|0|0" >&2
-            echo "SILVER_FILE|$OUT|1080|$EXT"
-            """);
+                       TARGET_DIR=""
+                       EXT="mp4"
+                       URL=""
+                       while [[ $# -gt 0 ]]; do
+                         case "$1" in
+                           -P) TARGET_DIR="$2"; shift 2 ;;
+                           --merge-output-format) EXT="$2"; shift 2 ;;
+                           *) URL="$1"; shift ;;
+                         esac
+                       done
+                       VID="${URL##*v=}"
+                       OUT="$TARGET_DIR/Test [$VID].$EXT"
+                       echo "SILVER_TARGET|$OUT|1080|$EXT"
+                       echo "SILVER_DL|downloading|50|100|100|1000|1" >&2
+                       printf 'media-content' > "$OUT"
+                       echo "SILVER_DL|finished|100|100|100|0|0" >&2
+                       echo "SILVER_FILE|$OUT|1080|$EXT"
+                       """);
 
         var prefs = new FilePreferencesService(_prefsPath);
         prefs.SavePreferences(new AppPreferences
@@ -136,21 +136,21 @@ public sealed class DownloadCoordinatorServiceTests : IDisposable
     {
         var startedMarker = Path.Combine(_tempRoot, "started");
         WriteFakeYtDlp($$"""
-            TARGET_DIR=""
-            URL=""
-            while [[ $# -gt 0 ]]; do
-              case "$1" in
-                -P) TARGET_DIR="$2"; shift 2 ;;
-                *) URL="$1"; shift ;;
-              esac
-            done
-            VID="${URL##*v=}"
-            PART="$TARGET_DIR/Test [$VID].mp4.part"
-            printf 'partial' > "$PART"
-            touch "{{startedMarker}}"
-            echo "SILVER_DL|downloading|7|100|100|100|5"
-            sleep 30
-            """);
+                         TARGET_DIR=""
+                         URL=""
+                         while [[ $# -gt 0 ]]; do
+                           case "$1" in
+                             -P) TARGET_DIR="$2"; shift 2 ;;
+                             *) URL="$1"; shift ;;
+                           esac
+                         done
+                         VID="${URL##*v=}"
+                         PART="$TARGET_DIR/Test [$VID].mp4.part"
+                         printf 'partial' > "$PART"
+                         touch "{{startedMarker}}"
+                         echo "SILVER_DL|downloading|7|100|100|100|5"
+                         sleep 30
+                         """);
 
         var prefs = new FilePreferencesService(_prefsPath);
         prefs.SavePreferences(new AppPreferences

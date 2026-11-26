@@ -5,10 +5,10 @@ namespace SilverScreen.Infrastructure.Common;
 /// </summary>
 internal sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
 {
+    private readonly int _capacity;
+    private readonly Lock _gate = new();
     private readonly Dictionary<TKey, LinkedListNode<CacheItem>> _lookup;
     private readonly LinkedList<CacheItem> _lru = new();
-    private readonly Lock _gate = new();
-    private readonly int _capacity;
     private readonly TimeProvider _timeProvider;
 
     public BoundedLruCache(

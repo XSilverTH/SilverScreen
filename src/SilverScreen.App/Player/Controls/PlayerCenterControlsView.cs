@@ -8,8 +8,8 @@ namespace SilverScreen.Player.Controls;
 /// </summary>
 public partial class PlayerCenterControlsView : ViewBase<Box>
 {
-    private bool? _isPlaying;
     private bool _isLoading;
+    private bool? _isPlaying;
 
     public event EventHandler? RewindRequested;
     public event EventHandler? PlayPauseRequested;

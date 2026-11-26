@@ -4,7 +4,6 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Browsing.Channel;

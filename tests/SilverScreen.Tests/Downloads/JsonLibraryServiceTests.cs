@@ -9,10 +9,10 @@ namespace SilverScreen.Tests.Downloads;
 
 public sealed class JsonLibraryServiceTests : IDisposable
 {
-    private readonly string _tempRoot;
-    private readonly string _prefsPath;
     private readonly string _libraryDirA;
     private readonly string _libraryDirB;
+    private readonly string _prefsPath;
+    private readonly string _tempRoot;
 
     public JsonLibraryServiceTests()
     {
@@ -59,7 +59,10 @@ public sealed class JsonLibraryServiceTests : IDisposable
             "1080p",
             "MKV",
             DownloadSubtitleMode.None,
-            [new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25), SponsorBlockCategories.Sponsor)]);
+            [
+                new SponsorBlockSegment("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(25),
+                    SponsorBlockCategories.Sponsor)
+            ]);
 
         await library.UpsertAsync(entry);
 
@@ -103,7 +106,7 @@ public sealed class JsonLibraryServiceTests : IDisposable
 
         Assert.True(library.ContainsPlayable("dQw4w9WgXcQ"));
 
-        await library.RemoveAsync("dQw4w9WgXcQ", deleteFileFromDisk: true);
+        await library.RemoveAsync("dQw4w9WgXcQ", true);
 
         Assert.False(library.ContainsPlayable("dQw4w9WgXcQ"));
         Assert.False(File.Exists(mediaFile));

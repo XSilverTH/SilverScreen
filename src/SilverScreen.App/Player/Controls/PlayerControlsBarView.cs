@@ -19,12 +19,12 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 {
     private static readonly string[] DefaultQualities = ["Best", "1080p", "720p", "480p", "360p", "240p", "144p"];
     private static readonly ILogger Logger = Log.ForContext<PlayerControlsBarView>();
-    private readonly List<QualitySelectionOption> _qualityOptions = [new("Best", false)];
     private readonly INavigationService _navigation;
+    private readonly List<QualitySelectionOption> _qualityOptions = [new("Best", false)];
     private string? _channelUrl;
-    private string? _currentQualityVideoId;
-    private bool _currentQualityIsLocal;
     private string? _currentLocalLabel;
+    private bool _currentQualityIsLocal;
+    private string? _currentQualityVideoId;
     private (bool Visible, bool CanPrevious, bool CanNext, bool IsQueueOpen)? _lastQueueControls;
     private double _lastSpeed = double.NaN;
     private double _lastVolume = double.NaN;
@@ -198,7 +198,8 @@ public partial class PlayerControlsBarView : ViewBase<Box>
                 displayLabels.Add("Best (Online)");
                 foreach (var q in tracks)
                 {
-                    if (_qualityOptions.Any(o => !o.IsOffline && string.Equals(o.Quality, q, StringComparison.OrdinalIgnoreCase)))
+                    if (_qualityOptions.Any(o =>
+                            !o.IsOffline && string.Equals(o.Quality, q, StringComparison.OrdinalIgnoreCase)))
                         continue;
                     _qualityOptions.Add(new QualitySelectionOption(q, false));
                     displayLabels.Add($"{q} (Online)");

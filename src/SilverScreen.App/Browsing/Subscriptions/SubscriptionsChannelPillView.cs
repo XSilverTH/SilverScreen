@@ -7,7 +7,6 @@ using SilverScreen.Browsing.Channel;
 using SilverScreen.Core.Browsing.Subscriptions;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
-using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 using Constants = Gdk.Constants;
 
