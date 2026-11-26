@@ -497,9 +497,9 @@ public static partial class YtDlpFormatSelector
         else if (root.TryGetProperty("upload_date", out var udProp) &&
                  udProp.ValueKind == JsonValueKind.String &&
                  udProp.GetString() is { Length: 8 } ud &&
-                 DateTime.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
-                     DateTimeStyles.AssumeUniversal, out var dt))
-            publishedAt = new DateTimeOffset(dt, TimeSpan.Zero);
+                 DateTimeOffset.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
+                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dto))
+            publishedAt = dto;
 
         return new YouTubeVideoDetails(
             description,

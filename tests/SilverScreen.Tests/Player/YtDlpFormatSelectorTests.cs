@@ -444,4 +444,33 @@ public sealed class YtDlpFormatSelectorTests
         Assert.NotNull(media);
         Assert.Null(media.ExpiresAt);
     }
+
+    [Fact]
+    public void ParsePayload_UploadDateWithoutTimestamp_ParsesUtcMidnightAcrossTimeZones()
+    {
+        var json = """
+                   {
+                       "id": "uploaddate1",
+                       "title": "Upload Date Video",
+                       "channel": "Test Channel",
+                       "upload_date": "20261126",
+                       "formats": [
+                           {
+                               "format_id": "18",
+                               "url": "https://example.com/video.mp4",
+                               "ext": "mp4",
+                               "height": 360,
+                               "vcodec": "avc1",
+                               "acodec": "mp4a"
+                           }
+                       ]
+                   }
+                   """;
+
+        var parsed = YtDlpFormatSelector.ParsePayload(json);
+
+        Assert.NotNull(parsed);
+        Assert.NotNull(parsed.Details);
+        Assert.Equal(new DateTimeOffset(2026, 11, 26, 0, 0, 0, TimeSpan.Zero), parsed.Details.PublishedAt);
+    }
 }
