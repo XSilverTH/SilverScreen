@@ -11,8 +11,8 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <AssemblyName>SilverScreen</AssemblyName>
         <RootNamespace>SilverScreen</RootNamespace>
-        <Version>0.1.0</Version>
-        <InformationalVersion>0.1.0</InformationalVersion>
+        <Version>0.3.0</Version>
+        <InformationalVersion>0.3.0</InformationalVersion>
         <Authors>XSilverTH</Authors>
         <Copyright>Copyright © XSilverTH</Copyright>
         <Description>A GTK 4 and Libadwaita desktop app for YouTube</Description>
