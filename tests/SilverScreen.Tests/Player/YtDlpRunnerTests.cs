@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
@@ -90,8 +91,8 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("invalid id with spaces");
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("Media is unavailable for this video.", result.StatusMessage);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
+        Assert.Equal("Media is unavailable for this video.", failure.StatusMessage);
     }
 
     [Fact]
@@ -106,9 +107,9 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.False(result.IsSuccess);
-        Assert.DoesNotContain(secret, result.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", result.StatusMessage, StringComparison.Ordinal);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
+        Assert.DoesNotContain(secret, failure.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", failure.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -122,9 +123,9 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.False(result.IsSuccess);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
         Assert.Contains("error code 1: ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm you're not a bot",
-            result.StatusMessage);
+            failure.StatusMessage);
     }
 
     [Fact]
@@ -138,8 +139,8 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.False(result.IsSuccess);
-        Assert.Contains("error code 1.", result.StatusMessage);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
+        Assert.Contains("error code 1.", failure.StatusMessage);
     }
 
     [Fact]
@@ -153,8 +154,8 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.False(result.IsSuccess);
-        Assert.Contains("the process returned no output", result.StatusMessage);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
+        Assert.Contains("the process returned no output", failure.StatusMessage);
     }
 
     [Fact]
@@ -168,10 +169,9 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Media);
-        Assert.Equal("https://cdn.example/video.mp4", result.Media.VideoUrl);
-        Assert.Null(result.Details);
+        var success = Assert.IsType<YouTubeMediaResolutionResult.Success>(result.Value);
+        Assert.Equal("https://cdn.example/video.mp4", success.Media.VideoUrl);
+        Assert.Null(success.Details);
     }
 
     [Fact]
@@ -195,14 +195,13 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Media);
-        Assert.NotNull(result.Details);
-        Assert.Equal("Test Title", result.Details.Title);
-        Assert.Equal("Test Channel", result.Details.ChannelName);
-        Assert.Equal("Test Description", result.Details.Description);
-        Assert.Equal(12345, result.Details.ViewCount);
-        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1600000000), result.Details.PublishedAt);
+        var success = Assert.IsType<YouTubeMediaResolutionResult.Success>(result.Value);
+        Assert.NotNull(success.Details);
+        Assert.Equal("Test Title", success.Details.Title);
+        Assert.Equal("Test Channel", success.Details.ChannelName);
+        Assert.Equal("Test Description", success.Details.Description);
+        Assert.Equal(12345, success.Details.ViewCount);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1600000000), success.Details.PublishedAt);
     }
 
 
@@ -217,8 +216,8 @@ public sealed class YtDlpMediaResolverTests
 
         var result = await resolver.ResolveMediaAsync("dQw4w9WgXcQ");
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(RuntimeDependencyGuidance.YtDlpTimedOut, result.StatusMessage);
+        var failure = Assert.IsType<YouTubeMediaResolutionResult.Failure>(result.Value);
+        Assert.Equal(RuntimeDependencyGuidance.YtDlpTimedOut, failure.StatusMessage);
     }
 
     [Fact]

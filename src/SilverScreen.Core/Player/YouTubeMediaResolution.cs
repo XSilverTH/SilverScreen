@@ -22,21 +22,16 @@ public sealed record ResolvedMedia(
     DateTimeOffset? ExpiresAt,
     YouTubeVideoDetails? Details);
 
-public sealed record YouTubeMediaResolutionResult(
-    ResolvedMedia? Media,
-    YouTubeVideoDetails? Details,
-    bool IsSuccess,
-    string StatusMessage)
+public union YouTubeMediaResolutionResult(
+    YouTubeMediaResolutionResult.Success,
+    YouTubeMediaResolutionResult.Failure)
 {
-    public static YouTubeMediaResolutionResult Success(ResolvedMedia media)
+    public sealed record Success(ResolvedMedia Media)
     {
-        return new YouTubeMediaResolutionResult(media, media.Details, true, "Media resolved successfully.");
+        public YouTubeVideoDetails? Details => Media.Details;
     }
 
-    public static YouTubeMediaResolutionResult Failure(string message)
-    {
-        return new YouTubeMediaResolutionResult(null, null, false, message);
-    }
+    public sealed record Failure(string StatusMessage);
 }
 
 public static partial class YouTubeMediaExpiryParser

@@ -19,7 +19,7 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
 
     private readonly Lock _gate = new();
-    private readonly HashSet<string> _loadedCommentIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _loadedCommentIds = [with(StringComparer.Ordinal)];
     private readonly List<YouTubeComment> _loadedComments = [];
     private readonly Queue<CommentRepliesContinuation> _replyContinuations = [];
     private readonly SemaphoreSlim _requestGate = new(1, 1);

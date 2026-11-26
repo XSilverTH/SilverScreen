@@ -130,8 +130,7 @@ static string? ProbeToolVersion(
 {
     try
     {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
             Arguments = arguments,
@@ -141,31 +140,12 @@ static string? ProbeToolVersion(
             CreateNoWindow = true
         };
 
-        if (!process.Start())
+        var output = Process.RunAndCaptureText(startInfo, timeout);
+        if (output.ExitStatus is not { ExitCode: 0, Canceled: false, Signal: null } ||
+            string.IsNullOrWhiteSpace(output.StandardOutput))
             return null;
 
-        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-        {
-            try
-            {
-                process.Kill();
-            }
-            catch
-            {
-                // Best effort: the process already exited or cannot be killed.
-            }
-
-            return null;
-        }
-
-        if (process.ExitCode != 0)
-            return null;
-
-        var output = process.StandardOutput.ReadToEnd();
-        if (string.IsNullOrWhiteSpace(output))
-            return null;
-
-        var version = extractVersion(output);
+        var version = extractVersion(output.StandardOutput);
         return string.IsNullOrWhiteSpace(version) ? null : version;
     }
     catch

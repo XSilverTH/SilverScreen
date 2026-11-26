@@ -1,32 +1,34 @@
 namespace SilverScreen.Core.Common;
 
-public enum YouTubeUrlKind
+public union YouTubeUrlParseResult(
+    YouTubeUrlParseResult.NotYouTube,
+    YouTubeUrlParseResult.Video,
+    YouTubeUrlParseResult.Shorts,
+    YouTubeUrlParseResult.Channel,
+    YouTubeUrlParseResult.Playlist,
+    YouTubeUrlParseResult.UnknownYouTube,
+    YouTubeUrlParseResult.Invalid)
 {
-    NotYouTube,
-    Video,
-    Shorts,
-    Channel,
-    Playlist,
-    UnknownYouTube,
-    Invalid
-}
+    public sealed record NotYouTube;
 
-public sealed record YouTubeUrlParseResult(
-    YouTubeUrlKind Kind,
-    string? VideoId = null,
-    string? ChannelPath = null,
-    string? PlaylistId = null)
-{
-    public string? CanonicalWatchUrl => VideoId is not null &&
-                                        Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts
-        ? $"https://www.youtube.com/watch?v={Uri.EscapeDataString(VideoId)}"
-        : null;
+    public sealed record Video(string VideoId);
 
-    public static YouTubeUrlParseResult NotYouTube { get; } = new(YouTubeUrlKind.NotYouTube);
+    public sealed record Shorts(string VideoId);
 
-    public static YouTubeUrlParseResult UnknownYouTube { get; } = new(YouTubeUrlKind.UnknownYouTube);
+    public sealed record Channel(string ChannelPath);
 
-    public static YouTubeUrlParseResult Invalid { get; } = new(YouTubeUrlKind.Invalid);
+    public sealed record Playlist(string PlaylistId);
+
+    public sealed record UnknownYouTube;
+
+    public sealed record Invalid;
+
+    public string? CanonicalWatchUrl => Value switch
+    {
+        Video(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
+        Shorts(var videoId) => $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}",
+        _ => null
+    };
 }
 
 public static class YouTubeUrlParser
@@ -37,12 +39,14 @@ public static class YouTubeUrlParser
     {
         var text = input?.Trim();
         if (string.IsNullOrWhiteSpace(text) || !Uri.TryCreate(text, UriKind.Absolute, out var uri))
-            return YouTubeUrlParseResult.NotYouTube;
+            return new YouTubeUrlParseResult.NotYouTube();
 
         if (!IsSupportedScheme(uri))
-            return IsYouTubeHost(uri.Host) ? YouTubeUrlParseResult.Invalid : YouTubeUrlParseResult.NotYouTube;
+            return IsYouTubeHost(uri.Host)
+                ? new YouTubeUrlParseResult.Invalid()
+                : new YouTubeUrlParseResult.NotYouTube();
 
-        if (!IsYouTubeHost(uri.Host)) return YouTubeUrlParseResult.NotYouTube;
+        if (!IsYouTubeHost(uri.Host)) return new YouTubeUrlParseResult.NotYouTube();
 
         return uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)
             ? ParseShortHost(uri)
@@ -52,42 +56,42 @@ public static class YouTubeUrlParser
     private static YouTubeUrlParseResult ParseShortHost(Uri uri)
     {
         var firstSegment = GetPathSegment(uri, 0);
-        if (firstSegment is null) return YouTubeUrlParseResult.UnknownYouTube;
+        if (firstSegment is null) return new YouTubeUrlParseResult.UnknownYouTube();
 
         // youtu.be/shorts/<id> shares carry a redundant leading segment; strip it.
         var videoId = firstSegment.Equals("shorts", StringComparison.OrdinalIgnoreCase)
             ? GetPathSegment(uri, 1)
             : firstSegment;
-        if (videoId is null) return YouTubeUrlParseResult.UnknownYouTube;
+        if (videoId is null) return new YouTubeUrlParseResult.UnknownYouTube();
 
         return IsValidVideoId(videoId)
-            ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, videoId)
-            : YouTubeUrlParseResult.Invalid;
+            ? new YouTubeUrlParseResult.Video(videoId)
+            : new YouTubeUrlParseResult.Invalid();
     }
 
     private static YouTubeUrlParseResult ParseYouTubeHost(Uri uri)
     {
         var firstSegment = GetPathSegment(uri, 0);
-        if (firstSegment is null) return YouTubeUrlParseResult.UnknownYouTube;
+        if (firstSegment is null) return new YouTubeUrlParseResult.UnknownYouTube();
 
         if (firstSegment.Equals("watch", StringComparison.OrdinalIgnoreCase))
         {
             var videoId = GetQueryValue(uri.Query, "v");
-            if (string.IsNullOrWhiteSpace(videoId)) return YouTubeUrlParseResult.UnknownYouTube;
+            if (string.IsNullOrWhiteSpace(videoId)) return new YouTubeUrlParseResult.UnknownYouTube();
 
             return IsValidVideoId(videoId)
-                ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, videoId)
-                : YouTubeUrlParseResult.Invalid;
+                ? new YouTubeUrlParseResult.Video(videoId)
+                : new YouTubeUrlParseResult.Invalid();
         }
 
         if (firstSegment.Equals("shorts", StringComparison.OrdinalIgnoreCase))
         {
             var videoId = GetPathSegment(uri, 1);
-            if (videoId is null) return YouTubeUrlParseResult.UnknownYouTube;
+            if (videoId is null) return new YouTubeUrlParseResult.UnknownYouTube();
 
             return IsValidVideoId(videoId)
-                ? new YouTubeUrlParseResult(YouTubeUrlKind.Shorts, videoId)
-                : YouTubeUrlParseResult.Invalid;
+                ? new YouTubeUrlParseResult.Shorts(videoId)
+                : new YouTubeUrlParseResult.Invalid();
         }
 
         if (firstSegment.Equals("embed", StringComparison.OrdinalIgnoreCase)
@@ -97,19 +101,19 @@ public static class YouTubeUrlParser
         {
             // Embed, legacy /v/, live and clip links all address a single video; play it like a watch URL.
             var embeddedVideoId = GetPathSegment(uri, 1);
-            if (embeddedVideoId is null) return YouTubeUrlParseResult.UnknownYouTube;
+            if (embeddedVideoId is null) return new YouTubeUrlParseResult.UnknownYouTube();
 
             return IsValidVideoId(embeddedVideoId)
-                ? new YouTubeUrlParseResult(YouTubeUrlKind.Video, embeddedVideoId)
-                : YouTubeUrlParseResult.Invalid;
+                ? new YouTubeUrlParseResult.Video(embeddedVideoId)
+                : new YouTubeUrlParseResult.Invalid();
         }
 
         if (firstSegment.Equals("playlist", StringComparison.OrdinalIgnoreCase))
         {
             var playlistId = GetQueryValue(uri.Query, "list");
             return string.IsNullOrWhiteSpace(playlistId)
-                ? YouTubeUrlParseResult.UnknownYouTube
-                : new YouTubeUrlParseResult(YouTubeUrlKind.Playlist, PlaylistId: playlistId);
+                ? new YouTubeUrlParseResult.UnknownYouTube()
+                : new YouTubeUrlParseResult.Playlist(playlistId);
         }
 
         if (firstSegment.Equals("channel", StringComparison.OrdinalIgnoreCase)
@@ -117,9 +121,9 @@ public static class YouTubeUrlParser
             || firstSegment.Equals("user", StringComparison.OrdinalIgnoreCase)
             || firstSegment.Equals("handle", StringComparison.OrdinalIgnoreCase)
             || firstSegment.StartsWith('@'))
-            return new YouTubeUrlParseResult(YouTubeUrlKind.Channel, ChannelPath: uri.AbsolutePath.Trim('/'));
+            return new YouTubeUrlParseResult.Channel(uri.AbsolutePath.Trim('/'));
 
-        return YouTubeUrlParseResult.UnknownYouTube;
+        return new YouTubeUrlParseResult.UnknownYouTube();
     }
 
     private static bool IsSupportedScheme(Uri uri)

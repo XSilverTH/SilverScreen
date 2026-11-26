@@ -68,7 +68,7 @@ public sealed class YtDlpMediaResolver(
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(videoId) || !PlaybackRequest.LooksLikeYouTubeVideoId(videoId))
-            return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+            return new YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
 
         var quality = preferredQuality ?? _preferencesService.GetPreferences().Quality.ToPersistedString();
 
@@ -80,7 +80,7 @@ public sealed class YtDlpMediaResolver(
             if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia))
             {
                 if (!IsMediaExpired(cachedMedia.ExpiresAt))
-                    return YouTubeMediaResolutionResult.Success(cachedMedia);
+                    return new YouTubeMediaResolutionResult.Success(cachedMedia);
             }
             else
             {
@@ -89,7 +89,7 @@ public sealed class YtDlpMediaResolver(
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
-                    return YouTubeMediaResolutionResult.Success(media);
+                    return new YouTubeMediaResolutionResult.Success(media);
                 }
             }
         }
@@ -105,20 +105,20 @@ public sealed class YtDlpMediaResolver(
             {
                 if (cached.FormatsByQuality.TryGetValue(quality, out var cachedMedia) &&
                     !IsMediaExpired(cachedMedia.ExpiresAt))
-                    return YouTubeMediaResolutionResult.Success(cachedMedia);
+                    return new YouTubeMediaResolutionResult.Success(cachedMedia);
 
                 var media = TrySelectMedia(cached.RawJsonOutput, quality, cached.Details, videoId);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
-                    return YouTubeMediaResolutionResult.Success(media);
+                    return new YouTubeMediaResolutionResult.Success(media);
                 }
             }
 
             var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
             if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
-                return YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
-                                                            "Failed to extract video formats.");
+                return new YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
+                                                                "Failed to extract video formats.");
             var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
             if (details is null)
             {
@@ -132,7 +132,8 @@ public sealed class YtDlpMediaResolver(
             }
 
             var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
-            if (resolvedMedia is null) return YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
+            if (resolvedMedia is null)
+                return new YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
                 fetchResult.RawJsonOutput,
@@ -145,7 +146,7 @@ public sealed class YtDlpMediaResolver(
                 });
 
             _cache[videoId] = newEntry;
-            return YouTubeMediaResolutionResult.Success(resolvedMedia);
+            return new YouTubeMediaResolutionResult.Success(resolvedMedia);
         }
         finally
         {
@@ -265,7 +266,7 @@ public sealed class YtDlpMediaResolver(
         {
             var videoId = NormalizeToVideoId(videoIdOrUrl);
             if (videoId is null)
-                return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+                return new YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
             return await ResolveMediaAsync(videoId, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -275,7 +276,7 @@ public sealed class YtDlpMediaResolver(
         catch (Exception exception)
         {
             Logger.Warning(exception, "Fallback media resolution failed");
-            return YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
+            return new YouTubeMediaResolutionResult.Failure("Media is unavailable for this video.");
         }
     }
 
@@ -286,8 +287,12 @@ public sealed class YtDlpMediaResolver(
         var text = videoIdOrUrl.Trim();
         if (PlaybackRequest.LooksLikeYouTubeVideoId(text))
             return text;
-        var parsed = YouTubeUrlParser.Parse(text);
-        return parsed.VideoId;
+        return YouTubeUrlParser.Parse(text) switch
+        {
+            YouTubeUrlParseResult.Video(var videoId) => videoId,
+            YouTubeUrlParseResult.Shorts(var videoId) => videoId,
+            _ => null
+        };
     }
 
     public void Invalidate(string videoId)

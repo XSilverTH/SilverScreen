@@ -28,8 +28,9 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
     private const int MaxCachedClients = 2;
     private const int LoggedHashPrefixLength = 12;
 
-    private static readonly HashSet<string> DiagnosticCookieNames = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> DiagnosticCookieNames =
+    [
+        with(StringComparer.Ordinal),
         "SAPISID",
         "__Secure-3PAPISID",
         "APISID",
@@ -45,7 +46,7 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
         "SIDCC",
         "__Secure-1PSIDCC",
         "__Secure-3PSIDCC"
-    };
+    ];
 
     private static readonly ILogger Logger = Log.ForContext<YouTubeClientProvider>();
     private readonly Dictionary<string, LinkedListNode<CachedClient>> _clients = new(StringComparer.Ordinal);

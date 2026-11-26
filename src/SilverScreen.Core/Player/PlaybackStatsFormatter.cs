@@ -392,7 +392,8 @@ public static class PlaybackStatsFormatter
 
         sb.AppendLine($"<span weight=\"bold\" foreground=\"{accentColor}\"><b>Application</b></span>");
         sb.AppendLine("  <span foreground=\"#9a9996\">App:</span> <b>SilverScreen</b>");
-        sb.AppendLine("  <span foreground=\"#9a9996\">Framework:</span> <b>GTK 4 / Libadwaita / .NET 10</b>");
+        sb.AppendLine(
+            $"  <span foreground=\"#9a9996\">Framework:</span> <b>GTK 4 / Libadwaita / {Escape(RuntimeInformation.FrameworkDescription)}</b>");
         sb.AppendLine(
             $"  <span foreground=\"#9a9996\">Platform:</span> <b>{Escape(Environment.OSVersion.VersionString)} ({RuntimeInformation.ProcessArchitecture})</b>");
 

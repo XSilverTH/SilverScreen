@@ -216,7 +216,7 @@ public class PlayerTimelineStateTests
             new("seg1", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), SponsorBlockCategories.Sponsor),
             new("seg2", TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(90), SponsorBlockCategories.Intro)
         };
-        var skippedIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> skippedIds = [with(StringComparer.Ordinal)];
 
         // Normal playback outside segment -> false
         Assert.False(PlayerSponsorBlockState.ShouldAutoSkip(TimeSpan.FromSeconds(5), segments, false, true, skippedIds,

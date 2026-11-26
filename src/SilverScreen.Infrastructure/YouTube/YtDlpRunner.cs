@@ -34,17 +34,17 @@ public sealed class YtDlpRunner : IYtDlpRunner
     // pass cookie file paths (never cookie contents), but redaction is defense in depth
     // in case a future caller forwards credential-bearing options.
     private static readonly HashSet<string> SecretOptions =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "--password",
-            "--client-secret",
-            "--access-token",
-            "--refresh-token",
-            "--token",
-            "--api-key",
-            "--cookies",
-            "--cookies-from-browser"
-        };
+    [
+        with(StringComparer.OrdinalIgnoreCase),
+        "--password",
+        "--client-secret",
+        "--access-token",
+        "--refresh-token",
+        "--token",
+        "--api-key",
+        "--cookies",
+        "--cookies-from-browser"
+    ];
 
     public async Task<ProcessResult> RunAsync(
         ProcessStartInfo startInfo,

@@ -159,15 +159,12 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
             {
                 var profileResult = await profileService.GetCurrentProfileAsync(linkedCts.Token)
                     .ConfigureAwait(false);
-                var profileStatus = profileResult.Status switch
+                var profileStatus = profileResult switch
                 {
-                    AccountProfileLoadStatus.Success when profileResult.Profile is not null =>
-                        AuthenticatedHomeFeedStatus.Success,
-                    AccountProfileLoadStatus.AuthenticationRequired =>
-                        AuthenticatedHomeFeedStatus.AuthenticationRequired,
-                    AccountProfileLoadStatus.AuthenticationRejected =>
-                        AuthenticatedHomeFeedStatus.AuthenticationRejected,
-                    _ => AuthenticatedHomeFeedStatus.TemporaryBackendFailure
+                    AccountProfileResult.Success => AuthenticatedHomeFeedStatus.Success,
+                    AccountProfileResult.AuthenticationRequired => AuthenticatedHomeFeedStatus.AuthenticationRequired,
+                    AccountProfileResult.AuthenticationRejected => AuthenticatedHomeFeedStatus.AuthenticationRejected,
+                    AccountProfileResult.TemporaryFailure => AuthenticatedHomeFeedStatus.TemporaryBackendFailure
                 };
                 var succeeded = profileStatus == AuthenticatedHomeFeedStatus.Success;
                 var profileRequiresAuth = profileStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired

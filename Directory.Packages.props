@@ -12,8 +12,8 @@
         <PackageVersion Include="Tmds.DBus.Generator" Version="0.95.2"/>
         <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.2"/>
         <PackageVersion Include="Ace4896.DBus.Services.Secrets" Version="1.6.0"/>
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14"/>
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14"/>
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0"/>
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0"/>
         <PackageVersion Include="coverlet.collector" Version="10.1.0"/>
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0"/>
         <PackageVersion Include="xunit" Version="2.9.3"/>

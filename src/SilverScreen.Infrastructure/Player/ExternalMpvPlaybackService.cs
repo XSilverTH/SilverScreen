@@ -320,10 +320,15 @@ public sealed class ExternalMpvPlaybackService(
         Logger.Warning("MPV exited quickly with code {ExitCode}; attempting yt-dlp fallback", exitCode);
 
         var fallback = await mediaResolver.TryResolveAsFallbackAsync(video.Id).ConfigureAwait(false);
-        var media = fallback.IsSuccess ? fallback.Media : null;
-        if (string.IsNullOrWhiteSpace(media?.VideoUrl))
+        if (fallback is not YouTubeMediaResolutionResult.Success(var media) ||
+            string.IsNullOrWhiteSpace(media.VideoUrl))
         {
-            Logger.Warning("MPV fallback resolution failed: {Status}", fallback.StatusMessage);
+            var statusMessage = fallback switch
+            {
+                YouTubeMediaResolutionResult.Failure(var message) => message,
+                _ => "Media is unavailable for this video."
+            };
+            Logger.Warning("MPV fallback resolution failed: {Status}", statusMessage);
             return;
         }
 

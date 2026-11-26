@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Core.Account.Profile;
@@ -205,20 +206,20 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             Logger.Warning(
                 "Failed to load current YouTube account profile. Failure details: {FailureDetails}",
                 DiagnosticSanitizer.Sanitize(exception.ToString()));
-            result = new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+            result = new AccountProfileResult.TemporaryFailure();
         }
 
         if (_disposed || request.IsCancellationRequested || !ReferenceEquals(_profileCancellation, request))
             return;
 
-        _profile = result.Status == AccountProfileLoadStatus.Success ? result.Profile : null;
-        var status = result.Status switch
+        _profile = result is AccountProfileResult.Success(var profile) ? profile : null;
+        var status = result switch
         {
-            AccountProfileLoadStatus.Success when result.Profile is not null =>
-                AccountProfilePresentationStatus.Ready,
-            AccountProfileLoadStatus.AuthenticationRequired or AccountProfileLoadStatus.AuthenticationRejected =>
+            AccountProfileResult.Success => AccountProfilePresentationStatus.Ready,
+            AccountProfileResult.AuthenticationRequired or AccountProfileResult.AuthenticationRejected =>
                 AccountProfilePresentationStatus.Rejected,
-            _ => AccountProfilePresentationStatus.Unavailable
+            AccountProfileResult.TemporaryFailure => AccountProfilePresentationStatus.Unavailable,
+            _ => throw new UnreachableException()
         };
         SetProfileStatus(status);
         OnPropertyChanged(nameof(DisplayName));

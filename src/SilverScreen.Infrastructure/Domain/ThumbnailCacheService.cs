@@ -15,15 +15,15 @@ public sealed class ThumbnailCacheService : IThumbnailService, IDisposable
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly HashSet<string> SafeExtensions =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".webp",
-            ".gif",
-            ".bmp"
-        };
+    [
+        with(StringComparer.OrdinalIgnoreCase),
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif",
+        ".bmp"
+    ];
 
     private readonly bool _disposeHttpClient;
 

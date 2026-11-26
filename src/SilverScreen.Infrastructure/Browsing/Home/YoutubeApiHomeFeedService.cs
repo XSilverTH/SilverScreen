@@ -113,7 +113,7 @@ public sealed class YoutubeApiHomeFeedService : IAuthenticatedHomeFeedService, I
         try
         {
             var videos = new List<VideoSummary>();
-            var knownVideoIds = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<string> knownVideoIds = [with(StringComparer.Ordinal)];
             if (!isFirstPage)
                 lock (_lock)
                 {

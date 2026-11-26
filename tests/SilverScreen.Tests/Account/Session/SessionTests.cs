@@ -154,8 +154,8 @@ public sealed class SessionTests
         var profile = new FakeProfileService(() =>
         {
             profileCalls++;
-            return Task.FromResult(new AccountProfileResult(
-                AccountProfileLoadStatus.Success, new AccountProfile("Test account")));
+            return Task.FromResult<AccountProfileResult>(
+                new AccountProfileResult.Success(new AccountProfile("Test account")));
         });
         using var service = new SecretServiceSessionService(
             store, tempRoot.Path, () => profile);

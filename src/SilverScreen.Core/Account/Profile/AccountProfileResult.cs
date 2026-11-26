@@ -1,11 +1,16 @@
 namespace SilverScreen.Core.Account.Profile;
 
-public enum AccountProfileLoadStatus
+public union AccountProfileResult(
+    AccountProfileResult.Success,
+    AccountProfileResult.AuthenticationRequired,
+    AccountProfileResult.AuthenticationRejected,
+    AccountProfileResult.TemporaryFailure)
 {
-    Success,
-    AuthenticationRequired,
-    AuthenticationRejected,
-    TemporaryFailure
-}
+    public sealed record Success(AccountProfile Profile);
 
-public sealed record AccountProfileResult(AccountProfileLoadStatus Status, AccountProfile? Profile = null);
+    public sealed record AuthenticationRequired;
+
+    public sealed record AuthenticationRejected;
+
+    public sealed record TemporaryFailure;
+}

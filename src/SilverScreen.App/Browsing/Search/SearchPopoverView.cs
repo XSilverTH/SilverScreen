@@ -239,7 +239,7 @@ public partial class SearchPopoverView : ViewBase<Box>
         if (string.IsNullOrWhiteSpace(text) ||
             text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-            YouTubeUrlParser.Parse(text).Kind != YouTubeUrlKind.NotYouTube)
+            YouTubeUrlParser.Parse(text) is not YouTubeUrlParseResult.NotYouTube)
         {
             DismissSuggestions();
             return;

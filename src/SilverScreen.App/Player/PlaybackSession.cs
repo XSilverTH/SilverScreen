@@ -123,7 +123,7 @@ internal sealed class PlaybackSession : IDisposable
 
     #region Content sidecars (SponsorBlock / resume / engagement / playlist)
 
-    private readonly HashSet<string> _autoSkippedSegmentIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _autoSkippedSegmentIds = [with(StringComparer.Ordinal)];
     private readonly IYouTubePlaybackProgressService _playbackProgress;
     private readonly ISponsorBlockService _sponsorBlock;
     private readonly IVideoEngagementService _videoEngagement;

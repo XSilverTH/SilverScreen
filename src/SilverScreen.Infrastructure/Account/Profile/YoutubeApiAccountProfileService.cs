@@ -33,7 +33,7 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         if (!HasAuthenticatedSession(session, cookies))
         {
             Logger.Debug("Cannot fetch account profile without an authenticated YouTube session");
-            return new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRequired);
+            return new AccountProfileResult.AuthenticationRequired();
         }
 
         try
@@ -48,13 +48,13 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
                 string.IsNullOrWhiteSpace(profile.DisplayName))
             {
                 Logger.Warning("YoutubeAPI returned no usable account profile or the session changed");
-                return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+                return new AccountProfileResult.TemporaryFailure();
             }
 
             var accountProfile = new AccountProfile(profile.DisplayName, profile.Avatar?.Url.ToString());
             Logger.Information("YouTube account profile fetched successfully ({ElapsedTime}ms)",
                 Stopwatch.GetElapsedTime(startTime).Milliseconds);
-            return new AccountProfileResult(AccountProfileLoadStatus.Success, accountProfile);
+            return new AccountProfileResult.Success(accountProfile);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -63,23 +63,23 @@ public sealed class YoutubeApiAccountProfileService : IAccountProfileService, ID
         catch (OperationCanceledException exception)
         {
             LogProfileFailure(exception, "request timeout");
-            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+            return new AccountProfileResult.TemporaryFailure();
         }
         catch (Exception exception) when
             (exception is AuthenticationRequiredException or AuthenticationExpiredException)
         {
             LogProfileFailure(exception, "authentication rejection");
-            return new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRejected);
+            return new AccountProfileResult.AuthenticationRejected();
         }
         catch (YouTubeException exception)
         {
             LogProfileFailure(exception, ClassifyFailure(exception));
-            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+            return new AccountProfileResult.TemporaryFailure();
         }
         catch (Exception exception)
         {
             LogProfileFailure(exception, exception is HttpRequestException ? "request" : "unexpected");
-            return new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure);
+            return new AccountProfileResult.TemporaryFailure();
         }
     }
 

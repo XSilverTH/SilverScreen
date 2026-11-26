@@ -55,7 +55,7 @@ chmod +x SilverScreen-x86_64.AppImage
 ```
 ## Building manually
 
-you'll need .NET 10 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, mpv, and yt-dlp.
+you'll need .NET 11 SDK, blueprint-compiler, clang, glib2, gtk4, libadwaita, webkitgtk-6.0, libsoup3, mpv, and yt-dlp.
 
 ```sh
 git clone --recurse-submodules https://github.com/XSilverTH/SilverScreen.git

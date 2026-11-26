@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Serilog;
 using SilverScreen.Browsing.Components;
 using SilverScreen.Core.Browsing;
@@ -112,7 +113,7 @@ public sealed class SearchViewModel : IVideoListSource
             return false;
 
         var parsed = YouTubeUrlParser.Parse(text.Trim());
-        return parsed.Kind is YouTubeUrlKind.Video or YouTubeUrlKind.Shorts;
+        return parsed is YouTubeUrlParseResult.Video or YouTubeUrlParseResult.Shorts;
     }
 
     /// <summary>
@@ -127,8 +128,7 @@ public sealed class SearchViewModel : IVideoListSource
         if (trimmed.StartsWith('@') && !trimmed.Contains(' '))
             return true;
 
-        var parsed = YouTubeUrlParser.Parse(trimmed);
-        return parsed.Kind == YouTubeUrlKind.Channel;
+        return YouTubeUrlParser.Parse(trimmed) is YouTubeUrlParseResult.Channel;
     }
 
 
@@ -194,12 +194,11 @@ public sealed class SearchViewModel : IVideoListSource
         try
         {
             var parsedUrl = YouTubeUrlParser.Parse(query);
-            if (parsedUrl.Kind == YouTubeUrlKind.Channel)
+            if (parsedUrl is YouTubeUrlParseResult.Channel(var channelPath))
             {
-                var channelTarget = parsedUrl.ChannelPath ?? query;
                 if (OpenChannelRequested is not null)
                 {
-                    await OpenChannelRequested(channelTarget).ConfigureAwait(false);
+                    await OpenChannelRequested(channelPath).ConfigureAwait(false);
                     return null;
                 }
             }
@@ -209,24 +208,17 @@ public sealed class SearchViewModel : IVideoListSource
                 return null;
             }
 
-            switch (parsedUrl.Kind)
+            return parsedUrl switch
             {
-                case YouTubeUrlKind.Video:
-                case YouTubeUrlKind.Shorts:
-                    return await PlayYouTubeUrlAsync(parsedUrl).ConfigureAwait(false);
-                case YouTubeUrlKind.Channel:
-                case YouTubeUrlKind.Playlist:
-                case YouTubeUrlKind.UnknownYouTube:
-                case YouTubeUrlKind.Invalid:
-                    ShowUnsupportedUrlNotice();
-                    return UnsupportedUrlMessage;
-                case YouTubeUrlKind.NotYouTube:
-                    await SearchPlainTextAsync(query, count).ConfigureAwait(false);
-                    return null;
-                default:
-                    ShowUnsupportedUrlNotice();
-                    return UnsupportedUrlMessage;
-            }
+                YouTubeUrlParseResult.Video or YouTubeUrlParseResult.Shorts =>
+                    await PlayYouTubeUrlAsync(parsedUrl).ConfigureAwait(false),
+                YouTubeUrlParseResult.Channel or YouTubeUrlParseResult.Playlist
+                    or YouTubeUrlParseResult.UnknownYouTube or YouTubeUrlParseResult.Invalid =>
+                    ShowUnsupportedUrlNotice(),
+                YouTubeUrlParseResult.NotYouTube =>
+                    await SearchPlainTextAsync(query, count).ConfigureAwait(false),
+                _ => throw new UnreachableException()
+            };
         }
         catch (Exception exception)
         {
@@ -235,7 +227,7 @@ public sealed class SearchViewModel : IVideoListSource
         }
     }
 
-    private async Task SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
+    private async Task<string?> SearchPlainTextAsync(string query, int count = VideoFeedConstants.DefaultPageSize)
     {
         ThrowIfDisposed();
         var identityChanged = !string.Equals(CurrentQuery, query, StringComparison.Ordinal);
@@ -246,6 +238,7 @@ public sealed class SearchViewModel : IVideoListSource
 
         _engine.SetLoadingMessage($"Searching YouTube for “{query}”…");
         await _engine.RefreshAsync(count).ConfigureAwait(false);
+        return null;
     }
 
     private async Task<FeedPageResult> FetchSearchPageAsync(string? token, int count, CancellationToken ct)
@@ -271,22 +264,31 @@ public sealed class SearchViewModel : IVideoListSource
     ///     status the page already renders) and in view state, so a pasted non-video URL is never
     ///     a silent no-op. Cancels any in-flight text search first so it cannot overwrite the notice.
     /// </summary>
-    private void ShowUnsupportedUrlNotice()
+    private string ShowUnsupportedUrlNotice()
     {
         ThrowIfDisposed();
         CurrentQuery = null;
         _engine.Reset(statusMessage: UnsupportedUrlMessage);
+        return UnsupportedUrlMessage;
     }
 
     private async Task<string?> PlayYouTubeUrlAsync(YouTubeUrlParseResult parsedUrl)
     {
-        if (parsedUrl.VideoId is null || parsedUrl.CanonicalWatchUrl is null)
+        var videoId = parsedUrl switch
+        {
+            YouTubeUrlParseResult.Video(var id) => id,
+            YouTubeUrlParseResult.Shorts(var id) => id,
+            YouTubeUrlParseResult.Channel or YouTubeUrlParseResult.Playlist or YouTubeUrlParseResult.UnknownYouTube
+                or YouTubeUrlParseResult.Invalid or YouTubeUrlParseResult.NotYouTube => null
+        };
+
+        if (videoId is null || parsedUrl.CanonicalWatchUrl is null)
         {
             ShowUnsupportedUrlNotice();
             return UnsupportedUrlMessage;
         }
 
-        var video = new VideoSummary(parsedUrl.VideoId, $"YouTube video {parsedUrl.VideoId}", "YouTube", TimeSpan.Zero,
+        var video = new VideoSummary(videoId, $"YouTube video {videoId}", "YouTube", TimeSpan.Zero,
             string.Empty, false, parsedUrl.CanonicalWatchUrl);
         try
         {

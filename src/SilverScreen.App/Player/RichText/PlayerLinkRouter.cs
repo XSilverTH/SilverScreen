@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Serilog;
 using SilverScreen.Core.Common;
@@ -53,27 +54,41 @@ internal sealed class PlayerLinkRouter(
 
         if (!IsWebUrl(uri)) return true;
         var parsed = YouTubeUrlParser.Parse(uri);
-        switch (parsed)
+        return parsed switch
         {
-            case { Kind: YouTubeUrlKind.Video or YouTubeUrlKind.Shorts, VideoId: not null }:
-                videoRequested(new VideoSummary(
-                    parsed.VideoId,
-                    $"YouTube video {parsed.VideoId}",
-                    "YouTube",
-                    TimeSpan.Zero,
-                    string.Empty,
-                    false,
-                    parsed.CanonicalWatchUrl));
-                return true;
-            case { Kind: YouTubeUrlKind.Channel, ChannelPath: not null }:
-                channelRequested(
-                    $"https://www.youtube.com/{parsed.ChannelPath.Trim('/')}",
-                    parsed.ChannelPath.Trim('/'));
-                return true;
-            default:
-                externalRequested(uri);
-                return true;
-        }
+            YouTubeUrlParseResult.Video(var videoId) => ActivateVideo(videoId, parsed.CanonicalWatchUrl),
+            YouTubeUrlParseResult.Shorts(var videoId) => ActivateVideo(videoId, parsed.CanonicalWatchUrl),
+            YouTubeUrlParseResult.Channel(var channelPath) => ActivateChannel(channelPath),
+            YouTubeUrlParseResult.NotYouTube or YouTubeUrlParseResult.Playlist
+                or YouTubeUrlParseResult.UnknownYouTube or YouTubeUrlParseResult.Invalid => ActivateExternal(uri),
+            _ => throw new UnreachableException()
+        };
+    }
+
+    private bool ActivateVideo(string videoId, string? canonicalWatchUrl)
+    {
+        videoRequested(new VideoSummary(
+            videoId,
+            $"YouTube video {videoId}",
+            "YouTube",
+            TimeSpan.Zero,
+            string.Empty,
+            false,
+            canonicalWatchUrl));
+        return true;
+    }
+
+    private bool ActivateChannel(string channelPath)
+    {
+        var normalizedChannel = channelPath.Trim('/');
+        channelRequested($"https://www.youtube.com/{normalizedChannel}", normalizedChannel);
+        return true;
+    }
+
+    private bool ActivateExternal(string uri)
+    {
+        externalRequested(uri);
+        return true;
     }
 
     private static bool TryParseSeekUri(string uri, out double seconds)

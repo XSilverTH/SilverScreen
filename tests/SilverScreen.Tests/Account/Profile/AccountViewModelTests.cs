@@ -12,10 +12,10 @@ public sealed class AccountViewModelTests
     [Fact]
     public async Task TemporaryProfileFailureKeepsCredentialsAndRetryCanRestoreHealthyProfile()
     {
-        _profileService.Results.Enqueue(Task.FromResult(
-            new AccountProfileResult(AccountProfileLoadStatus.TemporaryFailure)));
-        _profileService.Results.Enqueue(Task.FromResult(
-            new AccountProfileResult(AccountProfileLoadStatus.Success, new AccountProfile("Verified account"))));
+        _profileService.Results.Enqueue(Task.FromResult<AccountProfileResult>(
+            new AccountProfileResult.TemporaryFailure()));
+        _profileService.Results.Enqueue(Task.FromResult<AccountProfileResult>(
+            new AccountProfileResult.Success(new AccountProfile("Verified account"))));
         using var vm = new AccountViewModel(_profileService, _sessionService);
         var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
         var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
@@ -151,8 +151,8 @@ public sealed class AccountViewModelTests
     public async Task PresentationStatus_WithManualSession_MatchesProfileStatusAndFiresPropertyChanged()
     {
         var propertiesChanged = new List<string?>();
-        _profileService.Results.Enqueue(Task.FromResult(
-            new AccountProfileResult(AccountProfileLoadStatus.Success, new AccountProfile("Verified account"))));
+        _profileService.Results.Enqueue(Task.FromResult<AccountProfileResult>(
+            new AccountProfileResult.Success(new AccountProfile("Verified account"))));
         using var vm = new AccountViewModel(_profileService, _sessionService);
         vm.PropertyChanged += (_, e) => propertiesChanged.Add(e.PropertyName);
 
@@ -172,7 +172,7 @@ public sealed class AccountViewModelTests
         {
             return Results.Count > 0
                 ? Results.Dequeue()
-                : Task.FromResult(new AccountProfileResult(AccountProfileLoadStatus.AuthenticationRequired));
+                : Task.FromResult<AccountProfileResult>(new AccountProfileResult.AuthenticationRequired());
         }
     }
 }

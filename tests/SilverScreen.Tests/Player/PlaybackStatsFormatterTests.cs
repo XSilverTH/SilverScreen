@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using SilverScreen.Core.Player;
 
 namespace SilverScreen.Tests.Player;
@@ -159,5 +160,63 @@ public sealed class PlaybackStatsFormatterTests
         var summary = PlaybackStatsFormatter.FormatFullSummary(stats);
         Assert.Contains("... and ", summary);
         Assert.Contains("#55", summary);
+    }
+
+    [Fact]
+    public void FormatEnginePageMarkup_IncludesCurrentRuntimeFrameworkDescription()
+    {
+        var stats = new PlaybackStats(
+            "Test",
+            "mkv",
+            "lavf",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            null,
+            1,
+            100,
+            false,
+            false,
+            null,
+            null,
+            [],
+            null,
+            null,
+            null);
+
+        var markup = PlaybackStatsFormatter.FormatEnginePageMarkup(stats);
+
+        Assert.Contains(RuntimeInformation.FrameworkDescription, markup);
     }
 }
