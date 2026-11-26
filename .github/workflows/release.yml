@@ -18,9 +18,9 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
+          # TODO: Re-add `dotnet-sdk` to pacman and remove the temporary .NET 11 step once Arch repos package .NET 11
           pacman -Syu --noconfirm --needed \
             git \
-            dotnet-sdk \
             clang \
             pkgconf \
             glib2 \
@@ -33,7 +33,15 @@ jobs:
             curl \
             librsvg \
             openssh
+          # dotnet-sdk
           git config --global --add safe.directory '*'
+
+      # Temporary workaround until Arch Linux repos package .NET 11
+      - name: Install .NET 11 SDK
+        run: |
+          curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 11.0 --install-dir /usr/share/dotnet
+          ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+          echo "DOTNET_ROOT=/usr/share/dotnet" >> "$GITHUB_ENV"
 
       - name: Checkout repository
         uses: actions/checkout@v4
