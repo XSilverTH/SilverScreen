@@ -107,6 +107,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
         overlay.AddOverlay(ControlsBar.Widget);
         overlay.AddOverlay(Stats.Widget);
         overlay.AddOverlay(InfoPanel.Widget);
+        overlay.AddOverlay(InfoPanel.CueWidget);
         overlay.AddOverlay(CommentsCue.Widget);
         overlay.AddOverlay(PromptStack.Widget);
         overlay.AddOverlay(Osd.Widget);

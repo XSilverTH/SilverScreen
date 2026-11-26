@@ -39,10 +39,13 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         player_info_revealer.RevealChild = false;
         player_info_cue_revealer.SetVisible(false);
         player_info_cue_revealer.RevealChild = false;
+        Widget.RemoveOverlay(player_info_cue_revealer);
         Widget.CanTarget = false;
 
         SetInfoContent(null);
     }
+
+    public Widget CueWidget => player_info_cue_revealer;
 
     public bool IsOpen { get; private set; }
 
@@ -128,7 +131,6 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
             if (!_bottomEdgeActive) return;
             _bottomEdgeActive = false;
             player_info_cue_revealer.RevealChild = false;
-            Widget.CanTarget = IsOpen;
             return;
         }
 
@@ -137,7 +139,6 @@ public partial class PlayerInfoPanelView : ViewBase<Overlay>
         _bottomEdgeActive = inZone;
         if (inZone) player_info_cue_revealer.SetVisible(true);
         player_info_cue_revealer.RevealChild = inZone;
-        Widget.CanTarget = inZone;
     }
 
     private void OnBackdropClicked(object? sender, EventArgs args)
