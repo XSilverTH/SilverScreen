@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -164,7 +165,8 @@ public sealed class SecretServiceSessionService : ISessionService, ISecretServic
                     AccountProfileResult.Success => AuthenticatedHomeFeedStatus.Success,
                     AccountProfileResult.AuthenticationRequired => AuthenticatedHomeFeedStatus.AuthenticationRequired,
                     AccountProfileResult.AuthenticationRejected => AuthenticatedHomeFeedStatus.AuthenticationRejected,
-                    AccountProfileResult.TemporaryFailure => AuthenticatedHomeFeedStatus.TemporaryBackendFailure
+                    AccountProfileResult.TemporaryFailure => AuthenticatedHomeFeedStatus.TemporaryBackendFailure,
+                    _ => throw new UnreachableException()
                 };
                 var succeeded = profileStatus == AuthenticatedHomeFeedStatus.Success;
                 var profileRequiresAuth = profileStatus is AuthenticatedHomeFeedStatus.AuthenticationRequired
