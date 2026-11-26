@@ -62,4 +62,23 @@ public sealed class NotificationServiceTests
         Assert.NotNull(notifyInterface);
         Assert.Same(notifyInterface, notifyConcrete);
     }
+
+    [Fact]
+    public void DependencyInjection_RegistersLazyPlaybackAndPlayerDependencies()
+    {
+        var services = new ServiceCollection();
+        var config = new ApplicationConfiguration();
+        services.AddSilverScreenServices(config);
+
+        using var provider = services.BuildServiceProvider();
+
+        var lazyPlayback = provider.GetRequiredService<Lazy<global::SilverScreen.Core.Player.IPlaybackService>>();
+        var lazyPlayerDeps = provider.GetRequiredService<Lazy<global::SilverScreen.Player.PlayerDependencies>>();
+        var presence = provider.GetRequiredService<global::SilverScreen.Core.Player.IPlaybackPresenceService>();
+
+        Assert.False(lazyPlayback.IsValueCreated);
+        Assert.False(lazyPlayerDeps.IsValueCreated);
+        Assert.NotNull(presence);
+        Assert.False(string.IsNullOrWhiteSpace(ApplicationMetadata.Version));
+    }
 }

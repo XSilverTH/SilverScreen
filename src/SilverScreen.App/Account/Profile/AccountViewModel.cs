@@ -13,16 +13,21 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<AccountViewModel>();
     private readonly IAccountProfileService _accountProfileService;
+    private readonly Action<Action>? _mainThreadDispatch;
     private readonly ISessionService _sessionService;
     private bool _disposed;
     private AccountProfile? _profile;
     private CancellationTokenSource? _profileCancellation;
     private AccountSession _session;
 
-    public AccountViewModel(IAccountProfileService accountProfileService, ISessionService sessionService)
+    public AccountViewModel(
+        IAccountProfileService accountProfileService,
+        ISessionService sessionService,
+        Action<Action>? mainThreadDispatch = null)
     {
         _accountProfileService = accountProfileService;
         _sessionService = sessionService;
+        _mainThreadDispatch = mainThreadDispatch;
         _session = _sessionService.GetCurrentSession();
         _sessionService.SessionChanged += OnSessionChanged;
         RefreshProfile();
@@ -111,7 +116,7 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
             return false;
         }
 
-        var (succeeded, error) = await PersistSessionAsync(trimmed).ConfigureAwait(false);
+        var (succeeded, error) = await PersistSessionAsync(trimmed);
         SetManualSessionError(error);
         return succeeded;
     }
@@ -163,8 +168,14 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnSessionChanged(object? sender, EventArgs eventArgs)
     {
-        if (!_disposed)
-            Session = _sessionService.GetCurrentSession();
+        if (_disposed)
+            return;
+
+        DispatchToMainThread(() =>
+        {
+            if (!_disposed)
+                Session = _sessionService.GetCurrentSession();
+        });
     }
 
     public void RefreshProfile()
@@ -212,18 +223,32 @@ public sealed class AccountViewModel : INotifyPropertyChanged, IDisposable
         if (_disposed || request.IsCancellationRequested || !ReferenceEquals(_profileCancellation, request))
             return;
 
-        _profile = result is AccountProfileResult.Success(var profile) ? profile : null;
-        var status = result switch
+        DispatchToMainThread(() =>
         {
-            AccountProfileResult.Success => AccountProfilePresentationStatus.Ready,
-            AccountProfileResult.AuthenticationRequired or AccountProfileResult.AuthenticationRejected =>
-                AccountProfilePresentationStatus.Rejected,
-            AccountProfileResult.TemporaryFailure => AccountProfilePresentationStatus.Unavailable,
-            _ => throw new UnreachableException()
-        };
-        SetProfileStatus(status);
-        OnPropertyChanged(nameof(DisplayName));
-        OnPropertyChanged(nameof(AvatarUrl));
+            if (_disposed || request.IsCancellationRequested || !ReferenceEquals(_profileCancellation, request))
+                return;
+
+            _profile = result is AccountProfileResult.Success(var profile) ? profile : null;
+            var status = result switch
+            {
+                AccountProfileResult.Success => AccountProfilePresentationStatus.Ready,
+                AccountProfileResult.AuthenticationRequired or AccountProfileResult.AuthenticationRejected =>
+                    AccountProfilePresentationStatus.Rejected,
+                AccountProfileResult.TemporaryFailure => AccountProfilePresentationStatus.Unavailable,
+                _ => throw new UnreachableException()
+            };
+            SetProfileStatus(status);
+            OnPropertyChanged(nameof(DisplayName));
+            OnPropertyChanged(nameof(AvatarUrl));
+        });
+    }
+
+    private void DispatchToMainThread(Action action)
+    {
+        if (_mainThreadDispatch is not null)
+            _mainThreadDispatch(action);
+        else
+            action();
     }
 
     private void SetProfileStatus(AccountProfilePresentationStatus status)

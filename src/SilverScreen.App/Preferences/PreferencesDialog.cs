@@ -1,6 +1,7 @@
 using Adw;
 using Gtk;
 using Serilog;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
@@ -17,7 +18,10 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private readonly IReadOnlyDictionary<string, SwitchRow> _sponsorBlockCategoryRows;
     private readonly PreferencesViewModel _viewModel;
     private string? _capturingShortcut;
+    private string? _lastValidatedMpvPath;
+    private string? _lastValidatedYtDlpPath;
     private bool _loading;
+    private CancellationTokenSource? _pathValidationCts;
 
     public PreferencesDialog(IPreferencesService preferencesService)
     {
@@ -289,10 +293,39 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
 
     private void UpdatePathStatus()
     {
-        SetPathStatus(ytdlp_status_row, ytdlp_status_label,
-            PreferencesViewModel.ValidateExecutablePath(((Editable)ytdlp_path_row).GetText()));
-        SetPathStatus(mpv_status_row, mpv_status_label,
-            PreferencesViewModel.ValidateExecutablePath(((Editable)mpv_path_row).GetText()));
+        var ytDlpPath = ((Editable)ytdlp_path_row).GetText();
+        var mpvPath = ((Editable)mpv_path_row).GetText();
+        if (string.Equals(_lastValidatedYtDlpPath, ytDlpPath, StringComparison.Ordinal) &&
+            string.Equals(_lastValidatedMpvPath, mpvPath, StringComparison.Ordinal))
+            return;
+
+        _lastValidatedYtDlpPath = ytDlpPath;
+        _lastValidatedMpvPath = mpvPath;
+        _pathValidationCts?.Cancel();
+        _pathValidationCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _pathValidationCts = cts;
+        ValidatePathsAsync(ytDlpPath, mpvPath, cts.Token).FireAndForget(Logger);
+    }
+
+    private async Task ValidatePathsAsync(string ytDlpPath, string mpvPath, CancellationToken cancellationToken)
+    {
+        var (ytDlpStatus, mpvStatus) = await Task.Run(() => (
+            PreferencesViewModel.ValidateExecutablePath(ytDlpPath),
+            PreferencesViewModel.ValidateExecutablePath(mpvPath)), cancellationToken).ConfigureAwait(false);
+
+        if (IsDisposed || cancellationToken.IsCancellationRequested)
+            return;
+
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (IsDisposed || cancellationToken.IsCancellationRequested)
+                return false;
+
+            SetPathStatus(ytdlp_status_row, ytdlp_status_label, ytDlpStatus);
+            SetPathStatus(mpv_status_row, mpv_status_label, mpvStatus);
+            return false;
+        });
     }
 
     private static void SetPathStatus(ActionRow row, Label label, ExecutablePathStatus status)
@@ -411,5 +444,17 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
     private void OnClosed(Dialog sender, EventArgs args)
     {
         Dispose();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _pathValidationCts?.Cancel();
+            _pathValidationCts?.Dispose();
+            _pathValidationCts = null;
+        }
+
+        base.Dispose(disposing);
     }
 }

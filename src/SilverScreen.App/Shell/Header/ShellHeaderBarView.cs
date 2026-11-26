@@ -32,7 +32,7 @@ public partial class ShellHeaderBarView : ViewBase<HeaderBar>
             new NowPlayingHeaderBarView(playback, navigationService, account.Preferences),
             new QueueHeaderButtonView(queueViewModel),
             new RefreshHeaderButtonView(refreshCoordinator),
-            new DependencyWarningButtonView(diagnostics))
+            new DependencyWarningButtonView(diagnostics, account.Session))
     {
     }
 

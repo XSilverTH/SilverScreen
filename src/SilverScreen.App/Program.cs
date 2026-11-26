@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Adw;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
+using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
 
@@ -24,8 +24,7 @@ try
         .WriteTo.File(
             Path.Combine(logDirectory, "silverscreen-.log"),
             rollingInterval: RollingInterval.Day,
-            retainedFileCountLimit: 14,
-            shared: true)
+            retainedFileCountLimit: 14)
         .CreateLogger();
 }
 catch (Exception setupException)
@@ -49,8 +48,6 @@ try
         RuntimeInformation.RuntimeIdentifier,
         RuntimeInformation.OSArchitecture,
         RuntimeInformation.FrameworkDescription);
-    LogExternalDependencyVersions(serviceProvider.GetRequiredService<IPreferencesService>().GetPreferences());
-
 
     Module.Initialize();
     GResourceHelper.RegisterAssemblyResources(typeof(Program).Assembly);
@@ -88,75 +85,78 @@ static LogEventLevel ResolveLogLevel(string? logLevelOverride)
     };
 }
 
-static void LogExternalDependencyVersions(AppPreferences preferences)
-{
-    LogToolVersion("yt-dlp", preferences.YtDlpExecutablePath, "yt-dlp", "--version",
-        static output => output.Trim());
-    LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version",
-        static output =>
-        {
-            var firstLine = output.Split('\n', 2)[0].Trim();
-            var tokens = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (tokens.Length > 1 && tokens[0].Equals("mpv", StringComparison.OrdinalIgnoreCase))
-                return tokens[1].TrimStart('v', 'V');
-
-            return firstLine.TrimStart('v', 'V');
-        });
-}
-
-static void LogToolVersion(
-    string displayName,
-    string configuredPath,
-    string fallbackFileName,
-    string arguments,
-    Func<string, string> extractVersion)
-{
-    var executablePath = string.IsNullOrWhiteSpace(configuredPath) ? fallbackFileName : configuredPath.Trim();
-    var version = ProbeToolVersion(executablePath, arguments, TimeSpan.FromSeconds(5), extractVersion);
-    if (version is null)
-    {
-        Log.Warning("{Tool} not found or failed to report a version", displayName);
-        return;
-    }
-
-    Log.Information("{Tool} version {Version}", displayName, version);
-}
-
-static string? ProbeToolVersion(
-    string fileName,
-    string arguments,
-    TimeSpan timeout,
-    Func<string, string> extractVersion)
-{
-    try
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        var output = Process.RunAndCaptureText(startInfo, timeout);
-        if (output.ExitStatus is not { ExitCode: 0, Canceled: false, Signal: null } ||
-            string.IsNullOrWhiteSpace(output.StandardOutput))
-            return null;
-
-        var version = extractVersion(output.StandardOutput);
-        return string.IsNullOrWhiteSpace(version) ? null : version;
-    }
-    catch
-    {
-        // Missing binary, permission denied, etc. The caller logs a warning.
-        return null;
-    }
-}
-
 internal partial class Program
 {
     [LibraryImport("auth_helper", EntryPoint = "run_auth_helper")]
     private static partial int RunAuthHelper();
+
+    internal static void LogExternalDependencyVersions(AppPreferences preferences)
+    {
+        LogToolVersion("yt-dlp", preferences.YtDlpExecutablePath, "yt-dlp", "--version",
+            static output => output.Trim());
+        if (PlaybackBackends.IsEmbedded(preferences.PlaybackBackendKind))
+            return;
+
+        LogToolVersion("mpv", preferences.MpvExecutablePath, "mpv", "--version",
+            static output =>
+            {
+                var firstLine = output.Split('\n', 2)[0].Trim();
+                var tokens = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length > 1 && tokens[0].Equals("mpv", StringComparison.OrdinalIgnoreCase))
+                    return tokens[1].TrimStart('v', 'V');
+
+                return firstLine.TrimStart('v', 'V');
+            });
+    }
+
+    private static void LogToolVersion(
+        string displayName,
+        string configuredPath,
+        string fallbackFileName,
+        string arguments,
+        Func<string, string> extractVersion)
+    {
+        var executablePath = string.IsNullOrWhiteSpace(configuredPath) ? fallbackFileName : configuredPath.Trim();
+        var version = ProbeToolVersion(executablePath, arguments, TimeSpan.FromSeconds(5), extractVersion);
+        if (version is null)
+        {
+            Log.Warning("{Tool} not found or failed to report a version", displayName);
+            return;
+        }
+
+        Log.Information("{Tool} version {Version}", displayName, version);
+    }
+
+    private static string? ProbeToolVersion(
+        string fileName,
+        string arguments,
+        TimeSpan timeout,
+        Func<string, string> extractVersion)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            var output = Process.RunAndCaptureText(startInfo, timeout);
+            if (output.ExitStatus is not { ExitCode: 0, Canceled: false, Signal: null } ||
+                string.IsNullOrWhiteSpace(output.StandardOutput))
+                return null;
+
+            var version = extractVersion(output.StandardOutput);
+            return string.IsNullOrWhiteSpace(version) ? null : version;
+        }
+        catch
+        {
+            // Missing binary, permission denied, etc. The caller logs a warning.
+            return null;
+        }
+    }
 }

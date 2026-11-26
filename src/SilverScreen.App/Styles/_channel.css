@@ -17,8 +17,8 @@
     border: 2px solid alpha(@borders, 0.4);
 }
 
-.channel-avatar picture,
-.channel-avatar image {
+.channel-avatar > picture,
+.channel-avatar > image {
     border-radius: 50%;
 }
 

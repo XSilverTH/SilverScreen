@@ -28,6 +28,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
     private readonly LibMpvPlayer _player;
     private readonly Action _raiseRequested;
     private DBusConnection? _connection;
+    private bool _connectionStarted;
     private bool _disposed;
     private MprisHandler? _mprisHandler;
     private bool _portalAvailable = true;
@@ -38,7 +39,6 @@ internal sealed class DesktopMediaIntegration : IDisposable
     {
         _player = player;
         _raiseRequested = raiseRequested;
-        ConnectAsync().FireAndForget(Logger);
     }
 
     public void Dispose()
@@ -67,6 +67,7 @@ internal sealed class DesktopMediaIntegration : IDisposable
 
     public void UpdatePlayback(PlaybackRequest? request, LibMpvPlaybackState state)
     {
+        var startConnection = false;
         lock (_gate)
         {
             if (_disposed) return;
@@ -74,8 +75,17 @@ internal sealed class DesktopMediaIntegration : IDisposable
             var previous = _snapshot;
             var current = DesktopPlaybackSnapshot.Create(request, state);
             _snapshot = current;
+            if (!_connectionStarted && current.HasMedia)
+            {
+                _connectionStarted = true;
+                startConnection = true;
+            }
+
             _mprisHandler?.PublishChanges(previous, current);
         }
+
+        if (startConnection)
+            ConnectAsync().FireAndForget(Logger);
 
         UpdateInhibition();
     }

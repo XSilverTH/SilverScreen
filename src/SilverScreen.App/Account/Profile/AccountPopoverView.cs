@@ -8,9 +8,12 @@ namespace SilverScreen.Account.Profile;
 
 public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
 {
-    private readonly AccountManualSessionEditorView _manualEditor;
-    private readonly AccountSignedInCardView _signedInCard;
-    private readonly AccountStatusPageView _statusPage;
+    private readonly INativeAuthService _authService;
+    private readonly INotificationService _notifications;
+    private readonly IThumbnailService _thumbnails;
+    private AccountManualSessionEditorView? _manualEditor;
+    private AccountSignedInCardView? _signedInCard;
+    private AccountStatusPageView? _statusPage;
     private bool _editing;
 
     public AccountPopoverView(
@@ -18,24 +21,18 @@ public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
         INativeAuthService authService,
         INotificationService notifications)
     {
-        _statusPage = Lifetime.Own(new AccountStatusPageView(authService, notifications));
-        _signedInCard = Lifetime.Own(new AccountSignedInCardView(thumbnails));
-        _manualEditor = Lifetime.Own(new AccountManualSessionEditorView());
+        _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
+        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
 
-        status_host.Child = _statusPage.Widget;
-        signed_in_host.Child = _signedInCard.Widget;
-        manual_host.Child = _manualEditor.Widget;
-
-        _statusPage.OpenManualEditorRequested += (_, _) => ShowManualEditor();
-        _manualEditor.EditingCompleted += (_, _) => ExitManualEditor();
         Lifetime.Track(() => Widget.OnUnmap += OnUnmap, () => Widget.OnUnmap -= OnUnmap);
     }
 
     protected override void BindViewModel(AccountViewModel viewModel, BindingScope<AccountViewModel> bindings)
     {
-        _statusPage.ViewModel = viewModel;
-        _signedInCard.ViewModel = viewModel;
-        _manualEditor.ViewModel = viewModel;
+        if (_statusPage is not null) _statusPage.ViewModel = viewModel;
+        if (_signedInCard is not null) _signedInCard.ViewModel = viewModel;
+        if (_manualEditor is not null) _manualEditor.ViewModel = viewModel;
 
         bindings.Bind(nameof(AccountViewModel.PresentationStatus), this,
             static vm => vm.PresentationStatus,
@@ -46,18 +43,76 @@ public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
     {
         if (_editing)
         {
+            EnsureManualEditor();
             account_stack.VisibleChildName = "manual";
             return;
         }
 
         var isReady = ViewModel?.PresentationStatus == AccountProfilePresentationStatus.Ready;
-        account_stack.VisibleChildName = isReady ? "signed_in" : "status";
+        if (isReady)
+        {
+            EnsureSignedInCard();
+            account_stack.VisibleChildName = "signed_in";
+        }
+        else
+        {
+            EnsureStatusPage();
+            account_stack.VisibleChildName = "status";
+        }
+    }
+
+    private AccountStatusPageView EnsureStatusPage()
+    {
+        if (_statusPage is not null)
+            return _statusPage;
+
+        var statusPage = Lifetime.Own(new AccountStatusPageView(_authService, _notifications));
+        statusPage.OpenManualEditorRequested += OnOpenManualEditorRequested;
+        status_host.Child = statusPage.Widget;
+        statusPage.ViewModel = ViewModel;
+        _statusPage = statusPage;
+        return statusPage;
+    }
+
+    private AccountSignedInCardView EnsureSignedInCard()
+    {
+        if (_signedInCard is not null)
+            return _signedInCard;
+
+        var signedInCard = Lifetime.Own(new AccountSignedInCardView(_thumbnails));
+        signed_in_host.Child = signedInCard.Widget;
+        signedInCard.ViewModel = ViewModel;
+        _signedInCard = signedInCard;
+        return signedInCard;
+    }
+
+    private AccountManualSessionEditorView EnsureManualEditor()
+    {
+        if (_manualEditor is not null)
+            return _manualEditor;
+
+        var manualEditor = Lifetime.Own(new AccountManualSessionEditorView());
+        manualEditor.EditingCompleted += OnEditingCompleted;
+        manual_host.Child = manualEditor.Widget;
+        manualEditor.ViewModel = ViewModel;
+        _manualEditor = manualEditor;
+        return manualEditor;
+    }
+
+    private void OnOpenManualEditorRequested(object? sender, EventArgs e)
+    {
+        ShowManualEditor();
+    }
+
+    private void OnEditingCompleted(object? sender, EventArgs e)
+    {
+        ExitManualEditor();
     }
 
     private void ShowManualEditor()
     {
         _editing = true;
-        _manualEditor.Reset();
+        EnsureManualEditor().Reset();
         account_stack.VisibleChildName = "manual";
     }
 
@@ -71,7 +126,20 @@ public partial class AccountPopoverView : ViewBase<Bin, AccountViewModel>
     {
         if (!_editing) return;
         _editing = false;
-        _manualEditor.Reset();
+        _manualEditor?.Reset();
         UpdateStack();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            if (_statusPage is not null)
+                _statusPage.OpenManualEditorRequested -= OnOpenManualEditorRequested;
+            if (_manualEditor is not null)
+                _manualEditor.EditingCompleted -= OnEditingCompleted;
+        }
+
+        base.Dispose(disposing);
     }
 }

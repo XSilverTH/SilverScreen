@@ -92,4 +92,26 @@
         <NativeSystemLibrary Include="gtk-4;webkitgtk-6.0;soup-3.0;glib-2.0;gobject-2.0;gio-2.0" Visible="false"/>
         <DirectPInvoke Include="auth_helper" Visible="false"/>
     </ItemGroup>
+
+    <Target Name="GenerateApplicationVersion" BeforeTargets="BeforeCompile;CoreCompile">
+        <PropertyGroup>
+            <_AppVersion Condition="'$(InformationalVersion)' != ''">$(InformationalVersion)</_AppVersion>
+            <_AppVersion Condition="'$(_AppVersion)' == ''">$(Version)</_AppVersion>
+            <_AppVersion Condition="'$(_AppVersion)' == ''">Unknown</_AppVersion>
+            <_VersionFile>$(IntermediateOutputPath)ApplicationMetadata.Version.g.cs</_VersionFile>
+        </PropertyGroup>
+        <ItemGroup>
+            <_VersionLines Include="// &lt;auto-generated/&gt;"/>
+            <_VersionLines Include="namespace SilverScreen.Shell%3B"/>
+            <_VersionLines Include="internal static partial class ApplicationMetadata"/>
+            <_VersionLines Include="{"/>
+            <_VersionLines Include="    internal const string Version = &quot;$(_AppVersion)&quot;%3B"/>
+            <_VersionLines Include="}"/>
+        </ItemGroup>
+        <WriteLinesToFile File="$(_VersionFile)" Lines="@(_VersionLines)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
+        <ItemGroup>
+            <Compile Include="$(_VersionFile)"/>
+            <FileWrites Include="$(_VersionFile)"/>
+        </ItemGroup>
+    </Target>
 </Project>

@@ -1,5 +1,6 @@
 using SilverScreen.Account.Profile;
 using SilverScreen.Core.Account.Profile;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Infrastructure.Account.Session;
 
 namespace SilverScreen.Tests.Account.Profile;
@@ -162,6 +163,44 @@ public sealed class AccountViewModelTests
         Assert.True(await vm.SaveManualSessionAsync(validCookies));
         Assert.Equal(AccountProfilePresentationStatus.Ready, vm.PresentationStatus);
         Assert.Contains(nameof(AccountViewModel.PresentationStatus), propertiesChanged);
+    }
+
+    [Fact]
+    public async Task SessionChangedFromThreadPool_DispatchesSessionAndProfileUpdatesToMainThreadDispatcher()
+    {
+        var dispatchCount = 0;
+        var profileReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var profileRequest = new TaskCompletionSource<AccountProfileResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _profileService.Results.Enqueue(profileRequest.Task);
+
+        using var vm = new AccountViewModel(
+            _profileService,
+            _sessionService,
+            action =>
+            {
+                Interlocked.Increment(ref dispatchCount);
+                action();
+            });
+        vm.StateChanged += (_, _) =>
+        {
+            if (vm.ProfileStatus == AccountProfilePresentationStatus.Ready)
+                profileReady.TrySetResult();
+        };
+
+        var futureExpiry = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+        var validCookies = $".youtube.com\tTRUE\t/\tTRUE\t{futureExpiry}\tSAPISID\tauth_sapisid_value\n";
+
+        await Task.Run(() => _sessionService.SetManualSessionAsync(validCookies, SessionCookieFormat.NetscapeCookiesText));
+        Assert.True(Volatile.Read(ref dispatchCount) >= 1);
+
+        var countAfterSession = Volatile.Read(ref dispatchCount);
+        profileRequest.SetResult(new AccountProfileResult.Success(new AccountProfile("Dispatched account")));
+        await profileReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(Volatile.Read(ref dispatchCount) > countAfterSession);
+        Assert.Equal(AccountProfilePresentationStatus.Ready, vm.ProfileStatus);
+        Assert.Equal("Dispatched account", vm.DisplayName);
     }
 
     private sealed class FakeProfileService : IAccountProfileService

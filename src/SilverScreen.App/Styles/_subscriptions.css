@@ -17,7 +17,7 @@
     padding: 8px 18px;
     font-weight: 700;
     font-size: 0.95rem;
-    transition: all 150ms ease-in-out;
+    transition: background-color 150ms ease-in-out, color 150ms ease-in-out;
 }
 
 .channel-pill:checked,
@@ -47,12 +47,12 @@
     transition: border-color 150ms ease-in-out;
 }
 
-.subscriptions-channel-avatar picture,
-.subscriptions-channel-avatar image {
+.subscriptions-channel-avatar > picture,
+.subscriptions-channel-avatar > image {
     border-radius: 50%;
 }
 
-.subscriptions-channel-item.selected .subscriptions-channel-avatar {
+.subscriptions-channel-item.selected > .subscriptions-channel-avatar {
     border-color: @accent_color;
 }
 
@@ -62,7 +62,7 @@
     transition: color 150ms ease-in-out;
 }
 
-.subscriptions-channel-item.selected .subscriptions-channel-title {
+.subscriptions-channel-item.selected > .subscriptions-channel-title {
     color: @accent_color;
     font-weight: 700;
 }

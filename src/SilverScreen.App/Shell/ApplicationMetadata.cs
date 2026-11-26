@@ -1,10 +1,9 @@
-using System.Reflection;
 using Gtk;
 using AboutDialog = Adw.AboutDialog;
 
 namespace SilverScreen.Shell;
 
-internal static class ApplicationMetadata
+internal static partial class ApplicationMetadata
 {
     internal const string ApplicationId = "io.github.silverscreen.SilverScreen";
     internal const string IconName = "silverscreen";
@@ -13,19 +12,6 @@ internal static class ApplicationMetadata
     private const string DeveloperName = "XSilverTH";
     private const string IssueUrl = "https://github.com/XSilverTH/SilverScreen/issues";
     private const string SourceUrl = "https://github.com/XSilverTH/SilverScreen";
-
-    internal static readonly string Version = GetVersion();
-
-    private static string GetVersion()
-    {
-        var assembly = typeof(ApplicationMetadata).Assembly;
-        var informationalVersion =
-            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        return string.IsNullOrWhiteSpace(informationalVersion)
-            ? assembly.GetName().Version?.ToString() ?? "Unknown"
-            : informationalVersion;
-    }
 
     internal static void PresentAboutDialog(Window parent)
     {

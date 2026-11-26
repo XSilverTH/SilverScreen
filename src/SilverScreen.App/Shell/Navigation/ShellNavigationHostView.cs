@@ -18,19 +18,22 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
 {
     private static readonly ILogger Logger = Log.ForContext<ShellNavigationHostView>();
 
-    private readonly ChannelView _channel;
+    private readonly AccountServices _account;
+    private readonly BrowsingServices _browsing;
+    private readonly VideoCardServices _cardServices;
+    private ChannelView? _channel;
     private readonly Dictionary<NavigationEntry, ChannelBrowsingState> _channelBrowsingStates = [];
-    private readonly ChannelViewModel _channelViewModel;
-    private readonly VideoListView _history;
-    private readonly HistoryViewModel _historyViewModel;
+    private ChannelViewModel? _channelViewModel;
+    private VideoListView? _history;
+    private HistoryViewModel? _historyViewModel;
     private readonly VideoListView _home;
     private readonly INavigationService _navigationService;
     private readonly IShellRefreshCoordinator _refreshCoordinator;
     private readonly Dictionary<NavigationEntry, SearchBrowsingState> _searchBrowsingStates = [];
-    private readonly VideoListView _searchView;
+    private VideoListView? _searchView;
     private readonly SearchViewModel _searchViewModel;
-    private readonly SubscriptionsView _subscriptions;
-    private readonly SubscriptionsViewModel _subscriptionsViewModel;
+    private SubscriptionsView? _subscriptions;
+    private SubscriptionsViewModel? _subscriptionsViewModel;
 
     public ShellNavigationHostView(
         BrowsingServices browsing,
@@ -42,44 +45,21 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
         IShellRefreshCoordinator refreshCoordinator,
         string? initialQuery = null)
     {
+        _browsing = browsing ?? throw new ArgumentNullException(nameof(browsing));
+        _account = account ?? throw new ArgumentNullException(nameof(account));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _refreshCoordinator = refreshCoordinator ?? throw new ArgumentNullException(nameof(refreshCoordinator));
         _searchViewModel = searchViewModel ?? throw new ArgumentNullException(nameof(searchViewModel));
 
-        var cardServices = new VideoCardServices(browsing.Thumbnails, _navigationService, playback, account.Queue,
+        _cardServices = new VideoCardServices(browsing.Thumbnails, _navigationService, playback, account.Queue,
             notificationService);
-
-        _channelViewModel = Lifetime.Own(new ChannelViewModel(browsing.Channels));
-        _channel = Lifetime.Own(new ChannelView(_channelViewModel, cardServices));
-        Lifetime.Track(() => _channel.RefreshLoadingChanged += OnPageLoadingChanged,
-            () => _channel.RefreshLoadingChanged -= OnPageLoadingChanged);
-        channel_host.Append(_channel.Widget);
 
         _home = Lifetime.Own(new VideoListView(
             browsing.HomeFeed.GetVideoListSource(() => account.Auth.StartAuthAsync().FireAndForget(Logger)),
-            cardServices));
+            _cardServices));
         Lifetime.Track(() => _home.RefreshLoadingChanged += OnPageLoadingChanged,
             () => _home.RefreshLoadingChanged -= OnPageLoadingChanged);
         home_host.Append(_home.Widget);
-
-        _historyViewModel = Lifetime.Own(new HistoryViewModel(browsing.History, account.Session,
-            () => account.Auth.StartAuthAsync().FireAndForget(Logger)));
-        _history = Lifetime.Own(new VideoListView(_historyViewModel, cardServices));
-        Lifetime.Track(() => _history.RefreshLoadingChanged += OnPageLoadingChanged,
-            () => _history.RefreshLoadingChanged -= OnPageLoadingChanged);
-        history_host.Append(_history.Widget);
-
-        _subscriptionsViewModel = Lifetime.Own(new SubscriptionsViewModel(browsing.Subscriptions, browsing.Channels,
-            account.Session, true, () => account.Auth.StartAuthAsync().FireAndForget(Logger), account.Auth));
-        _subscriptions = Lifetime.Own(new SubscriptionsView(_subscriptionsViewModel, cardServices));
-        Lifetime.Track(() => _subscriptions.RefreshLoadingChanged += OnPageLoadingChanged,
-            () => _subscriptions.RefreshLoadingChanged -= OnPageLoadingChanged);
-        subscriptions_host.Append(_subscriptions.Widget);
-
-        _searchView = Lifetime.Own(new VideoListView(_searchViewModel, cardServices));
-        Lifetime.Track(() => _searchView.RefreshLoadingChanged += OnPageLoadingChanged,
-            () => _searchView.RefreshLoadingChanged -= OnPageLoadingChanged);
-        search_host.Append(_searchView.Widget);
 
         _searchViewModel.OpenChannelRequested = channelTarget =>
         {
@@ -111,7 +91,7 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
             {
                 if (IsDisposed) return false;
                 _navigationService.NavigateToSearch(initialQuery);
-                _searchViewModel.SubmitAsync(initialQuery, _searchView.GetBatchSize()).FireAndForget(Logger);
+                _searchViewModel.SubmitAsync(initialQuery, EnsureSearchView().GetBatchSize()).FireAndForget(Logger);
 
                 return false;
             });
@@ -121,12 +101,69 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
 
     private bool IsActivePageLoading => _navigationService.CurrentPage switch
     {
-        NavigationPage.Channel => _channel.IsLoading,
-        NavigationPage.History => _history.IsLoading,
-        NavigationPage.Subscriptions => _subscriptions.IsLoading,
-        NavigationPage.Search => _searchView.IsLoading,
+        NavigationPage.Channel => _channel?.IsLoading ?? false,
+        NavigationPage.History => _history?.IsLoading ?? false,
+        NavigationPage.Subscriptions => _subscriptions?.IsLoading ?? false,
+        NavigationPage.Search => _searchView?.IsLoading ?? false,
         _ => _home.IsLoading
     };
+
+    private ChannelView EnsureChannelView()
+    {
+        if (_channel is not null)
+            return _channel;
+
+        _channelViewModel = Lifetime.Own(new ChannelViewModel(_browsing.Channels));
+        var channel = Lifetime.Own(new ChannelView(_channelViewModel, _cardServices));
+        Lifetime.Track(() => channel.RefreshLoadingChanged += OnPageLoadingChanged,
+            () => channel.RefreshLoadingChanged -= OnPageLoadingChanged);
+        channel_host.Append(channel.Widget);
+        _channel = channel;
+        return channel;
+    }
+
+    private VideoListView EnsureHistoryView()
+    {
+        if (_history is not null)
+            return _history;
+
+        _historyViewModel = Lifetime.Own(new HistoryViewModel(_browsing.History, _account.Session,
+            () => _account.Auth.StartAuthAsync().FireAndForget(Logger)));
+        var history = Lifetime.Own(new VideoListView(_historyViewModel, _cardServices));
+        Lifetime.Track(() => history.RefreshLoadingChanged += OnPageLoadingChanged,
+            () => history.RefreshLoadingChanged -= OnPageLoadingChanged);
+        history_host.Append(history.Widget);
+        _history = history;
+        return history;
+    }
+
+    private SubscriptionsView EnsureSubscriptionsView()
+    {
+        if (_subscriptions is not null)
+            return _subscriptions;
+
+        _subscriptionsViewModel = Lifetime.Own(new SubscriptionsViewModel(_browsing.Subscriptions, _browsing.Channels,
+            _account.Session, true, () => _account.Auth.StartAuthAsync().FireAndForget(Logger), _account.Auth));
+        var subscriptions = Lifetime.Own(new SubscriptionsView(_subscriptionsViewModel, _cardServices));
+        Lifetime.Track(() => subscriptions.RefreshLoadingChanged += OnPageLoadingChanged,
+            () => subscriptions.RefreshLoadingChanged -= OnPageLoadingChanged);
+        subscriptions_host.Append(subscriptions.Widget);
+        _subscriptions = subscriptions;
+        return subscriptions;
+    }
+
+    private VideoListView EnsureSearchView()
+    {
+        if (_searchView is not null)
+            return _searchView;
+
+        var searchView = Lifetime.Own(new VideoListView(_searchViewModel, _cardServices));
+        Lifetime.Track(() => searchView.RefreshLoadingChanged += OnPageLoadingChanged,
+            () => searchView.RefreshLoadingChanged -= OnPageLoadingChanged);
+        search_host.Append(searchView.Widget);
+        _searchView = searchView;
+        return searchView;
+    }
 
     private void OnViewStackNotify(object? sender = null, EventArgs? args = null)
     {
@@ -141,10 +178,18 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
             switch (e.CurrentPage)
             {
                 case NavigationPage.History:
-                    _historyViewModel.LoadAsync(_history.GetBatchSize()).FireAndForget(Logger);
+                    var history = EnsureHistoryView();
+                    _historyViewModel!.LoadAsync(history.GetBatchSize()).FireAndForget(Logger);
                     break;
                 case NavigationPage.Subscriptions:
-                    _subscriptionsViewModel.LoadAsync(_subscriptions.GetBatchSize()).FireAndForget(Logger);
+                    var subscriptions = EnsureSubscriptionsView();
+                    _subscriptionsViewModel!.LoadAsync(subscriptions.GetBatchSize()).FireAndForget(Logger);
+                    break;
+                case NavigationPage.Search:
+                    EnsureSearchView();
+                    break;
+                case NavigationPage.Channel:
+                    EnsureChannelView();
                     break;
             }
 
@@ -160,10 +205,10 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
     {
         return _navigationService.CurrentPage switch
         {
-            NavigationPage.Channel => _channel.RefreshAsync(),
-            NavigationPage.History => _history.RefreshAsync(),
-            NavigationPage.Subscriptions => _subscriptions.RefreshAsync(),
-            NavigationPage.Search => _searchView.RefreshAsync(),
+            NavigationPage.Channel => EnsureChannelView().RefreshAsync(),
+            NavigationPage.History => EnsureHistoryView().RefreshAsync(),
+            NavigationPage.Subscriptions => EnsureSubscriptionsView().RefreshAsync(),
+            NavigationPage.Search => EnsureSearchView().RefreshAsync(),
             _ => _home.RefreshAsync()
         };
     }
@@ -178,15 +223,16 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
     {
         _searchBrowsingStates[_navigationService.CurrentEntry] = new SearchBrowsingState(
             _searchViewModel.CaptureNavigationState(),
-            _searchView.Vadjustment?.Value ?? 0);
+            _searchView?.Vadjustment?.Value ?? 0);
     }
 
     private void RestoreSearchBrowsingState()
     {
+        var searchView = EnsureSearchView();
         if (_searchBrowsingStates.TryGetValue(_navigationService.CurrentEntry, out var state))
         {
             _searchViewModel.RestoreNavigationState(state.ViewModel);
-            RestoreScrollPosition(_searchView.Vadjustment, state.ScrollValue);
+            RestoreScrollPosition(searchView.Vadjustment, state.ScrollValue);
         }
         else
         {
@@ -196,25 +242,29 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
 
     private void CaptureChannelBrowsingState()
     {
+        if (_channelViewModel is null)
+            return;
+
         _channelBrowsingStates[_navigationService.CurrentEntry] = new ChannelBrowsingState(
             _channelViewModel.CaptureNavigationState(),
-            _channel.Vadjustment?.Value ?? 0);
+            _channel?.Vadjustment?.Value ?? 0);
     }
 
     private void RestoreChannelBrowsingState()
     {
+        var channelView = EnsureChannelView();
         var entry = _navigationService.CurrentEntry;
         if (_channelBrowsingStates.TryGetValue(entry, out var state))
         {
-            _channelViewModel.RestoreNavigationState(state.ViewModel);
-            RestoreScrollPosition(_channel.Vadjustment, state.ScrollValue);
+            _channelViewModel!.RestoreNavigationState(state.ViewModel);
+            RestoreScrollPosition(channelView.Vadjustment, state.ScrollValue);
             return;
         }
 
-        _channelViewModel.Clear();
+        _channelViewModel!.Clear();
         if (entry.Parameter is ChannelNavigationArgs channelArgs)
             _channelViewModel
-                .OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? string.Empty, _channel.GetBatchSize())
+                .OpenChannelAsync(channelArgs.Url, channelArgs.Name ?? string.Empty, channelView.GetBatchSize())
                 .FireAndForget(Logger);
     }
 

@@ -1,3 +1,4 @@
+using GLib;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Account.Auth;
@@ -11,6 +12,7 @@ using SilverScreen.Core.Browsing.History;
 using SilverScreen.Core.Browsing.Home;
 using SilverScreen.Core.Browsing.Search;
 using SilverScreen.Core.Browsing.Subscriptions;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
@@ -82,14 +84,16 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IYouTubeClientProvider>(static provider =>
             provider.GetRequiredService<YouTubeClientProvider>());
         services.AddSingleton<IAccountProfileService, YoutubeApiAccountProfileService>();
-        services.AddSingleton<IPlaybackPresenceService>(provider =>
-            new DiscordPresenceService(
+        services.AddSingleton<IPlaybackPresenceService>(static provider =>
+            new LazyDiscordPresenceService(
                 provider.GetRequiredService<IPreferencesService>(),
                 provider.GetRequiredService<ApplicationConfiguration>().DiscordApplicationId));
         services.AddSingleton<IYouTubePlaybackTelemetryService, YouTubePlaybackTelemetryService>();
         services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<IYouTubePlaybackProgressService, YoutubeApiPlaybackProgressService>();
         services.AddSingleton<IPlaybackService, ExternalMpvPlaybackService>();
+        services.AddSingleton(static provider =>
+            new Lazy<IPlaybackService>(provider.GetRequiredService<IPlaybackService>));
         // yt-dlp runner and media resolver back the mpv fallback path: when mpv exits fast
         // with a non-zero code, the playback service resolves direct media URLs and relaunches once.
         services.AddSingleton<IYtDlpRunner, YtDlpRunner>();
@@ -125,14 +129,68 @@ public static class ApplicationServiceCollectionExtensions
             provider.GetRequiredService<IQueueService>(),
             provider.GetRequiredService<INativeAuthService>()));
         services.AddSingleton<PlayerDependencies>();
+        services.AddSingleton(static provider =>
+            new Lazy<PlayerDependencies>(provider.GetRequiredService<PlayerDependencies>));
         services.AddSingleton<ShellRefreshCoordinator>();
         services.AddSingleton<IShellRefreshCoordinator>(static provider =>
             provider.GetRequiredService<ShellRefreshCoordinator>());
         services.AddSingleton<SearchViewModel>();
         services.AddSingleton(static provider => new AccountViewModel(
             provider.GetRequiredService<IAccountProfileService>(),
-            provider.GetRequiredService<ISessionService>()));
+            provider.GetRequiredService<ISessionService>(),
+            DispatchToMainThread));
         return services;
+    }
+
+    private static void DispatchToMainThread(Action action)
+    {
+        if (MainContext.Default().IsOwner())
+        {
+            action();
+            return;
+        }
+
+        Functions.IdleAdd(0, () =>
+        {
+            action();
+            return false;
+        });
+    }
+
+    private sealed class LazyDiscordPresenceService(
+        IPreferencesService preferencesService,
+        string? applicationId)
+        : IPlaybackPresenceService
+    {
+        private readonly Lazy<DiscordPresenceService> _inner = new(() =>
+            new DiscordPresenceService(preferencesService, applicationId));
+
+        private int _disposed;
+
+        public void SetPlaybackState(PlaybackRequest request, PlaybackPresenceState state)
+        {
+            if (Volatile.Read(ref _disposed) != 0)
+                return;
+
+            _inner.Value.SetPlaybackState(request, state);
+        }
+
+        public void Clear()
+        {
+            if (Volatile.Read(ref _disposed) != 0 || !_inner.IsValueCreated)
+                return;
+
+            _inner.Value.Clear();
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+
+            if (_inner.IsValueCreated)
+                _inner.Value.Dispose();
+        }
     }
 }
 
@@ -143,17 +201,18 @@ public static class ApplicationComposition
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        SweepStaleTemporaryFiles();
         return new ServiceCollection()
             .AddSilverScreenServices(configuration)
             .BuildServiceProvider(new ServiceProviderOptions
             {
+#if DEBUG
                 ValidateOnBuild = true,
                 ValidateScopes = true
+#endif
             });
     }
 
-    private static void SweepStaleTemporaryFiles()
+    internal static void SweepStaleTemporaryFiles()
     {
         // Best-effort orphan cleanup for crashed/short-lived cookie and IPC entries; never fails startup.
         try

@@ -12,6 +12,7 @@ using Action = System.Action;
 using ApplicationWindow = Adw.ApplicationWindow;
 using Constants = Gdk.Constants;
 using PreferencesDialog = SilverScreen.Preferences.PreferencesDialog;
+using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
 
 namespace SilverScreen.Shell;
@@ -21,14 +22,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
     private readonly AccountServices _account;
     private readonly Action _disposeApplicationServices;
-    private readonly EmbeddedPlayerView _embeddedPlayer;
+    private readonly LazyEmbeddedPlayerPresenter _embeddedPlayerPresenter;
     private readonly ShellNavigationHostView _navigationHost;
     private readonly INavigationService _navigationService;
     private readonly INotificationService _notificationService;
+    private readonly Lazy<PlayerDependencies> _playerDependencies;
     private readonly QueueView _queueView;
     private readonly QueueViewModel _queueViewModel;
     private readonly ShellHeaderBarView _shellHeaderBar;
     private bool _closed;
+    private EmbeddedPlayerView? _embeddedPlayer;
 
     public MainWindow(
         BrowsingServices browsing, AccountServices account, IPlaybackService playback,
@@ -37,15 +40,45 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         SearchViewModel searchViewModel, AccountViewModel accountViewModel,
         IShellRefreshCoordinator refreshCoordinator, Action disposeApplicationServices,
         string? initialQuery = null)
+        : this(
+            browsing,
+            account,
+            new Lazy<IPlaybackService>(() => playback ?? throw new ArgumentNullException(nameof(playback))),
+            new Lazy<PlayerDependencies>(() => player ?? throw new ArgumentNullException(nameof(player))),
+            diagnostics,
+            navigationService,
+            notificationService,
+            searchViewModel,
+            accountViewModel,
+            refreshCoordinator,
+            disposeApplicationServices,
+            initialQuery)
+    {
+    }
+
+    public MainWindow(
+        BrowsingServices browsing, AccountServices account, Lazy<IPlaybackService> playback,
+        Lazy<PlayerDependencies> player, RuntimeDependencyDiagnostics diagnostics,
+        INavigationService navigationService, INotificationService notificationService,
+        SearchViewModel searchViewModel, AccountViewModel accountViewModel,
+        IShellRefreshCoordinator refreshCoordinator, Action disposeApplicationServices,
+        string? initialQuery = null)
     {
         Logger.Debug("Initializing MainWindow");
-        (_account, _disposeApplicationServices, _navigationService, _notificationService) = (account,
-            disposeApplicationServices, navigationService, notificationService);
+        ArgumentNullException.ThrowIfNull(playback);
+        (_account, _disposeApplicationServices, _navigationService, _notificationService, _playerDependencies) = (
+            account,
+            disposeApplicationServices,
+            navigationService,
+            notificationService,
+            player ?? throw new ArgumentNullException(nameof(player)));
         if (_notificationService is NotificationService notify) notify.AttachToastOverlay(toast_overlay);
 
-        _embeddedPlayer = new EmbeddedPlayerView(_navigationService, player);
-        var playback1 = new PlaybackModeRoutingService(account.Preferences, playback, _embeddedPlayer);
-        player_host.Append(_embeddedPlayer.Widget);
+        _embeddedPlayerPresenter = new LazyEmbeddedPlayerPresenter(this);
+        var playback1 = new PlaybackModeRoutingService(
+            account.Preferences,
+            new LazyPlaybackService(playback),
+            _embeddedPlayerPresenter);
 
         _queueViewModel = new QueueViewModel(account.Queue, playback1);
         _queueView = new QueueView(_queueViewModel, browsing.Thumbnails);
@@ -85,6 +118,19 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
         Lifetime.Track(() => Widget.OnCloseRequest += OnCloseRequest, () => Widget.OnCloseRequest -= OnCloseRequest);
     }
 
+    private EmbeddedPlayerView EnsureEmbeddedPlayer()
+    {
+        if (_embeddedPlayer is not null)
+            return _embeddedPlayer;
+
+        App.EnsurePlayerStylesInstalled();
+        var embedded = new EmbeddedPlayerView(_navigationService, _playerDependencies.Value);
+        _embeddedPlayer = embedded;
+        _embeddedPlayerPresenter.Attach(embedded);
+        player_host.Append(embedded.Widget);
+        return embedded;
+    }
+
     private void SetupDesktopBackShortcuts()
     {
         var key = EventControllerKey.New();
@@ -114,9 +160,16 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
     private void OnNavigationPageChanged(object? sender, NavigationPageChangedEventArgs e)
     {
         if (_closed) return;
-        if (e.CurrentPage == NavigationPage.Player && _account.Preferences.GetPreferences().OpenInFullscreen)
-            Widget.Fullscreen();
-        else if (e.PreviousPage == NavigationPage.Player) Widget.Unfullscreen();
+        if (e.CurrentPage == NavigationPage.Player)
+        {
+            EnsureEmbeddedPlayer();
+            if (_account.Preferences.GetPreferences().OpenInFullscreen)
+                Widget.Fullscreen();
+        }
+        else if (e.PreviousPage == NavigationPage.Player)
+        {
+            Widget.Unfullscreen();
+        }
     }
 
     private void RegisterApplicationActions()
@@ -162,10 +215,106 @@ public partial class MainWindow : WindowBase<ApplicationWindow>
             _navigationHost.Dispose();
             _queueView.Dispose();
             _queueViewModel.Dispose();
-            _embeddedPlayer.Dispose();
+            _embeddedPlayerPresenter.Detach();
+            _embeddedPlayer?.Dispose();
+            _embeddedPlayer = null;
             _disposeApplicationServices();
         }
 
         base.Dispose(disposing);
+    }
+
+    private sealed class LazyPlaybackService(Lazy<IPlaybackService> inner) : IPlaybackService
+    {
+        public Task<string> PlayAsync(PlaybackRequest request)
+        {
+            return inner.Value.PlayAsync(request);
+        }
+
+        public Task<string> PlayAlternateAsync(PlaybackRequest request)
+        {
+            return inner.Value.PlayAlternateAsync(request);
+        }
+    }
+
+    private sealed class LazyEmbeddedPlayerPresenter(MainWindow owner) : IEmbeddedPlayerPresenter
+    {
+        private EmbeddedPlayerView? _attached;
+        private EventHandler? _playbackStateChanged;
+
+        public bool HasMedia => _attached?.HasMedia ?? false;
+        public bool IsPaused => _attached?.IsPaused ?? true;
+
+        public event EventHandler? PlaybackStateChanged
+        {
+            add => _playbackStateChanged += value;
+            remove => _playbackStateChanged -= value;
+        }
+
+        public Task<string> PresentAsync(PlaybackRequest request)
+        {
+            if (_attached is not null || GLib.MainContext.Default().IsOwner())
+                return owner.EnsureEmbeddedPlayer().PresentAsync(request);
+
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            GLib.Functions.IdleAdd(0, () =>
+            {
+                if (owner._closed)
+                {
+                    tcs.TrySetResult("Window closed.");
+                    return false;
+                }
+
+                try
+                {
+                    var task = owner.EnsureEmbeddedPlayer().PresentAsync(request);
+                    task.ContinueWith(completed =>
+                    {
+                        if (completed.IsFaulted)
+                            tcs.TrySetException(completed.Exception!.InnerExceptions);
+                        else if (completed.IsCanceled)
+                            tcs.TrySetCanceled();
+                        else
+                            tcs.TrySetResult(completed.Result);
+                    }, TaskScheduler.Default);
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+
+                return false;
+            });
+            return tcs.Task;
+        }
+
+        public Task TogglePauseAsync()
+        {
+            return _attached is not null ? _attached.TogglePauseAsync() : Task.CompletedTask;
+        }
+
+        public void Attach(EmbeddedPlayerView embeddedPlayer)
+        {
+            if (ReferenceEquals(_attached, embeddedPlayer))
+                return;
+
+            _attached = embeddedPlayer;
+            embeddedPlayer.PlaybackStateChanged += OnInnerPlaybackStateChanged;
+        }
+
+        public void Detach()
+        {
+            if (_attached is null)
+                return;
+
+            _attached.PlaybackStateChanged -= OnInnerPlaybackStateChanged;
+            _attached = null;
+            _playbackStateChanged = null;
+        }
+
+        private void OnInnerPlaybackStateChanged(object? sender, EventArgs e)
+        {
+            _playbackStateChanged?.Invoke(sender, e);
+        }
     }
 }

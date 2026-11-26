@@ -7,11 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SilverScreen.Account.Profile;
 using SilverScreen.Browsing.Search;
+using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using Application = Adw.Application;
 using Functions = GLib.Functions;
+using Task = System.Threading.Tasks.Task;
 using Window = Gtk.Window;
 
 namespace SilverScreen.Shell;
@@ -20,6 +22,7 @@ namespace SilverScreen.Shell;
 public partial class App
 {
     private static CssProvider? _styles;
+    private static CssProvider? _playerStyles;
     private readonly ActivationWindowGuard<Window> _windowGuard = new();
     private AccountServices? _accountServices;
     private string? _initialQuery;
@@ -41,6 +44,8 @@ public partial class App
         {
             _styles?.Dispose();
             _styles = null;
+            _playerStyles?.Dispose();
+            _playerStyles = null;
             if (_preferencesChangedHandler is not null && _accountServices is not null)
             {
                 _accountServices.Preferences.PreferencesChanged -= _preferencesChangedHandler;
@@ -84,7 +89,8 @@ public partial class App
         InstallStyles();
         var account = _serviceProvider.GetRequiredService<AccountServices>();
         _accountServices = account;
-        ApplyTheme(account.Preferences.GetPreferences().ThemeMode);
+        var initialPreferences = account.Preferences.GetPreferences();
+        ApplyTheme(initialPreferences.ThemeMode);
         if (_preferencesChangedHandler is null)
         {
             _preferencesChangedHandler = (_, prefs) => ApplyTheme(prefs.ThemeMode);
@@ -95,8 +101,8 @@ public partial class App
         var mainWindowWrapper = new MainWindow(
             _serviceProvider.GetRequiredService<BrowsingServices>(),
             account,
-            _serviceProvider.GetRequiredService<IPlaybackService>(),
-            _serviceProvider.GetRequiredService<PlayerDependencies>(),
+            _serviceProvider.GetRequiredService<Lazy<IPlaybackService>>(),
+            _serviceProvider.GetRequiredService<Lazy<PlayerDependencies>>(),
             _serviceProvider.GetRequiredService<RuntimeDependencyDiagnostics>(),
             _serviceProvider.GetRequiredService<INavigationService>(),
             _serviceProvider.GetRequiredService<INotificationService>(),
@@ -112,11 +118,18 @@ public partial class App
             _initialQuery);
         _initialQuery = null;
         var mainWindow = mainWindowWrapper.Widget;
+        createdWindow = mainWindow;
         _windowGuard.Set(mainWindow);
         _serviceLifetime!.WindowOpened();
         mainWindow.Application = this;
         AddWindow(mainWindow);
         mainWindow.Present();
+
+        Task.Run(() =>
+        {
+            ApplicationComposition.SweepStaleTemporaryFiles();
+            Program.LogExternalDependencyVersions(initialPreferences);
+        }).FireAndForget(Log.Logger);
     }
 
     private static void ApplyTheme(ThemeMode theme)
@@ -127,17 +140,28 @@ public partial class App
             return;
         }
 
+        if (GLib.MainContext.Default().IsOwner())
+        {
+            ApplyThemeCore(theme);
+            return;
+        }
+
         Functions.IdleAdd(0, () =>
         {
-            var styleManager = StyleManager.GetDefault();
-            styleManager.ColorScheme = theme switch
-            {
-                ThemeMode.Light => ColorScheme.PreferLight,
-                ThemeMode.Dark => ColorScheme.PreferDark,
-                _ => ColorScheme.Default
-            };
+            ApplyThemeCore(theme);
             return false;
         });
+    }
+
+    private static void ApplyThemeCore(ThemeMode theme)
+    {
+        var styleManager = StyleManager.GetDefault();
+        styleManager.ColorScheme = theme switch
+        {
+            ThemeMode.Light => ColorScheme.PreferLight,
+            ThemeMode.Dark => ColorScheme.PreferDark,
+            _ => ColorScheme.Default
+        };
     }
 
     private static void InstallStyles()
@@ -159,5 +183,23 @@ public partial class App
         _styles.LoadFromResource("/SilverScreen/Styles/main.css");
 
         StyleContext.AddProviderForDisplay(display, _styles, 600);
+    }
+
+    internal static void EnsurePlayerStylesInstalled()
+    {
+        if (_playerStyles is not null)
+            return;
+
+        var display = Display.GetDefault();
+        if (display is null)
+        {
+            Log.Debug("Skipping player style install: no display available");
+            return;
+        }
+
+        _playerStyles = CssProvider.New();
+        _playerStyles.LoadFromResource("/SilverScreen/Styles/player.css");
+
+        StyleContext.AddProviderForDisplay(display, _playerStyles, 600);
     }
 }

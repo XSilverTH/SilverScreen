@@ -8,6 +8,7 @@ using SilverScreen.Account.Profile;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using XSTH.Blueprint.Helpers;
+using Object = GObject.Object;
 
 namespace SilverScreen.Shell.Header;
 
@@ -15,12 +16,15 @@ namespace SilverScreen.Shell.Header;
 public partial class AccountHeaderButtonView : ViewBase<MenuButton>
 {
     private static readonly ILogger Logger = Log.ForContext<AccountHeaderButtonView>();
+    private readonly INativeAuthService _authService;
     private readonly NativeMemoryPressure _avatarPressure = new();
+    private readonly INotificationService _notifications;
     private readonly IThumbnailService _thumbnails;
     private readonly AccountViewModel _viewModel;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
     private string? _loadedAvatarUrl;
+    private AccountPopoverView? _popover;
 
     public AccountHeaderButtonView(
         AccountViewModel viewModel, IThumbnailService thumbnails,
@@ -28,14 +32,31 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
-        var popover = Lifetime.Own(new AccountPopoverView(thumbnails, authService, notifications));
-        popover.ViewModel = viewModel;
-        account_popover.Child = popover.Widget;
+        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
 
+        Lifetime.Track(() => account_popover.OnNotify += OnPopoverNotify,
+            () => account_popover.OnNotify -= OnPopoverNotify);
         Lifetime.Track(
             () => _viewModel.PropertyChanged += OnPropertyChanged,
             () => _viewModel.PropertyChanged -= OnPropertyChanged);
         Render();
+    }
+
+    private void OnPopoverNotify(Object sender, Object.NotifySignalArgs args)
+    {
+        if (args.Pspec.GetName() == "visible" && account_popover.GetVisible())
+            EnsurePopover();
+    }
+
+    private void EnsurePopover()
+    {
+        if (_popover is not null || IsDisposed)
+            return;
+
+        _popover = Lifetime.Own(new AccountPopoverView(_thumbnails, _authService, _notifications));
+        _popover.ViewModel = _viewModel;
+        account_popover.Child = _popover.Widget;
     }
 
     private void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -80,13 +101,19 @@ public partial class AccountHeaderButtonView : ViewBase<MenuButton>
         _loadedAvatarUrl = avatarUrl;
         try
         {
-            await _avatarCancellation?.CancelAsync()!;
+            if (_avatarCancellation is { } previousCts)
+            {
+                await previousCts.CancelAsync();
+                previousCts.Dispose();
+                _avatarCancellation = null;
+            }
         }
         catch (Exception)
         {
+            _avatarCancellation?.Dispose();
+            _avatarCancellation = null;
         }
 
-        _avatarCancellation?.Dispose();
         var ct = (_avatarCancellation = new CancellationTokenSource()).Token;
         Pixbuf? pixbuf = null;
         try

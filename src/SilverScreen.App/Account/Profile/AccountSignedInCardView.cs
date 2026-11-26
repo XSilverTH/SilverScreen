@@ -84,7 +84,7 @@ public partial class AccountSignedInCardView(IThumbnailService thumbnails) : Vie
                 signed_in_avatar.CustomImage = texture;
                 _avatarTexture?.Dispose();
                 _avatarTexture = texture;
-                _avatarPressure.Track(48 * 48 * 4);
+                _avatarPressure.Track(128 * 128 * 4);
             }
             finally
             {

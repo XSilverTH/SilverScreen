@@ -1,46 +1,34 @@
 /* Queue Panel and Queue Row styles */
 
 listview > row,
-listview row,
-listview > child,
-listview child {
+listview > child {
     background-color: transparent;
     outline: none;
     box-shadow: none;
 }
 
 listview > row:hover,
-listview row:hover,
 listview > child:hover,
-listview child:hover,
 listview > row:selected,
-listview row:selected,
 listview > child:selected,
-listview child:selected,
 listview > row:focus,
-listview row:focus,
 listview > child:focus,
-listview child:focus,
 listview > row:active,
-listview row:active,
-listview > child:active,
-listview child:active {
+listview > child:active {
     background-color: transparent;
     outline: none;
     box-shadow: none;
 }
 
 .queue-row:focus-visible,
-listview > row:focus-visible .queue-row,
-listview row:focus-visible .queue-row {
+listview > row:focus-visible > .queue-row {
     background-color: mix(@card_bg_color, @accent_bg_color, 0.16);
     border-color: @accent_bg_color;
     box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.45);
 }
 
-.queue-row:focus-visible .queue-thumbnail,
-listview > row:focus-visible .queue-thumbnail,
-listview row:focus-visible .queue-thumbnail {
+.queue-row:focus-visible > .queue-thumbnail,
+listview > row:focus-visible > .queue-row > .queue-thumbnail {
     border: 1px solid @accent_bg_color;
 }
 
@@ -69,7 +57,7 @@ listview row:focus-visible .queue-thumbnail {
     border-radius: 8px;
 }
 
-.queue-thumbnail image {
+.queue-thumbnail > image {
     border-radius: 8px;
 }
 
