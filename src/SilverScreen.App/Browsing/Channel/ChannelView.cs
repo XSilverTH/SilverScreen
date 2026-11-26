@@ -1,7 +1,7 @@
 using Gtk;
 using SilverScreen.Browsing.Components;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Channel;
 
@@ -55,12 +55,7 @@ public partial class ChannelView : ViewBase<Box, ChannelViewModel>
         }
         finally
         {
-            Functions.IdleAdd(0, () =>
-            {
-                if (!IsDisposed)
-                    _header.SetHeaderCollapsed(false);
-                return false;
-            });
+            GtkUiDispatch.Run(() => !IsDisposed, () => _header.SetHeaderCollapsed(false));
         }
     }
 

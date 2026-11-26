@@ -5,9 +5,9 @@ namespace SilverScreen.Player.Controls;
 
 internal sealed class PlayerChromeController : IDisposable
 {
-    private const long ControlsIdleDelayMilliseconds = 1_500;
-    private const uint ControlsVisibilityCheckMilliseconds = 100;
+    private const uint ControlsIdleDelayMilliseconds = 1_500;
     private readonly Box _centerControls;
+    private readonly Func<bool> _hasOpenPopover;
     private readonly Widget _headerBar;
     private readonly DisposeScope _lifetime = new();
     private readonly Action? _onActivity;
@@ -16,7 +16,7 @@ internal sealed class PlayerChromeController : IDisposable
     private readonly Widget _playerControls;
     private readonly Widget _viewWidget;
     private uint _hideControlsTimeoutSource;
-    private long _lastActivityMilliseconds;
+    private uint _idleHideTimeoutSource;
     private double _lastPointerX = double.NaN;
     private double _lastPointerY = double.NaN;
 
@@ -34,6 +34,7 @@ internal sealed class PlayerChromeController : IDisposable
         _headerBar = headerBar;
         _centerControls = centerControls;
         _playerControls = playerControls;
+        _hasOpenPopover = hasOpenPopover;
 
         _onActivity = onActivity;
         _onPointerMoved = onPointerMoved;
@@ -52,38 +53,58 @@ internal sealed class PlayerChromeController : IDisposable
             c => c.OnPressed -= OnPressed);
 
         RegisterActivity();
-
-        _lifetime.Timeout(ControlsVisibilityCheckMilliseconds, () =>
-        {
-            if (ControlsVisible &&
-                !hasOpenPopover() &&
-                Environment.TickCount64 - _lastActivityMilliseconds >= ControlsIdleDelayMilliseconds)
-                SetControlsVisible(false);
-
-            return true;
-        });
     }
 
-    private bool ControlsVisible { get; set; } = true;
+    public bool ControlsVisible { get; private set; } = true;
 
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
-        if (_hideControlsTimeoutSource != 0)
-        {
-            _lifetime.Cancel(_hideControlsTimeoutSource);
-            _hideControlsTimeoutSource = 0;
-        }
-
+        CancelIdleHideTimeout();
+        CancelHideControlsTimeout();
         _lifetime.Dispose();
     }
 
     public void RegisterActivity()
     {
         if (_lifetime.IsDisposed) return;
-        _lastActivityMilliseconds = Environment.TickCount64;
         _onActivity?.Invoke();
         SetControlsVisible(true);
+        ScheduleIdleHideTimeout();
+    }
+
+    private void ScheduleIdleHideTimeout()
+    {
+        CancelIdleHideTimeout();
+        _idleHideTimeoutSource = _lifetime.Timeout(ControlsIdleDelayMilliseconds, OnIdleHideTimeout);
+    }
+
+    private bool OnIdleHideTimeout()
+    {
+        _idleHideTimeoutSource = 0;
+        if (_lifetime.IsDisposed || !ControlsVisible) return false;
+        if (_hasOpenPopover())
+        {
+            _idleHideTimeoutSource = _lifetime.Timeout(ControlsIdleDelayMilliseconds, OnIdleHideTimeout);
+            return false;
+        }
+
+        SetControlsVisible(false);
+        return false;
+    }
+
+    private void CancelIdleHideTimeout()
+    {
+        if (_idleHideTimeoutSource == 0) return;
+        _lifetime.Cancel(_idleHideTimeoutSource);
+        _idleHideTimeoutSource = 0;
+    }
+
+    private void CancelHideControlsTimeout()
+    {
+        if (_hideControlsTimeoutSource == 0) return;
+        _lifetime.Cancel(_hideControlsTimeoutSource);
+        _hideControlsTimeoutSource = 0;
     }
 
     private void RegisterPointerActivity(double x, double y)
@@ -101,11 +122,7 @@ internal sealed class PlayerChromeController : IDisposable
         if (ControlsVisible == visible) return;
         ControlsVisible = visible;
 
-        if (_hideControlsTimeoutSource != 0)
-        {
-            _lifetime.Cancel(_hideControlsTimeoutSource);
-            _hideControlsTimeoutSource = 0;
-        }
+        CancelHideControlsTimeout();
 
         if (visible)
         {
@@ -115,6 +132,7 @@ internal sealed class PlayerChromeController : IDisposable
         }
         else
         {
+            CancelIdleHideTimeout();
             SetControlFadingOut(_headerBar);
             SetControlFadingOut(_centerControls);
             SetControlFadingOut(_playerControls);

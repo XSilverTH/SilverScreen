@@ -41,14 +41,14 @@ public partial class PlayerTimelineView : ViewBase<Box>
             registerActivity));
     }
 
-    public void UpdatePosition(LibMpvPlaybackState state)
+    public void UpdatePosition(LibMpvPlaybackState state, bool updateWidgets = true)
     {
-        _timelineController?.UpdatePosition(state);
+        _timelineController?.UpdatePosition(state, updateWidgets);
     }
 
-    public void UpdateChapters(IReadOnlyList<LibMpvChapter> chapters, TimeSpan duration)
+    public void UpdateChapters(IReadOnlyList<LibMpvChapter> chapters, TimeSpan duration, bool layoutNow = true)
     {
-        _chapterOverlay?.Update(chapters, duration);
+        _chapterOverlay?.Update(chapters, duration, layoutNow);
     }
 
     public void SetExpectedMedia(TimeSpan duration, bool isLive)

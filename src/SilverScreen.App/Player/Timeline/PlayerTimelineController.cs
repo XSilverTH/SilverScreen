@@ -265,6 +265,11 @@ internal sealed class PlayerTimelineController : IDisposable
 
     private readonly Scale _timeline;
     private readonly Overlay _timelineOverlay;
+    private string? _lastDurationText;
+    private string? _lastPositionText;
+    private double _lastRangeMax = double.NaN;
+    private bool? _lastSensitive;
+    private double _lastTimelineValue = double.NaN;
     private uint _throttledSeekSource;
     private bool _updatingControls;
 
@@ -341,54 +346,90 @@ internal sealed class PlayerTimelineController : IDisposable
         CancelThrottledSeek();
     }
 
-    public void UpdatePosition(LibMpvPlaybackState state)
+    public void UpdatePosition(LibMpvPlaybackState state, bool updateWidgets = true)
     {
         if (_lifetime.IsDisposed) return;
+
+        var effectiveDuration = state.Duration > TimeSpan.Zero
+            ? state.Duration
+            : State.ExpectedDuration ?? TimeSpan.Zero;
+
+        var accepted = State.UpdatePlaybackState(state.HasMedia, state.Position, effectiveDuration, state.Chapters,
+            out var positionAccepted) && positionAccepted;
+
+        if (!updateWidgets)
+            return;
 
         _updatingControls = true;
         try
         {
+            string durationText;
+            double rangeMax;
+            bool sensitive;
+
             if (state.Duration > TimeSpan.Zero)
             {
-                _durationLabel.SetText(PlayerTimelineState.FormatTime(state.Duration));
-                _timeline.SetRange(0, state.Duration.TotalSeconds);
-                _timeline.SetSensitive(state is { IsSeekable: true, IsLoading: false });
+                durationText = PlayerTimelineState.FormatTime(state.Duration);
+                rangeMax = state.Duration.TotalSeconds;
+                sensitive = state is { IsSeekable: true, IsLoading: false };
             }
             else if (State.IsLive)
             {
-                _durationLabel.SetText("Live");
-                _timeline.SetRange(0, 0);
-                _timeline.SetSensitive(false);
+                durationText = "Live";
+                rangeMax = 0;
+                sensitive = false;
             }
             else if (State.ExpectedDuration is { } expected && expected > TimeSpan.Zero)
             {
-                _durationLabel.SetText(PlayerTimelineState.FormatTime(expected));
-                _timeline.SetRange(0, expected.TotalSeconds);
-                _timeline.SetSensitive(false);
+                durationText = PlayerTimelineState.FormatTime(expected);
+                rangeMax = expected.TotalSeconds;
+                sensitive = false;
             }
             else
             {
-                _durationLabel.SetText(state.IsLoading
+                durationText = state.IsLoading
                     ? "--:--"
-                    : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive));
-                _timeline.SetRange(0, 0);
-                _timeline.SetSensitive(false);
+                    : PlayerTimelineState.FormatDurationLabel(state.Duration, State.IsLive);
+                rangeMax = 0;
+                sensitive = false;
             }
 
-            var effectiveDuration = state.Duration > TimeSpan.Zero
-                ? state.Duration
-                : State.ExpectedDuration ?? TimeSpan.Zero;
+            if (!string.Equals(_lastDurationText, durationText, StringComparison.Ordinal))
+            {
+                _lastDurationText = durationText;
+                _durationLabel.SetText(durationText);
+            }
 
-            if (!State.UpdatePlaybackState(state.HasMedia, state.Position, effectiveDuration, state.Chapters,
-                    out var accepted) || !accepted) return;
+            if (!_lastRangeMax.Equals(rangeMax))
+            {
+                _lastRangeMax = rangeMax;
+                _timeline.SetRange(0, rangeMax);
+            }
 
-            if (state.IsLoading && state.Position <= TimeSpan.Zero)
-                _positionLabel.SetText(State.IsLive ? "Live" : "--:--");
-            else
-                _positionLabel.SetText(PlayerTimelineState.FormatTime(state.Position));
+            if (_lastSensitive != sensitive)
+            {
+                _lastSensitive = sensitive;
+                _timeline.SetSensitive(sensitive);
+            }
+
+            if (!accepted) return;
+
+            var posText = state.IsLoading && state.Position <= TimeSpan.Zero
+                ? State.IsLive ? "Live" : "--:--"
+                : PlayerTimelineState.FormatTime(state.Position);
+            if (!string.Equals(_lastPositionText, posText, StringComparison.Ordinal))
+            {
+                _lastPositionText = posText;
+                _positionLabel.SetText(posText);
+            }
 
             var maxSeconds = effectiveDuration.TotalSeconds;
-            _timeline.SetValue(Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, maxSeconds)));
+            var value = Math.Clamp(state.Position.TotalSeconds, 0, Math.Max(0, maxSeconds));
+            if (!_lastTimelineValue.Equals(value))
+            {
+                _lastTimelineValue = value;
+                _timeline.SetValue(value);
+            }
         }
         finally
         {
@@ -413,8 +454,10 @@ internal sealed class PlayerTimelineController : IDisposable
         _updatingControls = true;
         try
         {
+            _lastTimelineValue = restoredPosition.TotalSeconds;
             _timeline.SetValue(restoredPosition.TotalSeconds);
-            _positionLabel.SetText(PlayerTimelineState.FormatTime(restoredPosition));
+            _lastPositionText = PlayerTimelineState.FormatTime(restoredPosition);
+            _positionLabel.SetText(_lastPositionText);
         }
         finally
         {
@@ -430,6 +473,11 @@ internal sealed class PlayerTimelineController : IDisposable
         _updatingControls = true;
         try
         {
+            _lastRangeMax = 0;
+            _lastTimelineValue = 0;
+            _lastSensitive = false;
+            _lastPositionText = "--:--";
+            _lastDurationText = "--:--";
             _timeline.SetRange(0, 0);
             _timeline.SetValue(0);
             _timeline.SetSensitive(false);
@@ -450,23 +498,34 @@ internal sealed class PlayerTimelineController : IDisposable
         {
             if (isLive)
             {
+                _lastDurationText = "Live";
+                _lastPositionText = "Live";
+                _lastRangeMax = 0;
                 _durationLabel.SetText("Live");
                 _positionLabel.SetText("Live");
                 _timeline.SetRange(0, 0);
             }
             else if (expectedDuration is { } duration && duration > TimeSpan.Zero)
             {
-                _durationLabel.SetText(PlayerTimelineState.FormatTime(duration));
+                _lastDurationText = PlayerTimelineState.FormatTime(duration);
+                _lastPositionText = "--:--";
+                _lastRangeMax = duration.TotalSeconds;
+                _durationLabel.SetText(_lastDurationText);
                 _positionLabel.SetText("--:--");
                 _timeline.SetRange(0, duration.TotalSeconds);
             }
             else
             {
+                _lastDurationText = "--:--";
+                _lastPositionText = "--:--";
+                _lastRangeMax = 0;
                 _durationLabel.SetText("--:--");
                 _positionLabel.SetText("--:--");
                 _timeline.SetRange(0, 0);
             }
 
+            _lastTimelineValue = 0;
+            _lastSensitive = false;
             _timeline.SetValue(0);
             _timeline.SetSensitive(false);
         }
@@ -586,8 +645,10 @@ internal sealed class PlayerTimelineController : IDisposable
         if (_updatingControls || !_timeline.GetSensitive()) return;
 
         var targetSeconds = _timeline.GetValue();
+        _lastTimelineValue = targetSeconds;
         State.SetPositionDirect(TimeSpan.FromSeconds(targetSeconds));
-        _positionLabel.SetText(PlayerTimelineState.FormatTime(State.PlaybackPosition));
+        _lastPositionText = PlayerTimelineState.FormatTime(State.PlaybackPosition);
+        _positionLabel.SetText(_lastPositionText);
 
         if (IsScrubbing)
         {

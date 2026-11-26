@@ -5,7 +5,6 @@ using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Player.Controls;
 
@@ -21,6 +20,10 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     private readonly INavigationService _navigation;
     private string? _channelUrl;
     private string? _currentQualityVideoId;
+    private (bool Visible, bool CanPrevious, bool CanNext, bool IsQueueOpen)? _lastQueueControls;
+    private double _lastSpeed = double.NaN;
+    private double _lastVolume = double.NaN;
+    private string? _lastVolumeIcon;
     private CancellationTokenSource? _qualityCancellation;
     private int _qualityGeneration;
     private PlayerSubtitleController? _subtitleController;
@@ -92,14 +95,20 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 
     public void SetQueueControls(bool visible, bool canPrevious, bool canNext, bool isQueueOpen)
     {
+        var next = (visible, canPrevious, canNext, isQueueOpen);
+        if (_lastQueueControls == next && player_queue_button.Active == isQueueOpen) return;
+        _lastQueueControls = next;
         player_queue_controls.SetVisible(visible);
         player_previous_queue_button.Sensitive = canPrevious;
         player_next_queue_button.Sensitive = canNext;
-        player_queue_button.Active = isQueueOpen;
+        if (player_queue_button.Active != isQueueOpen)
+            player_queue_button.Active = isQueueOpen;
     }
 
     public void SetVolume(double volume)
     {
+        if (_lastVolume.Equals(volume)) return;
+        _lastVolume = volume;
         _suppressVolumeNotification = true;
         player_volume_scale.SetValue(volume);
         _suppressVolumeNotification = false;
@@ -108,6 +117,8 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 
     public void SetSpeed(double speed)
     {
+        if (_lastSpeed.Equals(speed)) return;
+        _lastSpeed = speed;
         _suppressSpeedNotification = true;
         player_speed_scale.SetValue(speed);
         player_speed_label.SetText($"{speed.ToString("0.##", CultureInfo.InvariantCulture)}×");
@@ -135,13 +146,9 @@ public partial class PlayerControlsBarView : ViewBase<Box>
         {
             if (task.IsCompletedSuccessfully && !cancellation.IsCancellationRequested &&
                 generation == _qualityGeneration)
-                Functions.IdleAdd(0, () =>
-                {
-                    if (IsDisposed || cancellation.IsCancellationRequested || generation != _qualityGeneration)
-                        return false;
-                    ApplyQualityTracks(task.Result, targetQuality);
-                    return false;
-                });
+                GtkUiDispatch.Run(
+                    () => !IsDisposed && !cancellation.IsCancellationRequested && generation == _qualityGeneration,
+                    () => ApplyQualityTracks(task.Result, targetQuality));
         }, TaskScheduler.Default);
     }
 
@@ -164,13 +171,16 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 
     private void UpdateVolumeIcon(double volume)
     {
-        player_volume_button.SetIconName(volume switch
+        var icon = volume switch
         {
             <= 0 => "audio-volume-muted-symbolic",
             < 33 => "audio-volume-low-symbolic",
             < 66 => "audio-volume-medium-symbolic",
             _ => "audio-volume-high-symbolic"
-        });
+        };
+        if (string.Equals(_lastVolumeIcon, icon, StringComparison.Ordinal)) return;
+        _lastVolumeIcon = icon;
+        player_volume_button.SetIconName(icon);
     }
 
     private void OnChannelButtonClicked(object? sender, EventArgs args)
@@ -186,7 +196,10 @@ public partial class PlayerControlsBarView : ViewBase<Box>
 
     private void OnQueueButtonToggled(object? sender, EventArgs args)
     {
-        QueueToggled?.Invoke(this, player_queue_button.Active);
+        var active = player_queue_button.Active;
+        if (_lastQueueControls is { } prev)
+            _lastQueueControls = prev with { IsQueueOpen = active };
+        QueueToggled?.Invoke(this, active);
     }
 
     private void OnNextQueueButtonClicked(object? sender, EventArgs args)
@@ -208,6 +221,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     private void OnVolumeScaleValueChanged(object? sender, EventArgs args)
     {
         var volume = player_volume_scale.GetValue();
+        _lastVolume = volume;
         UpdateVolumeIcon(volume);
         if (!_suppressVolumeNotification) VolumeChanged?.Invoke(this, volume);
     }
@@ -215,6 +229,7 @@ public partial class PlayerControlsBarView : ViewBase<Box>
     private void OnSpeedScaleValueChanged(object? sender, EventArgs args)
     {
         var speed = player_speed_scale.GetValue();
+        _lastSpeed = speed;
         player_speed_label.SetText($"{speed.ToString("0.##", CultureInfo.InvariantCulture)}×");
         if (!_suppressSpeedNotification) SpeedChanged?.Invoke(this, speed);
     }

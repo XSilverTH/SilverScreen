@@ -16,6 +16,10 @@ internal sealed class PlayerSubtitleController(
 {
     private static readonly ILogger Logger = Log.ForContext<PlayerSubtitleController>();
     private readonly DisposeScope _lifetime = new();
+    private bool _buttonInitialized;
+    private bool _lastButtonSensitive;
+    private string? _lastButtonTooltip;
+    private string? _lastPreferredLanguage;
     private bool _suppressSelectionChanged;
     private IReadOnlyList<LibMpvSubtitleTrack> _tracks = [];
 
@@ -28,9 +32,9 @@ internal sealed class PlayerSubtitleController(
     public void UpdateTracks(IReadOnlyList<LibMpvSubtitleTrack> tracks, bool suppressSelectionChanged)
     {
         if (_lifetime.IsDisposed) return;
-        if (_tracks.SequenceEqual(tracks))
+        if (AreTracksEqual(_tracks, tracks))
         {
-            UpdateButton();
+            UpdateButtonIfPreferenceChanged();
             return;
         }
 
@@ -70,11 +74,23 @@ internal sealed class PlayerSubtitleController(
         UpdateButton();
     }
 
+    private static bool AreTracksEqual(IReadOnlyList<LibMpvSubtitleTrack> a, IReadOnlyList<LibMpvSubtitleTrack> b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+            if (a[i] != b[i])
+                return false;
+        return true;
+    }
+
     private static bool HaveSameTrackLabels(IReadOnlyList<LibMpvSubtitleTrack> a, IReadOnlyList<LibMpvSubtitleTrack> b)
     {
         if (a.Count != b.Count) return false;
-        return !a.Where((t, i) => t.Id != b[i].Id || !string.Equals(t.Label, b[i].Label, StringComparison.Ordinal))
-            .Any();
+        for (var i = 0; i < a.Count; i++)
+            if (a[i].Id != b[i].Id || !string.Equals(a[i].Label, b[i].Label, StringComparison.Ordinal))
+                return false;
+        return true;
     }
 
     public void OnSelectionChanged()
@@ -147,16 +163,51 @@ internal sealed class PlayerSubtitleController(
         }
     }
 
-    private void UpdateButton()
+    private void UpdateButtonIfPreferenceChanged()
     {
         var preferredLanguage = preferences.GetPreferences().PreferredSubtitleLanguage;
-        var track = _tracks.FirstOrDefault(track =>
-            SubtitleLanguageMatches(track.Language, preferredLanguage));
-        button.SetSensitive(track is not null);
-        button.SetTooltipText(track is null
+        if (_buttonInitialized &&
+            string.Equals(_lastPreferredLanguage, preferredLanguage, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        UpdateButton(preferredLanguage);
+    }
+
+    private void UpdateButton()
+    {
+        UpdateButton(preferences.GetPreferences().PreferredSubtitleLanguage);
+    }
+
+    private void UpdateButton(string preferredLanguage)
+    {
+        _lastPreferredLanguage = preferredLanguage;
+        LibMpvSubtitleTrack? track = null;
+        for (var i = 0; i < _tracks.Count; i++)
+        {
+            if (!SubtitleLanguageMatches(_tracks[i].Language, preferredLanguage)) continue;
+            track = _tracks[i];
+            break;
+        }
+
+        var sensitive = track is not null;
+        var tooltip = track is null
             ? "Choose a subtitle in player settings to set your preference"
             : track.IsSelected
                 ? "Turn off preferred subtitles (C)"
-                : $"Use preferred subtitles: {preferredLanguage} (C)");
+                : $"Use preferred subtitles: {preferredLanguage} (C)";
+
+        if (!_buttonInitialized || _lastButtonSensitive != sensitive)
+        {
+            _lastButtonSensitive = sensitive;
+            button.SetSensitive(sensitive);
+        }
+
+        if (!_buttonInitialized || !string.Equals(_lastButtonTooltip, tooltip, StringComparison.Ordinal))
+        {
+            _lastButtonTooltip = tooltip;
+            button.SetTooltipText(tooltip);
+        }
+
+        _buttonInitialized = true;
     }
 }

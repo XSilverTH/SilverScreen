@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using SilverScreen.Core.Common;
 
@@ -11,20 +12,27 @@ internal static class RichLabelMarkup
 {
     public const string SeekScheme = "seek:";
     public const string HashtagScheme = "hashtag:";
+    private static readonly SearchValues<char> XmlEscapeChars = SearchValues.Create("&<>\"'");
 
     public static string Build(string? text)
     {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
         return Build(YouTubeRichText.Parse(text));
     }
 
     private static string Build(IReadOnlyList<YouTubeRichTextSegment> segments)
     {
+        if (segments.Count == 0)
+            return string.Empty;
+
         var builder = new StringBuilder();
         foreach (var segment in segments)
         {
             if (segment.Link is null)
             {
-                builder.Append(EscapeText(segment.Text));
+                AppendEscapedText(builder, segment.Text);
                 continue;
             }
 
@@ -38,22 +46,42 @@ internal static class RichLabelMarkup
                 _ => segment.Link.Value
             };
 
-            builder.Append("<a href=\"")
-                .Append(EscapeText(href))
-                .Append("\">")
-                .Append(EscapeText(segment.Text))
-                .Append("</a>");
+            builder.Append("<a href=\"");
+            AppendEscapedText(builder, href);
+            builder.Append("\">");
+            AppendEscapedText(builder, segment.Text);
+            builder.Append("</a>");
         }
 
         return builder.ToString();
     }
 
-    private static string EscapeText(string text)
+    private static void AppendEscapedText(StringBuilder builder, string text)
     {
-        return text.Replace("&", "&amp;", StringComparison.Ordinal)
-            .Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal)
-            .Replace("\"", "&quot;", StringComparison.Ordinal)
-            .Replace("'", "&apos;", StringComparison.Ordinal);
+        var span = text.AsSpan();
+        while (!span.IsEmpty)
+        {
+            var nextSpecial = span.IndexOfAny(XmlEscapeChars);
+            if (nextSpecial < 0)
+            {
+                builder.Append(span);
+                return;
+            }
+
+            if (nextSpecial > 0)
+                builder.Append(span[..nextSpecial]);
+
+            builder.Append(span[nextSpecial] switch
+            {
+                '&' => "&amp;",
+                '<' => "&lt;",
+                '>' => "&gt;",
+                '"' => "&quot;",
+                '\'' => "&apos;",
+                _ => string.Empty
+            });
+
+            span = span[(nextSpecial + 1)..];
+        }
     }
 }

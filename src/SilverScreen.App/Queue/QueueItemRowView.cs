@@ -7,6 +7,7 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Queue;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 using Action = System.Action;
 using Task = System.Threading.Tasks.Task;
@@ -70,12 +71,17 @@ public partial class QueueItemRowView : ViewBase<Box>
     private const int ThumbnailWidth = 96;
     private const int ThumbnailHeight = 54;
     private static readonly ILogger Logger = Log.ForContext<QueueItemRowView>();
+    private static readonly SemaphoreSlim DecodeSemaphore = new(4, 4);
+    private readonly SimpleActionGroup _actionGroup;
     private readonly QueueRowBinding _binding = new();
     private readonly Action<Guid, int> _dropRequested;
     private readonly SimpleAction _moveDownAction;
+    private readonly SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> _moveDownHandler;
     private readonly Action<Guid, int> _moveRequested;
     private readonly SimpleAction _moveUpAction;
+    private readonly SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> _moveUpHandler;
     private readonly SimpleAction _playNowAction;
+    private readonly SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> _playNowHandler;
     private readonly Action<Guid, int>? _playRequested;
     private readonly Action<Guid> _removeRequested;
     private readonly NativeMemoryPressure _thumbnailPressure = new();
@@ -83,6 +89,8 @@ public partial class QueueItemRowView : ViewBase<Box>
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
+    private string? _loadedThumbnailUrl;
+    private string? _loadedVideoId;
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
 
@@ -100,18 +108,18 @@ public partial class QueueItemRowView : ViewBase<Box>
         _playRequested = playRequested;
 
 
-        var actionGroup = Lifetime.Own(SimpleActionGroup.New());
-        _playNowAction = CreateAction("play-now", () =>
+        _actionGroup = Lifetime.Own(SimpleActionGroup.New());
+        (_playNowAction, _playNowHandler) = CreateAction("play-now", () =>
         {
             if (_binding.TryGetPlayTarget(out var itemId, out var index))
                 _playRequested?.Invoke(itemId, index);
         });
-        _moveUpAction = CreateAction("move-up", () => MoveBy(-1));
-        _moveDownAction = CreateAction("move-down", () => MoveBy(1));
-        actionGroup.AddAction(_playNowAction);
-        actionGroup.AddAction(_moveUpAction);
-        actionGroup.AddAction(_moveDownAction);
-        menu.InsertActionGroup("queue", actionGroup);
+        (_moveUpAction, _moveUpHandler) = CreateAction("move-up", () => MoveBy(-1));
+        (_moveDownAction, _moveDownHandler) = CreateAction("move-down", () => MoveBy(1));
+        _actionGroup.AddAction(_playNowAction);
+        _actionGroup.AddAction(_moveUpAction);
+        _actionGroup.AddAction(_moveDownAction);
+        menu.InsertActionGroup("queue", _actionGroup);
 
         var dragPaintable = Lifetime.Own(WidgetPaintable.New(Widget));
         var dragSource = DragSource.New();
@@ -180,33 +188,32 @@ public partial class QueueItemRowView : ViewBase<Box>
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-        var isSameItem = _binding.Item?.Id == item.Id &&
-                         string.Equals(_binding.Item.Video.ThumbnailUrl, item.Video.ThumbnailUrl,
-                             StringComparison.Ordinal);
+        var sameThumbnail = (_boundTexture is not null || _thumbnailCancellation is not null) &&
+                            (!string.IsNullOrWhiteSpace(item.Video.ThumbnailUrl)
+                                ? string.Equals(_loadedThumbnailUrl, item.Video.ThumbnailUrl, StringComparison.Ordinal)
+                                : string.Equals(_loadedVideoId, item.Video.Id, StringComparison.Ordinal));
 
-        if (!isSameItem)
+        _binding.Bind(item, index);
+        title.SetText(item.Video.Title);
+        channel.SetText(item.Video.ChannelName);
+        duration_pill.SetText(FormatDuration(item.Video.Duration));
+        SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
+        _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
+
+        if (sameThumbnail)
         {
-            Unbind();
-            _binding.Bind(item, index);
-            title.SetText(item.Video.Title);
-            channel.SetText(item.Video.ChannelName);
-            duration_pill.SetText(FormatDuration(item.Video.Duration));
-            SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
-            _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
-
-            var generation = ++_bindingGeneration;
-            _thumbnailCancellation = new CancellationTokenSource();
-            LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
+            if (_boundPicture is not null)
+                _boundPicture.AlternativeText = _thumbnailAlternativeText;
         }
         else
         {
-            _binding.Bind(item, index);
-            title.SetText(item.Video.Title);
-            channel.SetText(item.Video.ChannelName);
-            duration_pill.SetText(FormatDuration(item.Video.Duration));
-            SetWatchProgress(item.Video.PlaybackProgress?.WatchedFraction);
-            _thumbnailAlternativeText = $"{item.Video.Title} thumbnail";
-            _boundPicture?.AlternativeText = _thumbnailAlternativeText;
+            CancelThumbnailLoad();
+            ClearThumbnail();
+            _loadedThumbnailUrl = item.Video.ThumbnailUrl;
+            _loadedVideoId = item.Video.Id;
+            var generation = ++_bindingGeneration;
+            _thumbnailCancellation = new CancellationTokenSource();
+            LoadThumbnailAsync(item.Video, generation, _thumbnailCancellation.Token).FireAndForget(Logger);
         }
 
         position.SetText((index + 1).ToString());
@@ -252,11 +259,25 @@ public partial class QueueItemRowView : ViewBase<Box>
         _moveUpAction.Enabled = false;
         _moveDownAction.Enabled = false;
         _thumbnailAlternativeText = string.Empty;
-        _thumbnailCancellation?.Cancel();
-        _thumbnailCancellation?.Dispose();
-        _thumbnailCancellation = null;
+        _loadedThumbnailUrl = null;
+        _loadedVideoId = null;
+        CancelThumbnailLoad();
         ClearThumbnail();
         SetWatchProgress(null);
+    }
+
+    private void CancelThumbnailLoad()
+    {
+        try
+        {
+            _thumbnailCancellation?.Cancel();
+        }
+        catch (Exception)
+        {
+        }
+
+        _thumbnailCancellation?.Dispose();
+        _thumbnailCancellation = null;
     }
 
 
@@ -312,11 +333,18 @@ public partial class QueueItemRowView : ViewBase<Box>
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken cancellationToken)
     {
+        var acquired = false;
         Pixbuf? pixbuf;
         try
         {
             var result = await _thumbnails.GetThumbnailAsync(video, cancellationToken).ConfigureAwait(false);
-            if (result is null)
+            if (result is null || IsDisposed || cancellationToken.IsCancellationRequested ||
+                _bindingGeneration != generation)
+                return;
+
+            await DecodeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            acquired = true;
+            if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
                 return;
 
             pixbuf = await Task.Run(
@@ -333,80 +361,74 @@ public partial class QueueItemRowView : ViewBase<Box>
             Logger.Warning(exception, "Failed to load thumbnail for queue item");
             return;
         }
+        finally
+        {
+            if (acquired)
+                DecodeSemaphore.Release();
+        }
 
         var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
-        if (IsDisposed || cancellationToken.IsCancellationRequested)
+        if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
         {
             decodedPixbuf.Dispose();
             return;
         }
 
         var pixbufForIdle = decodedPixbuf;
-        var scheduled = false;
-        try
+        GtkUiDispatch.Run(() =>
         {
-            Lifetime.Idle(() =>
+            try
             {
+                if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
+                    return;
+
+                Texture? texture = null;
                 try
                 {
-                    if (IsDisposed || cancellationToken.IsCancellationRequested || _bindingGeneration != generation)
-                        return false;
+                    var pixbufForTexture = pixbufForIdle ??
+                                           throw new InvalidOperationException(
+                                               "Thumbnail decode was released before texture creation.");
+                    texture = Texture.NewForPixbuf(pixbufForTexture);
+                    pixbufForTexture.Dispose();
+                    pixbufForIdle = null;
 
-                    Texture? texture = null;
-                    try
+                    if (_boundPicture is null)
                     {
-                        var pixbufForTexture = pixbufForIdle ??
-                                               throw new InvalidOperationException(
-                                                   "Thumbnail decode was released before texture creation.");
-                        texture = Texture.NewForPixbuf(pixbufForTexture);
-                        pixbufForTexture.Dispose();
-                        pixbufForIdle = null;
-
-                        if (_boundPicture is null)
-                        {
-                            var picture = Picture.NewForPaintable(texture);
-                            picture.AlternativeText = _thumbnailAlternativeText;
-                            picture.ContentFit = ContentFit.Cover;
-                            picture.WidthRequest = ThumbnailWidth;
-                            picture.HeightRequest = ThumbnailHeight;
-                            picture.Hexpand = true;
-                            picture.Vexpand = true;
-                            _boundPicture = picture;
-                        }
-                        else
-                        {
-                            _boundPicture.Paintable = texture;
-                            _boundPicture.AlternativeText = _thumbnailAlternativeText;
-                        }
-
-                        thumbnail.Child = _boundPicture;
-                        _boundTexture?.Dispose();
-                        _boundTexture = texture;
-                        _thumbnailPressure.Track((long)ThumbnailWidth * ThumbnailHeight * 4);
-                        texture = null;
+                        var picture = Picture.NewForPaintable(texture);
+                        picture.AlternativeText = _thumbnailAlternativeText;
+                        picture.ContentFit = ContentFit.Cover;
+                        picture.WidthRequest = ThumbnailWidth;
+                        picture.HeightRequest = ThumbnailHeight;
+                        picture.Hexpand = true;
+                        picture.Vexpand = true;
+                        _boundPicture = picture;
                     }
-                    finally
+                    else
                     {
-                        texture?.Dispose();
+                        _boundPicture.Paintable = texture;
+                        _boundPicture.AlternativeText = _thumbnailAlternativeText;
                     }
-                }
-                catch (Exception exception)
-                {
-                    Logger.Warning(exception, "Failed to render thumbnail texture for queue item");
+
+                    thumbnail.Child = _boundPicture;
+                    _boundTexture?.Dispose();
+                    _boundTexture = texture;
+                    _thumbnailPressure.Track((long)ThumbnailWidth * ThumbnailHeight * 4);
+                    texture = null;
                 }
                 finally
                 {
-                    pixbufForIdle?.Dispose();
+                    texture?.Dispose();
                 }
-
-                return false;
-            });
-            scheduled = true;
-        }
-        catch (ObjectDisposedException)
-        {
-            if (!scheduled) decodedPixbuf.Dispose();
-        }
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "Failed to render thumbnail texture for queue item");
+            }
+            finally
+            {
+                pixbufForIdle?.Dispose();
+            }
+        });
     }
 
     private void ClearThumbnail()
@@ -420,11 +442,13 @@ public partial class QueueItemRowView : ViewBase<Box>
         texture?.Dispose();
     }
 
-    private static SimpleAction CreateAction(string name, Action callback)
+    private static (SimpleAction Action, SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> Handler)
+        CreateAction(string name, Action callback)
     {
         var action = SimpleAction.New(name, null);
-        action.OnActivate += (_, _) => callback();
-        return action;
+        SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> handler = (_, _) => callback();
+        action.OnActivate += handler;
+        return (action, handler);
     }
 
     private static string FormatDuration(TimeSpan duration)
@@ -441,6 +465,13 @@ public partial class QueueItemRowView : ViewBase<Box>
         if (disposing)
         {
             Unbind();
+            menu.InsertActionGroup("queue", null);
+            _playNowAction.OnActivate -= _playNowHandler;
+            _moveUpAction.OnActivate -= _moveUpHandler;
+            _moveDownAction.OnActivate -= _moveDownHandler;
+            _playNowAction.Dispose();
+            _moveUpAction.Dispose();
+            _moveDownAction.Dispose();
             _boundPicture?.Dispose();
             _boundPicture = null;
             _thumbnailPressure.Dispose();

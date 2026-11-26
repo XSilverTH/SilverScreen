@@ -4,8 +4,8 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Channel;
 
@@ -18,6 +18,7 @@ public partial class ChannelProfileCardView(IThumbnailService thumbnails) : View
     private CancellationTokenSource? _avatarCancellation;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
+    private string? _loadedAvatarUrl;
 
     protected override void BindViewModel(ChannelViewModel viewModel, BindingScope<ChannelViewModel> bindings)
     {
@@ -44,15 +45,26 @@ public partial class ChannelProfileCardView(IThumbnailService thumbnails) : View
     private async Task LoadAvatarAsync(string avatarUrl)
     {
         if (IsDisposed) return;
-        try
+        if (string.Equals(_loadedAvatarUrl, avatarUrl, StringComparison.Ordinal) &&
+            (_boundTexture is not null || _avatarCancellation is not null))
+            return;
+
+        if (_avatarCancellation is { } previousCancellation)
         {
-            await _avatarCancellation?.CancelAsync()!;
-        }
-        catch (Exception)
-        {
+            try
+            {
+                await previousCancellation.CancelAsync();
+            }
+            catch (Exception)
+            {
+            }
+
+            previousCancellation.Dispose();
+            _avatarCancellation = null;
         }
 
-        _avatarCancellation?.Dispose();
+        if (IsDisposed) return;
+        _loadedAvatarUrl = avatarUrl;
         var ct = (_avatarCancellation = new CancellationTokenSource()).Token;
 
         Pixbuf? pixbuf;
@@ -74,11 +86,11 @@ public partial class ChannelProfileCardView(IThumbnailService thumbnails) : View
         }
 
         var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Avatar decode returned no pixbuf.");
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() =>
         {
             try
             {
-                if (IsDisposed || ct.IsCancellationRequested) return false;
+                if (IsDisposed || ct.IsCancellationRequested) return;
                 var texture = Texture.NewForPixbuf(decodedPixbuf);
                 if (_boundPicture is null)
                 {
@@ -106,13 +118,12 @@ public partial class ChannelProfileCardView(IThumbnailService thumbnails) : View
             {
                 decodedPixbuf.Dispose();
             }
-
-            return false;
         });
     }
 
     private void ClearAvatar()
     {
+        _loadedAvatarUrl = null;
         try
         {
             _avatarCancellation?.Cancel();

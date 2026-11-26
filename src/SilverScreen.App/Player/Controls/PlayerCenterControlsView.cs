@@ -8,12 +8,16 @@ namespace SilverScreen.Player.Controls;
 /// </summary>
 public partial class PlayerCenterControlsView : ViewBase<Box>
 {
+    private bool? _isPlaying;
+
     public event EventHandler? RewindRequested;
     public event EventHandler? PlayPauseRequested;
     public event EventHandler? ForwardRequested;
 
     public void SetPlaybackState(bool isPlaying)
     {
+        if (_isPlaying == isPlaying) return;
+        _isPlaying = isPlaying;
         player_play_pause_button.SetIconName(isPlaying
             ? "media-playback-pause-symbolic"
             : "media-playback-start-symbolic");

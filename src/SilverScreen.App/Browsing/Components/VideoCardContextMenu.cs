@@ -1,5 +1,6 @@
 using Gdk;
 using Gio;
+using GObject;
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
@@ -14,12 +15,15 @@ namespace SilverScreen.Browsing.Components;
 public sealed class VideoCardContextMenu : IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext<VideoCardContextMenu>();
+    private static Menu? _sharedMenuModel;
     private readonly SimpleActionGroup _actionGroup = SimpleActionGroup.New();
-    private readonly SimpleAction[] _actions;
+    private readonly (SimpleAction Action, SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> Handler)[]
+        _actions;
     private readonly INavigationService _navigation;
     private readonly INotificationService _notifications;
     private readonly IPlaybackService _playback;
     private readonly IQueueService _queue;
+    private MenuButton? _menuButton;
     private Widget? _parentWidget;
     private PopoverMenu? _popoverMenu;
     private VideoSummary? _video;
@@ -54,7 +58,7 @@ public sealed class VideoCardContextMenu : IDisposable
                 if (_video is { } v) CopyLink(v);
             })
         ];
-        foreach (var action in _actions) _actionGroup.AddAction(action);
+        foreach (var (action, _) in _actions) _actionGroup.AddAction(action);
     }
 
     public void Dispose()
@@ -68,29 +72,26 @@ public sealed class VideoCardContextMenu : IDisposable
             _popoverMenu = null;
         }
 
+        _menuButton?.InsertActionGroup("video", null);
+        _menuButton = null;
         _parentWidget?.InsertActionGroup("video", null);
-        foreach (var action in _actions) action.Dispose();
+        _parentWidget = null;
+        foreach (var (action, handler) in _actions)
+        {
+            action.OnActivate -= handler;
+            action.Dispose();
+        }
+
         _actionGroup.Dispose();
     }
 
     public void AttachTo(Widget parentWidget, MenuButton menuButton)
     {
         _parentWidget = parentWidget;
-        var menuModel = Menu.New();
-        foreach (var (t, a) in new[]
-                 {
-                     ("Play", "video.play"), ("Open in other player", "video.play-alternate"),
-                     ("Add to queue", "video.add-to-queue"), ("Open channel", "video.open-channel"),
-                     ("Copy link", "video.copy-link")
-                 })
-            menuModel.Append(t, a);
-        menuButton.MenuModel = menuModel;
+        _menuButton = menuButton;
+        menuButton.MenuModel = GetSharedMenuModel();
         menuButton.InsertActionGroup("video", _actionGroup);
         parentWidget.InsertActionGroup("video", _actionGroup);
-        _popoverMenu = PopoverMenu.NewFromModel(menuModel);
-        _popoverMenu.HasArrow = false;
-        _popoverMenu.SetParent(parentWidget);
-        _popoverMenu.InsertActionGroup("video", _actionGroup);
     }
 
     public void SetVideo(VideoSummary? video)
@@ -105,13 +106,37 @@ public sealed class VideoCardContextMenu : IDisposable
 
     public void ShowAt(int x = -1, int y = -1)
     {
-        if (_video is null || _popoverMenu is null || _parentWidget is null) return;
+        if (_video is null || _parentWidget is null) return;
+        EnsurePopover();
+        if (_popoverMenu is null) return;
         _popoverMenu.SetPointingTo(new Rectangle
         {
             X = x >= 0 ? x : Math.Max(0, _parentWidget.GetWidth() / 2),
             Y = y >= 0 ? y : Math.Max(0, _parentWidget.GetHeight() / 2), Width = 1, Height = 1
         });
         _popoverMenu.Popup();
+    }
+
+    private void EnsurePopover()
+    {
+        if (_popoverMenu is not null || _parentWidget is null) return;
+        _popoverMenu = PopoverMenu.NewFromModel(GetSharedMenuModel());
+        _popoverMenu.HasArrow = false;
+        _popoverMenu.SetParent(_parentWidget);
+        _popoverMenu.InsertActionGroup("video", _actionGroup);
+    }
+
+    private static Menu GetSharedMenuModel()
+    {
+        if (_sharedMenuModel is not null) return _sharedMenuModel;
+        var menuModel = Menu.New();
+        menuModel.Append("Play", "video.play");
+        menuModel.Append("Open in other player", "video.play-alternate");
+        menuModel.Append("Add to queue", "video.add-to-queue");
+        menuModel.Append("Open channel", "video.open-channel");
+        menuModel.Append("Copy link", "video.copy-link");
+        _sharedMenuModel = menuModel;
+        return menuModel;
     }
 
     public void Play(VideoSummary video)
@@ -160,10 +185,12 @@ public sealed class VideoCardContextMenu : IDisposable
         }
     }
 
-    private static SimpleAction CreateAction(string name, Action handler)
+    private static (SimpleAction Action, SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> Handler)
+        CreateAction(string name, Action handler)
     {
         var a = SimpleAction.New(name, null);
-        a.OnActivate += (_, _) => handler();
-        return a;
+        SignalHandler<SimpleAction, SimpleAction.ActivateSignalArgs> onActivate = (_, _) => handler();
+        a.OnActivate += onActivate;
+        return (a, onActivate);
     }
 }

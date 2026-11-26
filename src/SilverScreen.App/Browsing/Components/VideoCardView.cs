@@ -25,7 +25,9 @@ public partial class VideoCardView : ViewBase<Bin>
         card.Append(_thumbnail.Widget);
         card.Append(_metadata.Widget);
         _contextMenu.AttachTo(card, _metadata.MenuButton);
-        _metadata.ContextMenuRequested += () => _contextMenu.ShowAt();
+        Lifetime.Track(
+            () => _metadata.ContextMenuRequested += OnContextMenuRequested,
+            () => _metadata.ContextMenuRequested -= OnContextMenuRequested);
 
         var click = GestureClick.New();
         click.Button = 0;
@@ -41,12 +43,17 @@ public partial class VideoCardView : ViewBase<Bin>
     public void Bind(VideoSummary video, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
-        Unbind();
+        _contextMenu.Dismiss();
         _video = video;
         card.TooltipText = VideoCardFormatting.FormatCardTooltip(video);
         _thumbnail.Bind(video, ct);
         _metadata.Bind(video);
         _contextMenu.SetVideo(video);
+    }
+
+    private void OnContextMenuRequested()
+    {
+        _contextMenu.ShowAt();
     }
 
     public void Unbind()

@@ -3,7 +3,6 @@ using Gtk;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
 using XSTH.Blueprint.Helpers;
-using static GLib.Functions;
 using Object = GObject.Object;
 
 namespace SilverScreen.Player.Prompts;
@@ -76,53 +75,46 @@ internal sealed class PlayerSponsorBlockController : IDisposable
 
     private void OnSegmentsChanged(IReadOnlyList<SponsorBlockSegment> segments)
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            _timelineDrawingArea.QueueDraw();
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () => _timelineDrawingArea.QueueDraw());
     }
 
     private void OnPromptChanged(SponsorBlockSegment? segment)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             if (segment is not null)
                 ShowManualPrompt(segment);
             else
                 HideManualPrompt();
-            return false;
         });
     }
 
     private void OnSessionEnded()
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             HideManualPrompt();
             _timelineDrawingArea.QueueDraw();
-            return false;
         });
     }
 
     private void OnSessionFailed(string detail)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             HideManualPrompt();
             _timelineDrawingArea.QueueDraw();
-            return false;
         });
     }
 
     private void DrawTimeline(DrawingArea drawingArea, Context context, int width, int height)
     {
+        var segments = _session.SponsorBlockSegments;
+        if (segments.Count == 0 || width <= 0 || height <= 0)
+            return;
+
         var preferences = _preferences.GetPreferences();
-        if (!preferences.SponsorBlockSegmentDisplayEnabled || width <= 0 || height <= 0)
+        if (!preferences.SponsorBlockSegmentDisplayEnabled)
             return;
 
         var duration = _session.LastPlaybackState?.Duration > TimeSpan.Zero
@@ -138,7 +130,7 @@ internal sealed class PlayerSponsorBlockController : IDisposable
         const double rangeHeight = 10;
         var rangeY = Math.Max(0, (height - rangeHeight) / 2);
 
-        foreach (var segment in _session.SponsorBlockSegments)
+        foreach (var segment in segments)
         {
             if (segment.Start >= duration) continue;
             var start = PlayerTimelineGeometry.GetTrackPosition(segment.Start, duration, trackStart, trackWidth);

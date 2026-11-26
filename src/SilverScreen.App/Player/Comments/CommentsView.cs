@@ -1,6 +1,7 @@
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Player.RichText;
 using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
@@ -13,8 +14,10 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
     private readonly Func<string, bool> _linkActivated;
+    private readonly Dictionary<string, (string Text, string Markup)> _markupCache = new(StringComparer.Ordinal);
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
     private readonly Adjustment? _vadjustment;
+    private readonly Dictionary<string, CommentRowState> _visibleCommentsById = new(StringComparer.Ordinal);
     private string[] _displayedCommentIds = [];
     private CommentsViewState _state = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
@@ -85,7 +88,7 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (IsDisposed || _vadjustment is null ||
+        if (IsDisposed || _vadjustment is null || !_state.HasMore || _state.IsLoadingMore ||
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 280)
             return;
 
@@ -100,6 +103,9 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private void Render(CommentsViewState state)
     {
         _state = state;
+        if (state.Status is CommentsViewStatus.Unavailable or CommentsViewStatus.Loading)
+            _markupCache.Clear();
+
         ApplyComments(state.VisibleComments);
 
         comments_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
@@ -130,7 +136,16 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 
     private void ApplyComments(IReadOnlyList<CommentRowState> visibleComments)
     {
-        var nextIds = visibleComments.Select(row => row.Comment.Id).ToArray();
+        var nextIds = new string[visibleComments.Count];
+        _visibleCommentsById.Clear();
+        for (var i = 0; i < visibleComments.Count; i++)
+        {
+            var row = visibleComments[i];
+            var id = row.Comment.Id;
+            nextIds[i] = id;
+            _visibleCommentsById[id] = row;
+        }
+
         var prefixLength = 0;
         while (prefixLength < _displayedCommentIds.Length && prefixLength < nextIds.Length &&
                string.Equals(_displayedCommentIds[prefixLength], nextIds[prefixLength], StringComparison.Ordinal))
@@ -150,8 +165,27 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         if (removedMiddleCount == 0 && addedMiddleCount == 0)
             return;
 
-        var addedMiddleIds = nextIds.Skip(prefixLength).Take(addedMiddleCount).ToArray();
+        var addedMiddleIds = new string[addedMiddleCount];
+        for (var i = 0; i < addedMiddleCount; i++)
+            addedMiddleIds[i] = nextIds[prefixLength + i];
+
         _itemIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
+
+        foreach (var row in _rowsByCell.Values)
+            if (row.BoundCommentId is { } boundId && _visibleCommentsById.TryGetValue(boundId, out var rowState))
+                row.Bind(rowState.Comment, rowState.ReplyCount, rowState.RepliesExpanded,
+                    GetOrBuildMarkup(rowState.Comment.Id, rowState.Comment.Text));
+    }
+
+    private string GetOrBuildMarkup(string commentId, string text)
+    {
+        if (_markupCache.TryGetValue(commentId, out var cached) &&
+            string.Equals(cached.Text, text, StringComparison.Ordinal))
+            return cached.Markup;
+
+        var markup = RichLabelMarkup.Build(text);
+        _markupCache[commentId] = (text, markup);
+        return markup;
     }
 
     private void OnRowSetup(object? sender, SignalListItemFactory.SetupSignalArgs args)
@@ -168,15 +202,12 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private void OnRowBind(object? sender, SignalListItemFactory.BindSignalArgs args)
     {
         if (args.Object is not ListItem { Child: { } child, Item: StringObject { String: { } id } } ||
-            !_rowsByCell.TryGetValue(child, out var row))
+            !_rowsByCell.TryGetValue(child, out var row) ||
+            !_visibleCommentsById.TryGetValue(id, out var comment))
             return;
 
-        var comment = _state.VisibleComments.FirstOrDefault(item =>
-            string.Equals(item.Comment.Id, id, StringComparison.Ordinal));
-        if (comment is null)
-            return;
-
-        row.Bind(comment.Comment, comment.ReplyCount, comment.RepliesExpanded);
+        var markup = GetOrBuildMarkup(comment.Comment.Id, comment.Comment.Text);
+        row.Bind(comment.Comment, comment.ReplyCount, comment.RepliesExpanded, markup);
     }
 
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)
@@ -202,6 +233,8 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
                 row.Dispose();
 
             _rowsByCell.Clear();
+            _visibleCommentsById.Clear();
+            _markupCache.Clear();
         }
 
         base.Dispose(disposing);

@@ -70,3 +70,33 @@ public sealed class PlayerLinkRouterTests
         Assert.Equal(["https://www.youtube.com/playlist?list=PL123"], _externals);
     }
 }
+
+public sealed class RichLabelMarkupTests
+{
+    [Fact]
+    public void Build_NullOrEmpty_ReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, RichLabelMarkup.Build(null));
+        Assert.Equal(string.Empty, RichLabelMarkup.Build(string.Empty));
+    }
+
+    [Fact]
+    public void Build_EscapesAllXmlSpecialCharactersInTextAndLinks()
+    {
+        var input = "A & B < C > D \"quote\" 'apos' https://example.com/?a=1&b=2";
+        var markup = RichLabelMarkup.Build(input);
+
+        Assert.Contains("A &amp; B &lt; C &gt; D &quot;quote&quot; &apos;apos&apos;", markup);
+        Assert.Contains("<a href=\"https://example.com/?a=1&amp;b=2\">https://example.com/?a=1&amp;b=2</a>", markup);
+    }
+
+    [Fact]
+    public void Build_FormatsTimestampHashtagAndMentionLinks()
+    {
+        var markup = RichLabelMarkup.Build("Jump to 1:23 #dotnet @example");
+
+        Assert.Contains("<a href=\"seek:83\">1:23</a>", markup);
+        Assert.Contains("<a href=\"hashtag:dotnet\">#dotnet</a>", markup);
+        Assert.Contains("<a href=\"https://www.youtube.com/@example\">@example</a>", markup);
+    }
+}

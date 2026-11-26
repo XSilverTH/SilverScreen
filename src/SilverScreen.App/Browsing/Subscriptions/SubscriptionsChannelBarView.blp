@@ -5,40 +5,46 @@ Gtk.Revealer SubscriptionsChannelBarView {
   transition-type: slide_down;
   transition-duration: 200;
 
-  child: Gtk.ScrolledWindow channel_bar_scroller {
-    hscrollbar-policy: automatic;
-    vscrollbar-policy: never;
-    hexpand: true;
+  child: Gtk.Box channel_bar_box {
+    orientation: horizontal;
+    spacing: 12;
+    margin-start: 24;
+    margin-end: 24;
+    margin-top: 12;
+    margin-bottom: 8;
 
     styles [
-      "subscriptions-channel-bar-scroller",
+      "subscriptions-channel-bar",
     ]
 
-    child: Gtk.Box channel_bar_box {
-      orientation: horizontal;
-      spacing: 12;
-      margin-start: 24;
-      margin-end: 24;
-      margin-top: 12;
-      margin-bottom: 8;
+    Gtk.Button all_channel_button {
+      valign: center;
+      tooltip-text: "All subscriptions";
+      clicked => $OnAllButtonClicked();
 
       styles [
-        "subscriptions-channel-bar",
+        "channel-pill",
+        "active",
       ]
 
-      Gtk.Button all_channel_button {
-        valign: center;
-        tooltip-text: "All subscriptions";
-        clicked => $OnAllButtonClicked();
-        styles [
-          "channel-pill",
-          "active",
-        ]
+      child: Gtk.Label all_channel_label {
+        label: "All";
+      };
+    }
 
-        child: Gtk.Label all_channel_label {
-          label: "All";
-        };
-      }
-    };
+    Gtk.ScrolledWindow channel_bar_scroller {
+      hscrollbar-policy: automatic;
+      vscrollbar-policy: never;
+      hexpand: true;
+
+      styles [
+        "subscriptions-channel-bar-scroller",
+      ]
+
+      child: Gtk.ListView channel_bar_list {
+        orientation: horizontal;
+        single-click-activate: false;
+      };
+    }
   };
 }

@@ -1,7 +1,6 @@
 using Gtk;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
-using static GLib.Functions;
 using Object = GObject.Object;
 
 namespace SilverScreen.Player.Prompts;
@@ -80,10 +79,8 @@ internal sealed class PlayerResumeController : IDisposable
 
     private void OnResumePromptChanged(ResumePromptMode mode, TimeSpan position)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
-
             switch (mode)
             {
                 case ResumePromptMode.Resume:
@@ -97,29 +94,17 @@ internal sealed class PlayerResumeController : IDisposable
                     HidePrompt();
                     break;
             }
-
-            return false;
         });
     }
 
     private void OnSessionEnded()
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            HidePrompt();
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, HidePrompt);
     }
 
     private void OnSessionFailed(string detail)
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            HidePrompt();
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, HidePrompt);
     }
 
     private void SchedulePromptHide(bool dismissSessionPrompt = true)

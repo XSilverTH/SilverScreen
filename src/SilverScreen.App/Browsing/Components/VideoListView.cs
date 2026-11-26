@@ -5,8 +5,8 @@ using Serilog;
 using SilverScreen.Core.Browsing;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Components;
 
@@ -25,6 +25,7 @@ public partial class VideoListView : ViewBase<Bin>
     private readonly Dictionary<string, VideoSummary> _videosById = [];
     private Action? _currentStatusAction;
     private VideoSummary[] _displayedVideos = [];
+    private int _measuredCardWidth;
     private Label? _paginationErrorLabel;
     private Revealer? _paginationErrorRevealer;
     private long _refreshGeneration;
@@ -103,14 +104,16 @@ public partial class VideoListView : ViewBase<Bin>
         if (width <= 0)
             return VideoFeedConstants.DefaultColumns;
 
-        var cardWidth = CardWidthWithMargin;
-        foreach (var card in _cardsByListItem)
-        {
-            card.Value.Widget.Measure(Orientation.Horizontal, -1, out _, out var nat, out _, out _);
-            if (nat <= 0) continue;
-            cardWidth = nat;
-            break;
-        }
+        var cardWidth = _measuredCardWidth > 0 ? _measuredCardWidth : CardWidthWithMargin;
+        if (_measuredCardWidth <= 0)
+            foreach (var card in _cardsByListItem)
+            {
+                card.Value.Widget.Measure(Orientation.Horizontal, -1, out _, out var nat, out _, out _);
+                if (nat <= 0) continue;
+                _measuredCardWidth = nat;
+                cardWidth = nat;
+                break;
+            }
 
         var minColumns = (int)video_list_grid.MinColumns;
         if (minColumns <= 0) minColumns = 1;
@@ -255,7 +258,7 @@ public partial class VideoListView : ViewBase<Bin>
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
         if (IsDisposed || _refreshScrollPending || _source.State.IsLoading || _source.State.IsLoadingMore ||
-            Vadjustment is null ||
+            !_source.HasMore || Vadjustment is null ||
             Vadjustment.Value + Vadjustment.PageSize < Vadjustment.Upper - 240)
             return;
 
@@ -264,14 +267,10 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void OnStateChanged(object? sender, VideoListPresentationState state)
     {
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !IsDisposed, () =>
         {
-            if (IsDisposed)
-                return false;
             RefreshLoadingChanged?.Invoke(this, state.IsLoading || state.IsLoadingMore);
             Render(state);
-
-            return false;
         });
     }
 
@@ -318,7 +317,7 @@ public partial class VideoListView : ViewBase<Bin>
 
     private void ApplyVideos(IReadOnlyList<VideoSummary> videos)
     {
-        var nextVideos = videos.ToArray();
+        var nextVideos = videos as VideoSummary[] ?? [.. videos];
         var prefixLength = 0;
         while (prefixLength < _displayedVideos.Length && prefixLength < nextVideos.Length &&
                _displayedVideos[prefixLength] == nextVideos[prefixLength])
@@ -333,23 +332,31 @@ public partial class VideoListView : ViewBase<Bin>
 
         var removedMiddleCount = _displayedVideos.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextVideos.Length - prefixLength - suffixLength;
-        var isPaginationAppend = removedMiddleCount == 0 && prefixLength == _displayedVideos.Length;
+        _displayedVideos = nextVideos;
+        if (removedMiddleCount == 0 && addedMiddleCount == 0)
+            return;
+
+        var isPaginationAppend = removedMiddleCount == 0 && prefixLength == _displayedVideos.Length - addedMiddleCount;
         var isInPlaceUpdate = removedMiddleCount > 0 && removedMiddleCount == addedMiddleCount;
         if (isInPlaceUpdate)
             for (var i = 0; i < removedMiddleCount; i++)
-                if (_displayedVideos[prefixLength + i].Id != nextVideos[prefixLength + i].Id)
+                if (_videoIds.GetString((uint)(prefixLength + i)) != nextVideos[prefixLength + i].Id)
                 {
                     isInPlaceUpdate = false;
                     break;
                 }
 
-        _videosById.Clear();
-        foreach (var video in nextVideos)
-            _videosById[video.Id] = video;
-
-        _displayedVideos = nextVideos;
-        if (removedMiddleCount == 0 && addedMiddleCount == 0)
-            return;
+        if (isPaginationAppend)
+        {
+            for (var i = prefixLength; i < nextVideos.Length; i++)
+                _videosById[nextVideos[i].Id] = nextVideos[i];
+        }
+        else
+        {
+            _videosById.Clear();
+            foreach (var video in nextVideos)
+                _videosById[video.Id] = video;
+        }
 
         if (!isPaginationAppend && !isInPlaceUpdate)
         {
@@ -362,7 +369,9 @@ public partial class VideoListView : ViewBase<Bin>
             ScrollToTop();
         }
 
-        var addedMiddleIds = nextVideos.Skip(prefixLength).Take(addedMiddleCount).Select(video => video.Id).ToArray();
+        var addedMiddleIds = new string[addedMiddleCount];
+        for (var i = 0; i < addedMiddleCount; i++)
+            addedMiddleIds[i] = nextVideos[prefixLength + i].Id;
         _videoIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
     }
 

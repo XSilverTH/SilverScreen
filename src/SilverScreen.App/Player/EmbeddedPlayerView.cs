@@ -57,11 +57,7 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _mediaResolver = dependencies.MediaResolver;
         _queueService = dependencies.Queue;
 
-        _player = Lifetime.Own(new LibMpvPlayer(a => Functions.IdleAdd(0, () =>
-        {
-            if (!IsDisposed) a();
-            return false;
-        })));
+        _player = Lifetime.Own(new LibMpvPlayer(a => GtkUiDispatch.Run(() => !IsDisposed, a)));
         var desktopMedia = Lifetime.Own(new DesktopMediaIntegration(_player, PresentPlayer));
         _session = Lifetime.Own(new PlaybackSession(dependencies, desktopMedia));
         var linkRouter = new PlayerLinkRouter(pos => _player.SeekAbsolute(pos),
@@ -107,9 +103,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         if (!_player.IsAvailable)
             return Task.FromResult(_player.AvailabilityError ?? RuntimeDependencyGuidance.LibMpvUnavailable);
 
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !IsDisposed, () =>
         {
-            if (IsDisposed) return false;
             EndSession(true);
             _session.Start(request);
             _syncingQueue = true;
@@ -143,10 +138,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             Widget.GrabFocus();
 
             if (!_overlay.Surface.IsRendererReady) _overlay.Surface.MakeCurrent();
-            if (!_overlay.Surface.IsRendererReady) return false;
+            if (!_overlay.Surface.IsRendererReady) return;
             _player.Load(request, _preferences.GetPreferences(), _session.CookieFilePath);
             _loadedRequest = request;
-            return false;
         });
         return Task.FromResult("Opening embedded player.");
     }
@@ -288,15 +282,15 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
     private void OnQueueChanged(object? sender, EventArgs e)
     {
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !IsDisposed && !_syncingQueue && _session.Request is not null, () =>
         {
-            if (IsDisposed || _syncingQueue || _session.Request is null) return false;
+            if (_session.Request is null) return;
 
             var currentVideos = _session.Request.Videos;
             var newItems = _queueService.Items;
             var newVideos = newItems.Select(i => i.Video).ToImmutableArray();
 
-            if (newVideos.SequenceEqual(currentVideos)) return false;
+            if (newVideos.SequenceEqual(currentVideos)) return;
 
             if (newVideos.Length > currentVideos.Length &&
                 newVideos.Take(currentVideos.Length).SequenceEqual(currentVideos))
@@ -341,7 +335,6 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
             var idx = _session.CurrentPlaylistIndex;
             _overlay.ControlsBar.SetQueueControls(count > 1, idx > 0, idx < count - 1,
                 player_queue_split_view.ShowSidebar);
-            return false;
         });
     }
 

@@ -3,6 +3,7 @@ using Gtk;
 using Pango;
 using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
 using Functions = GLib.Functions;
 
@@ -252,11 +253,8 @@ public partial class SearchPopoverView : ViewBase<Box>
                 return;
 
             var suggestions = await _viewModel.FetchSuggestionsAsync(text, token).ConfigureAwait(false);
-            Functions.IdleAdd(0, () =>
-            {
-                if (!token.IsCancellationRequested && !IsDisposed) UpdateSuggestions(text, suggestions);
-                return false;
-            });
+            GtkUiDispatch.Run(() => !token.IsCancellationRequested && !IsDisposed,
+                () => UpdateSuggestions(text, suggestions));
         }, TaskScheduler.Default);
     }
 

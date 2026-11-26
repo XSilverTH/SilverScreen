@@ -22,6 +22,7 @@ public sealed record VideoListPresentationState(
 
 public interface IVideoListSource : IDisposable
 {
+    bool HasMore { get; }
     VideoListPresentationState State { get; }
     event EventHandler<VideoListPresentationState>? StateChanged;
     Task RefreshAsync(int count = VideoFeedConstants.DefaultPageSize);

@@ -209,7 +209,9 @@ internal sealed class PlaybackSession : IDisposable
         if (Request is not null && state.HasMedia && _playbackId != 0)
             _coordinator.UpdateActivePlayback(_playbackId, coherentState, CurrentVideo?.Id);
 
-        var coherentPlaybackState = state with { PlaylistIndex = coherentIndex };
+        var coherentPlaybackState = coherentIndex == state.PlaylistIndex
+            ? state
+            : state with { PlaylistIndex = coherentIndex };
         _desktopMedia?.UpdatePlayback(Request, coherentPlaybackState);
 
         if (state.HasMedia && CurrentVideo is not null)
@@ -522,6 +524,13 @@ internal sealed class PlaybackSession : IDisposable
     private void EvaluateSponsorBlock(LibMpvPlaybackState state)
     {
         if (CurrentVideo is null) return;
+
+        if (SponsorBlockSegments.Count == 0 && ActiveManualSegment is null)
+        {
+            _hadSeek = false;
+            _wasPaused = state.IsPaused;
+            return;
+        }
 
         if (LastPlaybackState is { } prev &&
             string.Equals(_lastPlaybackVideoId, CurrentVideo.Id, StringComparison.Ordinal) &&

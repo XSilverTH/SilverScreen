@@ -13,6 +13,7 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
     private readonly Action? _closeRequested;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
+    private readonly Dictionary<Guid, int> _itemIndicesById = [];
     private readonly Dictionary<string, QueueItem> _itemsById = [];
     private readonly Dictionary<Widget, QueueItemRowView> _rowsByCell = [];
     private readonly IThumbnailService _thumbnails;
@@ -86,7 +87,9 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
         ApplyItems(state.Items);
         if (state.CurrentPlayingIndex >= 0 && state.CurrentPlayingIndex < state.Items.Count)
         {
-            var remainingTicks = state.Items.Skip(state.CurrentPlayingIndex).Sum(item => item.Video.Duration.Ticks);
+            long remainingTicks = 0;
+            for (var i = state.CurrentPlayingIndex; i < state.Items.Count; i++)
+                remainingTicks += state.Items[i].Video.Duration.Ticks;
             var remainingDuration = TimeSpan.FromTicks(remainingTicks);
             queue_summary_label.SetText(
                 $"Playing {state.CurrentPlayingIndex + 1} of {state.Items.Count} · {FormatDuration(remainingDuration)} remaining");
@@ -122,7 +125,7 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
 
     private void ApplyItems(IReadOnlyList<QueueItem> items)
     {
-        var nextItems = items.ToArray();
+        var nextItems = items as QueueItem[] ?? [.. items];
         var prefixLength = 0;
         while (prefixLength < _displayedItems.Length && prefixLength < nextItems.Length &&
                _displayedItems[prefixLength].Id == nextItems[prefixLength].Id)
@@ -137,15 +140,35 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
 
         var removedMiddleCount = _displayedItems.Length - prefixLength - suffixLength;
         var addedMiddleCount = nextItems.Length - prefixLength - suffixLength;
-        _itemsById.Clear();
-        foreach (var item in nextItems)
-            _itemsById[item.Id.ToString()] = item;
+
+        var itemsChanged = removedMiddleCount != 0 || addedMiddleCount != 0;
+        if (!itemsChanged)
+            for (var i = 0; i < nextItems.Length; i++)
+                if (!Equals(_displayedItems[i], nextItems[i]))
+                {
+                    itemsChanged = true;
+                    break;
+                }
 
         _displayedItems = nextItems;
+        if (itemsChanged)
+        {
+            _itemsById.Clear();
+            _itemIndicesById.Clear();
+            for (var i = 0; i < nextItems.Length; i++)
+            {
+                var item = nextItems[i];
+                _itemsById[item.Id.ToString()] = item;
+                _itemIndicesById[item.Id] = i;
+            }
+        }
+
         if (removedMiddleCount == 0 && addedMiddleCount == 0)
             return;
 
-        var addedIds = nextItems.Skip(prefixLength).Take(addedMiddleCount).Select(item => item.Id.ToString()).ToArray();
+        var addedIds = new string[addedMiddleCount];
+        for (var i = 0; i < addedMiddleCount; i++)
+            addedIds[i] = nextItems[prefixLength + i].Id.ToString();
         _itemIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedIds);
     }
 
@@ -173,11 +196,7 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
 
     private int GetItemIndex(Guid itemId)
     {
-        for (var index = 0; index < _displayedItems.Length; index++)
-            if (_displayedItems[index].Id == itemId)
-                return index;
-
-        return -1;
+        return _itemIndicesById.GetValueOrDefault(itemId, -1);
     }
 
     private void OnRowPlayRequested(Guid itemId, int index)
@@ -215,7 +234,7 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
 
     private void RequestDrop(Guid itemId, int insertionIndex)
     {
-        var sourceIndex = _displayedItems.ToList().FindIndex(item => item.Id == itemId);
+        var sourceIndex = GetItemIndex(itemId);
         if (sourceIndex < 0)
             return;
 
@@ -249,6 +268,8 @@ public partial class QueueView : ViewBase<Box, QueueViewModel>
                 row.Dispose();
 
             _rowsByCell.Clear();
+            _itemsById.Clear();
+            _itemIndicesById.Clear();
             _viewModel.Dispose();
         }
 

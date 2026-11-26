@@ -3,7 +3,6 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 using Object = GObject.Object;
 
 namespace SilverScreen.Player.Status;
@@ -41,6 +40,9 @@ internal sealed class PlayerStatsController : IDisposable
         _lifetime.Track(
             () => _revealer.OnNotify += OnRevealerNotify,
             () => _revealer.OnNotify -= OnRevealerNotify);
+        _lifetime.Track(
+            () => _revealer.OnUnmap += OnRevealerUnmap,
+            () => _revealer.OnUnmap -= OnRevealerUnmap);
     }
 
     public PlayerStatsController(
@@ -70,7 +72,15 @@ internal sealed class PlayerStatsController : IDisposable
     private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
         if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
+        {
             _revealer.SetVisible(false);
+            StopTimer();
+        }
+    }
+
+    private void OnRevealerUnmap(Widget sender, EventArgs args)
+    {
+        Close();
     }
 
     private static string GetAccentColorHex()
@@ -182,7 +192,7 @@ internal sealed class PlayerStatsController : IDisposable
 
     private void RefreshContent()
     {
-        if (_lifetime.IsDisposed || !IsOpen) return;
+        if (_lifetime.IsDisposed || !IsOpen || !_revealer.GetVisible()) return;
 
         if (Interlocked.CompareExchange(ref _isRefreshing, 1, 0) != 0)
         {
@@ -197,6 +207,12 @@ internal sealed class PlayerStatsController : IDisposable
         {
             try
             {
+                if (_lifetime.IsDisposed || !IsOpen)
+                {
+                    Interlocked.Exchange(ref _isRefreshing, 0);
+                    return;
+                }
+
                 var stats = _statsProvider(currentPage == 3);
                 if (_lifetime.IsDisposed || !IsOpen)
                 {
@@ -217,23 +233,22 @@ internal sealed class PlayerStatsController : IDisposable
                         _ => PlaybackStatsFormatter.FormatOverviewPageMarkup(stats, accent)
                     };
 
-                Functions.IdleAdd(0, () =>
+                GtkUiDispatch.Run(() =>
                 {
                     try
                     {
-                        if (!_lifetime.IsDisposed && IsOpen && CurrentPage == currentPage) _label.SetMarkup(markup);
+                        if (!_lifetime.IsDisposed && IsOpen && _revealer.GetVisible() && CurrentPage == currentPage)
+                            _label.SetMarkup(markup);
                     }
                     finally
                     {
                         Interlocked.Exchange(ref _isRefreshing, 0);
-                        if (_pendingRefresh && IsOpen && !_lifetime.IsDisposed)
+                        if (_pendingRefresh && IsOpen && _revealer.GetVisible() && !_lifetime.IsDisposed)
                         {
                             _pendingRefresh = false;
                             RefreshContent();
                         }
                     }
-
-                    return false;
                 });
             }
             catch (Exception ex)
@@ -249,7 +264,7 @@ internal sealed class PlayerStatsController : IDisposable
         StopTimer();
         _refreshTimerSource = _lifetime.Timeout(RefreshIntervalMilliseconds, () =>
         {
-            if (_lifetime.IsDisposed || !IsOpen)
+            if (_lifetime.IsDisposed || !IsOpen || !_revealer.GetVisible())
             {
                 _refreshTimerSource = 0;
                 return false;

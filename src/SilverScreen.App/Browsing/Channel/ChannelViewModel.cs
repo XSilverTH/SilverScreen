@@ -86,6 +86,8 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         _engine.Dispose();
     }
 
+    public bool HasMore => State.HasMore;
+
     VideoListPresentationState IVideoListSource.State => _engine.State;
 
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged

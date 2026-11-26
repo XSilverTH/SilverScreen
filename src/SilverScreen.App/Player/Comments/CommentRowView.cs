@@ -16,6 +16,11 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
         repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
 
     private string? _boundCommentId;
+    private bool? _boundRepliesVisible;
+    private int _boundReplyCount = -1;
+    private string? _boundText;
+
+    internal string? BoundCommentId => _boundCommentId;
 
     private bool OnCommentTextActivateLink(Label sender, Label.ActivateLinkSignalArgs args)
     {
@@ -30,22 +35,46 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
 
     public void Bind(YouTubeComment comment, int replyCount, bool repliesVisible)
     {
+        Bind(comment, replyCount, repliesVisible, null);
+    }
+
+    internal void Bind(YouTubeComment comment, int replyCount, bool repliesVisible, string? prebuiltMarkup)
+    {
+        var sameContent = string.Equals(_boundCommentId, comment.Id, StringComparison.Ordinal) &&
+                          string.Equals(_boundText, comment.Text, StringComparison.Ordinal);
+
         _boundCommentId = comment.Id;
-        Widget.MarginStart = comment.ParentId is null ? 8 : 32;
-        comment_author_label.SetText(comment.AuthorName);
-        comment_published_time_label.SetText(comment.PublishedTimeText);
-        comment_published_time_label.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
-        SetCommentText(comment.Text);
-        comment_likes_label.SetText(FormatCount(comment.LikeCount));
-        comment_replies_button.SetVisible(replyCount > 0);
-        comment_replies_button.SetLabel(repliesVisible
-            ? $"Hide {FormatReplyCount(replyCount)}"
-            : $"Show {FormatReplyCount(replyCount)}");
+        if (!sameContent)
+        {
+            _boundText = comment.Text;
+            Widget.MarginStart = comment.ParentId is null ? 8 : 32;
+            comment_author_label.SetText(comment.AuthorName);
+            comment_published_time_label.SetText(comment.PublishedTimeText);
+            comment_published_time_label.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
+            SetCommentText(comment.Text, prebuiltMarkup);
+            comment_likes_label.SetText(FormatCount(comment.LikeCount));
+        }
+
+        if (!sameContent || _boundReplyCount != replyCount || _boundRepliesVisible != repliesVisible)
+        {
+            _boundReplyCount = replyCount;
+            _boundRepliesVisible = repliesVisible;
+            comment_replies_button.SetVisible(replyCount > 0);
+            if (replyCount > 0)
+                comment_replies_button.SetLabel(repliesVisible
+                    ? $"Hide {FormatReplyCount(replyCount)}"
+                    : $"Show {FormatReplyCount(replyCount)}");
+            else
+                comment_replies_button.SetLabel(string.Empty);
+        }
     }
 
     public void Unbind()
     {
         _boundCommentId = null;
+        _boundText = null;
+        _boundReplyCount = -1;
+        _boundRepliesVisible = null;
         Widget.MarginStart = 8;
         comment_author_label.SetText(string.Empty);
         comment_published_time_label.SetText(string.Empty);
@@ -56,11 +85,11 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
         comment_replies_button.SetLabel(string.Empty);
     }
 
-    private void SetCommentText(string text)
+    private void SetCommentText(string text, string? prebuiltMarkup)
     {
         try
         {
-            comment_text_label.SetMarkup(RichLabelMarkup.Build(text));
+            comment_text_label.SetMarkup(prebuiltMarkup ?? RichLabelMarkup.Build(text));
         }
         catch (Exception)
         {

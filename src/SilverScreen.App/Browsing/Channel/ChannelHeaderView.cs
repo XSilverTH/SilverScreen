@@ -1,3 +1,4 @@
+using GObject;
 using Gtk;
 using SilverScreen.Core.Domain;
 using XSTH.Blueprint.Helpers;
@@ -45,16 +46,20 @@ public partial class ChannelHeaderView : ViewBase<Revealer, ChannelViewModel>
 
         var motionController = EventControllerMotion.New();
         motionController.SetPropagationPhase(PropagationPhase.Capture);
+        SignalHandler<EventControllerMotion, EventControllerMotion.EnterSignalArgs> enterHandler =
+            (_, e) => CheckHoverReveal(e.Y);
+        SignalHandler<EventControllerMotion, EventControllerMotion.MotionSignalArgs> motionHandler =
+            (_, e) => CheckHoverReveal(e.Y);
         Lifetime.Attach(scrolledWindow, motionController,
             c =>
             {
-                c.OnEnter += (_, e) => CheckHoverReveal(e.Y);
-                c.OnMotion += (_, e) => CheckHoverReveal(e.Y);
+                c.OnEnter += enterHandler;
+                c.OnMotion += motionHandler;
             },
             c =>
             {
-                c.OnEnter -= (_, e) => CheckHoverReveal(e.Y);
-                c.OnMotion -= (_, e) => CheckHoverReveal(e.Y);
+                c.OnEnter -= enterHandler;
+                c.OnMotion -= motionHandler;
             });
     }
 

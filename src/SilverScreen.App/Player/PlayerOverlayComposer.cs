@@ -125,7 +125,15 @@ internal sealed class PlayerOverlayComposer : IDisposable
                 InfoPanel.UpdatePointer(x, y, w, h, session.HasMedia);
                 CommentsCue.UpdatePointer(x, y, w, h, isCommentsOpen(), session.HasMedia);
             },
-            visible => Osd.SetChromeVisible(visible)));
+            visible =>
+            {
+                Osd.SetChromeVisible(visible);
+                if (visible && LastState is { } st)
+                {
+                    Timeline.UpdatePosition(st);
+                    Timeline.UpdateChapters(st.Chapters, st.Duration);
+                }
+            }));
 
         Shortcuts = _lifetime.Own(new PlayerShortcutController(rootWidget));
         PlayerShortcutWiring.Wire(
@@ -170,9 +178,10 @@ internal sealed class PlayerOverlayComposer : IDisposable
     public void SyncState(LibMpvPlaybackState state, bool hasQueue, bool canPrev, bool canNext, bool isQueueOpen)
     {
         LastState = state;
+        var chromeVisible = Chrome.ControlsVisible;
         CenterControls.SetPlaybackState(state is { HasMedia: true, IsPaused: false });
-        Timeline.UpdatePosition(state);
-        Timeline.UpdateChapters(state.Chapters, state.Duration);
+        Timeline.UpdatePosition(state, chromeVisible);
+        Timeline.UpdateChapters(state.Chapters, state.Duration, chromeVisible);
         ControlsBar.SetVolume(state.Volume);
         ControlsBar.SetSpeed(state.Speed);
         ControlsBar.UpdateSubtitleTracks(state.SubtitleTracks, true);
@@ -202,6 +211,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
     {
         Timeline.Reset();
         Osd.HideImmediate();
+        Stats.Close();
         Error.ClearError();
         Loading.Reset();
         InfoPanel.SetVideo(null);

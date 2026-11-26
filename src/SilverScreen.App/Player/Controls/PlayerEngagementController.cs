@@ -2,7 +2,6 @@ using Gtk;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
 using XSTH.Blueprint.Helpers;
-using static GLib.Functions;
 
 namespace SilverScreen.Player.Controls;
 
@@ -58,57 +57,41 @@ internal sealed class PlayerEngagementController : IDisposable
 
     private void OnEngagementChanged(VideoEngagement? engagement)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             _likesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Likes));
             _dislikesLabel.SetText(engagement is null ? "—" : FormatCount(engagement.Dislikes));
-            return false;
         });
     }
 
     private void OnRatingStateChanged(YouTubeRatingState ratingState)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             SetRatingState(ratingState);
             SetReactionSensitive(_session.CanVote);
-            return false;
         });
     }
 
     private void OnVideoChanged(VideoSummary video, int playlistIndex)
     {
-        IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () =>
         {
-            if (_lifetime.IsDisposed) return false;
             _likesLabel.SetText("—");
             _dislikesLabel.SetText("—");
             SetRatingState(YouTubeRatingState.None);
             SetReactionSensitive(_session.CanVote);
-            return false;
         });
     }
 
     private void OnSessionEnded()
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            Clear();
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, Clear);
     }
 
     private void OnSessionFailed(string detail)
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            Clear();
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, Clear);
     }
 
     private void Clear()

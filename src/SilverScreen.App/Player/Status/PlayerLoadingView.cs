@@ -9,6 +9,9 @@ namespace SilverScreen.Player.Status;
 /// </summary>
 public partial class PlayerLoadingView : ViewBase<Box>
 {
+    private int _bufferingPercent = -1;
+    private bool? _isBuffering;
+    private bool? _isLoading;
     private PlayerStreamDelayController? _streamDelayController;
 
     public void AttachPlayer(LibMpvPlayer player)
@@ -19,16 +22,34 @@ public partial class PlayerLoadingView : ViewBase<Box>
 
     public void SetLoading(bool loading)
     {
+        if (_isLoading == loading && !(_isBuffering == true && loading))
+            return;
+
+        _isLoading = loading;
         if (!loading)
             _streamDelayController?.Reset();
+        else if (_isBuffering == true)
+            SetBuffering(false, 0);
 
         player_loading_indicator.SetVisible(loading);
     }
 
     public void SetBuffering(bool buffering, int percent)
     {
+        if (_isBuffering == buffering && (!buffering || _bufferingPercent == percent))
+            return;
+
+        _isBuffering = buffering;
+        _bufferingPercent = buffering ? percent : -1;
+
         if (buffering)
         {
+            if (_isLoading == true)
+            {
+                _isLoading = false;
+                player_loading_indicator.SetVisible(false);
+            }
+
             player_buffering_label.SetText(percent > 0 ? $"Buffering {percent}%" : "Buffering…");
             player_buffering_indicator.SetVisible(true);
         }
@@ -41,7 +62,17 @@ public partial class PlayerLoadingView : ViewBase<Box>
     public void Reset()
     {
         _streamDelayController?.Reset();
-        player_loading_indicator.SetVisible(false);
-        player_buffering_indicator.SetVisible(false);
+        if (_isLoading != false)
+        {
+            _isLoading = false;
+            player_loading_indicator.SetVisible(false);
+        }
+
+        if (_isBuffering != false)
+        {
+            _isBuffering = false;
+            _bufferingPercent = -1;
+            player_buffering_indicator.SetVisible(false);
+        }
     }
 }

@@ -3,7 +3,6 @@ using Gtk;
 using Pango;
 using SilverScreen.Infrastructure.Player;
 using XSTH.Blueprint.Helpers;
-using static GLib.Functions;
 using Context = Cairo.Context;
 using Functions = PangoCairo.Functions;
 using Object = GObject.Object;
@@ -18,11 +17,18 @@ internal sealed class PlayerStreamDelayController : IDisposable
 {
     private const uint TickIntervalMilliseconds = 33; // ~30 FPS
     private readonly DrawingArea _drawingArea;
+    private readonly FontDescription _fontDescription;
     private readonly DisposeScope _lifetime = new();
     private readonly Revealer _revealer;
     private readonly PlayerStreamDelayState _state;
+    private double _accentA = 1.0;
+    private double _accentB = 0.89;
+    private double _accentG = 0.52;
+    private bool _accentIsLight;
+    private double _accentR = 0.21;
     private double _currentFraction;
     private string _currentLabelText = string.Empty;
+    private bool _hasCachedAccent;
     private uint _tickSource;
 
     public PlayerStreamDelayController(
@@ -35,6 +41,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         _revealer = revealer ?? throw new ArgumentNullException(nameof(revealer));
         _drawingArea = drawingArea ?? throw new ArgumentNullException(nameof(drawingArea));
         _state = state ?? new PlayerStreamDelayState();
+        _fontDescription = FontDescription.FromString("Sans Bold 9");
 
         _revealer.SetVisible(false);
         _revealer.RevealChild = false;
@@ -53,15 +60,19 @@ internal sealed class PlayerStreamDelayController : IDisposable
     public void Dispose()
     {
         if (_lifetime.IsDisposed) return;
-        _lifetime.Dispose();
         CancelTimer();
+        _lifetime.Dispose();
+        _fontDescription.Dispose();
         _state.Reset();
     }
 
     public void Reset()
     {
+        var hadActivity = _state.IsActive || _tickSource != 0 || _revealer.RevealChild || _revealer.GetVisible() ||
+                          !string.IsNullOrEmpty(_currentLabelText);
         CancelTimer();
         _state.Reset();
+        if (!hadActivity) return;
         _currentFraction = 0.0;
         _currentLabelText = string.Empty;
         _revealer.RevealChild = false;
@@ -72,17 +83,15 @@ internal sealed class PlayerStreamDelayController : IDisposable
     private void OnRevealerNotify(Object sender, Object.NotifySignalArgs args)
     {
         if (args.Pspec.GetName() == "child-revealed" && _revealer is { ChildRevealed: false, RevealChild: false })
+        {
+            CancelTimer();
             _revealer.SetVisible(false);
+        }
     }
 
     private void OnStreamDelayDetected(object? sender, TimeSpan delay)
     {
-        IdleAdd(0, () =>
-        {
-            if (_lifetime.IsDisposed) return false;
-            StartDelay(delay);
-            return false;
-        });
+        GtkUiDispatch.Run(() => !_lifetime.IsDisposed, () => StartDelay(delay));
     }
 
     private void StartDelay(TimeSpan delay)
@@ -90,6 +99,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         if (delay <= TimeSpan.Zero) return;
 
         CancelTimer();
+        _hasCachedAccent = false;
         _state.Start(delay);
 
         _currentFraction = 0.0;
@@ -104,7 +114,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
 
     private bool OnTick()
     {
-        if (_lifetime.IsDisposed || !_state.IsActive)
+        if (_lifetime.IsDisposed || !_state.IsActive || !_revealer.GetVisible() || !_revealer.RevealChild)
         {
             _tickSource = 0;
             return false;
@@ -129,22 +139,10 @@ internal sealed class PlayerStreamDelayController : IDisposable
         _tickSource = 0;
     }
 
-    private void DrawDelayBar(DrawingArea area, Context cr, int width, int height)
+    private void EnsureAccentColor(DrawingArea area)
     {
-        if (width <= 0 || height <= 0) return;
+        if (_hasCachedAccent) return;
 
-        var radius = height / 2.0;
-
-        // 1. Trough background and border
-        PathPill();
-        cr.SetSourceRgba(0.09, 0.09, 0.09, 0.95);
-        cr.FillPreserve();
-        cr.SetSourceRgba(1.0, 1.0, 1.0, 0.15);
-        cr.LineWidth = 1.0;
-        cr.Stroke();
-
-        // 2. Progress fill
-        var fillWidth = width * Math.Clamp(_currentFraction, 0.0, 1.0);
         double fillR = 0.21, fillG = 0.52, fillB = 0.89, fillA = 1.0;
         var hasBg = area.GetStyleContext().LookupColor("accent_bg_color", out var accentBg);
         if (hasBg)
@@ -170,13 +168,39 @@ internal sealed class PlayerStreamDelayController : IDisposable
             }
         }
 
+        _accentR = fillR;
+        _accentG = fillG;
+        _accentB = fillB;
+        _accentA = fillA;
+        _accentIsLight = IsLightColor(fillR, fillG, fillB);
+        _hasCachedAccent = true;
+    }
+
+    private void DrawDelayBar(DrawingArea area, Context cr, int width, int height)
+    {
+        if (width <= 0 || height <= 0) return;
+
+        var radius = height / 2.0;
+
+        // 1. Trough background and border
+        PathPill();
+        cr.SetSourceRgba(0.09, 0.09, 0.09, 0.95);
+        cr.FillPreserve();
+        cr.SetSourceRgba(1.0, 1.0, 1.0, 0.15);
+        cr.LineWidth = 1.0;
+        cr.Stroke();
+
+        // 2. Progress fill
+        EnsureAccentColor(area);
+        var fillWidth = width * Math.Clamp(_currentFraction, 0.0, 1.0);
+
         if (fillWidth > 0)
         {
             cr.Save();
             PathPill();
             cr.Clip();
             cr.Rectangle(0, 0, fillWidth, height);
-            cr.SetSourceRgba(fillR, fillG, fillB, fillA);
+            cr.SetSourceRgba(_accentR, _accentG, _accentB, _accentA);
             cr.Fill();
             cr.Restore();
         }
@@ -185,9 +209,8 @@ internal sealed class PlayerStreamDelayController : IDisposable
         var text = _currentLabelText;
         if (string.IsNullOrEmpty(text)) return;
 
-        var layout = area.CreatePangoLayout(text);
-        var fontDesc = FontDescription.FromString("Sans Bold 9");
-        layout.SetFontDescription(fontDesc);
+        using var layout = area.CreatePangoLayout(text);
+        layout.SetFontDescription(_fontDescription);
         layout.GetPixelSize(out var textWidth, out var textHeight);
         var textX = (width - textWidth) / 2.0;
         var textY = (height - textHeight) / 2.0;
@@ -211,7 +234,7 @@ internal sealed class PlayerStreamDelayController : IDisposable
         cr.Rectangle(0, 0, fillWidth, height);
         cr.Clip();
 
-        if (IsLightColor(fillR, fillG, fillB))
+        if (_accentIsLight)
             cr.SetSourceRgba(0.0, 0.0, 0.0, 0.95);
         else
             cr.SetSourceRgba(1.0, 1.0, 1.0, 0.95);

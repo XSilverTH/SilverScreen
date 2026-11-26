@@ -139,6 +139,8 @@ public sealed class SubscriptionsViewModel : INotifyPropertyChanged, IVideoListS
         _engine.Dispose();
     }
 
+    public bool HasMore => State.HasMore;
+
     VideoListPresentationState IVideoListSource.State => MapState(State, _openWebLogin, _authService);
 
     event EventHandler<VideoListPresentationState>? IVideoListSource.StateChanged

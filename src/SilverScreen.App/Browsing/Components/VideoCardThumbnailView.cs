@@ -4,8 +4,8 @@ using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
+using SilverScreen.Player;
 using XSTH.Blueprint.Helpers;
-using Functions = GLib.Functions;
 
 namespace SilverScreen.Browsing.Components;
 
@@ -13,21 +13,41 @@ public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : View
 {
     private const int CardWidth = 336, ThumbnailHeight = 189;
     private static readonly ILogger Logger = Log.ForContext<VideoCardThumbnailView>();
+    private static readonly SemaphoreSlim DecodeSemaphore = new(4, 4);
     private readonly NativeMemoryPressure _thumbnailPressure = new();
     private readonly IThumbnailService _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
     private int _bindingGeneration;
     private Picture? _boundPicture;
     private Texture? _boundTexture;
+    private string? _boundThumbnailUrl;
+    private string? _boundVideoId;
     private string _thumbnailAlternativeText = string.Empty;
     private CancellationTokenSource? _thumbnailCancellation;
 
     public void Bind(VideoSummary video, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
-        Unbind();
+        ArgumentNullException.ThrowIfNull(video);
+
         duration.SetText(VideoCardFormatting.FormatDuration(video.Duration));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         SetWatchProgress(video.PlaybackProgress?.WatchedFraction);
+
+        var sameMedia = string.Equals(_boundVideoId, video.Id, StringComparison.Ordinal) &&
+                        string.Equals(_boundThumbnailUrl, video.ThumbnailUrl, StringComparison.Ordinal) &&
+                        (_boundTexture is not null || _thumbnailCancellation is not null);
+        if (sameMedia)
+        {
+            if (_boundPicture is not null)
+                _boundPicture.AlternativeText = _thumbnailAlternativeText;
+            return;
+        }
+
+        CancelThumbnailLoad();
+        ClearThumbnail();
+
+        _boundVideoId = video.Id;
+        _boundThumbnailUrl = video.ThumbnailUrl;
         var generation = ++_bindingGeneration;
         _thumbnailCancellation = ct.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(ct)
@@ -38,13 +58,27 @@ public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : View
     public void Unbind()
     {
         _bindingGeneration++;
+        _boundVideoId = null;
+        _boundThumbnailUrl = null;
         duration.SetText(string.Empty);
         SetWatchProgress(null);
         _thumbnailAlternativeText = string.Empty;
-        _thumbnailCancellation?.Cancel();
+        CancelThumbnailLoad();
+        ClearThumbnail();
+    }
+
+    private void CancelThumbnailLoad()
+    {
+        try
+        {
+            _thumbnailCancellation?.Cancel();
+        }
+        catch (Exception)
+        {
+        }
+
         _thumbnailCancellation?.Dispose();
         _thumbnailCancellation = null;
-        ClearThumbnail();
     }
 
     private void SetWatchProgress(double? fraction)
@@ -55,11 +89,19 @@ public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : View
 
     private async Task LoadThumbnailAsync(VideoSummary video, int generation, CancellationToken ct)
     {
+        var acquired = false;
         Pixbuf? pixbuf;
         try
         {
             var result = await _thumbnails.GetThumbnailAsync(video, ct).ConfigureAwait(false);
-            if (result is null) return;
+            if (result is null || IsDisposed || ct.IsCancellationRequested || _bindingGeneration != generation)
+                return;
+
+            await DecodeSemaphore.WaitAsync(ct).ConfigureAwait(false);
+            acquired = true;
+            if (IsDisposed || ct.IsCancellationRequested || _bindingGeneration != generation)
+                return;
+
             pixbuf = await Task
                 .Run(() => Pixbuf.NewFromFileAtScale(result.LocalPath, CardWidth, ThumbnailHeight, true), ct)
                 .ConfigureAwait(false);
@@ -73,13 +115,18 @@ public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : View
             Logger.Warning(ex, "Failed to load thumbnail for video");
             return;
         }
+        finally
+        {
+            if (acquired)
+                DecodeSemaphore.Release();
+        }
 
         var decodedPixbuf = pixbuf ?? throw new InvalidOperationException("Thumbnail decode returned no pixbuf.");
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() =>
         {
             try
             {
-                if (IsDisposed || ct.IsCancellationRequested || _bindingGeneration != generation) return false;
+                if (IsDisposed || ct.IsCancellationRequested || _bindingGeneration != generation) return;
                 var texture = Texture.NewForPixbuf(decodedPixbuf);
                 if (_boundPicture is null)
                 {
@@ -107,8 +154,6 @@ public partial class VideoCardThumbnailView(IThumbnailService thumbnails) : View
             {
                 decodedPixbuf.Dispose();
             }
-
-            return false;
         });
     }
 

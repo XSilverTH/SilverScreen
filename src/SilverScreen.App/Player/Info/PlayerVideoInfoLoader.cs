@@ -1,5 +1,4 @@
 using System.Globalization;
-using GLib;
 using Serilog;
 using SilverScreen.Core.Domain;
 using SilverScreen.Core.Player;
@@ -58,9 +57,8 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
             result = new YouTubeVideoDetailsResult(null, false, "Video details could not be loaded.");
         }
 
-        Functions.IdleAdd(0, () =>
+        GtkUiDispatch.Run(() => currentGen == _generation, () =>
         {
-            if (currentGen != _generation) return false;
             if (result is { IsSuccess: true, Details: { } details })
             {
                 LoadedDetails = details;
@@ -75,7 +73,6 @@ internal sealed class PlayerVideoInfoLoader(IYouTubeMediaResolver mediaResolver)
             }
 
             onCompleted();
-            return false;
         });
 
         return true;
