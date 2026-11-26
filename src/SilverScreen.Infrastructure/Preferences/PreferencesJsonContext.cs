@@ -12,7 +12,7 @@ namespace SilverScreen.Infrastructure.Preferences;
 ///     <see cref="EquatableArray{T}" /> collections of primitive/record types to ensure zero runtime reflection
 ///     or code generation during Native AOT publishing.
 /// </remarks>
-[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSourceGenerationOptions(WriteIndented = true, Converters = [typeof(EquatableArrayStringJsonConverter)])]
 [JsonSerializable(typeof(AppPreferences))]
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(VideoQuality))]

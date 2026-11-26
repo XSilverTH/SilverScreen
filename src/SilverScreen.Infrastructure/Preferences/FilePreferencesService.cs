@@ -25,10 +25,9 @@ public sealed class FilePreferencesService : IPreferencesService
 
     public AppPreferences GetPreferences()
     {
-        lock (_lock)
-        {
-            return Clone(_current);
-        }
+        // _current is only ever replaced with a newly cloned immutable snapshot after save,
+        // so Volatile.Read gives a consistent snapshot without lock contention on hot reads.
+        return Clone(Volatile.Read(ref _current));
     }
 
     public void SavePreferences(AppPreferences preferences)
@@ -50,10 +49,11 @@ public sealed class FilePreferencesService : IPreferencesService
                 throw new PreferencesPersistenceException(_filePath, ex);
             }
 
-            _current = cloned;
+            Volatile.Write(ref _current, cloned);
         }
 
-        PreferencesChanged?.Invoke(this, Clone(cloned));
+        if (PreferencesChanged is { } handlers)
+            handlers.Invoke(this, Clone(cloned));
     }
 
     private static AppPreferences Clone(AppPreferences preferences)
@@ -98,8 +98,14 @@ public sealed class FilePreferencesService : IPreferencesService
         {
             if (File.Exists(_filePath))
             {
-                var json = File.ReadAllText(_filePath);
-                var preferences = JsonSerializer.Deserialize(json, PreferencesJsonContext.Default.AppPreferences);
+                using var stream = new FileStream(
+                    _filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    4096,
+                    FileOptions.SequentialScan);
+                var preferences = JsonSerializer.Deserialize(stream, PreferencesJsonContext.Default.AppPreferences);
                 if (preferences is not null) return preferences;
             }
         }

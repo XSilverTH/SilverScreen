@@ -191,6 +191,7 @@ public sealed class ThumbnailCacheServiceTests
         Assert.All(results, r => Assert.Equal(firstPath, r!.LocalPath));
         Assert.True(File.Exists(firstPath));
         Assert.Equal(1, service.CachedFileCount);
+        Assert.Equal(1, handler.CallCount);
     }
 
     [Fact]

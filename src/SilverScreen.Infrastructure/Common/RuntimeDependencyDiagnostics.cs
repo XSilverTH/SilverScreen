@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
@@ -31,10 +32,14 @@ namespace SilverScreen.Infrastructure.Common;
 public sealed class RuntimeDependencyDiagnostics
 {
     private static readonly ILogger Logger = Log.ForContext<RuntimeDependencyDiagnostics>();
+    private static readonly TimeSpan ProbeCacheTtl = TimeSpan.FromSeconds(30);
+    private readonly ConcurrentDictionary<(string Path, string SearchPath), (bool Available, long Timestamp)> _executableCache = new();
     private readonly Func<string, bool> _isExecutableAvailable;
     private readonly Func<bool> _isLibMpvAvailable;
+    private readonly Lock _libMpvCacheLock = new();
     private readonly IPreferencesService _preferencesService;
     private readonly ISecretServiceAvailability _secretServiceAvailability;
+    private (bool Available, long Timestamp)? _libMpvCache;
 
     public RuntimeDependencyDiagnostics(
         IPreferencesService preferencesService,
@@ -64,7 +69,7 @@ public sealed class RuntimeDependencyDiagnostics
         var ytDlpPath = ResolveExecutablePath(preferences.YtDlpExecutablePath, "yt-dlp");
         var warnings = new List<string>(3);
 
-        if (!_isExecutableAvailable(ytDlpPath))
+        if (!IsExecutableAvailableCached(ytDlpPath))
         {
             var msg = RuntimeDependencyGuidance.YtDlpUnavailable(ytDlpPath);
             Logger.Warning("Startup dependency warning: {Warning}", msg);
@@ -73,7 +78,7 @@ public sealed class RuntimeDependencyDiagnostics
 
         if (PlaybackBackends.IsEmbedded(preferences.PlaybackBackendKind))
         {
-            if (!_isLibMpvAvailable())
+            if (!IsLibMpvAvailableCached())
             {
                 const string libMpvMsg = RuntimeDependencyGuidance.LibMpvUnavailable;
                 Logger.Warning("Startup dependency warning: {Warning}", libMpvMsg);
@@ -83,7 +88,7 @@ public sealed class RuntimeDependencyDiagnostics
         else
         {
             var mpvPath = ResolveExecutablePath(preferences.MpvExecutablePath, "mpv");
-            if (!_isExecutableAvailable(mpvPath))
+            if (!IsExecutableAvailableCached(mpvPath))
             {
                 var mpvMsg = RuntimeDependencyGuidance.MpvUnavailable(mpvPath);
                 Logger.Warning("Startup dependency warning: {Warning}", mpvMsg);
@@ -101,6 +106,60 @@ public sealed class RuntimeDependencyDiagnostics
         if (warnings.Count == 0) Logger.Debug("No runtime dependency warnings");
 
         return warnings;
+    }
+
+    /// <summary>
+    ///     Runs dependency probing asynchronously on a thread-pool worker so UI startup is not blocked.
+    /// </summary>
+    public Task<IReadOnlyList<string>> GetStartupWarningsAsync(CancellationToken cancellationToken = default)
+    {
+        return cancellationToken.IsCancellationRequested
+            ? Task.FromCanceled<IReadOnlyList<string>>(cancellationToken)
+            : Task.Run(GetStartupWarnings, cancellationToken);
+    }
+
+    public void InvalidateCache()
+    {
+        _executableCache.Clear();
+        lock (_libMpvCacheLock)
+        {
+            _libMpvCache = null;
+        }
+    }
+
+    private bool IsExecutableAvailableCached(string executablePath)
+    {
+        var searchPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var key = (executablePath, searchPath);
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_executableCache.TryGetValue(key, out var cached) &&
+            System.Diagnostics.Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
+            return cached.Available;
+
+        var available = _isExecutableAvailable(executablePath);
+        if (_executableCache.Count >= 32)
+            _executableCache.Clear();
+        _executableCache[key] = (available, now);
+        return available;
+    }
+
+    private bool IsLibMpvAvailableCached()
+    {
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        lock (_libMpvCacheLock)
+        {
+            if (_libMpvCache is { } cached &&
+                System.Diagnostics.Stopwatch.GetElapsedTime(cached.Timestamp, now) < ProbeCacheTtl)
+                return cached.Available;
+        }
+
+        var available = _isLibMpvAvailable();
+        lock (_libMpvCacheLock)
+        {
+            _libMpvCache = (available, now);
+        }
+
+        return available;
     }
 
     private static bool IsExecutableAvailable(string executablePath)

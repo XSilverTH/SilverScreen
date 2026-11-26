@@ -74,11 +74,15 @@ public static class ThemeModes
 
     public static ThemeMode Parse(string? value)
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? ThemeMode.System
-            : Enum.GetValues<ThemeMode>()
-                .FirstOrDefault(mode =>
-                    string.Equals(value.Trim(), mode.ToPersistedString(), StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(value))
+            return ThemeMode.System;
+
+        var trimmed = value.AsSpan().Trim();
+        if (trimmed.Equals("Light", StringComparison.OrdinalIgnoreCase))
+            return ThemeMode.Light;
+        if (trimmed.Equals("Dark", StringComparison.OrdinalIgnoreCase))
+            return ThemeMode.Dark;
+        return ThemeMode.System;
     }
 }
 
@@ -110,22 +114,42 @@ public static class VideoQualities
         if (string.IsNullOrWhiteSpace(value))
             return VideoQuality.Best;
 
-        var trimmed = value.Trim();
+        var trimmed = value.AsSpan().Trim();
+        if (trimmed.Equals("4320p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("4320", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("8K", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P4320;
+        if (trimmed.Equals("2160p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("2160", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("4K", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P2160;
+        if (trimmed.Equals("1440p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("1440", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("2K", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("QHD", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P1440;
+        if (trimmed.Equals("1080p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("1080", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("FHD", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P1080;
+        if (trimmed.Equals("720p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("720", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("HD", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P720;
+        if (trimmed.Equals("480p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("480", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P480;
+        if (trimmed.Equals("360p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("360", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P360;
+        if (trimmed.Equals("240p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("240", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P240;
+        if (trimmed.Equals("144p", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("144", StringComparison.OrdinalIgnoreCase))
+            return VideoQuality.P144;
 
-        return trimmed.ToUpperInvariant() switch
-        {
-            "8K" or "4320" => VideoQuality.P4320,
-            "4K" or "2160" => VideoQuality.P2160,
-            "2K" or "1440" or "QHD" => VideoQuality.P1440,
-            "1080" or "FHD" => VideoQuality.P1080,
-            "720" or "HD" => VideoQuality.P720,
-            "480" => VideoQuality.P480,
-            "360" => VideoQuality.P360,
-            "240" => VideoQuality.P240,
-            "144" => VideoQuality.P144,
-            _ => Enum.GetValues<VideoQuality>().FirstOrDefault(quality =>
-                string.Equals(trimmed, quality.ToPersistedString(), StringComparison.OrdinalIgnoreCase))
-        };
+        return VideoQuality.Best;
     }
 }
 
@@ -165,13 +189,20 @@ public static class PreferredVideoCodecs
         if (string.IsNullOrWhiteSpace(value))
             return PreferredVideoCodec.Any;
 
-        return value.Trim().ToUpperInvariant() switch
-        {
-            "AV1" or "AV01" => PreferredVideoCodec.Av1,
-            "VP9" or "VP09" => PreferredVideoCodec.Vp9,
-            "H.264" or "H264" or "AVC" or "AVC1" => PreferredVideoCodec.H264,
-            _ => PreferredVideoCodec.Any
-        };
+        var trimmed = value.AsSpan().Trim();
+        if (trimmed.Equals("AV1", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("AV01", StringComparison.OrdinalIgnoreCase))
+            return PreferredVideoCodec.Av1;
+        if (trimmed.Equals("VP9", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("VP09", StringComparison.OrdinalIgnoreCase))
+            return PreferredVideoCodec.Vp9;
+        if (trimmed.Equals("H.264", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("H264", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("AVC", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("AVC1", StringComparison.OrdinalIgnoreCase))
+            return PreferredVideoCodec.H264;
+
+        return PreferredVideoCodec.Any;
     }
 }
 

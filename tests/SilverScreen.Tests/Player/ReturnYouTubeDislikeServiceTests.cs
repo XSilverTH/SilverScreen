@@ -144,6 +144,27 @@ public sealed class ReturnYouTubeDislikeServiceTests
         Assert.Equal(ids.Length + 1, handler.CallCount);
     }
 
+    [Fact]
+    public async Task GetEngagementAsync_ConcurrentRequests_DeduplicateInFlightHttpCall()
+    {
+        var handler = new FakeHttpMessageHandler(async (_, _) =>
+        {
+            await Task.Delay(20);
+            return JsonResponse("""{ "id": "dQw4w9WgXcQ", "likes": 100, "dislikes": 5 }""");
+        });
+        using var client = new HttpClient(handler);
+        var preferences = new FakePreferencesService(new AppPreferences { RydEnabled = true });
+        using var service = new ReturnYouTubeDislikeService(client, preferences);
+
+        var tasks = Enumerable.Range(0, 10)
+            .Select(_ => service.GetEngagementAsync("dQw4w9WgXcQ"))
+            .ToArray();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, r => Assert.Equal(100, r?.Likes));
+        Assert.Equal(1, handler.CallCount);
+    }
+
     private sealed class FakeHttpMessageHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) : HttpMessageHandler
     {

@@ -13,7 +13,8 @@ public sealed record ResolvedMediaStream(
     string? AudioCodec,
     double? Bitrate,
     bool HasVideo,
-    bool HasAudio);
+    bool HasAudio,
+    DateTimeOffset? ExpiresAt = null);
 
 public sealed record ResolvedMedia(
     string VideoUrl,

@@ -141,6 +141,9 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 {
     private static readonly string[] MpvLibraryNames = ["libmpv.so.2", "libmpv.so.1", "libmpv.so"];
     private static readonly string[] EpoxyLibraryNames = ["libepoxy.so.0", "libepoxy.so"];
+    private static readonly Lock AvailabilityCacheLock = new();
+    private static string? _cachedAvailabilityLdPath;
+    private static bool? _cachedAvailabilityResult;
     private static LibMpvNative? _currentForOpenGl;
 
     private static readonly string[] StandardSearchDirs =
@@ -531,31 +534,45 @@ internal sealed unsafe partial class LibMpvNative : ILibMpvNativeApi
 
     public static bool IsAvailable()
     {
-        if (ProbeLibraryFileExists(MpvLibraryNames)) return true;
-        if (!TryLoad(MpvLibraryNames, out var library)) return false;
-        NativeLibrary.Free(library);
-        return true;
+        var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? string.Empty;
+        lock (AvailabilityCacheLock)
+        {
+            if (_cachedAvailabilityResult.HasValue &&
+                string.Equals(_cachedAvailabilityLdPath, ldPath, StringComparison.Ordinal))
+                return _cachedAvailabilityResult.Value;
+        }
+
+        var available = ProbeLibraryFileExists(MpvLibraryNames, ldPath);
+        if (!available && TryLoad(MpvLibraryNames, out var library))
+        {
+            NativeLibrary.Free(library);
+            available = true;
+        }
+
+        lock (AvailabilityCacheLock)
+        {
+            _cachedAvailabilityLdPath = ldPath;
+            _cachedAvailabilityResult = available;
+        }
+
+        return available;
     }
 
-    private static bool ProbeLibraryFileExists(string[] names)
+    private static bool ProbeLibraryFileExists(string[] names, string ldPath)
     {
         if (!OperatingSystem.IsLinux()) return false;
-        if ((
-                from dir in StandardSearchDirs
-                from name in names
-                where File.Exists(Path.Combine(dir, name))
-                select dir)
-            .Any())
-            return true;
+        foreach (var dir in StandardSearchDirs)
+        foreach (var name in names)
+            if (File.Exists(Path.Combine(dir, name)))
+                return true;
 
-        var ldPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
         if (string.IsNullOrWhiteSpace(ldPath)) return false;
-        return (
-                from dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries)
-                from name in names
-                where File.Exists(Path.Combine(dir, name))
-                select dir)
-            .Any();
+        foreach (var dir in ldPath.Split(':', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var name in names)
+            if (File.Exists(Path.Combine(dir, name)))
+                return true;
+
+        return false;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

@@ -1,7 +1,9 @@
+using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Serilog;
+using Serilog.Events;
 using SilverScreen.Core.Account.Session;
 using YoutubeAPI;
 using YoutubeAPI.Exceptions;
@@ -94,10 +96,31 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
         var cookieContent = cookies?.Format == SessionCookieFormat.NetscapeCookiesText
             ? cookies.Content
             : string.Empty;
+        var hasCookieText = !string.IsNullOrWhiteSpace(cookieContent);
+        if (requireAuthentication && !hasCookieText)
+            throw new AuthenticationRequiredException(
+                "This operation requires a valid authenticated YouTube session.");
+
         var sessionKey = HashSessionCookies(cookieContent);
 
+        // Fast path: check _clients cache by cookie hash BEFORE parsing Netscape cookies.
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_clients.TryGetValue(sessionKey, out var hit))
+            {
+                if (requireAuthentication && !hit.Value.IsAuthenticated)
+                    throw new AuthenticationRequiredException(
+                        "Stored YouTube session does not contain authentication cookies.");
+
+                _lru.Remove(hit);
+                _lru.AddLast(hit);
+                return hit.Value.Client;
+            }
+        }
+
         YouTubeCookieAuthentication? authentication = null;
-        if (!string.IsNullOrWhiteSpace(cookieContent))
+        if (hasCookieText)
             try
             {
                 authentication = YouTubeCookieAuthentication.FromNetscape(cookieContent);
@@ -124,9 +147,6 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
                     "Stored session cookies are invalid or corrupted; falling back to unauthenticated client");
                 authentication = null;
             }
-        else if (requireAuthentication)
-            throw new AuthenticationRequiredException(
-                "This operation requires a valid authenticated YouTube session.");
 
         List<YouTubeClient>? evicted = null;
         YouTubeClient client;
@@ -135,6 +155,10 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_clients.TryGetValue(sessionKey, out var hit))
             {
+                if (requireAuthentication && !hit.Value.IsAuthenticated)
+                    throw new AuthenticationRequiredException(
+                        "Stored YouTube session does not contain authentication cookies.");
+
                 _lru.Remove(hit);
                 _lru.AddLast(hit);
                 return hit.Value.Client;
@@ -144,8 +168,9 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
             {
                 Authentication = authentication
             });
-            _clients.Add(sessionKey, _lru.AddLast(new CachedClient(sessionKey, client)));
-            if (authentication is not null)
+            _clients.Add(sessionKey,
+                _lru.AddLast(new CachedClient(sessionKey, client, authentication is not null)));
+            if (authentication is not null && Logger.IsEnabled(LogEventLevel.Debug))
                 LogImportedCookieMetadata(cookieContent, authentication);
             Logger.Debug("Created YoutubeAPI client for {AuthenticationState} session ({SessionHash})",
                 authentication is null ? "anonymous" : "authenticated",
@@ -279,7 +304,28 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
 
     private static string HashSessionCookies(string cookieContent)
     {
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cookieContent)));
+        Span<byte> hashBytes = stackalloc byte[SHA256.HashSizeInBytes];
+        var maxByteCount = Encoding.UTF8.GetMaxByteCount(cookieContent.Length);
+        if (maxByteCount <= 512)
+        {
+            Span<byte> buffer = stackalloc byte[512];
+            var written = Encoding.UTF8.GetBytes(cookieContent, buffer);
+            SHA256.HashData(buffer[..written], hashBytes);
+            return Convert.ToHexString(hashBytes);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(maxByteCount);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(cookieContent, rented);
+            SHA256.HashData(rented.AsSpan(0, written), hashBytes);
+            return Convert.ToHexString(hashBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rented.AsSpan(0, maxByteCount));
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     private static string TruncateHash(string sessionKey)
@@ -287,5 +333,5 @@ public sealed class YouTubeClientProvider(ISessionService sessionService) : IYou
         return sessionKey.Length > LoggedHashPrefixLength ? sessionKey[..LoggedHashPrefixLength] : sessionKey;
     }
 
-    private sealed record CachedClient(string SessionKey, YouTubeClient Client);
+    private sealed record CachedClient(string SessionKey, YouTubeClient Client, bool IsAuthenticated);
 }

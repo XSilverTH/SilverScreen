@@ -13,6 +13,11 @@ public static class YtDlpCommandBuilder
         string? cookieFilePath = null)
     {
         var startInfo = CreateStartInfo(executablePath);
+        startInfo.ArgumentList.Add("--ignore-config");
+        startInfo.ArgumentList.Add("--no-warnings");
+        startInfo.ArgumentList.Add("--socket-timeout");
+        startInfo.ArgumentList.Add("10");
+        startInfo.ArgumentList.Add("--no-write-subs");
         startInfo.ArgumentList.Add("--dump-single-json");
         startInfo.ArgumentList.Add("--skip-download");
         startInfo.ArgumentList.Add("--no-playlist");

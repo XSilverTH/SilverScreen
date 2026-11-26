@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Serilog;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Preferences;
+using SilverScreen.Infrastructure.Common;
 
 namespace SilverScreen.Infrastructure.Player;
 
@@ -13,20 +14,21 @@ namespace SilverScreen.Infrastructure.Player;
 ///     Fetches dislike estimates from returnyoutubedislike.com. Off by default: unless
 ///     <see cref="AppPreferences.RydEnabled" /> is true, every call fails closed to null —
 ///     no HTTP traffic and no cached (possibly stale) entries are served. The per-video
-///     cache is bounded to <see cref="MaxCachedVideos" /> entries (oldest-inserted evicted).
+///     cache is bounded to <see cref="MaxCachedVideos" /> LRU entries with singleflight deduplication.
 /// </summary>
 public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisposable
 {
-    /// <summary>Maximum cached videos; the oldest-inserted entry is evicted past this bound.</summary>
+    /// <summary>Maximum cached videos; the least-recently-used entry is evicted past this bound.</summary>
     internal const int MaxCachedVideos = 100;
 
     private static readonly ILogger Logger = Log.ForContext<ReturnYouTubeDislikeService>();
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
     private static readonly Uri VotesEndpoint = new("https://returnyoutubedislikeapi.com/votes");
+    private readonly BoundedLruCache<string, VideoEngagement> _cache = new(MaxCachedVideos, StringComparer.Ordinal);
     private readonly bool _disposeHttpClient;
-    private readonly ConcurrentDictionary<string, VideoEngagement> _engagementByVideoId = new(StringComparer.Ordinal);
+    private readonly CancellationTokenSource _disposeCts = new();
     private readonly HttpClient _httpClient;
-    private readonly ConcurrentQueue<string> _insertionOrder = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<VideoEngagement?>>> _inFlight = new(StringComparer.Ordinal);
     private readonly IPreferencesService? _preferencesService;
 
     public ReturnYouTubeDislikeService()
@@ -58,22 +60,71 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
 
     public void Dispose()
     {
+        _disposeCts.Cancel();
+        _disposeCts.Dispose();
         if (_disposeHttpClient) _httpClient.Dispose();
     }
 
     public async Task<VideoEngagement?> GetEngagementAsync(string videoId,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!PlaybackRequest.LooksLikeYouTubeVideoId(videoId)) return null;
         if (!IsEnabled())
         {
             // Fail closed: no network and no cached (possibly stale) entries while disabled.
-            _engagementByVideoId.Clear();
-            _insertionOrder.Clear();
+            _cache.Clear();
             return null;
         }
 
-        if (_engagementByVideoId.TryGetValue(videoId, out var cached))
+        if (_cache.TryGetValue(videoId, out var cached))
+        {
+            Logger.Debug("ReturnYouTubeDislike cache hit for video");
+            return cached;
+        }
+
+        Lazy<Task<VideoEngagement?>>? created = null;
+        var lazy = _inFlight.GetOrAdd(videoId, _ =>
+        {
+            created = new Lazy<Task<VideoEngagement?>>(
+                () => ExecuteSingleflightAsync(videoId, created!),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            return created;
+        });
+
+        var result = await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!IsEnabled())
+        {
+            _cache.Clear();
+            return null;
+        }
+
+        return result;
+    }
+
+    private async Task<VideoEngagement?> ExecuteSingleflightAsync(
+        string videoId,
+        Lazy<Task<VideoEngagement?>> self)
+    {
+        try
+        {
+            return await FetchAndCacheAsync(videoId, _disposeCts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<VideoEngagement?>>>(videoId, self));
+        }
+    }
+
+    private async Task<VideoEngagement?> FetchAndCacheAsync(string videoId, CancellationToken cancellationToken)
+    {
+        if (!IsEnabled())
+        {
+            _cache.Clear();
+            return null;
+        }
+
+        if (_cache.TryGetValue(videoId, out var cached))
         {
             Logger.Debug("ReturnYouTubeDislike cache hit for video");
             return cached;
@@ -88,7 +139,9 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
             if (response.StatusCode is < HttpStatusCode.OK or >= HttpStatusCode.MultipleChoices)
             {
                 Logger.Warning("ReturnYouTubeDislike returned HTTP status {StatusCode}", response.StatusCode);
@@ -105,12 +158,13 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
                 return null;
 
             var engagement = new VideoEngagement(payload.Likes, payload.Dislikes);
-            AddBounded(videoId, engagement);
+            if (IsEnabled())
+                _cache.Set(videoId, engagement);
             return engagement;
         }
         catch (OperationCanceledException)
         {
-            throw;
+            return null;
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or NotSupportedException)
         {
@@ -134,20 +188,15 @@ public sealed class ReturnYouTubeDislikeService : IVideoEngagementService, IDisp
         }
     }
 
-    private void AddBounded(string videoId, VideoEngagement engagement)
-    {
-        if (_engagementByVideoId.TryAdd(videoId, engagement))
-            _insertionOrder.Enqueue(videoId);
-        while (_engagementByVideoId.Count > MaxCachedVideos && _insertionOrder.TryDequeue(out var oldest))
-            _engagementByVideoId.TryRemove(oldest, out _);
-    }
-
     private static HttpClient CreateDefaultHttpClient()
     {
         var handler = new SocketsHttpHandler
         {
-            MaxConnectionsPerServer = 4,
-            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
+            MaxConnectionsPerServer = 8,
+            EnableMultipleHttp2Connections = true,
+            ConnectTimeout = TimeSpan.FromSeconds(5),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(90),
             AutomaticDecompression = DecompressionMethods.All
         };
         return new HttpClient(handler, true) { Timeout = DefaultTimeout };

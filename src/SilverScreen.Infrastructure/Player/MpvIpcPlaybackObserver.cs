@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
@@ -164,29 +165,165 @@ internal static class MpvIpcPlaybackProtocol
 {
     public static bool TryApply(string message, ref PlaybackPresenceState state, out string? property)
     {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            property = null;
+            return false;
+        }
+
+        var maxBytes = Encoding.UTF8.GetMaxByteCount(message.Length);
+        if (maxBytes <= 512)
+        {
+            Span<byte> stackBuffer = stackalloc byte[512];
+            var written = Encoding.UTF8.GetBytes(message, stackBuffer);
+            return TryApply(stackBuffer[..written], ref state, out property);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(maxBytes);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(message, rented);
+            return TryApply(rented.AsSpan(0, written), ref state, out property);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    public static bool TryApply(ReadOnlySpan<byte> utf8Message, ref PlaybackPresenceState state, out string? property)
+    {
         property = null;
         try
         {
-            using var document = JsonDocument.Parse(message);
-            var root = document.RootElement;
-            if (root.TryGetProperty("event", out var eventName) && eventName.GetString() == "property-change")
+            var reader = new Utf8JsonReader(utf8Message);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+                return false;
+
+            var isPropertyChange = false;
+            string? eventPropertyName = null;
+            int? requestId = null;
+            var hasData = false;
+            var dataTokenType = JsonTokenType.None;
+            double doubleValue = 0;
+            int intValue = 0;
+            var hasIntValue = false;
+            var boolValue = false;
+
+            while (reader.Read())
             {
-                if (!root.TryGetProperty("name", out var name) || !root.TryGetProperty("data", out var data))
-                    return false;
-                property = name.GetString();
-                return property is not null && TryApplyProperty(property, data, ref state);
+                if (reader.TokenType == JsonTokenType.EndObject)
+                    break;
+
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                    continue;
+
+                if (reader.ValueTextEquals("event"u8))
+                {
+                    if (!reader.Read()) return false;
+                    isPropertyChange = reader.TokenType == JsonTokenType.String &&
+                                       reader.ValueTextEquals("property-change"u8);
+                    if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals("name"u8))
+                {
+                    if (!reader.Read()) return false;
+                    if (reader.TokenType == JsonTokenType.String)
+                        eventPropertyName = MatchKnownProperty(ref reader);
+                    else if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals("request_id"u8))
+                {
+                    if (!reader.Read()) return false;
+                    if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var parsedRequestId))
+                        requestId = parsedRequestId;
+                    else if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals("data"u8))
+                {
+                    if (!reader.Read()) return false;
+                    dataTokenType = reader.TokenType;
+                    switch (dataTokenType)
+                    {
+                        case JsonTokenType.Number:
+                            hasData = reader.TryGetDouble(out doubleValue);
+                            hasIntValue = reader.TryGetInt32(out intValue);
+                            break;
+                        case JsonTokenType.True:
+                            hasData = true;
+                            boolValue = true;
+                            break;
+                        case JsonTokenType.False:
+                            hasData = true;
+                            boolValue = false;
+                            break;
+                        case JsonTokenType.StartObject or JsonTokenType.StartArray:
+                            reader.Skip();
+                            break;
+                    }
+                }
+                else
+                {
+                    if (!reader.Read()) return false;
+                    if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+                        reader.Skip();
+                }
             }
 
-            if (!root.TryGetProperty("request_id", out var requestId) ||
-                !root.TryGetProperty("data", out var responseData) ||
-                !requestId.TryGetInt32(out var requestIdValue)) return false;
-            property = PropertyForRequestId(requestIdValue);
-            return property is not null && TryApplyProperty(property, responseData, ref state);
+            if (!hasData)
+                return false;
+
+            property = isPropertyChange
+                ? eventPropertyName
+                : requestId.HasValue
+                    ? PropertyForRequestId(requestId.Value)
+                    : null;
+
+            if (property is null)
+                return false;
+
+            var observedAt = DateTimeOffset.UtcNow;
+            switch (property)
+            {
+                case "time-pos" when dataTokenType == JsonTokenType.Number && double.IsFinite(doubleValue) &&
+                                     doubleValue >= 0:
+                    state = state with { Position = TimeSpan.FromSeconds(doubleValue), ObservedAt = observedAt };
+                    return true;
+                case "duration" when dataTokenType == JsonTokenType.Number && double.IsFinite(doubleValue) &&
+                                     doubleValue >= 0:
+                    state = state with { Duration = TimeSpan.FromSeconds(doubleValue), ObservedAt = observedAt };
+                    return true;
+                case "pause" when dataTokenType is JsonTokenType.True or JsonTokenType.False:
+                    state = state with { IsPaused = boolValue, ObservedAt = observedAt };
+                    return true;
+                case "playlist-pos" when dataTokenType == JsonTokenType.Number && hasIntValue:
+                    state = state with { PlaylistIndex = intValue, ObservedAt = observedAt };
+                    return true;
+                case "speed" when dataTokenType == JsonTokenType.Number && double.IsFinite(doubleValue) &&
+                                  doubleValue > 0:
+                    state = state with { Speed = doubleValue, ObservedAt = observedAt };
+                    return true;
+                default:
+                    return false;
+            }
         }
         catch (JsonException)
         {
             return false;
         }
+    }
+
+    private static string? MatchKnownProperty(ref Utf8JsonReader reader)
+    {
+        if (reader.ValueTextEquals("time-pos"u8)) return "time-pos";
+        if (reader.ValueTextEquals("duration"u8)) return "duration";
+        if (reader.ValueTextEquals("pause"u8)) return "pause";
+        if (reader.ValueTextEquals("playlist-pos"u8)) return "playlist-pos";
+        if (reader.ValueTextEquals("speed"u8)) return "speed";
+        return null;
     }
 
     private static string? PropertyForRequestId(int requestId)
@@ -200,30 +337,5 @@ internal static class MpvIpcPlaybackProtocol
             104 => "speed",
             _ => null
         };
-    }
-
-    private static bool TryApplyProperty(string property, JsonElement value, ref PlaybackPresenceState state)
-    {
-        var observedAt = DateTimeOffset.UtcNow;
-        switch (property)
-        {
-            case "time-pos" when value.TryGetDouble(out var position) && double.IsFinite(position) && position >= 0:
-                state = state with { Position = TimeSpan.FromSeconds(position), ObservedAt = observedAt };
-                return true;
-            case "duration" when value.TryGetDouble(out var duration) && double.IsFinite(duration) && duration >= 0:
-                state = state with { Duration = TimeSpan.FromSeconds(duration), ObservedAt = observedAt };
-                return true;
-            case "pause" when value.ValueKind is JsonValueKind.True or JsonValueKind.False:
-                state = state with { IsPaused = value.GetBoolean(), ObservedAt = observedAt };
-                return true;
-            case "playlist-pos" when value.TryGetInt32(out var playlistIndex):
-                state = state with { PlaylistIndex = playlistIndex, ObservedAt = observedAt };
-                return true;
-            case "speed" when value.TryGetDouble(out var speed) && double.IsFinite(speed) && speed > 0:
-                state = state with { Speed = speed, ObservedAt = observedAt };
-                return true;
-            default:
-                return false;
-        }
     }
 }

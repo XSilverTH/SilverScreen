@@ -8,9 +8,13 @@ public sealed class EquatableArrayTests
     [Fact]
     public void Serialization_StringEquatableArray_RoundtripsCorrectly()
     {
+        var options = new JsonSerializerOptions
+        {
+            Converters = { new EquatableArrayStringJsonConverter() }
+        };
         EquatableArray<string> array = ["item1", "item2", "item3"];
-        var json = JsonSerializer.Serialize(array);
-        var deserialized = JsonSerializer.Deserialize<EquatableArray<string>>(json);
+        var json = JsonSerializer.Serialize(array, options);
+        var deserialized = JsonSerializer.Deserialize<EquatableArray<string>>(json, options);
 
         Assert.Equal(array, deserialized);
     }

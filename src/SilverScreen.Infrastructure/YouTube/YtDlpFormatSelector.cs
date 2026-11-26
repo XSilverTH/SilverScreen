@@ -7,40 +7,17 @@ using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Infrastructure.YouTube;
 
+internal sealed record ParsedYtDlpMedia(
+    ResolvedMediaStream[] Formats,
+    string? DirectUrl,
+    DateTimeOffset? DirectUrlExpiry,
+    YouTubeVideoDetails? Details,
+    string[] AvailableQualityTracks);
+
 /// <summary>
 ///     Evaluates and selects formats from yt-dlp JSON dumps (<c>--dump-single-json</c>), and provides
 ///     the mapping from quality preference labels to mpv/yt-dlp format strings.
 /// </summary>
-/// <remarks>
-///     <para>
-///         <b>Architectural Role:</b><br />
-///         This class fulfills two distinct roles:
-///         <list type="bullet">
-///             <item>
-///                 <description>
-///                     <b>Active:</b> <see cref="ToMpvFormat(string, PreferredVideoCodec)" /> provides the single source
-///                     of truth mapping
-///                     user-configured
-///                     video quality labels (e.g. "1080p", "720p") to yt-dlp format specifiers utilized by mpv command
-///                     builders.
-///                 </description>
-///             </item>
-///             <item>
-///                 <description>
-///                     <b>Dormant Fallback Extraction:</b>
-///                     <see cref="SelectMedia(string, string, YouTubeVideoDetails?, PreferredVideoCodec)" /> contains
-///                     the format selection engine that parses adaptive video/audio streams, muxed streams, and live HLS
-///                     manifests,
-///                     pairing streams and extracting expiration timestamps. Although standard playback uses mpv's
-///                     internal
-///                     <c>ytdl_hook.lua</c>, this logic is retained as a fallback extraction pipeline and for future
-///                     offline downloading
-///                     or headless stream resolution.
-///                 </description>
-///             </item>
-///         </list>
-///     </para>
-/// </remarks>
 public static partial class YtDlpFormatSelector
 {
     /// <summary>
@@ -77,11 +54,11 @@ public static partial class YtDlpFormatSelector
         };
     }
 
-    public static ResolvedMedia? SelectMedia(
-        string output,
-        string preferredQuality,
-        YouTubeVideoDetails? details = null,
-        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
+    /// <summary>
+    ///     Parses yt-dlp single-JSON output once into compact immutable records so raw JSON strings
+    ///     do not need to be retained in memory or re-parsed on subsequent quality/track queries.
+    /// </summary>
+    internal static ParsedYtDlpMedia? ParsePayload(string? output)
     {
         if (string.IsNullOrWhiteSpace(output)) return null;
 
@@ -99,111 +76,194 @@ public static partial class YtDlpFormatSelector
         {
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return null;
+
+            var details = TryParseVideoDetails(root);
             var formats = ParseFormats(root);
-            if (formats.Count == 0)
+            string? directUrl = null;
+            DateTimeOffset? directUrlExpiry = null;
+
+            if (formats.Length == 0 &&
+                root.TryGetProperty("url", out var directUrlProp) &&
+                directUrlProp.ValueKind == JsonValueKind.String &&
+                directUrlProp.GetString() is { } candidateUrl &&
+                !string.IsNullOrWhiteSpace(candidateUrl))
             {
-                // If there's a direct url at root
-                if (!root.TryGetProperty("url", out var directUrlProp) ||
-                    directUrlProp.GetString() is not { } directUrl ||
-                    string.IsNullOrWhiteSpace(directUrl)) return null;
-                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(directUrl);
-                return new ResolvedMedia(directUrl, null, preferredQuality, expiry, details);
+                directUrl = candidateUrl;
+                directUrlExpiry = YouTubeMediaExpiryParser.TryExtractExpiry(candidateUrl);
             }
 
-            var maxTargetHeight = ParseTargetHeight(preferredQuality);
+            var qualityTracks = ComputeAvailableQualityTracks(formats);
+            return new ParsedYtDlpMedia(formats, directUrl, directUrlExpiry, details, qualityTracks);
+        }
+    }
 
-            // Separate formats into muxed, video-only, audio-only
-            var muxed = formats.Where(f => f is { HasVideo: true, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url))
-                .ToList();
-            var videoOnly = formats
-                .Where(f => f is { HasVideo: true, HasAudio: false } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
-            var audioOnly = formats
-                .Where(f => f is { HasVideo: false, HasAudio: true } && !string.IsNullOrWhiteSpace(f.Url)).ToList();
+    public static ResolvedMedia? SelectMedia(
+        string output,
+        string preferredQuality,
+        YouTubeVideoDetails? details = null,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
+    {
+        var parsed = ParsePayload(output);
+        return parsed is null
+            ? null
+            : SelectMedia(parsed, preferredQuality, details ?? parsed.Details, preferredCodec);
+    }
 
-            // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
-            // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
-            ResolvedMediaStream? selectedVideo = null;
-            if (videoOnly.Count > 0)
-                selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false, preferredCodec);
+    internal static ResolvedMedia? SelectMedia(
+        ParsedYtDlpMedia parsed,
+        string preferredQuality,
+        YouTubeVideoDetails? details = null,
+        PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
+    {
+        ArgumentNullException.ThrowIfNull(parsed);
+        var formats = parsed.Formats;
 
-            ResolvedMediaStream? selectedAudio = null;
-            if (audioOnly.Count > 0) selectedAudio = SelectBestAudioStream(audioOnly);
+        if (formats.Length == 0)
+        {
+            if (string.IsNullOrWhiteSpace(parsed.DirectUrl)) return null;
+            return new ResolvedMedia(
+                parsed.DirectUrl,
+                null,
+                preferredQuality,
+                parsed.DirectUrlExpiry,
+                details);
+        }
 
-            if (selectedVideo is not null && selectedAudio is not null)
-            {
-                var expiry = MinExpiry(
-                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedVideo.Url),
-                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedAudio.Url));
+        var maxTargetHeight = ParseTargetHeight(preferredQuality);
 
-                return new ResolvedMedia(
-                    selectedVideo.Url,
-                    selectedAudio.Url,
-                    preferredQuality,
-                    expiry,
-                    details);
-            }
+        // Separate formats into muxed, video-only, audio-only without extra LINQ enumerators.
+        var muxed = new List<ResolvedMediaStream>();
+        var videoOnly = new List<ResolvedMediaStream>();
+        var audioOnly = new List<ResolvedMediaStream>();
+        foreach (var format in formats)
+        {
+            if (string.IsNullOrWhiteSpace(format.Url)) continue;
+            if (format.HasVideo && format.HasAudio)
+                muxed.Add(format);
+            else if (format.HasVideo)
+                videoOnly.Add(format);
+            else if (format.HasAudio)
+                audioOnly.Add(format);
+        }
 
-            // A compliant muxed stream is preferable to relaxing the adaptive video selection.
-            var selectedMuxed = muxed.Count > 0
-                ? SelectBestVideoStream(muxed, maxTargetHeight, false, preferredCodec)
-                : null;
+        // Prefer streams that satisfy the quality cap before relaxing the adaptive selection.
+        // This avoids choosing an over-cap video-only stream when a compliant muxed stream exists.
+        ResolvedMediaStream? selectedVideo = null;
+        if (videoOnly.Count > 0)
+            selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, false, preferredCodec);
+
+        ResolvedMediaStream? selectedAudio = null;
+        if (audioOnly.Count > 0)
+            selectedAudio = SelectBestAudioStream(audioOnly);
+
+        if (selectedVideo is not null && selectedAudio is not null)
+        {
+            var expiry = MinExpiry(GetStreamExpiry(selectedVideo), GetStreamExpiry(selectedAudio));
+            return new ResolvedMedia(
+                selectedVideo.Url,
+                selectedAudio.Url,
+                preferredQuality,
+                expiry,
+                details);
+        }
+
+        // A compliant muxed stream is preferable to relaxing the adaptive video selection.
+        var selectedMuxed = muxed.Count > 0
+            ? SelectBestVideoStream(muxed, maxTargetHeight, false, preferredCodec)
+            : null;
+        if (selectedMuxed is not null)
+        {
+            return new ResolvedMedia(
+                selectedMuxed.Url,
+                null,
+                preferredQuality,
+                GetStreamExpiry(selectedMuxed),
+                details);
+        }
+
+        // No compliant stream is available, so relax the cap for the existing fallback behavior.
+        if (videoOnly.Count > 0)
+            selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, true, preferredCodec);
+
+        if (selectedVideo is not null && selectedAudio is not null)
+        {
+            var expiry = MinExpiry(GetStreamExpiry(selectedVideo), GetStreamExpiry(selectedAudio));
+            return new ResolvedMedia(
+                selectedVideo.Url,
+                selectedAudio.Url,
+                preferredQuality,
+                expiry,
+                details);
+        }
+
+        if (muxed.Count > 0)
+        {
+            selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight, true, preferredCodec);
             if (selectedMuxed is not null)
             {
-                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(selectedMuxed.Url);
                 return new ResolvedMedia(
                     selectedMuxed.Url,
                     null,
                     preferredQuality,
-                    expiry,
-                    details);
-            }
-
-            // No compliant stream is available, so relax the cap for the existing fallback behavior.
-            if (videoOnly.Count > 0)
-                selectedVideo = SelectBestVideoStream(videoOnly, maxTargetHeight, true, preferredCodec);
-
-            if (selectedVideo is not null && selectedAudio is not null)
-            {
-                var expiry = MinExpiry(
-                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedVideo.Url),
-                    YouTubeMediaExpiryParser.TryExtractExpiry(selectedAudio.Url));
-
-                return new ResolvedMedia(
-                    selectedVideo.Url,
-                    selectedAudio.Url,
-                    preferredQuality,
-                    expiry,
-                    details);
-            }
-
-            if (muxed.Count > 0)
-            {
-                selectedMuxed = SelectBestVideoStream(muxed, maxTargetHeight, true, preferredCodec);
-                if (selectedMuxed is not null)
-                {
-                    var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(selectedMuxed.Url);
-                    return new ResolvedMedia(
-                        selectedMuxed.Url,
-                        null,
-                        preferredQuality,
-                        expiry,
-                        details);
-                }
-            }
-
-            // 3. If only video or only audio or fallback
-            var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats.Count > 0 ? formats[0] : null);
-            if (fallback is null) return null;
-            {
-                var expiry = YouTubeMediaExpiryParser.TryExtractExpiry(fallback.Url);
-                return new ResolvedMedia(
-                    fallback.Url,
-                    selectedAudio?.Url,
-                    preferredQuality,
-                    expiry,
+                    GetStreamExpiry(selectedMuxed),
                     details);
             }
         }
+
+        var fallback = selectedVideo ?? (muxed.Count > 0 ? muxed[0] : formats[0]);
+        if (fallback is null) return null;
+
+        return new ResolvedMedia(
+            fallback.Url,
+            selectedAudio?.Url,
+            preferredQuality,
+            GetStreamExpiry(fallback),
+            details);
+    }
+
+    public static IReadOnlyList<string> GetAvailableQualityTracks(string output)
+    {
+        return ParsePayload(output)?.AvailableQualityTracks ?? [];
+    }
+
+    internal static IReadOnlyList<string> GetAvailableQualityTracks(ParsedYtDlpMedia parsed)
+    {
+        return parsed.AvailableQualityTracks;
+    }
+
+    private static DateTimeOffset? GetStreamExpiry(ResolvedMediaStream stream)
+    {
+        return stream.ExpiresAt ?? YouTubeMediaExpiryParser.TryExtractExpiry(stream.Url);
+    }
+
+    private static string[] ComputeAvailableQualityTracks(ResolvedMediaStream[] formats)
+    {
+        if (formats.Length == 0) return [];
+
+        var maxFpsByHeight = new Dictionary<int, int>();
+        foreach (var format in formats)
+        {
+            if (!format.HasVideo || format.Height is not > 0) continue;
+            var height = format.Height.Value;
+            var fps = format.Fps ?? 0;
+            if (!maxFpsByHeight.TryGetValue(height, out var existingFps) || fps > existingFps)
+                maxFpsByHeight[height] = fps;
+        }
+
+        if (maxFpsByHeight.Count == 0) return [];
+
+        var heights = maxFpsByHeight.Keys.ToArray();
+        Array.Sort(heights, static (a, b) => b.CompareTo(a));
+
+        var tracks = new string[heights.Length];
+        for (var i = 0; i < heights.Length; i++)
+        {
+            var height = heights[i];
+            var maxFps = maxFpsByHeight[height];
+            tracks[i] = maxFps > 30 ? $"{height}p{maxFps}" : $"{height}p";
+        }
+
+        return tracks;
     }
 
     private static int? ParseTargetHeight(string? quality)
@@ -237,52 +297,6 @@ public static partial class YtDlpFormatSelector
         return null;
     }
 
-    public static IReadOnlyList<string> GetAvailableQualityTracks(string output)
-    {
-        if (string.IsNullOrWhiteSpace(output)) return [];
-
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(output);
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-
-        using (document)
-        {
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return [];
-
-            var formats = ParseFormats(root);
-            if (formats.Count == 0) return [];
-
-            var videoStreams = formats
-                .Where(f => f is { HasVideo: true, Height: > 0 })
-                .ToList();
-
-            if (videoStreams.Count == 0) return [];
-
-            var groupedByHeight = videoStreams
-                .GroupBy(v => v.Height!.Value)
-                .OrderByDescending(g => g.Key);
-
-            return
-            [
-                ..
-                from @group in groupedByHeight
-                let height = @group.Key
-                let maxFps = @group.Max(v => v.Fps) ?? 0
-                let fpsSuffix = maxFps > 30
-                    ? $"{maxFps}"
-                    : string.Empty
-                select $"{height}p{fpsSuffix}"
-            ];
-        }
-    }
-
     private static bool MatchesCodec(string? videoCodec, PreferredVideoCodec preferred)
     {
         if (string.IsNullOrWhiteSpace(videoCodec) || preferred == PreferredVideoCodec.Any)
@@ -306,9 +320,15 @@ public static partial class YtDlpFormatSelector
         bool allowRelaxation = true,
         PreferredVideoCodec preferredCodec = PreferredVideoCodec.Any)
     {
-        var eligible = maxHeight.HasValue
-            ? [.. videoStreams.Where(v => v.Height.HasValue && v.Height.Value <= maxHeight.Value)]
-            : videoStreams;
+        var eligible = videoStreams;
+        if (maxHeight.HasValue)
+        {
+            var filtered = new List<ResolvedMediaStream>(videoStreams.Count);
+            foreach (var v in videoStreams)
+                if (v.Height.HasValue && v.Height.Value <= maxHeight.Value)
+                    filtered.Add(v);
+            eligible = filtered;
+        }
 
         // If nothing matches the <= maxHeight constraint (e.g. video only has higher or unstated height), fallback to all videoStreams
         if (eligible.Count == 0)
@@ -317,26 +337,59 @@ public static partial class YtDlpFormatSelector
             eligible = videoStreams;
         }
 
-        return eligible
-            .OrderByDescending(v => MatchesCodec(v.VideoCodec, preferredCodec) ? 1 : 0)
-            .ThenByDescending(v => v.Height ?? 0)
-            .ThenByDescending(v => v.Fps ?? 0)
-            .ThenByDescending(v => v.Bitrate ?? 0)
-            .FirstOrDefault();
+        ResolvedMediaStream? best = null;
+        var bestCodecMatch = -1;
+        var bestHeight = int.MinValue;
+        var bestFps = int.MinValue;
+        var bestBitrate = double.NegativeInfinity;
+
+        foreach (var candidate in eligible)
+        {
+            var codecMatch = MatchesCodec(candidate.VideoCodec, preferredCodec) ? 1 : 0;
+            var height = candidate.Height ?? 0;
+            var fps = candidate.Fps ?? 0;
+            var bitrate = candidate.Bitrate ?? 0;
+
+            if (best is null ||
+                codecMatch > bestCodecMatch ||
+                (codecMatch == bestCodecMatch && (height > bestHeight ||
+                 (height == bestHeight && (fps > bestFps ||
+                  (fps == bestFps && bitrate > bestBitrate))))))
+            {
+                best = candidate;
+                bestCodecMatch = codecMatch;
+                bestHeight = height;
+                bestFps = fps;
+                bestBitrate = bitrate;
+            }
+        }
+
+        return best;
     }
 
     private static ResolvedMediaStream? SelectBestAudioStream(List<ResolvedMediaStream> audioStreams)
     {
-        return audioStreams
-            .OrderByDescending(a => a.Bitrate ?? 0)
-            .FirstOrDefault();
+        ResolvedMediaStream? best = null;
+        var bestBitrate = double.NegativeInfinity;
+        foreach (var candidate in audioStreams)
+        {
+            var bitrate = candidate.Bitrate ?? 0;
+            if (best is null || bitrate > bestBitrate)
+            {
+                best = candidate;
+                bestBitrate = bitrate;
+            }
+        }
+
+        return best;
     }
 
-    private static List<ResolvedMediaStream> ParseFormats(JsonElement root)
+    private static ResolvedMediaStream[] ParseFormats(JsonElement root)
     {
-        var list = new List<ResolvedMediaStream>();
         if (!root.TryGetProperty("formats", out var formatsProp) || formatsProp.ValueKind != JsonValueKind.Array)
-            return list;
+            return [];
+
+        var list = new List<ResolvedMediaStream>(formatsProp.GetArrayLength());
 
         foreach (var format in formatsProp.EnumerateArray())
         {
@@ -390,6 +443,9 @@ public static partial class YtDlpFormatSelector
             }
 
             var formatId = GetString(format, "format_id");
+            var expiresAt = string.IsNullOrWhiteSpace(url)
+                ? null
+                : YouTubeMediaExpiryParser.TryExtractExpiry(url);
 
             list.Add(new ResolvedMediaStream(
                 url,
@@ -401,10 +457,56 @@ public static partial class YtDlpFormatSelector
                 acodec,
                 tbr,
                 hasVideo,
-                hasAudio));
+                hasAudio,
+                expiresAt));
         }
 
-        return list;
+        return [.. list];
+    }
+
+    private static YouTubeVideoDetails? TryParseVideoDetails(JsonElement root)
+    {
+        var title = GetString(root, "title") ?? GetString(root, "fulltitle");
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+
+        var channel = GetString(root, "channel") ?? GetString(root, "uploader") ?? GetString(root, "uploader_id");
+        if (string.IsNullOrWhiteSpace(channel))
+            return null;
+
+        var description = GetString(root, "description");
+
+        long? viewCount = null;
+        if (root.TryGetProperty("view_count", out var viewProp))
+            viewCount = viewProp.ValueKind switch
+            {
+                JsonValueKind.Number when viewProp.TryGetInt64(out var vc) => vc,
+                JsonValueKind.String when long.TryParse(viewProp.GetString(), out var parsedVc) => parsedVc,
+                _ => viewCount
+            };
+
+        DateTimeOffset? publishedAt = null;
+        if (root.TryGetProperty("timestamp", out var tsProp) &&
+            tsProp.ValueKind == JsonValueKind.Number &&
+            tsProp.TryGetInt64(out var ts))
+            publishedAt = DateTimeOffset.FromUnixTimeSeconds(ts);
+        else if (root.TryGetProperty("release_timestamp", out var rtsProp) &&
+                 rtsProp.ValueKind == JsonValueKind.Number &&
+                 rtsProp.TryGetInt64(out var rts))
+            publishedAt = DateTimeOffset.FromUnixTimeSeconds(rts);
+        else if (root.TryGetProperty("upload_date", out var udProp) &&
+                 udProp.ValueKind == JsonValueKind.String &&
+                 udProp.GetString() is { Length: 8 } ud &&
+                 DateTime.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
+                     DateTimeStyles.AssumeUniversal, out var dt))
+            publishedAt = new DateTimeOffset(dt, TimeSpan.Zero);
+
+        return new YouTubeVideoDetails(
+            description,
+            viewCount,
+            publishedAt,
+            title,
+            channel);
     }
 
     private static string? GetString(JsonElement element, string propertyName)

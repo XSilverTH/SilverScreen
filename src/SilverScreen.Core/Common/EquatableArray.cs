@@ -2,7 +2,6 @@ using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace SilverScreen.Core.Common;
 
@@ -25,7 +24,6 @@ namespace SilverScreen.Core.Common;
 /// </remarks>
 /// <typeparam name="T">The type of elements in the array. Must implement equality comparison.</typeparam>
 [CollectionBuilder(typeof(EquatableArray), nameof(EquatableArray.Create))]
-[JsonConverter(typeof(EquatableArrayJsonConverterFactory))]
 public readonly struct EquatableArray<T> : IReadOnlyList<T>, IEquatable<EquatableArray<T>>
 {
     private readonly T[]? _items;
@@ -132,58 +130,37 @@ public static class EquatableArray
     }
 }
 
-public sealed class EquatableArrayJsonConverterFactory : JsonConverterFactory
+/// <summary>
+///     Native AOT-compatible JSON converter for <see cref="EquatableArray{T}" /> of <see cref="string" />.
+///     Reads and writes JSON string arrays directly via <see cref="Utf8JsonReader" /> and <see cref="Utf8JsonWriter" />
+///     without runtime reflection or <see cref="JsonSerializerOptions.GetTypeInfo(Type)" /> lookups.
+/// </summary>
+public sealed class EquatableArrayStringJsonConverter : JsonConverter<EquatableArray<string>>
 {
-    public override bool CanConvert(Type typeToConvert)
-    {
-        return typeToConvert.IsGenericType &&
-               typeToConvert.GetGenericTypeDefinition() == typeof(EquatableArray<>);
-    }
-
-    public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
-    {
-        var elementType = typeToConvert.GetGenericArguments()[0];
-
-        return
-            elementType == typeof(string) ? new EquatableArrayJsonConverter<string>() :
-            elementType == typeof(int) ? new EquatableArrayJsonConverter<int>() :
-            elementType == typeof(long) ? new EquatableArrayJsonConverter<long>() :
-            elementType == typeof(double) ? new EquatableArrayJsonConverter<double>() :
-            elementType == typeof(float) ? new EquatableArrayJsonConverter<float>() :
-            elementType == typeof(bool) ? new EquatableArrayJsonConverter<bool>() :
-            elementType == typeof(short) ? new EquatableArrayJsonConverter<short>() :
-            elementType == typeof(byte) ? new EquatableArrayJsonConverter<byte>() :
-            elementType == typeof(decimal) ? new EquatableArrayJsonConverter<decimal>() :
-            null;
-    }
-}
-
-public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArray<T>>
-{
-    private JsonTypeInfo<T>? _elementTypeInfo;
-
-    private JsonTypeInfo<T> GetElementTypeInfo(JsonSerializerOptions options)
-    {
-        return _elementTypeInfo ??= (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
-    }
-
-    public override EquatableArray<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override EquatableArray<string> Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
     {
         if (reader.TokenType == JsonTokenType.Null)
-            return EquatableArray<T>.Empty;
+            return EquatableArray<string>.Empty;
 
         if (reader.TokenType != JsonTokenType.StartArray)
             throw new JsonException($"Expected StartArray token, got {reader.TokenType}");
 
-        var typeInfo = GetElementTypeInfo(options);
-        var list = new List<T>();
-
+        var list = new List<string>();
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndArray)
-                return [.. list.ToArray()];
+                return list.Count == 0 ? EquatableArray<string>.Empty : new EquatableArray<string>(list.ToArray());
 
-            var element = JsonSerializer.Deserialize(ref reader, typeInfo);
+            if (reader.TokenType == JsonTokenType.Null)
+                continue;
+
+            if (reader.TokenType != JsonTokenType.String)
+                throw new JsonException($"Expected String token, got {reader.TokenType}");
+
+            var element = reader.GetString();
             if (element is not null)
                 list.Add(element);
         }
@@ -191,13 +168,11 @@ public sealed class EquatableArrayJsonConverter<T> : JsonConverter<EquatableArra
         throw new JsonException("Expected EndArray token, but reached end of input");
     }
 
-    public override void Write(Utf8JsonWriter writer, EquatableArray<T> value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, EquatableArray<string> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        var typeInfo = GetElementTypeInfo(options);
-
-        foreach (var item in value) JsonSerializer.Serialize(writer, item, typeInfo);
-
+        foreach (var item in value.AsSpan())
+            writer.WriteStringValue(item);
         writer.WriteEndArray();
     }
 }

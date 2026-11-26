@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using Serilog;
 using SilverScreen.Core.Browsing.Channel;
+using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
+using YoutubeAPI;
 using YoutubeAPI.Exceptions;
 using YoutubeAPI.Models.Continuations;
 using YoutubeAPI.Models.ValueTypes;
@@ -11,13 +14,31 @@ using VideoSummary = SilverScreen.Core.Domain.VideoSummary;
 
 namespace SilverScreen.Infrastructure.Browsing.Channel;
 
-/// <summary>Loads YouTube channel metadata and videos through the configured YoutubeAPI client.</summary>
-public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvider) : IChannelService
+/// <summary>
+///     Loads YouTube channel metadata and videos through the configured YoutubeAPI client,
+///     caching channel metadata and initial pages briefly to eliminate redundant round-trips.
+/// </summary>
+public sealed class YoutubeApiChannelService(
+    IYouTubeClientProvider clientProvider,
+    TimeProvider? timeProvider = null) : IChannelService
 {
+    private const int MaxCachedChannels = 32;
+    private const int MaxCachedFirstPages = 20;
+    private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan FirstPageCacheTtl = TimeSpan.FromMinutes(2);
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiChannelService>();
 
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
+
+    private readonly BoundedLruCache<string, CachedChannelMetadata> _metadataCache =
+        new(MaxCachedChannels, StringComparer.Ordinal, timeProvider);
+
+    private readonly BoundedLruCache<(string ChannelKey, ChannelVideoSort Sort), CachedFirstPage> _firstPageCache =
+        new(MaxCachedFirstPages, timeProvider: timeProvider);
+
+    private readonly ConcurrentDictionary<(string ChannelKey, ChannelVideoSort Sort), Lazy<Task<ChannelPage>>>
+        _inFlightFirstPages = new();
 
     public async Task<ChannelPage> GetChannelAsync(
         string channelUrl,
@@ -36,60 +57,38 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
                 ? null
                 : ChannelVideosContinuation.Import(continuationToken);
             var apiSort = continuation?.Sort ?? ToApiSort(sort);
-
-            string channelName;
-            string? description;
-            string? avatarUrl;
-            long? subscriberCount;
+            var channelKey = channelReference.Value;
 
             if (continuation is null)
             {
-                var metadata = await client.Channels.GetAsync(channelReference, cancellationToken)
-                    .ConfigureAwait(false);
-                channelName = string.IsNullOrWhiteSpace(metadata.Summary.Title)
-                    ? fallbackName
-                    : metadata.Summary.Title;
-                description = string.IsNullOrWhiteSpace(metadata.Description) ? null : metadata.Description;
-                avatarUrl = ThumbnailResolutionSelector.SelectAvatarThumbnail(metadata.Summary.Thumbnails);
-                subscriberCount = metadata.Summary.SubscriberCount;
+                if (_firstPageCache.TryGetValue((channelKey, sort), out var cachedPage) &&
+                    ReferenceEquals(cachedPage.Client, client))
+                {
+                    Logger.Debug("Channel first-page cache hit");
+                    return cachedPage.Page;
+                }
+
+                return await LoadFirstPageCoalescedAsync(
+                    client,
+                    channelReference,
+                    channelKey,
+                    channelUrl,
+                    fallbackName,
+                    sort,
+                    apiSort,
+                    cancellationToken).ConfigureAwait(false);
             }
-            else
-            {
-                channelName = fallbackName;
-                description = null;
-                avatarUrl = null;
-                subscriberCount = null;
-            }
 
-            var videosPage = continuation is null
-                ? await client.Channels.GetVideosPageAsync(channelReference, apiSort, cancellationToken)
-                    .ConfigureAwait(false)
-                : await client.Channels.GetVideosPageAsync(continuation, cancellationToken)
-                    .ConfigureAwait(false);
-
-            var videos = videosPage.Items
-                .Where(video => !video.IsShort)
-                .DistinctBy(video => video.Id)
-                .Select(video => MapVideo(
-                    video,
-                    channelName,
-                    videosPage.PlaybackProgress?.GetValueOrDefault(video.Id)))
-                .ToArray();
-            var nextContinuationToken = videosPage.Next?.Export();
-            var resultSort = ToCoreSort(apiSort);
-            var status = videos.Length == 0 ? "This channel has no videos to show." : null;
-
-            return new ChannelPage(
+            var videosPage = await client.Channels.GetVideosPageAsync(continuation, cancellationToken)
+                .ConfigureAwait(false);
+            return BuildChannelPage(
                 channelUrl,
-                channelName,
-                description,
-                avatarUrl,
-                subscriberCount,
-                videos,
-                resultSort,
-                status,
-                true,
-                nextContinuationToken);
+                fallbackName,
+                null,
+                null,
+                null,
+                apiSort,
+                videosPage);
         }
         catch (FormatException exception)
         {
@@ -133,6 +132,142 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
         }
     }
 
+    private async Task<ChannelPage> LoadFirstPageCoalescedAsync(
+        YouTubeClient client,
+        ChannelReference channelReference,
+        string channelKey,
+        string channelUrl,
+        string fallbackName,
+        ChannelVideoSort sort,
+        ApiChannelVideoSort apiSort,
+        CancellationToken cancellationToken)
+    {
+        var flightKey = (channelKey, sort);
+        Lazy<Task<ChannelPage>>? created = null;
+        var lazy = _inFlightFirstPages.GetOrAdd(flightKey, _ =>
+        {
+            created = new Lazy<Task<ChannelPage>>(
+                () => ExecuteFirstPageAsync(
+                    client,
+                    channelReference,
+                    channelKey,
+                    channelUrl,
+                    fallbackName,
+                    sort,
+                    apiSort,
+                    flightKey,
+                    created!),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            return created;
+        });
+
+        return await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ChannelPage> ExecuteFirstPageAsync(
+        YouTubeClient client,
+        ChannelReference channelReference,
+        string channelKey,
+        string channelUrl,
+        string fallbackName,
+        ChannelVideoSort sort,
+        ApiChannelVideoSort apiSort,
+        (string ChannelKey, ChannelVideoSort Sort) flightKey,
+        Lazy<Task<ChannelPage>> self)
+    {
+        try
+        {
+            if (_firstPageCache.TryGetValue(flightKey, out var cachedPage) &&
+                ReferenceEquals(cachedPage.Client, client))
+                return cachedPage.Page;
+
+            CachedChannelMetadata? metadata;
+            if (!_metadataCache.TryGetValue(channelKey, out metadata) ||
+                !ReferenceEquals(metadata.Client, client))
+            {
+                var metadataTask = client.Channels.GetAsync(channelReference, CancellationToken.None);
+                var videosTask = client.Channels.GetVideosPageAsync(channelReference, apiSort, CancellationToken.None);
+                await Task.WhenAll(metadataTask, videosTask).ConfigureAwait(false);
+
+                var apiMetadata = await metadataTask.ConfigureAwait(false);
+                var videosPage = await videosTask.ConfigureAwait(false);
+
+                metadata = new CachedChannelMetadata(
+                    client,
+                    apiMetadata.Summary.Title,
+                    string.IsNullOrWhiteSpace(apiMetadata.Description) ? null : apiMetadata.Description,
+                    ThumbnailResolutionSelector.SelectAvatarThumbnail(apiMetadata.Summary.Thumbnails),
+                    apiMetadata.Summary.SubscriberCount);
+                _metadataCache.Set(channelKey, metadata, MetadataCacheTtl);
+
+                var page = BuildChannelPage(
+                    channelUrl,
+                    string.IsNullOrWhiteSpace(metadata.Title) ? fallbackName : metadata.Title,
+                    metadata.Description,
+                    metadata.AvatarUrl,
+                    metadata.SubscriberCount,
+                    apiSort,
+                    videosPage);
+                _firstPageCache.Set(flightKey, new CachedFirstPage(client, page), FirstPageCacheTtl);
+                return page;
+            }
+            else
+            {
+                var videosPage = await client.Channels
+                    .GetVideosPageAsync(channelReference, apiSort, CancellationToken.None)
+                    .ConfigureAwait(false);
+                var page = BuildChannelPage(
+                    channelUrl,
+                    string.IsNullOrWhiteSpace(metadata.Title) ? fallbackName : metadata.Title,
+                    metadata.Description,
+                    metadata.AvatarUrl,
+                    metadata.SubscriberCount,
+                    apiSort,
+                    videosPage);
+                _firstPageCache.Set(flightKey, new CachedFirstPage(client, page), FirstPageCacheTtl);
+                return page;
+            }
+        }
+        finally
+        {
+            _inFlightFirstPages.TryRemove(
+                new KeyValuePair<(string ChannelKey, ChannelVideoSort Sort), Lazy<Task<ChannelPage>>>(flightKey, self));
+        }
+    }
+
+    private static ChannelPage BuildChannelPage(
+        string channelUrl,
+        string channelName,
+        string? description,
+        string? avatarUrl,
+        long? subscriberCount,
+        ApiChannelVideoSort apiSort,
+        Page<ApiVideoSummary, ChannelVideosContinuation> videosPage)
+    {
+        var videos = videosPage.Items
+            .Where(video => !video.IsShort)
+            .DistinctBy(video => video.Id)
+            .Select(video => MapVideo(
+                video,
+                channelName,
+                videosPage.PlaybackProgress?.GetValueOrDefault(video.Id)))
+            .ToArray();
+        var nextContinuationToken = videosPage.Next?.Export();
+        var resultSort = ToCoreSort(apiSort);
+        var status = videos.Length == 0 ? "This channel has no videos to show." : null;
+
+        return new ChannelPage(
+            channelUrl,
+            channelName,
+            description,
+            avatarUrl,
+            subscriberCount,
+            videos,
+            resultSort,
+            status,
+            true,
+            nextContinuationToken);
+    }
 
     private static ApiChannelVideoSort ToApiSort(ChannelVideoSort sort)
     {
@@ -180,4 +315,13 @@ public sealed class YoutubeApiChannelService(IYouTubeClientProvider clientProvid
             video.Channel.Url.ToString(),
             YouTubePlaybackProgressMapper.Map(playbackProgress));
     }
+
+    private sealed record CachedChannelMetadata(
+        YouTubeClient Client,
+        string Title,
+        string? Description,
+        string? AvatarUrl,
+        long? SubscriberCount);
+
+    private sealed record CachedFirstPage(YouTubeClient Client, ChannelPage Page);
 }

@@ -14,6 +14,11 @@ public sealed class YtDlpCommandBuilderTests
 
         Assert.Equal(TestExecutable, startInfo.FileName);
 
+        Assert.Contains("--ignore-config", startInfo.ArgumentList);
+        Assert.Contains("--no-warnings", startInfo.ArgumentList);
+        Assert.Contains("--socket-timeout", startInfo.ArgumentList);
+        Assert.Contains("10", startInfo.ArgumentList);
+        Assert.Contains("--no-write-subs", startInfo.ArgumentList);
         Assert.Contains("--dump-single-json", startInfo.ArgumentList);
         Assert.Contains("--skip-download", startInfo.ArgumentList);
         Assert.Contains("--no-playlist", startInfo.ArgumentList);

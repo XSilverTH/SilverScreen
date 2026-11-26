@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
@@ -33,6 +35,8 @@ public sealed record LibMpvPlaybackState(
 
 public sealed partial class LibMpvPlayer : IDisposable
 {
+    private const double TimePosEmitDeltaSeconds = 0.20;
+    private const double TimePosEmitIntervalMs = 150.0;
     private static readonly ILogger Logger = Log.ForContext<LibMpvPlayer>();
 
     private readonly Channel<Action> _commands = Channel.CreateUnbounded<Action>(new UnboundedChannelOptions
@@ -55,8 +59,8 @@ public sealed partial class LibMpvPlayer : IDisposable
     private bool _initialized;
     private bool _isAvailable = true;
     private string? _lastErrorMessage;
-
-
+    private TimeSpan _lastEmittedPosition;
+    private long _lastTimePosEmitTimestamp;
     private string? _lastReportedHwdec;
     private string? _mpvVersion;
     private (double Seconds, bool Exact)? _pendingSeek;
@@ -255,6 +259,8 @@ public sealed partial class LibMpvPlayer : IDisposable
             _quality = preferences.Quality.ToPersistedString();
             _reload = null;
             _lastErrorMessage = null;
+            _lastEmittedPosition = TimeSpan.Zero;
+            _lastTimePosEmitTimestamp = 0;
             _state = _state with
             {
                 IsPaused = false, IsLoading = true, IsBuffering = false, BufferingPercent = 0, SubtitleTracks = [],
@@ -474,6 +480,8 @@ public sealed partial class LibMpvPlayer : IDisposable
             if (IsDisposing || !IsAvailable) return;
             _reload = null;
             _resumeAfterRenderer = false;
+            _lastEmittedPosition = TimeSpan.Zero;
+            _lastTimePosEmitTimestamp = 0;
             _state = _state with
             {
                 PlaylistIndex = -1,
@@ -542,7 +550,7 @@ public sealed partial class LibMpvPlayer : IDisposable
         }
     }
 
-    private void HandleEvent(LibMpvEvent mpvEvent)
+    private unsafe void HandleEvent(LibMpvEvent mpvEvent)
     {
         // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
         switch ((LibMpvEventId)mpvEvent.EventId)
@@ -561,7 +569,8 @@ public sealed partial class LibMpvPlayer : IDisposable
                 LogHardwareDecodingStatus();
                 break;
             case LibMpvEventId.EndFile:
-                HandleEndFile(Marshal.PtrToStructure<LibMpvEventEndFile>(mpvEvent.Data));
+                if (mpvEvent.Data != 0)
+                    HandleEndFile(*(LibMpvEventEndFile*)mpvEvent.Data);
                 break;
         }
     }
@@ -596,10 +605,10 @@ public sealed partial class LibMpvPlayer : IDisposable
         return false;
     }
 
-    private void HandleLogMessage(nint data)
+    private unsafe void HandleLogMessage(nint data)
     {
         if (data == 0) return;
-        var message = Marshal.PtrToStructure<LibMpvEventLogMessage>(data);
+        var message = *(LibMpvEventLogMessage*)data;
         var prefix = Marshal.PtrToStringUTF8(message.Prefix) ?? "unknown";
         var text = DiagnosticSanitizer.Sanitize(Marshal.PtrToStringUTF8(message.Text)?.TrimEnd('\r', '\n'));
         if (string.IsNullOrWhiteSpace(text)) return;
@@ -637,9 +646,10 @@ public sealed partial class LibMpvPlayer : IDisposable
         Logger.Information("Hardware decoding active: {Hwdec}", hwdec);
     }
 
-    private void HandlePropertyChange(nint data)
+    private unsafe void HandlePropertyChange(nint data)
     {
-        var property = Marshal.PtrToStructure<LibMpvEventProperty>(data);
+        if (data == 0) return;
+        var property = *(LibMpvEventProperty*)data;
         var name = Marshal.PtrToStringUTF8(property.Name);
         switch (name)
         {
@@ -666,62 +676,75 @@ public sealed partial class LibMpvPlayer : IDisposable
             return;
         }
 
+        var shouldEmit = true;
         lock (_gate)
         {
-            _state = name switch
+            switch (name)
             {
-                "time-pos" when property.Format == LibMpvFormat.Double => _state with
+                case "time-pos" when property.Format == LibMpvFormat.Double:
                 {
-                    Position = ToTimeSpan(Marshal.PtrToStructure<double>(property.Data))
-                },
-                "duration" when property.Format == LibMpvFormat.Double => _state with
-                {
-                    Duration = ToTimeSpan(Marshal.PtrToStructure<double>(property.Data))
-                },
-                "pause" when property.Format == LibMpvFormat.Flag => _state with
-                {
-                    IsPaused = Marshal.ReadInt32(property.Data) != 0
-                },
-                "mute" when property.Format == LibMpvFormat.Flag => _state with
-                {
-                    IsMuted = Marshal.ReadInt32(property.Data) != 0
-                },
-                "volume" when property.Format == LibMpvFormat.Double => _state with
-                {
-                    Volume = Marshal.PtrToStructure<double>(property.Data)
-                },
-                "speed" when property.Format == LibMpvFormat.Double => _state with
-                {
-                    Speed = Marshal.PtrToStructure<double>(property.Data)
-                },
-                "seekable" when property.Format == LibMpvFormat.Flag => _state with
-                {
-                    IsSeekable = Marshal.ReadInt32(property.Data) != 0
-                },
-                "playlist-pos" when property.Format == LibMpvFormat.Int64 => _state with
-                {
-                    PlaylistIndex = checked((int)Marshal.ReadInt64(property.Data))
-                },
-                "sid" when property.Format == LibMpvFormat.Int64 => _state with
-                {
-                    SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, Marshal.ReadInt64(property.Data))
-                },
-                "paused-for-cache" when property.Format == LibMpvFormat.Flag => _state with
-                {
-                    IsBuffering = Marshal.ReadInt32(property.Data) != 0
-                },
-                "cache-buffering-state" when property.Format == LibMpvFormat.Int64 => _state with
-                {
-                    BufferingPercent = (int)Math.Clamp(Marshal.ReadInt64(property.Data), 0, 100)
-                },
-                _ => _state
-            };
+                    var newPosition = ToTimeSpan(*(double*)property.Data);
+                    _state = _state with { Position = newPosition };
+                    var nowTimestamp = Stopwatch.GetTimestamp();
+                    shouldEmit = _lastTimePosEmitTimestamp == 0 ||
+                                 Math.Abs((newPosition - _lastEmittedPosition).TotalSeconds) >=
+                                 TimePosEmitDeltaSeconds ||
+                                 Stopwatch.GetElapsedTime(_lastTimePosEmitTimestamp, nowTimestamp).TotalMilliseconds >=
+                                 TimePosEmitIntervalMs;
+                    if (shouldEmit)
+                    {
+                        _lastEmittedPosition = newPosition;
+                        _lastTimePosEmitTimestamp = nowTimestamp;
+                    }
+
+                    break;
+                }
+                case "duration" when property.Format == LibMpvFormat.Double:
+                    _state = _state with { Duration = ToTimeSpan(*(double*)property.Data) };
+                    break;
+                case "pause" when property.Format == LibMpvFormat.Flag:
+                    _state = _state with { IsPaused = *(int*)property.Data != 0 };
+                    break;
+                case "mute" when property.Format == LibMpvFormat.Flag:
+                    _state = _state with { IsMuted = *(int*)property.Data != 0 };
+                    break;
+                case "volume" when property.Format == LibMpvFormat.Double:
+                    _state = _state with { Volume = *(double*)property.Data };
+                    break;
+                case "speed" when property.Format == LibMpvFormat.Double:
+                    _state = _state with { Speed = *(double*)property.Data };
+                    break;
+                case "seekable" when property.Format == LibMpvFormat.Flag:
+                    _state = _state with { IsSeekable = *(int*)property.Data != 0 };
+                    break;
+                case "playlist-pos" when property.Format == LibMpvFormat.Int64:
+                    _state = _state with { PlaylistIndex = checked((int)*(long*)property.Data) };
+                    break;
+                case "sid" when property.Format == LibMpvFormat.Int64:
+                    _state = _state with
+                    {
+                        SubtitleTracks = SelectSubtitleTrack(_state.SubtitleTracks, *(long*)property.Data)
+                    };
+                    break;
+                case "paused-for-cache" when property.Format == LibMpvFormat.Flag:
+                    _state = _state with { IsBuffering = *(int*)property.Data != 0 };
+                    break;
+                case "cache-buffering-state" when property.Format == LibMpvFormat.Int64:
+                    _state = _state with
+                    {
+                        BufferingPercent = (int)Math.Clamp(*(long*)property.Data, 0, 100)
+                    };
+                    break;
+                default:
+                    return;
+            }
             // A reload snapshot is immutable until HandleFileLoaded consumes it.
             // Property notifications from shutdown/reload commands must not replace
             // the state captured before the reload began.
         }
 
-        PublishState();
+        if (shouldEmit)
+            PublishState();
     }
 
     internal void HandleFileLoaded()
@@ -795,7 +818,8 @@ public sealed partial class LibMpvPlayer : IDisposable
 
         var urls = MpvCommandBuilder.GetPlaybackUrls(request);
         var rawOptions = BuildYtdlRawOptions(cookieFilePath,
-            preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled);
+            preferences.MarkWatchedVideos && !preferences.YouTubePlaybackTelemetryEnabled,
+            preferences.PreferredSubtitleLanguage);
         Check(Native.SetPropertyString(_handle, "ytdl-raw-options", rawOptions));
         if (!string.IsNullOrWhiteSpace(cookieFilePath))
         {
@@ -1323,15 +1347,43 @@ public sealed partial class LibMpvPlayer : IDisposable
         return [.. tracks.Select(track => track with { IsSelected = track.Id == selectedTrackId })];
     }
 
-    private static string BuildYtdlRawOptions(string? cookieFilePath, bool markWatchedVideos)
+    private static string BuildYtdlRawOptions(
+        string? cookieFilePath,
+        bool markWatchedVideos,
+        string? preferredSubtitleLanguage = null)
     {
-        var options = new List<string>
+        var options = new List<string>(5);
+        if (!string.IsNullOrWhiteSpace(cookieFilePath))
+            options.Add($"cookies={cookieFilePath}");
+
+        var sanitizedSubLang = SanitizeSubtitleLanguage(preferredSubtitleLanguage);
+        if (sanitizedSubLang is not null)
         {
-            "write-subs=", "sub-langs=all", "sub-format=vtt"
-        };
-        if (!string.IsNullOrWhiteSpace(cookieFilePath)) options.Insert(0, $"cookies={cookieFilePath}");
-        if (markWatchedVideos) options.Add("mark-watched=");
-        return string.Join(',', options);
+            options.Add("write-subs=");
+            options.Add(string.Equals(sanitizedSubLang, "all", StringComparison.OrdinalIgnoreCase)
+                ? "sub-langs=all"
+                : $"sub-langs={sanitizedSubLang}.*");
+            options.Add("sub-format=vtt");
+        }
+
+        if (markWatchedVideos)
+            options.Add("mark-watched=");
+
+        return options.Count == 0 ? string.Empty : string.Join(',', options);
+    }
+
+    private static string? SanitizeSubtitleLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language)) return null;
+        var trimmed = language.AsSpan().Trim();
+        var sb = new StringBuilder(trimmed.Length);
+        foreach (var ch in trimmed)
+        {
+            if (char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')
+                sb.Append(ch);
+        }
+
+        return sb.Length > 0 ? sb.ToString() : null;
     }
 
     private void Observe(string name, LibMpvFormat format)

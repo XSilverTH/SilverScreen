@@ -16,12 +16,16 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
     // Bounded live-session set: Start-without-Dispose callers must not grow memory without limit,
     // so the oldest-tracked session is evicted (disposed) past the cap.
     private const int MaxActiveSessions = 200;
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
     private static readonly ILogger Logger = Log.ForContext<YouTubePlaybackTelemetryService>();
     private readonly Func<CookieContainer, HttpMessageHandler>? _handlerFactory;
     private readonly IPreferencesService _preferences;
     private readonly ISessionService _sessionService;
     private readonly HashSet<TelemetrySession> _sessions = [];
     private readonly Lock _sessionsLock = new();
+    private readonly Lock _sharedClientLock = new();
+    private HttpClient? _sharedClient;
+    private CookieContainer? _sharedCookies;
     private bool _disposed;
 
     public YouTubePlaybackTelemetryService(
@@ -82,6 +86,16 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         _preferences.PreferencesChanged -= OnPreferencesChanged;
         _sessionService.SessionChanged -= OnSessionChanged;
         foreach (var session in sessions) session.Dispose();
+
+        HttpClient? sharedClient;
+        lock (_sharedClientLock)
+        {
+            sharedClient = _sharedClient;
+            _sharedClient = null;
+            _sharedCookies = null;
+        }
+
+        sharedClient?.Dispose();
     }
 
     private void OnSessionChanged(object? sender, EventArgs e)
@@ -94,7 +108,19 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             _sessions.Clear();
         }
 
+        HttpClient? retiredClient = null;
+        lock (_sharedClientLock)
+        {
+            _sharedCookies = null;
+            if (_handlerFactory is not null)
+            {
+                retiredClient = _sharedClient;
+                _sharedClient = null;
+            }
+        }
+
         foreach (var tracked in sessions) tracked.Retire();
+        retiredClient?.Dispose();
     }
 
     private void OnPreferencesChanged(object? sender, AppPreferences preferences)
@@ -124,31 +150,72 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         }
     }
 
-    private HttpClient? CreateAuthenticatedClient()
+    private (HttpClient Client, CookieContainer? Cookies)? GetAuthenticatedClient()
     {
-        var cookies = _sessionService.CreateCookieContainer();
-        if (cookies is null) return null;
+        lock (_sharedClientLock)
+        {
+            if (_disposed) return null;
 
-        try
-        {
-            var handler = _handlerFactory?.Invoke(cookies) ?? new HttpClientHandler
+            if (_sharedClient is not null)
             {
-                CookieContainer = cookies,
-                AllowAutoRedirect = true,
-                AutomaticDecompression = DecompressionMethods.All
-            };
-            var client = new HttpClient(handler, true);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
-            client.DefaultRequestHeaders.TryAddWithoutValidation("X-YouTube-Client-Name", "1");
-            client.DefaultRequestHeaders.TryAddWithoutValidation("X-YouTube-Client-Version", "2.20260724.01.00");
-            return client;
+                if (_handlerFactory is null)
+                {
+                    _sharedCookies ??= _sessionService.CreateCookieContainer();
+                    return _sharedCookies is null ? null : (_sharedClient, _sharedCookies);
+                }
+
+                return (_sharedClient, null);
+            }
+
+            var cookies = _sessionService.CreateCookieContainer();
+            if (cookies is null) return null;
+
+            try
+            {
+                HttpMessageHandler handler;
+                CookieContainer? requestCookies;
+                if (_handlerFactory is not null)
+                {
+                    handler = _handlerFactory(cookies);
+                    requestCookies = null;
+                }
+                else
+                {
+                    handler = new SocketsHttpHandler
+                    {
+                        UseCookies = false,
+                        AllowAutoRedirect = true,
+                        AutomaticDecompression = DecompressionMethods.All,
+                        MaxConnectionsPerServer = 8,
+                        EnableMultipleHttp2Connections = true,
+                        ConnectTimeout = TimeSpan.FromSeconds(5),
+                        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+                        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(90)
+                    };
+                    requestCookies = cookies;
+                    _sharedCookies = cookies;
+                }
+
+                var client = CreateConfiguredClient(handler);
+                _sharedClient = client;
+                return (client, requestCookies);
+            }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception, "Could not prepare authenticated YouTube playback telemetry");
+                return null;
+            }
         }
-        catch (Exception exception)
-        {
-            Logger.Debug(exception, "Could not prepare authenticated YouTube playback telemetry");
-            return null;
-        }
+    }
+
+    private static HttpClient CreateConfiguredClient(HttpMessageHandler handler)
+    {
+        var client = new HttpClient(handler, true) { Timeout = DefaultTimeout };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-YouTube-Client-Name", "1");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-YouTube-Client-Version", "2.20260724.01.00");
+        return client;
     }
 
     private sealed class TelemetrySession(YouTubePlaybackTelemetryService owner, PlaybackRequest request)
@@ -276,6 +343,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
         private readonly Lock _consentLock = new();
         private readonly string _cpn = CreateCpn();
         private HttpClient? _client;
+        private CookieContainer? _cookies;
         private bool _disposed;
         private Task<TrackingEndpoints?>? _endpointsTask;
         private DateTimeOffset _lastObservedAt;
@@ -359,7 +427,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
 
             _disposed = true;
-            DisposeClientAfterSendsAsync(_sendTail).FireAndForget(Logger);
+            // Shared HttpClient is owned by YouTubePlaybackTelemetryService; just drain pending sends.
+            _sendTail.FireAndForget(Logger);
         }
 
         public void InvalidateConsent()
@@ -372,8 +441,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 _lastPosition = TimeSpan.Zero;
                 _segmentStart = TimeSpan.Zero;
                 _consentCancellation.Cancel();
-                _client?.Dispose();
                 _client = null;
+                _cookies = null;
             }
         }
 
@@ -382,8 +451,8 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             if (_disposed) return;
             _disposed = true;
             _consentCancellation.Cancel();
-            _client?.Dispose();
             _client = null;
+            _cookies = null;
         }
 
         private void FlushSegment(TimeSpan end)
@@ -414,6 +483,7 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 lock (_consentLock)
                 {
                     if (!CanSend(cancellationToken) || _client is null) return;
+                    AttachCookies(request, uri, _cookies);
                     sendTask = _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 }
 
@@ -443,18 +513,17 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
 
         private async Task<TrackingEndpoints?> InitializeEndpointsAsync(CancellationToken cancellationToken)
         {
-            var client = owner.CreateAuthenticatedClient();
-            if (client is null) return null;
+            var resolved = owner.GetAuthenticatedClient();
+            if (resolved is null) return null;
 
+            var (client, cookies) = resolved.Value;
             lock (_consentLock)
             {
                 if (!CanSend(cancellationToken))
-                {
-                    client.Dispose();
                     return null;
-                }
 
                 _client = client;
+                _cookies = cookies;
             }
 
             try
@@ -462,7 +531,9 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
                 var pageUri =
                     new Uri(
                         $"https://www.youtube.com/watch?v={Uri.EscapeDataString(videoId)}&bpctr=9999999999&has_verified=1");
-                using var response = await client.GetAsync(pageUri, HttpCompletionOption.ResponseHeadersRead,
+                using var pageRequest = new HttpRequestMessage(HttpMethod.Get, pageUri);
+                AttachCookies(pageRequest, pageUri, cookies);
+                using var response = await client.SendAsync(pageRequest, HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken).ConfigureAwait(false);
                 if (!CanSend(cancellationToken) || !response.IsSuccessStatusCode) return null;
                 var page = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -475,27 +546,12 @@ public sealed class YouTubePlaybackTelemetryService : IYouTubePlaybackTelemetryS
             }
         }
 
-        private async Task DisposeClientAfterSendsAsync(Task sendTail)
+        private static void AttachCookies(HttpRequestMessage request, Uri uri, CookieContainer? cookies)
         {
-            try
-            {
-                await sendTail.ConfigureAwait(false);
-            }
-            catch
-            {
-                // Individual telemetry sends already handle their own errors.
-            }
-            finally
-            {
-                HttpClient? client;
-                lock (_consentLock)
-                {
-                    client = _client;
-                    _client = null;
-                }
-
-                client?.Dispose();
-            }
+            if (cookies is null) return;
+            var cookieHeader = cookies.GetCookieHeader(uri);
+            if (!string.IsNullOrEmpty(cookieHeader))
+                request.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
         }
 
         private static string CreateCpn()

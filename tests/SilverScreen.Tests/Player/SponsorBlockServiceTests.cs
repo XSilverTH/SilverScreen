@@ -98,15 +98,72 @@ public sealed class SponsorBlockServiceTests
     }
 
     [Fact]
-    public async Task GetSegmentsAsync_WhenNotFound_ReturnsEmpty()
+    public async Task GetSegmentsAsync_WhenNotFound_ReturnsEmptyAndNegativeCaches()
     {
         var handler = new FakeHttpMessageHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
         using var client = new HttpClient(handler);
         using var service = new SponsorBlockService(client);
 
-        var segments = await service.GetSegmentsAsync("dQw4w9WgXcQ", [SponsorBlockCategories.Sponsor]);
-        Assert.Empty(segments);
+        var first = await service.GetSegmentsAsync("dQw4w9WgXcQ", [SponsorBlockCategories.Sponsor]);
+        var second = await service.GetSegmentsAsync("dQw4w9WgXcQ", [SponsorBlockCategories.Sponsor]);
+        Assert.Empty(first);
+        Assert.Empty(second);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task GetSegmentsAsync_CategoryOrderDoesNotBypassCache()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(JsonResponse("""
+            [
+              {
+                "videoID": "dQw4w9WgXcQ",
+                "segments": [
+                  { "segment": [12.5, 36], "UUID": "sponsor-id", "category": "sponsor", "actionType": "skip" }
+                ]
+              }
+            ]
+            """)));
+        using var client = new HttpClient(handler);
+        using var service = new SponsorBlockService(client);
+
+        var first = await service.GetSegmentsAsync("dQw4w9WgXcQ",
+            [SponsorBlockCategories.Sponsor, SponsorBlockCategories.Outro]);
+        var second = await service.GetSegmentsAsync("dQw4w9WgXcQ",
+            [SponsorBlockCategories.Outro, SponsorBlockCategories.Sponsor]);
+
+        Assert.Same(first, second);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task GetSegmentsAsync_ConcurrentRequests_DeduplicateInFlightHttpCall()
+    {
+        var handler = new FakeHttpMessageHandler(async (_, _) =>
+        {
+            await Task.Delay(20);
+            return JsonResponse("""
+                                [
+                                  {
+                                    "videoID": "dQw4w9WgXcQ",
+                                    "segments": [
+                                      { "segment": [1, 2], "UUID": "s1", "category": "sponsor", "actionType": "skip" }
+                                    ]
+                                  }
+                                ]
+                                """);
+        });
+        using var client = new HttpClient(handler);
+        using var service = new SponsorBlockService(client);
+
+        var tasks = Enumerable.Range(0, 10)
+            .Select(_ => service.GetSegmentsAsync("dQw4w9WgXcQ", [SponsorBlockCategories.Sponsor]))
+            .ToArray();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, r => Assert.Single(r));
+        Assert.Equal(1, handler.CallCount);
     }
 
 

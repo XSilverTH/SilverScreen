@@ -258,6 +258,36 @@ public sealed class YtDlpMediaResolverTests
         resolver.Invalidate("test_video_id");
     }
 
+    [Fact]
+    public async Task ResolveMediaAsync_SinglePassParseSupportsQualitySwitchesAndTracksWithoutReRunningYtDlp()
+    {
+        var json = """
+                   {
+                       "id": "dQw4w9WgXcQ",
+                       "title": "Test Video",
+                       "channel": "Test Channel",
+                       "formats": [
+                           { "format_id": "137", "url": "https://cdn.example/1080.mp4", "height": 1080, "fps": 60, "vcodec": "avc1", "acodec": "none", "tbr": 4000 },
+                           { "format_id": "136", "url": "https://cdn.example/720.mp4", "height": 720, "fps": 30, "vcodec": "avc1", "acodec": "none", "tbr": 1500 },
+                           { "format_id": "251", "url": "https://cdn.example/audio.webm", "vcodec": "none", "acodec": "opus", "tbr": 160 }
+                       ]
+                   }
+                   """;
+        var runner = new FakeYtDlpRunner { Result = new ProcessResult(0, json, "") };
+        using var resolver = CreateResolver(runner);
+
+        var first = await resolver.ResolveMediaAsync("dQw4w9WgXcQ", "1080p");
+        var second = await resolver.ResolveMediaAsync("dQw4w9WgXcQ", "720p");
+        var tracks = await resolver.GetQualityTracksAsync("dQw4w9WgXcQ");
+
+        Assert.Equal(1, runner.CallCount);
+        var s1 = Assert.IsType<YouTubeMediaResolutionResult.Success>(first.Value);
+        var s2 = Assert.IsType<YouTubeMediaResolutionResult.Success>(second.Value);
+        Assert.Equal("https://cdn.example/1080.mp4", s1.Media.VideoUrl);
+        Assert.Equal("https://cdn.example/720.mp4", s2.Media.VideoUrl);
+        Assert.Equal(["1080p60", "720p"], tracks);
+    }
+
     private static YtDlpMediaResolver CreateResolver(IYtDlpRunner runner)
     {
         return new YtDlpMediaResolver(
@@ -269,12 +299,14 @@ public sealed class YtDlpMediaResolverTests
 
     private sealed class FakeYtDlpRunner : IYtDlpRunner
     {
+        public int CallCount { get; private set; }
         public ProcessResult Result { get; set; } = new(0, "{}", "");
         public Exception? ExceptionToThrow { get; set; }
 
         public Task<ProcessResult> RunAsync(ProcessStartInfo startInfo, TimeSpan timeout,
             CancellationToken cancellationToken)
         {
+            CallCount++;
             if (ExceptionToThrow is not null)
                 throw ExceptionToThrow;
 

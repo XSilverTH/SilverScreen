@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -185,6 +186,19 @@ public static partial class TemporaryCookieFile
         if (!string.Equals(defaultRoot, fallbackRoot, StringComparison.Ordinal)) SweepDirectory(fallbackRoot, age);
     }
 
+    /// <summary>
+    ///     Runs <see cref="SweepStale" /> asynchronously on a thread-pool worker so startup is not stalled.
+    /// </summary>
+    public static Task SweepStaleAsync(
+        TimeSpan? maxAge = null,
+        string? tempRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        return cancellationToken.IsCancellationRequested
+            ? Task.FromCanceled(cancellationToken)
+            : Task.Run(() => SweepStale(maxAge, tempRoot), cancellationToken);
+    }
+
     private static void SweepDirectory(string root, TimeSpan age)
     {
         try
@@ -220,7 +234,7 @@ public static partial class TemporaryCookieFile
                             !IsDirectoryOrphanedOrStale(directory, prefix, age, now))
                             continue;
 
-                        if (!TryRemoveOwnedDirectory(directory, prefix)) continue;
+                        if (!TryRemoveOwnedDirectory(directory, prefix, flushToDisk: false)) continue;
                         removed++;
                         Logger.Debug("Removed stale temporary directory {Directory}", directory.FullName);
                     }
@@ -243,7 +257,7 @@ public static partial class TemporaryCookieFile
         }
     }
 
-    private static bool TryRemoveOwnedDirectory(DirectoryInfo directory, string prefix)
+    private static bool TryRemoveOwnedDirectory(DirectoryInfo directory, string prefix, bool flushToDisk = true)
     {
         if (!IsSafeDirectory(directory))
             return false;
@@ -254,7 +268,7 @@ public static partial class TemporaryCookieFile
             if (prefix == DirectoryPrefix)
             {
                 if (entry is FileInfo file && IsOwnedCookieFile(file))
-                    TryWipeAndDeleteFile(file.FullName);
+                    TryWipeAndDeleteFile(file.FullName, flushToDisk);
             }
             else if (entry is FileInfo { Name: "mpv.sock" } ipcFile && IsOwnedIpcSocket(ipcFile))
             {
@@ -401,6 +415,21 @@ public static partial class TemporaryCookieFile
         if (pid <= 0)
             return false;
 
+        if (OperatingSystem.IsLinux())
+        {
+            try
+            {
+                // Checking /proc/<pid> directly avoids Process.GetProcessById throwing
+                // ArgumentException for every dead PID during startup stale-lease cleanup.
+                return Directory.Exists($"/proc/{pid}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, "Could not inspect /proc/{Pid}; assuming alive as safeguard", pid);
+                return true;
+            }
+        }
+
         try
         {
             using var process = Process.GetProcessById(pid);
@@ -459,7 +488,7 @@ public static partial class TemporaryCookieFile
     ///     not a guarantee against forensic recovery (copy-on-write filesystems, journals,
     ///     and SSD wear-levelling may retain copies). Logs only the file path.
     /// </summary>
-    private static void TryWipeAndDeleteFile(string path)
+    private static void TryWipeAndDeleteFile(string path, bool flushToDisk = true)
     {
         try
         {
@@ -470,16 +499,27 @@ public static partial class TemporaryCookieFile
             if (info.Length > 0)
             {
                 using var stream = OpenCookieFileForWipe(path);
-                var zeros = new byte[4096];
-                var remaining = info.Length;
-                while (remaining > 0)
+                var zeros = ArrayPool<byte>.Shared.Rent(4096);
+                Array.Clear(zeros, 0, 4096);
+                try
                 {
-                    var chunk = (int)Math.Min(zeros.Length, remaining);
-                    stream.Write(zeros, 0, chunk);
-                    remaining -= chunk;
+                    var remaining = info.Length;
+                    while (remaining > 0)
+                    {
+                        var chunk = (int)Math.Min(4096, remaining);
+                        stream.Write(zeros, 0, chunk);
+                        remaining -= chunk;
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(zeros);
                 }
 
-                stream.Flush(true);
+                if (flushToDisk)
+                    stream.Flush(true);
+                else
+                    stream.Flush();
             }
         }
         catch (Exception ex)

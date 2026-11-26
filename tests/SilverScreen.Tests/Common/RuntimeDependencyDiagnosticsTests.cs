@@ -52,6 +52,37 @@ public sealed class RuntimeDependencyDiagnosticsTests
         Assert.Empty(diagnostics.GetStartupWarnings());
     }
 
+    [Fact]
+    public async Task CachesProbeResultsAcrossRepeatedCalls_AndSupportsAsyncProbing()
+    {
+        var execCalls = 0;
+        var libMpvCalls = 0;
+        var preferences = new TestPreferences(PlaybackBackendKind.Embedded);
+        var diagnostics = new RuntimeDependencyDiagnostics(
+            preferences,
+            new TestSecretService(true),
+            _ =>
+            {
+                Interlocked.Increment(ref execCalls);
+                return true;
+            },
+            () =>
+            {
+                Interlocked.Increment(ref libMpvCalls);
+                return true;
+            });
+
+        Assert.Empty(diagnostics.GetStartupWarnings());
+        Assert.Empty(await diagnostics.GetStartupWarningsAsync());
+        Assert.Equal(1, execCalls);
+        Assert.Equal(1, libMpvCalls);
+
+        diagnostics.InvalidateCache();
+        Assert.Empty(diagnostics.GetStartupWarnings());
+        Assert.Equal(2, execCalls);
+        Assert.Equal(2, libMpvCalls);
+    }
+
 
     private sealed class TestPreferences(PlaybackBackendKind playbackBackend) : IPreferencesService
     {

@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
-using System.Text.Json;
 using Serilog;
 using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Common;
@@ -14,51 +12,55 @@ namespace SilverScreen.Infrastructure.YouTube;
 
 /// <summary>
 ///     Resolves YouTube media streams directly by invoking yt-dlp with <c>--dump-single-json</c>
-///     and parsing adaptive/muxed format payloads.
+///     and parsing adaptive/muxed format payloads once into compact immutable records.
 /// </summary>
-/// <remarks>
-///     Primary playback delegates extraction to mpv's internal <c>ytdl_hook.lua</c>. When mpv exits
-///     fast with a non-zero code, <c>ExternalMpvPlaybackService</c> calls
-///     <see cref="TryResolveAsFallbackAsync" /> once and relaunches mpv with the resolved direct
-///     media URLs. <see cref="GetVideoDetailsAsync" /> also feeds UI metadata (info/stats panel).
-/// </remarks>
-public sealed class YtDlpMediaResolver(
-    ICookieFileProvider cookieFileProvider,
-    IPreferencesService preferencesService,
-    IYtDlpRunner runner,
-    IYouTubeClientProvider clientProvider,
-    TimeSpan? timeout = null,
-    TimeSpan? cacheDuration = null,
-    TimeProvider? timeProvider = null)
-    : IYouTubeMediaResolver, IDisposable
+public sealed class YtDlpMediaResolver : IYouTubeMediaResolver, IDisposable
 {
+    internal const int MaxCachedEntries = 50;
+
     private static readonly ILogger Logger = Log.ForContext<YtDlpMediaResolver>();
-    private readonly ConcurrentDictionary<string, CachedVideoEntry> _cache = new(StringComparer.Ordinal);
-    private readonly TimeSpan _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
-
-    private readonly IYouTubeClientProvider _clientProvider =
-        clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
-
-    private readonly ICookieFileProvider _cookieFileProvider =
-        cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
-
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _fetchLocks = new(StringComparer.Ordinal);
-
-    private readonly IPreferencesService _preferencesService =
-        preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
-
-    private readonly IYtDlpRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
-    private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
+    private readonly BoundedLruCache<string, CachedVideoEntry> _cache;
+    private readonly TimeSpan _cacheDuration;
+    private readonly IYouTubeClientProvider _clientProvider;
+    private readonly ICookieFileProvider _cookieFileProvider;
+    private readonly Dictionary<string, RefCountedLock> _fetchLocks = new(StringComparer.Ordinal);
+    private readonly Lock _fetchLocksGate = new();
+    private readonly IPreferencesService _preferencesService;
+    private readonly IYtDlpRunner _runner;
+    private readonly TimeProvider _timeProvider;
+    private readonly TimeSpan _timeout;
     private bool _disposed;
+
+    public YtDlpMediaResolver(
+        ICookieFileProvider cookieFileProvider,
+        IPreferencesService preferencesService,
+        IYtDlpRunner runner,
+        IYouTubeClientProvider clientProvider,
+        TimeSpan? timeout = null,
+        TimeSpan? cacheDuration = null,
+        TimeProvider? timeProvider = null)
+    {
+        _cookieFileProvider = cookieFileProvider ?? throw new ArgumentNullException(nameof(cookieFileProvider));
+        _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _clientProvider = clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
+        _timeout = timeout ?? TimeSpan.FromSeconds(30);
+        _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(15);
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _cache = new BoundedLruCache<string, CachedVideoEntry>(MaxCachedEntries, StringComparer.Ordinal, _timeProvider);
+    }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _cache.Clear();
-        foreach (var sem in _fetchLocks.Values) sem.Dispose();
-        _fetchLocks.Clear();
+        lock (_fetchLocksGate)
+        {
+            foreach (var entry in _fetchLocks.Values)
+                entry.Semaphore.Dispose();
+            _fetchLocks.Clear();
+        }
     }
 
     public async Task<YouTubeMediaResolutionResult> ResolveMediaAsync(
@@ -72,8 +74,6 @@ public sealed class YtDlpMediaResolver(
 
         var quality = preferredQuality ?? _preferencesService.GetPreferences().Quality.ToPersistedString();
 
-        // Details-only entries carry no yt-dlp payload and must never satisfy media resolve.
-        // They are a media-miss here; the fresh fetch below re-resolves via yt-dlp.
         var cached = TryGetValidEntry(videoId, forceRefresh, true);
         if (cached is not null)
         {
@@ -82,10 +82,9 @@ public sealed class YtDlpMediaResolver(
                 if (!IsMediaExpired(cachedMedia.ExpiresAt))
                     return new YouTubeMediaResolutionResult.Success(cachedMedia);
             }
-            else
+            else if (cached.Payload is not null)
             {
-                // Format for this quality wasn't selected yet, but raw json is cached and not expired
-                var media = TrySelectMedia(cached.RawJsonOutput, quality, cached.Details, videoId);
+                var media = TrySelectMedia(cached.Payload, quality, cached.Details, videoId);
                 if (media is not null && !IsMediaExpired(media.ExpiresAt))
                 {
                     cached.FormatsByQuality[quality] = media;
@@ -94,12 +93,13 @@ public sealed class YtDlpMediaResolver(
             }
         }
 
-        // Fetch or wait for concurrent fetch
-        var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
-        await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var fetchLock = AcquireFetchLock(videoId);
+        var acquired = false;
         try
         {
-            // Double check cache
+            await fetchLock.Semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            acquired = true;
+
             cached = TryGetValidEntry(videoId, forceRefresh, true);
             if (cached is not null)
             {
@@ -107,11 +107,14 @@ public sealed class YtDlpMediaResolver(
                     !IsMediaExpired(cachedMedia.ExpiresAt))
                     return new YouTubeMediaResolutionResult.Success(cachedMedia);
 
-                var media = TrySelectMedia(cached.RawJsonOutput, quality, cached.Details, videoId);
-                if (media is not null && !IsMediaExpired(media.ExpiresAt))
+                if (cached.Payload is not null)
                 {
-                    cached.FormatsByQuality[quality] = media;
-                    return new YouTubeMediaResolutionResult.Success(media);
+                    var media = TrySelectMedia(cached.Payload, quality, cached.Details, videoId);
+                    if (media is not null && !IsMediaExpired(media.ExpiresAt))
+                    {
+                        cached.FormatsByQuality[quality] = media;
+                        return new YouTubeMediaResolutionResult.Success(media);
+                    }
                 }
             }
 
@@ -119,7 +122,12 @@ public sealed class YtDlpMediaResolver(
             if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
                 return new YouTubeMediaResolutionResult.Failure(fetchResult.ErrorMessage ??
                                                                 "Failed to extract video formats.");
-            var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
+
+            var parsed = YtDlpFormatSelector.ParsePayload(fetchResult.RawJsonOutput);
+            if (parsed is null)
+                return new YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
+
+            var details = parsed.Details;
             if (details is null)
             {
                 var apiDetailsResult =
@@ -131,12 +139,12 @@ public sealed class YtDlpMediaResolver(
                         DiagnosticSanitizer.Sanitize(apiDetailsResult.ErrorMessage));
             }
 
-            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
+            var resolvedMedia = TrySelectMedia(parsed, quality, details, videoId);
             if (resolvedMedia is null)
                 return new YouTubeMediaResolutionResult.Failure("No suitable media formats found.");
 
             var newEntry = new CachedVideoEntry(
-                fetchResult.RawJsonOutput,
+                parsed,
                 details,
                 _timeProvider.GetUtcNow(),
                 resolvedMedia.ExpiresAt,
@@ -145,12 +153,12 @@ public sealed class YtDlpMediaResolver(
                     [quality] = resolvedMedia
                 });
 
-            _cache[videoId] = newEntry;
+            _cache.Set(videoId, newEntry);
             return new YouTubeMediaResolutionResult.Success(resolvedMedia);
         }
         finally
         {
-            fetchLock.Release();
+            ReleaseFetchLock(videoId, fetchLock, acquired);
         }
     }
 
@@ -166,22 +174,21 @@ public sealed class YtDlpMediaResolver(
         if (cached?.Details is not null)
             return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
-        var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
-        await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var fetchLock = AcquireFetchLock(videoId);
+        var acquired = false;
         try
         {
+            await fetchLock.Semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            acquired = true;
+
             cached = TryGetValidEntry(videoId, forceRefresh);
             if (cached?.Details is not null)
                 return new YouTubeVideoDetailsResult(cached.Details, true, "Video details loaded.");
 
-            if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
+            if (cached?.Payload?.Details is { } parsedDetails)
             {
-                var parsedDetails = TryParseVideoDetailsFromRawJson(cached.RawJsonOutput);
-                if (parsedDetails is not null)
-                {
-                    _cache[videoId] = cached with { Details = parsedDetails };
-                    return new YouTubeVideoDetailsResult(parsedDetails, true, "Video details loaded.");
-                }
+                _cache.Set(videoId, cached with { Details = parsedDetails });
+                return new YouTubeVideoDetailsResult(parsedDetails, true, "Video details loaded.");
             }
 
             var details = await FetchVideoDetailsFromApiAsync(videoId, cancellationToken).ConfigureAwait(false);
@@ -189,18 +196,20 @@ public sealed class YtDlpMediaResolver(
                 return new YouTubeVideoDetailsResult(null, false,
                     details.ErrorMessage ?? "Failed to load video details.");
 
-            var entry = new CachedVideoEntry(
-                string.Empty,
-                details.Details,
-                _timeProvider.GetUtcNow(),
-                null,
-                new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
-            _cache[videoId] = entry;
+            var entry = cached is not null
+                ? cached with { Details = details.Details }
+                : new CachedVideoEntry(
+                    null,
+                    details.Details,
+                    _timeProvider.GetUtcNow(),
+                    null,
+                    new ConcurrentDictionary<string, ResolvedMedia>(StringComparer.OrdinalIgnoreCase));
+            _cache.Set(videoId, entry);
             return new YouTubeVideoDetailsResult(details.Details, true, "Video details loaded.");
         }
         finally
         {
-            fetchLock.Release();
+            ReleaseFetchLock(videoId, fetchLock, acquired);
         }
     }
 
@@ -212,27 +221,34 @@ public sealed class YtDlpMediaResolver(
             return [];
 
         var cached = TryGetValidEntry(videoId, false, true);
-        if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
-            return YtDlpFormatSelector.GetAvailableQualityTracks(cached.RawJsonOutput);
+        if (cached?.Payload is not null)
+            return YtDlpFormatSelector.GetAvailableQualityTracks(cached.Payload);
 
-        var fetchLock = _fetchLocks.GetOrAdd(videoId, _ => new SemaphoreSlim(1, 1));
-        await fetchLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var fetchLock = AcquireFetchLock(videoId);
+        var acquired = false;
         try
         {
+            await fetchLock.Semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            acquired = true;
+
             cached = TryGetValidEntry(videoId, false, true);
-            if (cached is not null && !string.IsNullOrWhiteSpace(cached.RawJsonOutput))
-                return YtDlpFormatSelector.GetAvailableQualityTracks(cached.RawJsonOutput);
+            if (cached?.Payload is not null)
+                return YtDlpFormatSelector.GetAvailableQualityTracks(cached.Payload);
 
             var fetchResult = await FetchFromYtDlpAsync(videoId, cancellationToken).ConfigureAwait(false);
             if (!fetchResult.IsSuccess || string.IsNullOrWhiteSpace(fetchResult.RawJsonOutput))
                 return [];
 
-            var details = TryParseVideoDetailsFromRawJson(fetchResult.RawJsonOutput);
+            var parsed = YtDlpFormatSelector.ParsePayload(fetchResult.RawJsonOutput);
+            if (parsed is null)
+                return [];
+
+            var details = parsed.Details;
             var quality = _preferencesService.GetPreferences().Quality.ToPersistedString();
-            var resolvedMedia = TrySelectMedia(fetchResult.RawJsonOutput, quality, details, videoId);
+            var resolvedMedia = TrySelectMedia(parsed, quality, details, videoId);
 
             var newEntry = new CachedVideoEntry(
-                fetchResult.RawJsonOutput,
+                parsed,
                 details,
                 _timeProvider.GetUtcNow(),
                 resolvedMedia?.ExpiresAt,
@@ -240,8 +256,8 @@ public sealed class YtDlpMediaResolver(
             if (resolvedMedia is not null)
                 newEntry.FormatsByQuality[quality] = resolvedMedia;
 
-            _cache[videoId] = newEntry;
-            return YtDlpFormatSelector.GetAvailableQualityTracks(fetchResult.RawJsonOutput);
+            _cache.Set(videoId, newEntry);
+            return YtDlpFormatSelector.GetAvailableQualityTracks(parsed);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -250,7 +266,7 @@ public sealed class YtDlpMediaResolver(
         }
         finally
         {
-            fetchLock.Release();
+            ReleaseFetchLock(videoId, fetchLock, acquired);
         }
     }
 
@@ -297,42 +313,68 @@ public sealed class YtDlpMediaResolver(
 
     public void Invalidate(string videoId)
     {
-        _cache.TryRemove(videoId, out _);
+        _cache.Remove(videoId);
+    }
+
+    private RefCountedLock AcquireFetchLock(string videoId)
+    {
+        lock (_fetchLocksGate)
+        {
+            if (!_fetchLocks.TryGetValue(videoId, out var entry))
+            {
+                entry = new RefCountedLock();
+                _fetchLocks[videoId] = entry;
+            }
+
+            entry.RefCount++;
+            return entry;
+        }
+    }
+
+    private void ReleaseFetchLock(string videoId, RefCountedLock entry, bool acquired)
+    {
+        if (acquired)
+            entry.Semaphore.Release();
+
+        lock (_fetchLocksGate)
+        {
+            if (--entry.RefCount == 0 &&
+                _fetchLocks.TryGetValue(videoId, out var current) &&
+                ReferenceEquals(current, entry))
+            {
+                _fetchLocks.Remove(videoId);
+                entry.Semaphore.Dispose();
+            }
+        }
     }
 
     private CachedVideoEntry? TryGetValidEntry(string videoId, bool forceRefresh, bool requireMedia = false)
     {
         if (forceRefresh)
         {
-            _cache.TryRemove(videoId, out _);
+            _cache.Remove(videoId);
             return null;
         }
 
         if (!_cache.TryGetValue(videoId, out var entry)) return null;
-        // Details fetch and media resolve share the entry but use independent payloads:
-        // a details-only entry has no yt-dlp JSON and must never satisfy media resolve.
-        // Report it as a media-miss without evicting so details stay cached.
-        if (requireMedia && string.IsNullOrWhiteSpace(entry.RawJsonOutput)) return null;
+        if (requireMedia && entry.Payload is null) return null;
         var now = _timeProvider.GetUtcNow();
         if (now - entry.CachedAt <= _cacheDuration && !IsMediaExpired(entry.MediaExpiresAt)) return entry;
-        _cache.TryRemove(videoId, out _);
+        _cache.Remove(videoId);
 
         return null;
     }
 
-    // Missing/unparseable media fields are a miss, never a throw: log and let the caller
-    // fall through to a fresh fetch (cached path) or return a miss status (fresh path).
     private ResolvedMedia? TrySelectMedia(
-        string rawJson,
+        ParsedYtDlpMedia payload,
         string quality,
         YouTubeVideoDetails? details,
         string videoId)
     {
-        if (string.IsNullOrWhiteSpace(rawJson)) return null;
         try
         {
             var preferredCodec = _preferencesService.GetPreferences().PreferredCodec;
-            return YtDlpFormatSelector.SelectMedia(rawJson, quality, details, preferredCodec);
+            return YtDlpFormatSelector.SelectMedia(payload, quality, details, preferredCodec);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -345,7 +387,6 @@ public sealed class YtDlpMediaResolver(
     {
         if (expiresAt is null) return false;
         var now = _timeProvider.GetUtcNow();
-        // Give 30s buffer before actual expiry
         return now >= expiresAt.Value - TimeSpan.FromSeconds(30);
     }
 
@@ -405,7 +446,6 @@ public sealed class YtDlpMediaResolver(
         return (false, null, RuntimeDependencyGuidance.YtDlpFailed("the process returned no output."));
     }
 
-
     private async Task<(bool IsSuccess, YouTubeVideoDetails? Details, string? ErrorMessage)>
         FetchVideoDetailsFromApiAsync(string videoId, CancellationToken cancellationToken)
     {
@@ -429,84 +469,14 @@ public sealed class YtDlpMediaResolver(
         }
     }
 
-    private static YouTubeVideoDetails? TryParseVideoDetailsFromRawJson(string rawJson)
+    private sealed class RefCountedLock
     {
-        if (string.IsNullOrWhiteSpace(rawJson)) return null;
-
-        try
-        {
-            using var document = JsonDocument.Parse(rawJson);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return null;
-
-            string? title = null;
-            if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
-                title = titleProp.GetString();
-            else if (root.TryGetProperty("fulltitle", out var fullTitleProp) &&
-                     fullTitleProp.ValueKind == JsonValueKind.String)
-                title = fullTitleProp.GetString();
-
-            if (string.IsNullOrWhiteSpace(title))
-                return null;
-
-            string? channel = null;
-            if (root.TryGetProperty("channel", out var channelProp) && channelProp.ValueKind == JsonValueKind.String)
-                channel = channelProp.GetString();
-            else if (root.TryGetProperty("uploader", out var uploaderProp) &&
-                     uploaderProp.ValueKind == JsonValueKind.String)
-                channel = uploaderProp.GetString();
-            else if (root.TryGetProperty("uploader_id", out var uploaderIdProp) &&
-                     uploaderIdProp.ValueKind == JsonValueKind.String)
-                channel = uploaderIdProp.GetString();
-
-            if (string.IsNullOrWhiteSpace(channel))
-                return null;
-
-            string? description = null;
-            if (root.TryGetProperty("description", out var descProp) && descProp.ValueKind == JsonValueKind.String)
-                description = descProp.GetString();
-
-            long? viewCount = null;
-            if (root.TryGetProperty("view_count", out var viewProp))
-                viewCount = viewProp.ValueKind switch
-                {
-                    JsonValueKind.Number when viewProp.TryGetInt64(out var vc) => vc,
-                    JsonValueKind.String when long.TryParse(viewProp.GetString(), out var parsedVc) => parsedVc,
-                    _ => viewCount
-                };
-
-            DateTimeOffset? publishedAt = null;
-            if (root.TryGetProperty("timestamp", out var tsProp) &&
-                tsProp.ValueKind == JsonValueKind.Number &&
-                tsProp.TryGetInt64(out var ts))
-                publishedAt = DateTimeOffset.FromUnixTimeSeconds(ts);
-            else if (root.TryGetProperty("release_timestamp", out var rtsProp) &&
-                     rtsProp.ValueKind == JsonValueKind.Number &&
-                     rtsProp.TryGetInt64(out var rts))
-                publishedAt = DateTimeOffset.FromUnixTimeSeconds(rts);
-            else if (root.TryGetProperty("upload_date", out var udProp) &&
-                     udProp.ValueKind == JsonValueKind.String &&
-                     udProp.GetString() is { Length: 8 } ud &&
-                     DateTime.TryParseExact(ud, "yyyyMMdd", CultureInfo.InvariantCulture,
-                         DateTimeStyles.AssumeUniversal, out var dt))
-                publishedAt = new DateTimeOffset(dt, TimeSpan.Zero);
-
-            return new YouTubeVideoDetails(
-                description,
-                viewCount,
-                publishedAt,
-                title,
-                channel);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        public readonly SemaphoreSlim Semaphore = new(1, 1);
+        public int RefCount;
     }
 
-
     private sealed record CachedVideoEntry(
-        string RawJsonOutput,
+        ParsedYtDlpMedia? Payload,
         YouTubeVideoDetails? Details,
         DateTimeOffset CachedAt,
         DateTimeOffset? MediaExpiresAt,

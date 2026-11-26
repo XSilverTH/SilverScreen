@@ -82,14 +82,102 @@ public sealed class LibMpvPlayerTests
             TimeSpan.FromSeconds(2)));
 
         var rawOptions = native.StringProperties.First(p => p.Name == "ytdl-raw-options").Value;
-        Assert.Contains("write-subs=", rawOptions);
-        Assert.Contains("sub-langs=all", rawOptions);
-        Assert.Contains("sub-format=vtt", rawOptions);
+        Assert.DoesNotContain("write-subs=", rawOptions);
+        Assert.DoesNotContain("sub-langs=", rawOptions);
+        Assert.DoesNotContain("sub-format=", rawOptions);
         Assert.Contains("cookies=/tmp/cookies.txt", rawOptions);
         Assert.Contains("mark-watched=", rawOptions);
         Assert.DoesNotContain("write-auto-subs", rawOptions);
         Assert.Contains(("cookies", true), native.FlagProperties);
         Assert.Contains(native.StringProperties, p => p.Name == "cookies-file" && p.Value == "/tmp/cookies.txt");
+    }
+
+    [Fact]
+    public void LoadSetsSubtitleYtdlRawOptionsWhenPreferredSubtitleLanguageIsConfigured()
+    {
+        var native = new RecordingNative();
+        using var player = new LibMpvPlayer(native, action => action());
+        var preferences = new AppPreferences
+        {
+            PreferredSubtitleLanguage = "en",
+            MarkWatchedVideos = false
+        };
+
+        player.Load(new PlaybackRequest([Video("abc123_X-yZ")]), preferences, null);
+
+        Assert.True(SpinWait.SpinUntil(
+            () => native.StringProperties.Any(p => p.Name == "ytdl-raw-options"),
+            TimeSpan.FromSeconds(2)));
+
+        var rawOptions = native.StringProperties.First(p => p.Name == "ytdl-raw-options").Value;
+        Assert.Contains("write-subs=", rawOptions);
+        Assert.Contains("sub-langs=en.*", rawOptions);
+        Assert.Contains("sub-format=vtt", rawOptions);
+        Assert.DoesNotContain("write-auto-subs", rawOptions);
+    }
+
+    [Fact]
+    public void TimePosPropertyChangesAreCoalescedWhenDeltaAndIntervalAreSmall()
+    {
+        var native = new RecordingNative { KeepEventLoopAlive = true };
+        var allocations = new List<nint>();
+
+        nint TimePosEvent(double seconds)
+        {
+            var namePointer = Marshal.StringToCoTaskMemUTF8("time-pos");
+            var dataPointer = Marshal.AllocCoTaskMem(sizeof(double));
+            Marshal.StructureToPtr(seconds, dataPointer, false);
+            var property = new LibMpvEventProperty(namePointer, LibMpvFormat.Double, dataPointer);
+            var propertyPointer = Marshal.AllocCoTaskMem(Marshal.SizeOf<LibMpvEventProperty>());
+            Marshal.StructureToPtr(property, propertyPointer, false);
+            allocations.AddRange([propertyPointer, dataPointer, namePointer]);
+            return propertyPointer;
+        }
+
+        try
+        {
+            using var player = new LibMpvPlayer(native, action => action());
+            var states = new ConcurrentQueue<LibMpvPlaybackState>();
+            player.StateChanged += (_, state) => states.Enqueue(state);
+
+            // First update emits immediately; tiny rapid increments within 150ms and <0.20s are coalesced;
+            // a >= 0.20s jump emits immediately.
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, TimePosEvent(1.00)));
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, TimePosEvent(1.03)));
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, TimePosEvent(1.06)));
+            native.EventsToYield.Enqueue(new LibMpvEvent((int)LibMpvEventId.PropertyChange, 0, 0, TimePosEvent(5.00)));
+
+            Assert.True(SpinWait.SpinUntil(() => states.Any(s => s.Position == TimeSpan.FromSeconds(5.00)),
+                TimeSpan.FromSeconds(2)));
+            Assert.Equal(2, states.Count);
+        }
+        finally
+        {
+            foreach (var allocation in allocations)
+                Marshal.FreeCoTaskMem(allocation);
+        }
+    }
+
+    [Fact]
+    public void MpvIpcPlaybackProtocol_ParsesPropertyChangeAndRequestResponseWithOutOfOrderKeys()
+    {
+        var state = PlaybackPresenceState.CreateInitial(DateTimeOffset.UtcNow);
+
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"data":42.5,"name":"time-pos","event":"property-change"}""",
+            ref state,
+            out var prop1));
+        Assert.Equal("time-pos", prop1);
+        Assert.Equal(TimeSpan.FromSeconds(42.5), state.Position);
+
+        Assert.True(MpvIpcPlaybackProtocol.TryApply(
+            """{"error":"success","data":true,"request_id":102}""",
+            ref state,
+            out var prop2));
+        Assert.Equal("pause", prop2);
+        Assert.True(state.IsPaused);
+
+        Assert.False(MpvIpcPlaybackProtocol.TryApply("{ malformed", ref state, out _));
     }
 
     [Fact]
