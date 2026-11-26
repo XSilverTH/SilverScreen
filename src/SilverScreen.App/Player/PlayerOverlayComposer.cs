@@ -180,6 +180,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
         LastState = state;
         var chromeVisible = Chrome.ControlsVisible;
         CenterControls.SetPlaybackState(state is { HasMedia: true, IsPaused: false });
+        CenterControls.SetLoading(state.IsLoading);
         Timeline.UpdatePosition(state, chromeVisible);
         Timeline.UpdateChapters(state.Chapters, state.Duration, chromeVisible);
         ControlsBar.SetVolume(state.Volume);
@@ -202,6 +203,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
     public void SyncSessionFailed(string detail, VideoSummary? failedVideo)
     {
         Loading.Reset();
+        CenterControls.SetLoading(false);
         Error.ShowError(detail, failedVideo);
         ControlsBar.SetMetadata(Error.CurrentErrorInfo?.Title ?? "Playback Error",
             Error.CurrentErrorInfo?.Message ?? detail, null);
@@ -214,6 +216,7 @@ internal sealed class PlayerOverlayComposer : IDisposable
         Stats.Close();
         Error.ClearError();
         Loading.Reset();
+        CenterControls.SetLoading(false);
         InfoPanel.SetVideo(null);
         ControlsBar.SetQueueControls(false, false, false, false);
         CommentsCue.Hide();

@@ -9,6 +9,7 @@ namespace SilverScreen.Player.Controls;
 public partial class PlayerCenterControlsView : ViewBase<Box>
 {
     private bool? _isPlaying;
+    private bool _isLoading;
 
     public event EventHandler? RewindRequested;
     public event EventHandler? PlayPauseRequested;
@@ -24,6 +25,16 @@ public partial class PlayerCenterControlsView : ViewBase<Box>
         player_play_pause_button.SetTooltipText(isPlaying
             ? "Pause (Space / K)"
             : "Play (Space / K)");
+    }
+
+    public void SetLoading(bool isLoading)
+    {
+        if (_isLoading == isLoading) return;
+        _isLoading = isLoading;
+        player_rewind_button.SetVisible(!isLoading);
+        player_play_pause_button.SetVisible(!isLoading);
+        player_forward_button.SetVisible(!isLoading);
+        Widget.SetCanTarget(!isLoading);
     }
 
     private void OnRewindClicked(object? sender, EventArgs args)
