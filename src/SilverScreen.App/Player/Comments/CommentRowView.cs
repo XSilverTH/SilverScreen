@@ -36,13 +36,11 @@ public partial class CommentRowView : ViewBase<Box>
     private readonly IThumbnailService? _thumbnails;
     private readonly Action<string>? _translateRequested;
 
-    private readonly CustomRequestModeFunc _clipRequestModeDelegate;
-    private readonly CustomMeasureFunc _clipMeasureDelegate;
-    private readonly CustomAllocateFunc _clipAllocateDelegate;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
     private Adw.TimedAnimation? _expandAnimation;
     private double _expandProgress;
+    private int _fullTextHeight;
     private bool _isHovered;
     private bool _isLongComment;
     private string? _loadedAvatarUrl;
@@ -96,13 +94,12 @@ public partial class CommentRowView : ViewBase<Box>
         _stickyCollapseChanged = stickyCollapseChanged;
 
         comment_tree_gutter.SetDrawFunc(DrawTreeLines);
-        _clipRequestModeDelegate = GetClipRequestMode;
-        _clipMeasureDelegate = MeasureClip;
-        _clipAllocateDelegate = AllocateClip;
-        comment_text_clip.SetLayoutManager(CustomLayout.New(
-            _clipRequestModeDelegate,
-            _clipMeasureDelegate,
-            _clipAllocateDelegate));
+        DisableInnerScrollCapture(comment_text_clip);
+        var textVadj = comment_text_clip.Vadjustment;
+        if (textVadj is not null)
+            Lifetime.Track(
+                () => textVadj.OnChanged += OnTextClipAdjustmentChanged,
+                () => textVadj.OnChanged -= OnTextClipAdjustmentChanged);
 
         var cardMotion = EventControllerMotion.New();
         cardMotion.SetPropagationPhase(PropagationPhase.Capture);
@@ -456,8 +453,12 @@ public partial class CommentRowView : ViewBase<Box>
         _boundIsTextExpanded = false;
         _isHovered = false;
         _isLongComment = false;
+        _fullTextHeight = 0;
         _expandProgress = 0.0;
         CancelExpandAnimation();
+        comment_text_clip.SetPolicy(PolicyType.Never, PolicyType.Never);
+        comment_text_clip.SetMaxContentHeight(-1);
+        comment_text_clip.SetMinContentHeight(-1);
         comment_text_fade.SetVisible(false);
         comment_text_fade.SetOpacity(1.0);
         comment_expand_revealer.SetRevealChild(false);
@@ -770,34 +771,44 @@ public partial class CommentRowView : ViewBase<Box>
         UpdatePillVisibility();
     }
 
-    private SizeRequestMode GetClipRequestMode(Widget widget)
+    private static void DisableInnerScrollCapture(ScrolledWindow scrolledWindow)
     {
-        return SizeRequestMode.HeightForWidth;
+        var controllers = scrolledWindow.ObserveControllers();
+        var count = controllers.GetNItems();
+        for (uint i = 0; i < count; i++)
+        {
+            if (controllers.GetObject(i) is EventControllerScroll scrollController)
+                scrollController.SetPropagationPhase(PropagationPhase.None);
+        }
     }
 
-    private void MeasureClip(
-        Widget widget,
-        Orientation orientation,
-        int forSize,
-        out int minimum,
-        out int natural,
-        out int minimumBaseline,
-        out int naturalBaseline)
+    private void OnTextClipAdjustmentChanged(object? sender, EventArgs args)
     {
-        minimumBaseline = -1;
-        naturalBaseline = -1;
-
-        if (orientation == Orientation.Horizontal)
-        {
-            comment_text_label.Measure(Orientation.Horizontal, forSize, out minimum, out natural, out _, out _);
+        if (IsDisposed)
             return;
-        }
 
-        comment_text_label.Measure(Orientation.Vertical, forSize, out _, out var labelNatural, out _, out _);
+        var vadj = comment_text_clip.Vadjustment;
+        if (vadj is null)
+            return;
+
+        if (vadj.Value != 0)
+            vadj.SetValue(0);
+
+        var nextFullHeight = (int)Math.Ceiling(vadj.Upper);
+        if (nextFullHeight != _fullTextHeight)
+        {
+            _fullTextHeight = nextFullHeight;
+            ApplyClipHeight();
+        }
+    }
+
+    private void ApplyClipHeight()
+    {
         var lineHeight = GetLineHeight();
         var collapsedHeight = (int)Math.Round(lineHeight * CollapsedVisibleLines);
         var thresholdHeight = (int)Math.Round(lineHeight * LongCommentThresholdLines);
-        var isLong = !_boundIsEditing && labelNatural > thresholdHeight;
+        var isLong = !_boundIsEditing && _fullTextHeight > thresholdHeight;
+
         if (isLong != _isLongComment)
         {
             _isLongComment = isLong;
@@ -806,22 +817,18 @@ public partial class CommentRowView : ViewBase<Box>
 
         if (!isLong)
         {
-            minimum = labelNatural;
-            natural = labelNatural;
+            comment_text_clip.SetPolicy(PolicyType.Never, PolicyType.Never);
+            comment_text_clip.SetMaxContentHeight(-1);
+            comment_text_clip.SetMinContentHeight(-1);
             return;
         }
 
-        var targetHeight = (int)Math.Round(collapsedHeight + (labelNatural - collapsedHeight) * _expandProgress);
-        targetHeight = Math.Clamp(targetHeight, collapsedHeight, labelNatural);
-        minimum = targetHeight;
-        natural = targetHeight;
-    }
-
-    private void AllocateClip(Widget widget, int width, int height, int baseline)
-    {
-        comment_text_label.Measure(Orientation.Vertical, width, out _, out var labelNatural, out _, out _);
-        comment_text_label.Allocate(width, Math.Max(height, labelNatural), -1, null);
-        ScheduleOverlaySync();
+        var targetHeight = (int)Math.Round(collapsedHeight + (_fullTextHeight - collapsedHeight) * _expandProgress);
+        targetHeight = Math.Clamp(targetHeight, collapsedHeight, _fullTextHeight);
+        comment_text_clip.SetPolicy(PolicyType.Never, PolicyType.External);
+        comment_text_clip.SetMaxContentHeight(-1);
+        comment_text_clip.SetMinContentHeight(targetHeight);
+        comment_text_clip.SetMaxContentHeight(targetHeight);
     }
 
     private double GetLineHeight()
@@ -845,7 +852,7 @@ public partial class CommentRowView : ViewBase<Box>
         {
             CancelExpandAnimation();
             _expandProgress = target;
-            comment_text_clip.QueueResize();
+            ApplyClipHeight();
             SyncOverlayState();
             return;
         }
@@ -863,7 +870,7 @@ public partial class CommentRowView : ViewBase<Box>
         if (Math.Abs(_expandProgress - target) < 0.001)
         {
             _expandProgress = target;
-            comment_text_clip.QueueResize();
+            ApplyClipHeight();
             SyncOverlayState();
             return;
         }
@@ -874,7 +881,7 @@ public partial class CommentRowView : ViewBase<Box>
                 return;
 
             _expandProgress = value;
-            comment_text_clip.QueueResize();
+            ApplyClipHeight();
             SyncFadeOpacity();
         });
 
@@ -892,7 +899,7 @@ public partial class CommentRowView : ViewBase<Box>
 
             _expandProgress = target;
             _expandAnimation = null;
-            comment_text_clip.QueueResize();
+            ApplyClipHeight();
             SyncOverlayState();
         };
 

@@ -215,12 +215,13 @@ Gtk.Box CommentRowView {
             Gtk.Overlay comment_body_overlay {
               hexpand: true;
 
-              child: Gtk.Box comment_text_clip {
-                orientation: vertical;
+              child: Gtk.ScrolledWindow comment_text_clip {
                 hexpand: true;
-                overflow: hidden;
+                hscrollbar-policy: never;
+                vscrollbar-policy: never;
+                propagate-natural-height: true;
 
-                Gtk.Label comment_text_label {
+                child: Gtk.Label comment_text_label {
                   xalign: 0;
                   yalign: 0;
                   wrap: true;
@@ -228,7 +229,7 @@ Gtk.Box CommentRowView {
                   selectable: true;
                   use-markup: true;
                   activate-link => $OnCommentTextActivateLink();
-                }
+                };
               };
 
               [overlay]
