@@ -18,6 +18,33 @@ Gtk.Overlay VideoCardThumbnailView {
   };
 
   [overlay]
+  Gtk.Box downloaded_pill {
+    orientation: horizontal;
+    spacing: 4;
+    halign: start;
+    valign: end;
+    margin-start: 10;
+    margin-bottom: 9;
+    visible: false;
+    tooltip-text: "Downloaded — plays offline";
+
+    styles [
+      "caption",
+      "downloaded-pill",
+    ]
+
+    Gtk.Image {
+      icon-name: "folder-download-symbolic";
+      pixel-size: 12;
+      accessible-role: presentation;
+    }
+
+    Gtk.Label {
+      label: "Offline";
+    }
+  }
+
+  [overlay]
   Gtk.Label duration {
     halign: end;
     valign: end;

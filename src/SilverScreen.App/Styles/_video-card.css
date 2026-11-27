@@ -54,7 +54,8 @@ gridview > child:focus .video-card {
     font-weight: 700;
 }
 
-.duration-pill {
+.duration-pill,
+.downloaded-pill {
     background-color: alpha(#000000, 0.78);
     border-radius: 7px;
     color: #ffffff;

@@ -29,6 +29,8 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
     {
         _thumbnails = thumbnails ?? throw new ArgumentNullException(nameof(thumbnails));
         _library = library;
+        if (_library is not null)
+            _library.LibraryChanged += OnLibraryChanged;
     }
 
     public void Bind(VideoSummary video, CancellationToken ct = default)
@@ -39,6 +41,7 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         duration.SetText(VideoCardFormatting.FormatDuration(video.Duration));
         _thumbnailAlternativeText = $"{video.Title} thumbnail";
         SetWatchProgress(video.PlaybackProgress?.WatchedFraction);
+        UpdateDownloadedPill(video.Id);
 
         var sameMedia = string.Equals(_boundVideoId, video.Id, StringComparison.Ordinal) &&
                         string.Equals(_boundThumbnailUrl, video.ThumbnailUrl, StringComparison.Ordinal) &&
@@ -69,6 +72,7 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         _boundThumbnailUrl = null;
         duration.SetText(string.Empty);
         SetWatchProgress(null);
+        downloaded_pill.SetVisible(false);
         _thumbnailAlternativeText = string.Empty;
         CancelThumbnailLoad();
         ClearThumbnail();
@@ -182,10 +186,27 @@ public partial class VideoCardThumbnailView : ViewBase<Overlay>
         texture?.Dispose();
     }
 
+    private void UpdateDownloadedPill(string videoId)
+    {
+        downloaded_pill.SetVisible(_library?.ContainsPlayable(videoId) == true);
+    }
+
+    private void OnLibraryChanged(object? sender, EventArgs e)
+    {
+        GLib.Functions.IdleAdd(0, () =>
+        {
+            if (!IsDisposed && _boundVideoId is not null)
+                UpdateDownloadedPill(_boundVideoId);
+            return false;
+        });
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            if (_library is not null)
+                _library.LibraryChanged -= OnLibraryChanged;
             Unbind();
             _boundPicture?.Dispose();
             _boundPicture = null;
