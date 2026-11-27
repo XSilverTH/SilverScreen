@@ -183,6 +183,10 @@ public partial class App
         IconTheme.GetForDisplay(display).AddResourcePath("/SilverScreen/Assets");
         Window.SetDefaultIconName(ApplicationMetadata.IconName);
 
+        // KDE Plasma sets gtk-primary-button-warps-slider=false in gtk-4.0/settings.ini,
+        // which prevents clicking the timeline trough to seek directly.
+        Gtk.Settings.GetForDisplay(display).GtkPrimaryButtonWarpsSlider = true;
+
         _styles = CssProvider.New();
         _styles.LoadFromResource("/SilverScreen/Styles/main.css");
 
