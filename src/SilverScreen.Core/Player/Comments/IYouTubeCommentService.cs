@@ -44,4 +44,38 @@ public interface IYouTubeCommentService
     {
         return Task.FromResult(false);
     }
+
+    /// <summary>Posts a new top-level comment on a video.</summary>
+    Task<YouTubeCommentPostResult> PostCommentAsync(
+        string videoId,
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new YouTubeCommentPostResult(
+            false,
+            ErrorMessage: "Posting comments is not supported."));
+    }
+
+    /// <summary>Updates the text of an existing comment using its InnerTube update token.</summary>
+    Task<YouTubeCommentPostResult> UpdateCommentAsync(
+        string commentId,
+        string text,
+        string? updateAction,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new YouTubeCommentPostResult(
+            false,
+            ErrorMessage: "Editing comments is not supported."));
+    }
+
+    /// <summary>Deletes a comment using its InnerTube delete action token.</summary>
+    Task<YouTubeCommentActionResult> DeleteCommentAsync(
+        string commentId,
+        string? deleteAction,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new YouTubeCommentActionResult(
+            false,
+            "Deleting comments is not supported."));
+    }
 }

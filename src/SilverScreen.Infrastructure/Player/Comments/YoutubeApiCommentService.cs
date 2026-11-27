@@ -290,6 +290,177 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         }
     }
 
+    public async Task<YouTubeCommentPostResult> PostCommentAsync(
+        string videoId,
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        if (!VideoId.TryParse(videoId, out var parsedVideoId) || string.IsNullOrWhiteSpace(text))
+            return new YouTubeCommentPostResult(false, ErrorMessage: "Could not post comment.");
+
+        var trimmedText = text.Trim();
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var client = _clientProvider.GetClient();
+            var created = await client.Comments
+                .CreateCommentAsync(parsedVideoId, trimmedText, cancellationToken)
+                .ConfigureAwait(false);
+
+            var mapped = MapComment(created, null);
+            lock (_gate)
+            {
+                if (string.Equals(_videoId, parsedVideoId.Value, StringComparison.Ordinal) &&
+                    _loadedCommentIds.Add(mapped.Id))
+                {
+                    _loadedComments.Insert(0, mapped);
+                }
+            }
+
+            return new YouTubeCommentPostResult(true, mapped);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var message = MapMutationError(exception, "post", videoId);
+            return new YouTubeCommentPostResult(false, ErrorMessage: message);
+        }
+        finally
+        {
+            _requestGate.Release();
+        }
+    }
+
+    public async Task<YouTubeCommentPostResult> UpdateCommentAsync(
+        string commentId,
+        string text,
+        string? updateAction,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(commentId) ||
+            string.IsNullOrWhiteSpace(text) ||
+            string.IsNullOrWhiteSpace(updateAction))
+            return new YouTubeCommentPostResult(false, ErrorMessage: "Could not update comment.");
+
+        var trimmedText = text.Trim();
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var client = _clientProvider.GetClient();
+            var updated = await client.Comments
+                .UpdateCommentAsync(updateAction, trimmedText, cancellationToken)
+                .ConfigureAwait(false);
+
+            var mapped = MapComment(updated, null) with { IsEdited = true };
+            lock (_gate)
+            {
+                for (var i = 0; i < _loadedComments.Count; i++)
+                {
+                    if (!string.Equals(_loadedComments[i].Id, commentId, StringComparison.Ordinal))
+                        continue;
+
+                    var existing = _loadedComments[i];
+                    _loadedComments[i] = mapped with
+                    {
+                        Id = existing.Id,
+                        ParentId = existing.ParentId,
+                        ReplyCount = existing.ReplyCount,
+                        HasMoreReplies = existing.HasMoreReplies,
+                        UpdateAction = mapped.UpdateAction ?? existing.UpdateAction,
+                        DeleteAction = mapped.DeleteAction ?? existing.DeleteAction
+                    };
+                    break;
+                }
+            }
+
+            return new YouTubeCommentPostResult(true, mapped);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var message = MapMutationError(exception, "update", commentId);
+            return new YouTubeCommentPostResult(false, ErrorMessage: message);
+        }
+        finally
+        {
+            _requestGate.Release();
+        }
+    }
+
+    public async Task<YouTubeCommentActionResult> DeleteCommentAsync(
+        string commentId,
+        string? deleteAction,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(commentId) || string.IsNullOrWhiteSpace(deleteAction))
+            return new YouTubeCommentActionResult(false, "Could not delete comment.");
+
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var client = _clientProvider.GetClient();
+            await client.Comments
+                .DeleteCommentAsync(deleteAction, cancellationToken)
+                .ConfigureAwait(false);
+
+            lock (_gate)
+            {
+                for (var i = _loadedComments.Count - 1; i >= 0; i--)
+                {
+                    var item = _loadedComments[i];
+                    if (string.Equals(item.Id, commentId, StringComparison.Ordinal) ||
+                        string.Equals(item.ParentId, commentId, StringComparison.Ordinal))
+                    {
+                        _loadedCommentIds.Remove(item.Id);
+                        _loadedComments.RemoveAt(i);
+                    }
+                }
+            }
+
+            return new YouTubeCommentActionResult(true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var message = MapMutationError(exception, "delete", commentId);
+            return new YouTubeCommentActionResult(false, message);
+        }
+        finally
+        {
+            _requestGate.Release();
+        }
+    }
+
+    private static string MapMutationError(Exception exception, string verb, string targetId)
+    {
+        switch (exception)
+        {
+            case AuthenticationRequiredException:
+                return $"Sign in to YouTube to {verb} a comment.";
+            case AuthenticationExpiredException:
+                return $"Your YouTube session expired. Sign in again to {verb} comments.";
+            case CommentsUnavailableException:
+                return "Comments are disabled for this video.";
+            case RateLimitedException:
+                return "You are making requests too quickly. Try again shortly.";
+            case YouTubeException:
+                Logger.Warning(exception, "YoutubeAPI failed to {Verb} comment {TargetId}", verb, targetId);
+                return $"Could not {verb} comment. Try again shortly.";
+            default:
+                Logger.Warning(exception, "Unexpected failure trying to {Verb} comment {TargetId}", verb, targetId);
+                return $"Could not {verb} comment. Try again shortly.";
+        }
+    }
+
     private void Reset(string videoId, YouTubeCommentSort sort)
     {
         lock (_gate)
@@ -306,8 +477,17 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
     private void AddComment(Comment comment, string? parentId, int replyCount = 0, bool hasMoreReplies = false)
     {
         if (!_loadedCommentIds.Add(comment.Id.Value)) return;
+        _loadedComments.Add(MapComment(comment, parentId, replyCount, hasMoreReplies));
+    }
+
+    private static YouTubeComment MapComment(
+        Comment comment,
+        string? parentId,
+        int replyCount = 0,
+        bool hasMoreReplies = false)
+    {
         var authorName = string.IsNullOrWhiteSpace(comment.Author.Name) ? "YouTube user" : comment.Author.Name;
-        _loadedComments.Add(new YouTubeComment(
+        return new YouTubeComment(
             comment.Id.Value,
             authorName,
             comment.Text,
@@ -319,7 +499,10 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             comment.Author.Avatar?.Url.ToString(),
             comment.IsLiked,
             comment.LikeAction,
-            comment.UnlikeAction));
+            comment.UnlikeAction,
+            comment.UpdateAction,
+            comment.DeleteAction,
+            comment.IsEdited);
     }
 
     private void UpdateParentReplyMetadata(string parentId, bool hasMoreReplies)

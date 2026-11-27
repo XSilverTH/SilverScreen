@@ -414,6 +414,216 @@ public sealed class CommentsViewModelTests
         Assert.Equal(5, row.Comment.LikeCount);
     }
 
+    [Fact]
+    public async Task PostCommentAsync_PostsCommentAndTransitionsEmptyToList()
+    {
+        var tcs = new TaskCompletionSource<YouTubeCommentPostResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new ControlledCommentService
+        {
+            PostCommentHandler = (videoId, text) => tcs.Task
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        var firstRequest = Assert.Single(service.Requests);
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult([], true, "No comments were returned for this video."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.Empty);
+
+        var postTask = viewModel.PostCommentAsync("  Hello world!  ", "Alice", "https://example.com/a.png");
+        await WaitForStateAsync(viewModel, state => state.IsPostingComment);
+
+        tcs.SetResult(new YouTubeCommentPostResult(
+            true,
+            new YouTubeComment("posted-1", "YouTube user", "Hello world!", "0 seconds ago", 0)));
+
+        var succeeded = await postTask;
+        Assert.True(succeeded);
+        Assert.False(viewModel.State.IsPostingComment);
+        Assert.Null(viewModel.State.PostCommentError);
+        Assert.Equal(CommentsViewStatus.List, viewModel.State.Status);
+        var row = Assert.Single(viewModel.State.VisibleComments);
+        Assert.Equal("posted-1", row.Comment.Id);
+        Assert.Equal("Alice", row.Comment.AuthorName);
+        Assert.Equal("https://example.com/a.png", row.Comment.AuthorAvatarUrl);
+        Assert.Equal("Hello world!", row.Comment.Text);
+        Assert.Equal(("aaaaaaaaaaa", "Hello world!"), Assert.Single(service.PostCalls));
+    }
+
+    [Fact]
+    public async Task PostCommentAsync_SetsErrorAndKeepsListUnchangedWhenServiceFails()
+    {
+        var service = new ControlledCommentService
+        {
+            PostCommentHandler = (_, _) => Task.FromResult(
+                new YouTubeCommentPostResult(false, ErrorMessage: "Sign in to YouTube to post a comment."))
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        var firstRequest = Assert.Single(service.Requests);
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        var succeeded = await viewModel.PostCommentAsync("Test comment");
+
+        Assert.False(succeeded);
+        Assert.False(viewModel.State.IsPostingComment);
+        Assert.Equal("Sign in to YouTube to post a comment.", viewModel.State.PostCommentError);
+        Assert.Equal(["c1"], viewModel.State.VisibleComments.Select(r => r.Comment.Id));
+
+        viewModel.ClearPostError();
+        Assert.Null(viewModel.State.PostCommentError);
+    }
+
+    [Fact]
+    public async Task PostCommentAsync_IgnoresStaleResultAfterVideoChange()
+    {
+        var tcs = new TaskCompletionSource<YouTubeCommentPostResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new ControlledCommentService
+        {
+            PostCommentHandler = (_, _) => tcs.Task
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        var postTask = viewModel.PostCommentAsync("Old video comment");
+        await WaitForStateAsync(viewModel, state => state.IsPostingComment);
+
+        viewModel.SetVideo("bbbbbbbbbbb");
+        viewModel.EnsureLoaded();
+        service.Requests[1].Completion.SetResult(new YouTubeCommentsResult([Comment("c2")], true, "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        tcs.SetResult(new YouTubeCommentPostResult(true, Comment("stale-posted")));
+        var succeeded = await postTask;
+
+        Assert.False(succeeded);
+        Assert.Equal(["c2"], viewModel.State.VisibleComments.Select(r => r.Comment.Id));
+    }
+
+    [Fact]
+    public async Task SaveEditAsync_UpdatesCommentTextAndExitsEditMode()
+    {
+        var service = new ControlledCommentService
+        {
+            UpdateCommentHandler = (id, text, token) => Task.FromResult(new YouTubeCommentPostResult(
+                true,
+                new YouTubeComment(id, "Alice", text, "1m ago", 2, UpdateAction: token, DeleteAction: "del-tok", IsEdited: true)))
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Alice", "Original", "1m ago", 2, UpdateAction: "upd-tok", DeleteAction: "del-tok")],
+            true,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        var initialRow = Assert.Single(viewModel.State.VisibleComments);
+        Assert.True(initialRow.CanEdit);
+        Assert.True(initialRow.CanDelete);
+        Assert.False(initialRow.IsEditing);
+
+        viewModel.BeginEdit("c1");
+        Assert.True(Assert.Single(viewModel.State.VisibleComments).IsEditing);
+
+        var saved = await viewModel.SaveEditAsync("c1", "  Edited text  ");
+        Assert.True(saved);
+
+        var updatedRow = Assert.Single(viewModel.State.VisibleComments);
+        Assert.False(updatedRow.IsEditing);
+        Assert.False(updatedRow.IsSavingEdit);
+        Assert.Null(updatedRow.EditError);
+        Assert.Equal("Edited text", updatedRow.Comment.Text);
+        Assert.True(updatedRow.Comment.IsEdited);
+        Assert.Equal(("c1", "Edited text", "upd-tok"), Assert.Single(service.UpdateCalls));
+    }
+
+    [Fact]
+    public async Task SaveEditAsync_SetsErrorAndRemainsInEditModeWhenServiceFails()
+    {
+        var service = new ControlledCommentService
+        {
+            UpdateCommentHandler = (_, _, _) => Task.FromResult(
+                new YouTubeCommentPostResult(false, ErrorMessage: "Could not update comment."))
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Alice", "Original", "1m ago", 0, UpdateAction: "upd-tok")],
+            true,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        viewModel.BeginEdit("c1");
+        var saved = await viewModel.SaveEditAsync("c1", "Updated");
+
+        Assert.False(saved);
+        var row = Assert.Single(viewModel.State.VisibleComments);
+        Assert.True(row.IsEditing);
+        Assert.Equal("Could not update comment.", row.EditError);
+        Assert.Equal("Original", row.Comment.Text);
+
+        viewModel.CancelEdit("c1");
+        row = Assert.Single(viewModel.State.VisibleComments);
+        Assert.False(row.IsEditing);
+        Assert.Null(row.EditError);
+    }
+
+    [Fact]
+    public async Task DeleteCommentAsync_RemovesCommentAndTransitionsToEmptyWhenLastTopLevel()
+    {
+        var service = new ControlledCommentService
+        {
+            DeleteCommentHandler = (_, _) => Task.FromResult(new YouTubeCommentActionResult(true))
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Alice", "Mine", "1m ago", 0, DeleteAction: "del-tok")],
+            true,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        var deleted = await viewModel.DeleteCommentAsync("c1");
+
+        Assert.True(deleted);
+        Assert.Equal(CommentsViewStatus.Empty, viewModel.State.Status);
+        Assert.Empty(viewModel.State.VisibleComments);
+        Assert.Equal(("c1", "del-tok"), Assert.Single(service.DeleteCalls));
+    }
+
+    [Fact]
+    public async Task DeleteCommentAsync_SetsErrorAndKeepsCommentWhenServiceFails()
+    {
+        var service = new ControlledCommentService
+        {
+            DeleteCommentHandler = (_, _) => Task.FromResult(
+                new YouTubeCommentActionResult(false, "Could not delete comment."))
+        };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        service.Requests[0].Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Alice", "Mine", "1m ago", 0, DeleteAction: "del-tok")],
+            true,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        var deleted = await viewModel.DeleteCommentAsync("c1");
+
+        Assert.False(deleted);
+        Assert.Equal(CommentsViewStatus.List, viewModel.State.Status);
+        var row = Assert.Single(viewModel.State.VisibleComments);
+        Assert.False(row.IsDeleting);
+        Assert.Equal("Could not delete comment.", row.DeleteError);
+    }
+
     private sealed class ControlledCommentService : IYouTubeCommentService
     {
         public bool SetCommentLikeResult { get; set; } = true;
@@ -428,6 +638,47 @@ public sealed class CommentsViewModelTests
             LikeCalls.Add((commentId, like, actionToken));
             return Task.FromResult(SetCommentLikeResult);
         }
+        public List<(string VideoId, string Text)> PostCalls { get; } = [];
+        public List<(string CommentId, string Text, string? UpdateAction)> UpdateCalls { get; } = [];
+        public List<(string CommentId, string? DeleteAction)> DeleteCalls { get; } = [];
+        public Func<string, string, Task<YouTubeCommentPostResult>>? PostCommentHandler { get; init; }
+        public Func<string, string, string?, Task<YouTubeCommentPostResult>>? UpdateCommentHandler { get; init; }
+        public Func<string, string?, Task<YouTubeCommentActionResult>>? DeleteCommentHandler { get; init; }
+
+        public Task<YouTubeCommentPostResult> PostCommentAsync(
+            string videoId,
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            PostCalls.Add((videoId, text));
+            return PostCommentHandler is not null
+                ? PostCommentHandler(videoId, text)
+                : Task.FromResult(new YouTubeCommentPostResult(false, ErrorMessage: "Not configured"));
+        }
+
+        public Task<YouTubeCommentPostResult> UpdateCommentAsync(
+            string commentId,
+            string text,
+            string? updateAction,
+            CancellationToken cancellationToken = default)
+        {
+            UpdateCalls.Add((commentId, text, updateAction));
+            return UpdateCommentHandler is not null
+                ? UpdateCommentHandler(commentId, text, updateAction)
+                : Task.FromResult(new YouTubeCommentPostResult(false, ErrorMessage: "Not configured"));
+        }
+
+        public Task<YouTubeCommentActionResult> DeleteCommentAsync(
+            string commentId,
+            string? deleteAction,
+            CancellationToken cancellationToken = default)
+        {
+            DeleteCalls.Add((commentId, deleteAction));
+            return DeleteCommentHandler is not null
+                ? DeleteCommentHandler(commentId, deleteAction)
+                : Task.FromResult(new YouTubeCommentActionResult(false, "Not configured"));
+        }
+
         public List<Pending> Requests { get; } = [];
         public List<PendingReplies> ReplyRequests { get; } = [];
         public int TranslateCallCount { get; private set; }

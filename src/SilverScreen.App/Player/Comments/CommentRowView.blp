@@ -132,6 +132,80 @@ Gtk.Box CommentRowView {
                     }
                   }
                 }
+
+                Gtk.MenuButton comment_more_button {
+                  valign: center;
+                  visible: false;
+                  icon-name: "view-more-symbolic";
+                  tooltip-text: "Comment actions";
+
+                  styles [
+                    "flat",
+                    "square",
+                  ]
+
+                  popover: Gtk.Popover comment_more_popover {
+                    Gtk.Box {
+                      orientation: vertical;
+                      spacing: 4;
+                      margin-top: 4;
+                      margin-bottom: 4;
+                      margin-start: 4;
+                      margin-end: 4;
+
+                      Gtk.Button comment_edit_button {
+                        visible: false;
+                        clicked => $OnEditButtonClicked();
+
+                        styles [
+                          "flat",
+                        ]
+
+                        Gtk.Box {
+                          orientation: horizontal;
+                          spacing: 8;
+
+                          Gtk.Image {
+                            icon-name: "document-edit-symbolic";
+                            pixel-size: 16;
+                            accessible-role: presentation;
+                          }
+
+                          Gtk.Label {
+                            label: "Edit";
+                            xalign: 0;
+                          }
+                        }
+                      }
+
+                      Gtk.Button comment_delete_button {
+                        visible: false;
+                        clicked => $OnDeleteButtonClicked();
+
+                        styles [
+                          "flat",
+                          "error",
+                        ]
+
+                        Gtk.Box {
+                          orientation: horizontal;
+                          spacing: 8;
+
+                          Gtk.Image {
+                            icon-name: "user-trash-symbolic";
+                            pixel-size: 16;
+                            accessible-role: presentation;
+                          }
+
+                          Gtk.Label {
+                            label: "Delete";
+                            xalign: 0;
+                          }
+                        }
+                      }
+                    }
+                  };
+                }
               }
             }
 
@@ -142,6 +216,115 @@ Gtk.Box CommentRowView {
               selectable: true;
               use-markup: true;
               activate-link => $OnCommentTextActivateLink();
+            }
+
+            Gtk.Box comment_edit_box {
+              orientation: vertical;
+              spacing: 8;
+              visible: false;
+
+              Gtk.ScrolledWindow {
+                hexpand: true;
+                hscrollbar-policy: never;
+                vscrollbar-policy: automatic;
+                propagate-natural-height: true;
+                min-content-height: 54;
+                max-content-height: 140;
+
+                child: Gtk.TextView comment_edit_text {
+                  wrap-mode: word;
+                  accepts-tab: false;
+                  hexpand: true;
+
+                  styles [
+                    "comment-composer-text",
+                  ]
+                };
+              }
+
+              Gtk.Label comment_edit_error_label {
+                visible: false;
+                wrap: true;
+                xalign: 0;
+
+                styles [
+                  "caption",
+                  "error",
+                ]
+              }
+
+              Gtk.Box {
+                orientation: horizontal;
+                spacing: 8;
+                halign: end;
+
+                Gtk.Button comment_edit_cancel_button {
+                  label: "Cancel";
+                  clicked => $OnEditCancelClicked();
+
+                  styles [
+                    "comment-composer-button",
+                  ]
+                }
+
+                Gtk.Button comment_edit_save_button {
+                  label: "Save";
+                  clicked => $OnEditSaveClicked();
+
+                  styles [
+                    "suggested-action",
+                    "comment-composer-button",
+                  ]
+                }
+              }
+            }
+
+            Gtk.Box comment_delete_confirm_box {
+              orientation: horizontal;
+              spacing: 8;
+              visible: false;
+              margin-top: 4;
+
+              Gtk.Label {
+                label: "Delete this comment?";
+                xalign: 0;
+                hexpand: true;
+
+                styles [
+                  "caption",
+                  "dim-label",
+                ]
+              }
+
+              Gtk.Button comment_delete_cancel_button {
+                label: "Cancel";
+                clicked => $OnDeleteCancelClicked();
+
+                styles [
+                  "comment-composer-button",
+                ]
+              }
+
+              Gtk.Button comment_delete_confirm_button {
+                label: "Delete";
+                clicked => $OnDeleteConfirmClicked();
+
+                styles [
+                  "destructive-action",
+                  "comment-composer-button",
+                ]
+              }
+            }
+
+            Gtk.Label comment_action_error_label {
+              visible: false;
+              wrap: true;
+              xalign: 0;
+
+              styles [
+                "caption",
+                "error",
+              ]
             }
 
             Gtk.Box comment_inline_actions_box {

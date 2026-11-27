@@ -20,10 +20,14 @@ public partial class CommentRowView : ViewBase<Box>
     private static readonly ILogger Logger = Log.ForContext<CommentRowView>();
 
     private readonly NativeMemoryPressure _avatarPressure = new();
+    private readonly Action<string>? _beginEditRequested;
+    private readonly Action<string>? _cancelEditRequested;
+    private readonly Action<string>? _deleteRequested;
     private readonly Func<string, bool> _linkActivated;
     private readonly Action<string>? _likeRequested;
     private readonly Action<string>? _loadMoreRepliesRequested;
     private readonly Action<string> _repliesToggleRequested;
+    private readonly Action<string, string>? _saveEditRequested;
     private readonly IThumbnailService? _thumbnails;
     private readonly Action<string>? _translateRequested;
 
@@ -35,6 +39,7 @@ public partial class CommentRowView : ViewBase<Box>
     private bool? _boundCanTranslate;
     private int _boundDepth;
     private bool? _boundHasMoreReplies;
+    private bool _boundIsEditing;
     private bool _boundIsFirstSibling = true;
     private bool _boundIsLastInThread = true;
     private bool _boundIsLastSibling = true;
@@ -54,7 +59,11 @@ public partial class CommentRowView : ViewBase<Box>
         Action<string>? translateRequested = null,
         Action<string>? loadMoreRepliesRequested = null,
         IThumbnailService? thumbnails = null,
-        Action<string>? likeRequested = null)
+        Action<string>? likeRequested = null,
+        Action<string>? beginEditRequested = null,
+        Action<string>? cancelEditRequested = null,
+        Action<string, string>? saveEditRequested = null,
+        Action<string>? deleteRequested = null)
     {
         _repliesToggleRequested =
             repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
@@ -63,8 +72,17 @@ public partial class CommentRowView : ViewBase<Box>
         _loadMoreRepliesRequested = loadMoreRepliesRequested;
         _thumbnails = thumbnails;
         _likeRequested = likeRequested;
+        _beginEditRequested = beginEditRequested;
+        _cancelEditRequested = cancelEditRequested;
+        _saveEditRequested = saveEditRequested;
+        _deleteRequested = deleteRequested;
 
         comment_tree_gutter.SetDrawFunc(DrawTreeLines);
+        var editBuffer = comment_edit_text.Buffer;
+        if (editBuffer is not null)
+            Lifetime.Track(
+                () => editBuffer.OnChanged += OnEditBufferChanged,
+                () => editBuffer.OnChanged -= OnEditBufferChanged);
         Lifetime.Track(() => { }, CancelAvatarLoad);
     }
 
@@ -201,7 +219,14 @@ public partial class CommentRowView : ViewBase<Box>
         IReadOnlyList<bool>? ancestorHasMoreSiblings = null,
         bool hasMoreReplies = false,
         bool isLoadingReplies = false,
-        string? loadMoreRepliesParentId = null)
+        string? loadMoreRepliesParentId = null,
+        bool canEdit = false,
+        bool canDelete = false,
+        bool isEditing = false,
+        bool isSavingEdit = false,
+        string? editError = null,
+        bool isDeleting = false,
+        string? deleteError = null)
     {
         var displayText = isTranslated && !string.IsNullOrEmpty(translatedText)
             ? translatedText
@@ -224,6 +249,16 @@ public partial class CommentRowView : ViewBase<Box>
         }
 
         UpdateLikeButton(comment);
+        UpdateManagementControls(
+            comment,
+            sameId,
+            canEdit,
+            canDelete,
+            isEditing,
+            isSavingEdit,
+            editError,
+            isDeleting,
+            deleteError);
 
         var previousIsLastInThread = _boundIsLastInThread;
         _boundDepth = Math.Max(0, depth);
@@ -368,6 +403,7 @@ public partial class CommentRowView : ViewBase<Box>
         _boundIsTranslating = null;
         _boundTranslationError = null;
         _boundDepth = 0;
+        _boundIsEditing = false;
         _boundIsFirstSibling = true;
         _boundIsLastSibling = true;
         _boundIsLastInThread = true;
@@ -400,6 +436,152 @@ public partial class CommentRowView : ViewBase<Box>
         comment_nested_replies_label.SetText(string.Empty);
         comment_load_more_replies_button.SetVisible(false);
         comment_inline_actions_box.SetVisible(false);
+        comment_more_button.SetVisible(false);
+        comment_more_button.SetSensitive(true);
+        comment_edit_button.SetVisible(false);
+        comment_delete_button.SetVisible(false);
+        comment_edit_box.SetVisible(false);
+        comment_text_label.SetVisible(true);
+        comment_edit_text.SetSensitive(true);
+        comment_edit_text.Buffer?.SetText(string.Empty, 0);
+        comment_edit_error_label.SetVisible(false);
+        comment_edit_error_label.SetText(string.Empty);
+        comment_edit_save_button.SetLabel("Save");
+        comment_edit_save_button.SetSensitive(false);
+        comment_edit_cancel_button.SetSensitive(true);
+        comment_delete_confirm_box.SetVisible(false);
+        comment_delete_confirm_button.SetLabel("Delete");
+        comment_delete_confirm_button.SetSensitive(true);
+        comment_delete_cancel_button.SetSensitive(true);
+        comment_action_error_label.SetVisible(false);
+        comment_action_error_label.SetText(string.Empty);
+    }
+
+    private void UpdateManagementControls(
+        YouTubeComment comment,
+        bool sameId,
+        bool canEdit,
+        bool canDelete,
+        bool isEditing,
+        bool isSavingEdit,
+        string? editError,
+        bool isDeleting,
+        string? deleteError)
+    {
+        var allowEdit = canEdit && _beginEditRequested is not null;
+        var allowDelete = canDelete && _deleteRequested is not null;
+        comment_edit_button.SetVisible(allowEdit);
+        comment_delete_button.SetVisible(allowDelete);
+        comment_more_button.SetVisible(allowEdit || allowDelete);
+        comment_more_button.SetSensitive(!isEditing && !isDeleting);
+
+        if (!sameId)
+            comment_delete_confirm_box.SetVisible(false);
+
+        if (isDeleting)
+            comment_delete_confirm_box.SetVisible(true);
+
+        comment_delete_confirm_button.SetLabel(isDeleting ? "Deleting…" : "Delete");
+        comment_delete_confirm_button.SetSensitive(!isDeleting);
+        comment_delete_cancel_button.SetSensitive(!isDeleting);
+
+        var hasDeleteError = !string.IsNullOrWhiteSpace(deleteError);
+        comment_action_error_label.SetVisible(hasDeleteError);
+        comment_action_error_label.SetText(deleteError ?? string.Empty);
+
+        var wasEditing = _boundIsEditing;
+        _boundIsEditing = isEditing;
+
+        comment_text_label.SetVisible(!isEditing);
+        comment_edit_box.SetVisible(isEditing);
+
+        if (isEditing)
+        {
+            if (!sameId || !wasEditing)
+            {
+                comment_edit_text.Buffer?.SetText(comment.Text, -1);
+                comment_edit_text.GrabFocus();
+            }
+
+            comment_edit_text.SetSensitive(!isSavingEdit);
+            comment_edit_cancel_button.SetSensitive(!isSavingEdit);
+            comment_edit_save_button.SetLabel(isSavingEdit ? "Saving…" : "Save");
+            UpdateEditSaveSensitivity(isSavingEdit);
+
+            var hasEditError = !string.IsNullOrWhiteSpace(editError);
+            comment_edit_error_label.SetVisible(hasEditError);
+            comment_edit_error_label.SetText(editError ?? string.Empty);
+        }
+        else
+        {
+            comment_edit_error_label.SetVisible(false);
+            comment_edit_error_label.SetText(string.Empty);
+        }
+    }
+
+    private void OnEditBufferChanged(object? sender, EventArgs args)
+    {
+        UpdateEditSaveSensitivity(!comment_edit_text.Sensitive);
+    }
+
+    private void UpdateEditSaveSensitivity(bool isSaving)
+    {
+        var buffer = comment_edit_text.Buffer;
+        if (buffer is null)
+        {
+            comment_edit_save_button.SetSensitive(false);
+            return;
+        }
+
+        buffer.GetBounds(out var start, out var end);
+        var text = buffer.GetText(start, end, false);
+        comment_edit_save_button.SetSensitive(!isSaving && !string.IsNullOrWhiteSpace(text));
+    }
+
+    private void OnEditButtonClicked(object? sender, EventArgs args)
+    {
+        comment_more_popover.Popdown();
+        if (!string.IsNullOrEmpty(BoundCommentId))
+            _beginEditRequested?.Invoke(BoundCommentId);
+    }
+
+    private void OnEditCancelClicked(object? sender, EventArgs args)
+    {
+        if (!string.IsNullOrEmpty(BoundCommentId))
+            _cancelEditRequested?.Invoke(BoundCommentId);
+    }
+
+    private void OnEditSaveClicked(object? sender, EventArgs args)
+    {
+        if (string.IsNullOrEmpty(BoundCommentId))
+            return;
+
+        var buffer = comment_edit_text.Buffer;
+        if (buffer is null)
+            return;
+
+        buffer.GetBounds(out var start, out var end);
+        var text = buffer.GetText(start, end, false);
+        if (!string.IsNullOrWhiteSpace(text))
+            _saveEditRequested?.Invoke(BoundCommentId, text);
+    }
+
+    private void OnDeleteButtonClicked(object? sender, EventArgs args)
+    {
+        comment_more_popover.Popdown();
+        comment_action_error_label.SetVisible(false);
+        comment_delete_confirm_box.SetVisible(true);
+    }
+
+    private void OnDeleteCancelClicked(object? sender, EventArgs args)
+    {
+        comment_delete_confirm_box.SetVisible(false);
+    }
+
+    private void OnDeleteConfirmClicked(object? sender, EventArgs args)
+    {
+        if (!string.IsNullOrEmpty(BoundCommentId))
+            _deleteRequested?.Invoke(BoundCommentId);
     }
 
     private void UpdateLikeButton(YouTubeComment comment)

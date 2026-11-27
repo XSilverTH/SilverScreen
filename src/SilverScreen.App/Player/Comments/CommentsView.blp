@@ -148,6 +148,17 @@ Gtk.Box CommentsView {
           }
         }
 
+        Gtk.Label comments_composer_error_label {
+          visible: false;
+          wrap: true;
+          xalign: 0;
+
+          styles [
+            "caption",
+            "error",
+          ]
+        }
+
         Gtk.Box {
           orientation: horizontal;
           spacing: 8;

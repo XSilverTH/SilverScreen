@@ -12,4 +12,7 @@ public sealed record YouTubeComment(
     string? AuthorAvatarUrl = null,
     bool IsLiked = false,
     string? LikeAction = null,
-    string? UnlikeAction = null);
+    string? UnlikeAction = null,
+    string? UpdateAction = null,
+    string? DeleteAction = null,
+    bool IsEdited = false);

@@ -82,6 +82,7 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
                 () => _account.PropertyChanged += OnAccountPropertyChanged,
                 () => _account.PropertyChanged -= OnAccountPropertyChanged);
             UpdateComposerAvatar();
+            UpdateComposerAvailability();
         }
 
         Lifetime.Own(viewModel);
@@ -133,14 +134,27 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 
     private void OnComposeButtonClicked(object? sender, EventArgs args)
     {
+        if (_account is not null && !_account.HasManualSession)
+            return;
+
         var reveal = !comments_composer_revealer.RevealChild;
         comments_composer_revealer.RevealChild = reveal;
         if (reveal)
             comments_composer_text.GrabFocus();
+        else
+            ViewModel?.ClearPostError();
     }
 
     private void OnComposerSubmitClicked(object? sender, EventArgs args)
     {
+        SubmitCommentAsync().FireAndForget(Logger);
+    }
+
+    private async Task SubmitCommentAsync()
+    {
+        if (IsDisposed || ViewModel is null)
+            return;
+
         var buffer = comments_composer_text.Buffer;
         if (buffer is null)
             return;
@@ -150,14 +164,42 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        ViewModel?.AddComment(text, _account?.DisplayName, _account?.AvatarUrl);
-        buffer.SetText(string.Empty, 0);
-        comments_composer_revealer.RevealChild = false;
+        var posted = await ViewModel
+            .PostCommentAsync(text, _account?.DisplayName, _account?.AvatarUrl)
+            .ConfigureAwait(false);
+        if (!posted || IsDisposed)
+            return;
+
+        Lifetime.Idle(() =>
+        {
+            if (IsDisposed)
+                return false;
+
+            var currentBuffer = comments_composer_text.Buffer;
+            currentBuffer?.SetText(string.Empty, 0);
+            comments_composer_revealer.RevealChild = false;
+            return false;
+        });
     }
 
     private void OnAccountPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
         UpdateComposerAvatar();
+        UpdateComposerAvailability();
+    }
+
+    private void UpdateComposerAvailability()
+    {
+        if (IsDisposed || _account is null)
+            return;
+
+        var canCompose = _account.HasManualSession;
+        comments_compose_button.Sensitive = canCompose;
+        comments_compose_button.TooltipText = canCompose
+            ? "Add a comment"
+            : "Sign in to YouTube to add a comment";
+        if (!canCompose)
+            comments_composer_revealer.RevealChild = false;
     }
 
     private void UpdateComposerAvatar()
@@ -241,6 +283,14 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 
     private void OnComposerBufferChanged(object? sender, EventArgs args)
     {
+        if (!string.IsNullOrEmpty(_state.PostCommentError))
+            ViewModel?.ClearPostError();
+
+        UpdateComposerInputState();
+    }
+
+    private void UpdateComposerInputState()
+    {
         var buffer = comments_composer_text.Buffer;
         if (buffer is null)
             return;
@@ -248,7 +298,7 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         buffer.GetBounds(out var start, out var end);
         var text = buffer.GetText(start, end, false);
         comments_composer_placeholder.Visible = string.IsNullOrEmpty(text);
-        comments_composer_submit_button.Sensitive = !string.IsNullOrWhiteSpace(text);
+        comments_composer_submit_button.Sensitive = !_state.IsPostingComment && !string.IsNullOrWhiteSpace(text);
     }
 
     private void Render(CommentsViewState state)
@@ -258,6 +308,14 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             _markupCache.Clear();
 
         ApplyComments(state.VisibleComments);
+
+        comments_composer_text.Sensitive = !state.IsPostingComment;
+        comments_composer_submit_button.Label = state.IsPostingComment ? "Posting…" : "Comment";
+        UpdateComposerInputState();
+
+        var hasPostError = !string.IsNullOrWhiteSpace(state.PostCommentError);
+        comments_composer_error_label.Visible = hasPostError;
+        comments_composer_error_label.SetText(state.PostCommentError ?? string.Empty);
 
         comments_pagination_loading_revealer.RevealChild = state.IsLoadingMore;
         comments_pagination_loading_label.SetText(state.PaginationLoadingMessage);
@@ -350,7 +408,14 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             rowState.AncestorHasMoreSiblings,
             rowState.HasMoreReplies,
             rowState.IsLoadingReplies,
-            rowState.LoadMoreRepliesParentId);
+            rowState.LoadMoreRepliesParentId,
+            rowState.CanEdit,
+            rowState.CanDelete,
+            rowState.IsEditing,
+            rowState.IsSavingEdit,
+            rowState.EditError,
+            rowState.IsDeleting,
+            rowState.DeleteError);
     }
 
     private string GetOrBuildMarkup(string commentId, string text)
@@ -376,7 +441,11 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             id => ViewModel?.ToggleTranslationAsync(id).FireAndForget(Logger),
             parentId => ViewModel?.LoadMoreRepliesAsync(parentId).FireAndForget(Logger),
             _thumbnails,
-            id => ViewModel?.ToggleLikeAsync(id).FireAndForget(Logger));
+            id => ViewModel?.ToggleLikeAsync(id).FireAndForget(Logger),
+            id => ViewModel?.BeginEdit(id),
+            id => ViewModel?.CancelEdit(id),
+            (id, text) => ViewModel?.SaveEditAsync(id, text).FireAndForget(Logger),
+            id => ViewModel?.DeleteCommentAsync(id).FireAndForget(Logger));
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
