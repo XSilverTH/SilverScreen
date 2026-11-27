@@ -31,6 +31,17 @@ Gtk.Box ChannelControlsBarView {
     hexpand: true;
   }
 
+  Gtk.Button channel_subscribe_button {
+    label: "Subscribe";
+    tooltip-text: "Subscribe to channel";
+    clicked => $OnSubscribeClicked();
+    visible: false;
+
+    styles [
+      "suggested-action",
+    ]
+  }
+
   Gtk.MenuButton channel_about_button {
     label: "About";
     icon-name: "dialog-information-symbolic";

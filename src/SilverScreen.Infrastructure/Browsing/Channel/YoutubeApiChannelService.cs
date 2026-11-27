@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Serilog;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Infrastructure.Common;
 using SilverScreen.Infrastructure.YouTube;
@@ -20,16 +21,23 @@ namespace SilverScreen.Infrastructure.Browsing.Channel;
 /// </summary>
 public sealed class YoutubeApiChannelService(
     IYouTubeClientProvider clientProvider,
+    ISessionService? sessionService = null,
     TimeProvider? timeProvider = null) : IChannelService
 {
     private const int MaxCachedChannels = 32;
     private const int MaxCachedFirstPages = 20;
+    private const int MaxSubscribedChannelPages = 20;
     private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan FirstPageCacheTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan SubscribedChannelsCacheTtl = TimeSpan.FromMinutes(2);
     private static readonly ILogger Logger = Log.ForContext<YoutubeApiChannelService>();
 
     private readonly IYouTubeClientProvider _clientProvider =
         clientProvider ?? throw new ArgumentNullException(nameof(clientProvider));
+
+    private readonly ISessionService? _sessionService = sessionService;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly SemaphoreSlim _subscribedChannelsGate = new(1, 1);
 
     private readonly BoundedLruCache<(string ChannelKey, ChannelVideoSort Sort), CachedFirstPage> _firstPageCache =
         new(MaxCachedFirstPages, timeProvider: timeProvider);
@@ -39,6 +47,8 @@ public sealed class YoutubeApiChannelService(
 
     private readonly BoundedLruCache<string, CachedChannelMetadata> _metadataCache =
         new(MaxCachedChannels, StringComparer.Ordinal, timeProvider);
+
+    private CachedSubscribedChannels? _subscribedChannelsCache;
 
     public async Task<ChannelPage> GetChannelAsync(
         string channelUrl,
@@ -132,6 +142,68 @@ public sealed class YoutubeApiChannelService(
         }
     }
 
+    public Task<ChannelSubscriptionResult> SubscribeAsync(
+        string channelIdOrUrl,
+        CancellationToken cancellationToken = default)
+    {
+        return SetSubscriptionAsync(channelIdOrUrl, true, cancellationToken);
+    }
+
+    public Task<ChannelSubscriptionResult> UnsubscribeAsync(
+        string channelIdOrUrl,
+        CancellationToken cancellationToken = default)
+    {
+        return SetSubscriptionAsync(channelIdOrUrl, false, cancellationToken);
+    }
+
+    private async Task<ChannelSubscriptionResult> SetSubscriptionAsync(
+        string channelIdOrUrl,
+        bool subscribe,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(channelIdOrUrl))
+            return new ChannelSubscriptionResult(false, !subscribe, "Invalid channel.");
+
+        if (_sessionService is not null && !SessionGate.RequireSignedIn(_sessionService))
+            return new ChannelSubscriptionResult(false, !subscribe, "Sign in to subscribe to channels.");
+
+        try
+        {
+            var client = _clientProvider.GetAuthenticatedClient();
+            var resolvedChannelId = ChannelId.TryParse(channelIdOrUrl, out var parsedId)
+                ? parsedId
+                : (await client.Channels.GetAsync(ChannelReference.Parse(channelIdOrUrl), cancellationToken)
+                    .ConfigureAwait(false)).Summary.Id;
+
+            if (subscribe)
+                await client.Account.SubscribeAsync(resolvedChannelId, cancellationToken).ConfigureAwait(false);
+            else
+                await client.Account.UnsubscribeAsync(resolvedChannelId, cancellationToken).ConfigureAwait(false);
+
+            UpdateSubscribedChannelsCache(client, resolvedChannelId.Value, subscribe);
+            _firstPageCache.Clear();
+
+            return new ChannelSubscriptionResult(true, subscribe, null, resolvedChannelId.Value);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is AuthenticationRequiredException or AuthenticationExpiredException
+                                              or PermissionDeniedException)
+        {
+            Logger.Warning(exception, "YouTube authentication rejected while updating channel subscription");
+            return new ChannelSubscriptionResult(false, !subscribe,
+                "Your YouTube session expired. Please sign in again.");
+        }
+        catch (Exception exception) when (exception is YouTubeException or FormatException or ArgumentException)
+        {
+            Logger.Warning(exception, "Failed to update channel subscription (subscribe={Subscribe})", subscribe);
+            return new ChannelSubscriptionResult(false, !subscribe,
+                subscribe ? "Could not subscribe to channel." : "Could not unsubscribe from channel.");
+        }
+    }
+
     private async Task<ChannelPage> LoadFirstPageCoalescedAsync(
         YouTubeClient client,
         ChannelReference channelReference,
@@ -182,24 +254,29 @@ public sealed class YoutubeApiChannelService(
                 return cachedPage.Page;
 
             CachedChannelMetadata? metadata;
+            HashSet<string>? subscribedChannelIds;
             if (!_metadataCache.TryGetValue(channelKey, out metadata) ||
                 !ReferenceEquals(metadata.Client, client))
             {
                 var metadataTask = client.Channels.GetAsync(channelReference, CancellationToken.None);
                 var videosTask = client.Channels.GetVideosPageAsync(channelReference, apiSort, CancellationToken.None);
-                await Task.WhenAll(metadataTask, videosTask).ConfigureAwait(false);
+                var subscribedTask = GetSubscribedChannelIdsAsync(client);
+                await Task.WhenAll(metadataTask, videosTask, subscribedTask).ConfigureAwait(false);
 
                 var apiMetadata = await metadataTask.ConfigureAwait(false);
                 var videosPage = await videosTask.ConfigureAwait(false);
+                subscribedChannelIds = await subscribedTask.ConfigureAwait(false);
 
                 metadata = new CachedChannelMetadata(
                     client,
+                    apiMetadata.Summary.Id.Value,
                     apiMetadata.Summary.Title,
                     string.IsNullOrWhiteSpace(apiMetadata.Description) ? null : apiMetadata.Description,
                     ThumbnailResolutionSelector.SelectAvatarThumbnail(apiMetadata.Summary.Thumbnails),
                     apiMetadata.Summary.SubscriberCount);
                 _metadataCache.Set(channelKey, metadata, MetadataCacheTtl);
 
+                var isSubscribed = subscribedChannelIds?.Contains(metadata.ChannelId);
                 var page = BuildChannelPage(
                     channelUrl,
                     string.IsNullOrWhiteSpace(metadata.Title) ? fallbackName : metadata.Title,
@@ -207,15 +284,22 @@ public sealed class YoutubeApiChannelService(
                     metadata.AvatarUrl,
                     metadata.SubscriberCount,
                     apiSort,
-                    videosPage);
+                    videosPage,
+                    metadata.ChannelId,
+                    isSubscribed);
                 _firstPageCache.Set(flightKey, new CachedFirstPage(client, page), FirstPageCacheTtl);
                 return page;
             }
             else
             {
-                var videosPage = await client.Channels
-                    .GetVideosPageAsync(channelReference, apiSort, CancellationToken.None)
-                    .ConfigureAwait(false);
+                var videosTask = client.Channels
+                    .GetVideosPageAsync(channelReference, apiSort, CancellationToken.None);
+                var subscribedTask = GetSubscribedChannelIdsAsync(client);
+                await Task.WhenAll(videosTask, subscribedTask).ConfigureAwait(false);
+
+                var videosPage = await videosTask.ConfigureAwait(false);
+                subscribedChannelIds = await subscribedTask.ConfigureAwait(false);
+                var isSubscribed = subscribedChannelIds?.Contains(metadata.ChannelId);
                 var page = BuildChannelPage(
                     channelUrl,
                     string.IsNullOrWhiteSpace(metadata.Title) ? fallbackName : metadata.Title,
@@ -223,7 +307,9 @@ public sealed class YoutubeApiChannelService(
                     metadata.AvatarUrl,
                     metadata.SubscriberCount,
                     apiSort,
-                    videosPage);
+                    videosPage,
+                    metadata.ChannelId,
+                    isSubscribed);
                 _firstPageCache.Set(flightKey, new CachedFirstPage(client, page), FirstPageCacheTtl);
                 return page;
             }
@@ -235,6 +321,78 @@ public sealed class YoutubeApiChannelService(
         }
     }
 
+    private async Task<HashSet<string>?> GetSubscribedChannelIdsAsync(YouTubeClient client)
+    {
+        if (_sessionService is null || !SessionGate.RequireSignedIn(_sessionService))
+            return null;
+
+        var now = _timeProvider.GetUtcNow();
+        var cached = Volatile.Read(ref _subscribedChannelsCache);
+        if (cached is not null && ReferenceEquals(cached.Client, client) && now < cached.ExpiresAt)
+            return cached.ChannelIds;
+
+        await _subscribedChannelsGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            now = _timeProvider.GetUtcNow();
+            cached = _subscribedChannelsCache;
+            if (cached is not null && ReferenceEquals(cached.Client, client) && now < cached.ExpiresAt)
+                return cached.ChannelIds;
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var page = await client.Feeds.GetSubscribedChannelsPageAsync(CancellationToken.None).ConfigureAwait(false);
+            foreach (var item in page.Items)
+                ids.Add(item.Id.Value);
+
+            var next = page.Next;
+            var pageCount = 1;
+            while (next is not null && pageCount < MaxSubscribedChannelPages)
+            {
+                page = await client.Feeds.GetSubscribedChannelsPageAsync(next, CancellationToken.None)
+                    .ConfigureAwait(false);
+                foreach (var item in page.Items)
+                    ids.Add(item.Id.Value);
+                next = page.Next;
+                pageCount++;
+            }
+
+            _subscribedChannelsCache = new CachedSubscribedChannels(
+                client,
+                ids,
+                _timeProvider.GetUtcNow() + SubscribedChannelsCacheTtl);
+            return ids;
+        }
+        catch (Exception exception) when (exception is YouTubeException or OperationCanceledException)
+        {
+            Logger.Debug(exception, "Could not determine channel subscription status");
+            return null;
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Unexpected error checking channel subscription status");
+            return null;
+        }
+        finally
+        {
+            _subscribedChannelsGate.Release();
+        }
+    }
+
+    private void UpdateSubscribedChannelsCache(YouTubeClient client, string channelId, bool isSubscribed)
+    {
+        var cached = Volatile.Read(ref _subscribedChannelsCache);
+        if (cached is null || !ReferenceEquals(cached.Client, client))
+            return;
+
+        var updated = new HashSet<string>(cached.ChannelIds, StringComparer.Ordinal);
+        if (isSubscribed)
+            updated.Add(channelId);
+        else
+            updated.Remove(channelId);
+
+        Volatile.Write(ref _subscribedChannelsCache, cached with { ChannelIds = updated });
+    }
+
     private static ChannelPage BuildChannelPage(
         string channelUrl,
         string channelName,
@@ -242,7 +400,9 @@ public sealed class YoutubeApiChannelService(
         string? avatarUrl,
         long? subscriberCount,
         ApiChannelVideoSort apiSort,
-        Page<ApiVideoSummary, ChannelVideosContinuation> videosPage)
+        Page<ApiVideoSummary, ChannelVideosContinuation> videosPage,
+        string? channelId = null,
+        bool? isSubscribed = null)
     {
         var videos = videosPage.Items
             .Where(video => !video.IsShort)
@@ -266,7 +426,9 @@ public sealed class YoutubeApiChannelService(
             resultSort,
             status,
             true,
-            nextContinuationToken);
+            nextContinuationToken,
+            channelId,
+            isSubscribed);
     }
 
     private static ApiChannelVideoSort ToApiSort(ChannelVideoSort sort)
@@ -318,10 +480,16 @@ public sealed class YoutubeApiChannelService(
 
     private sealed record CachedChannelMetadata(
         YouTubeClient Client,
+        string ChannelId,
         string Title,
         string? Description,
         string? AvatarUrl,
         long? SubscriberCount);
 
     private sealed record CachedFirstPage(YouTubeClient Client, ChannelPage Page);
+
+    private sealed record CachedSubscribedChannels(
+        YouTubeClient Client,
+        HashSet<string> ChannelIds,
+        DateTimeOffset ExpiresAt);
 }

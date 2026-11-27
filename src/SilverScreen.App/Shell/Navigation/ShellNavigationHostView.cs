@@ -141,7 +141,7 @@ public partial class ShellNavigationHostView : ViewBase<ViewStack>
         if (_channel is not null)
             return _channel;
 
-        _channelViewModel = Lifetime.Own(new ChannelViewModel(_browsing.Channels));
+        _channelViewModel = Lifetime.Own(new ChannelViewModel(_browsing.Channels, _account.Session, _notificationService));
         var channel = Lifetime.Own(new ChannelView(_channelViewModel, _cardServices));
         Lifetime.Track(() => channel.RefreshLoadingChanged += OnPageLoadingChanged,
             () => channel.RefreshLoadingChanged -= OnPageLoadingChanged);

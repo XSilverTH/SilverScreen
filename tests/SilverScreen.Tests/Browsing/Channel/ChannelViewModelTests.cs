@@ -1,7 +1,11 @@
+using System.Net;
+using Adw;
 using SilverScreen.Browsing.Channel;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Domain;
+using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Tests.Browsing.Channel;
 
@@ -140,6 +144,93 @@ public sealed class ChannelViewModelTests
         Assert.Equal(42000L, viewModel.State.SubscriberCount);
     }
 
+    [Fact]
+    public async Task ToggleSubscriptionAsync_SubscribesAndUnsubscribesUsingChannelIdAndShowsToast()
+    {
+        var service = new FakeChannelService
+        {
+            ChannelIdToReturn = "UC1234567890123456789012",
+            InitialIsSubscribed = false
+        };
+        var session = new FakeSessionService(isSignedIn: true);
+        var notifications = new FakeNotificationService();
+        using var viewModel = new ChannelViewModel(service, session, notifications);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        Assert.False(viewModel.State.IsSubscribed);
+        Assert.Equal("UC1234567890123456789012", viewModel.State.ChannelId);
+
+        await viewModel.ToggleSubscriptionAsync();
+
+        Assert.True(viewModel.State.IsSubscribed);
+        Assert.False(viewModel.State.IsSubscriptionBusy);
+        Assert.Equal(("UC1234567890123456789012", true), service.LastSubscriptionCall);
+        Assert.Equal("Subscribed to “Example Channel”", notifications.LastMessage);
+
+        await viewModel.ToggleSubscriptionAsync();
+
+        Assert.False(viewModel.State.IsSubscribed);
+        Assert.False(viewModel.State.IsSubscriptionBusy);
+        Assert.Equal(("UC1234567890123456789012", false), service.LastSubscriptionCall);
+        Assert.Equal("Unsubscribed from “Example Channel”", notifications.LastMessage);
+    }
+
+    [Fact]
+    public async Task ToggleSubscriptionAsync_WhenSignedOut_ShowsSignInToastAndDoesNotCallService()
+    {
+        var service = new FakeChannelService();
+        var session = new FakeSessionService(isSignedIn: false);
+        var notifications = new FakeNotificationService();
+        using var viewModel = new ChannelViewModel(service, session, notifications);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        await viewModel.ToggleSubscriptionAsync();
+
+        Assert.Null(service.LastSubscriptionCall);
+        Assert.False(viewModel.State.IsSubscribed);
+        Assert.Equal("Sign in to subscribe to channels.", notifications.LastMessage);
+    }
+
+    [Fact]
+    public async Task ToggleSubscriptionAsync_WhenServiceFails_KeepsPreviousStateAndShowsErrorToast()
+    {
+        var service = new FakeChannelService
+        {
+            InitialIsSubscribed = false,
+            FailNextSubscription = true
+        };
+        var session = new FakeSessionService(isSignedIn: true);
+        var notifications = new FakeNotificationService();
+        using var viewModel = new ChannelViewModel(service, session, notifications);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        await viewModel.ToggleSubscriptionAsync();
+
+        Assert.False(viewModel.State.IsSubscribed);
+        Assert.False(viewModel.State.IsSubscriptionBusy);
+        Assert.Equal("Could not subscribe to channel.", notifications.LastMessage);
+    }
+
+    [Fact]
+    public async Task NavigationState_RestoresIsSubscribedAndChannelId()
+    {
+        var service = new FakeChannelService
+        {
+            ChannelIdToReturn = "UC1234567890123456789012",
+            InitialIsSubscribed = true
+        };
+        using var viewModel = new ChannelViewModel(service);
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@example", "Example");
+        var saved = viewModel.CaptureNavigationState();
+
+        await viewModel.OpenChannelAsync("https://www.youtube.com/@other", "Other");
+        viewModel.RestoreNavigationState(saved);
+
+        Assert.True(viewModel.State.IsSubscribed);
+        Assert.Equal("UC1234567890123456789012", viewModel.State.ChannelId);
+    }
+
     private sealed class IdentityChangingChannelService : IChannelService
     {
         public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
@@ -200,8 +291,12 @@ public sealed class ChannelViewModelTests
         public (string Url, string FallbackName, ChannelVideoSort Sort, string? ContinuationToken, int Count)?
             LastRequest { get; private set; }
 
-        public int RequestCount { get; private set; }
+        public (string Target, bool Subscribe)? LastSubscriptionCall { get; private set; }
 
+        public int RequestCount { get; private set; }
+        public string? ChannelIdToReturn { get; init; }
+        public bool? InitialIsSubscribed { get; init; }
+        public bool FailNextSubscription { get; set; }
 
         public Task<ChannelPage> GetChannelAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
             string? continuationToken, int count, CancellationToken cancellationToken)
@@ -215,7 +310,76 @@ public sealed class ChannelViewModelTests
                     string.Empty, false, ChannelUrl: channelUrl);
             return Task.FromResult(new ChannelPage(channelUrl, "Example Channel", "Description", null, 1,
                 [video], sort, "Loaded Example Channel.",
-                NextContinuationToken: continuationToken is null ? "next" : null));
+                NextContinuationToken: continuationToken is null ? "next" : null,
+                ChannelId: ChannelIdToReturn,
+                IsSubscribed: InitialIsSubscribed));
         }
+
+        public Task<ChannelSubscriptionResult> SubscribeAsync(string channelIdOrUrl,
+            CancellationToken cancellationToken = default)
+        {
+            LastSubscriptionCall = (channelIdOrUrl, true);
+            if (FailNextSubscription)
+                return Task.FromResult(new ChannelSubscriptionResult(false, false, "Could not subscribe to channel."));
+
+            return Task.FromResult(new ChannelSubscriptionResult(true, true, null, ChannelIdToReturn));
+        }
+
+        public Task<ChannelSubscriptionResult> UnsubscribeAsync(string channelIdOrUrl,
+            CancellationToken cancellationToken = default)
+        {
+            LastSubscriptionCall = (channelIdOrUrl, false);
+            if (FailNextSubscription)
+                return Task.FromResult(new ChannelSubscriptionResult(false, true, "Could not unsubscribe from channel."));
+
+            return Task.FromResult(new ChannelSubscriptionResult(true, false, null, ChannelIdToReturn));
+        }
+    }
+
+    private sealed class FakeNotificationService : INotificationService
+    {
+        public string? LastMessage { get; private set; }
+
+        public void ShowToast(string message) => LastMessage = message;
+
+        public void ShowToast(Toast toast)
+        {
+        }
+    }
+
+    private sealed class FakeSessionService(bool isSignedIn) : ISessionService
+    {
+        public event EventHandler? SessionChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public AccountSession GetCurrentSession()
+        {
+            return isSignedIn
+                ? new AccountSession(true, "User", HasManualSession: true,
+                    CookieFormat: SessionCookieFormat.NetscapeCookiesText)
+                : AccountSession.SignedOut;
+        }
+
+        public ManualSessionCookies? GetManualSessionCookies()
+        {
+            return isSignedIn
+                ? new ManualSessionCookies(SessionCookieFormat.NetscapeCookiesText, "cookies")
+                : null;
+        }
+
+        public void SetManualSession(string cookieContent, SessionCookieFormat format)
+        {
+        }
+
+        public void ClearSession()
+        {
+        }
+
+        public CookieFileLease? AcquireCookieFileLease() => null;
+
+        public CookieContainer? CreateCookieContainer() => null;
     }
 }

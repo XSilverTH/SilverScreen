@@ -2,9 +2,11 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Serilog;
 using SilverScreen.Browsing.Components;
+using SilverScreen.Core.Account.Session;
 using SilverScreen.Core.Browsing;
 using SilverScreen.Core.Browsing.Channel;
 using SilverScreen.Core.Domain;
+using SilverScreen.Shell.Notifications;
 
 namespace SilverScreen.Browsing.Channel;
 
@@ -20,7 +22,10 @@ public sealed record ChannelViewState(
     bool IsLoading,
     bool IsSuccess,
     bool IsLoadingMore = false,
-    bool HasMore = false)
+    bool HasMore = false,
+    string? ChannelId = null,
+    bool IsSubscribed = false,
+    bool IsSubscriptionBusy = false)
 {
     public static ChannelViewState Empty { get; } = new(null, string.Empty, null, null, null, [],
         ChannelVideoSort.Newest, string.Empty, false, true);
@@ -35,25 +40,38 @@ public sealed record ChannelNavigationState(
     string? AvatarUrl,
     long? SubscriberCount,
     ChannelVideoSort Sort,
-    FeedEngineSnapshot Feed);
+    FeedEngineSnapshot Feed,
+    string? ChannelId = null,
+    bool IsSubscribed = false);
 
 public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
 {
     private static readonly ILogger Logger = Log.ForContext<ChannelViewModel>();
     private readonly IChannelService _channelService;
+    private readonly INotificationService? _notificationService;
+    private readonly ISessionService? _sessionService;
     private readonly PagedFeedEngine _engine;
     private readonly Lock _lock = new();
     private string? _avatarUrl;
+    private long _channelGeneration;
+    private string? _channelId;
     private string? _description;
     private bool _disposed;
+    private bool _isSubscribed;
+    private bool _isSubscriptionBusy;
     private string _name = string.Empty;
     private ChannelVideoSort _sort = ChannelVideoSort.Newest;
     private long? _subscriberCount;
     private string? _url;
 
-    public ChannelViewModel(IChannelService channelService)
+    public ChannelViewModel(
+        IChannelService channelService,
+        ISessionService? sessionService = null,
+        INotificationService? notificationService = null)
     {
         _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
+        _sessionService = sessionService;
+        _notificationService = notificationService;
 
         _engine = new PagedFeedEngine(
             FetchChannelPageAsync,
@@ -147,10 +165,14 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         lock (_lock)
         {
             _url = null;
+            _channelId = null;
             _name = string.Empty;
             _description = null;
             _avatarUrl = null;
             _subscriberCount = null;
+            _isSubscribed = false;
+            _isSubscriptionBusy = false;
+            _channelGeneration++;
         }
 
         _engine.Reset();
@@ -169,7 +191,9 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
                 _avatarUrl,
                 _subscriberCount,
                 _sort,
-                _engine.CaptureSnapshot());
+                _engine.CaptureSnapshot(),
+                _channelId,
+                _isSubscribed);
         }
     }
 
@@ -180,17 +204,104 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         lock (_lock)
         {
             _url = navigationState.Url;
+            _channelId = navigationState.ChannelId;
             _name = navigationState.Name;
             _description = navigationState.Description;
             _avatarUrl = navigationState.AvatarUrl;
             _subscriberCount = navigationState.SubscriberCount;
             _sort = navigationState.Sort;
+            _isSubscribed = navigationState.IsSubscribed;
+            _isSubscriptionBusy = false;
+            _channelGeneration++;
         }
 
         _engine.SetLoadingMessage($"Loading {navigationState.Name}…");
         _engine.RestoreSnapshot(navigationState.Feed);
     }
 
+    public async Task ToggleSubscriptionAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (_sessionService is not null && !SessionGate.RequireSignedIn(_sessionService))
+        {
+            _notificationService?.ShowToast("Sign in to subscribe to channels.");
+            return;
+        }
+
+        string? target;
+        string channelName;
+        bool currentlySubscribed;
+        long generation;
+
+        lock (_lock)
+        {
+            if (_isSubscriptionBusy || string.IsNullOrWhiteSpace(_url) || !State.IsSuccess)
+                return;
+
+            target = !string.IsNullOrWhiteSpace(_channelId) ? _channelId : _url;
+            channelName = string.IsNullOrWhiteSpace(_name) ? "channel" : _name;
+            currentlySubscribed = _isSubscribed;
+            generation = _channelGeneration;
+            _isSubscriptionBusy = true;
+        }
+
+        State = State with { IsSubscriptionBusy = true };
+
+        ChannelSubscriptionResult result;
+        try
+        {
+            result = currentlySubscribed
+                ? await _channelService.UnsubscribeAsync(target!, cancellationToken).ConfigureAwait(false)
+                : await _channelService.SubscribeAsync(target!, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_lock)
+            {
+                _isSubscriptionBusy = false;
+            }
+
+            State = State with { IsSubscriptionBusy = false };
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Unexpected error updating channel subscription");
+            result = new ChannelSubscriptionResult(false, currentlySubscribed,
+                currentlySubscribed ? "Could not unsubscribe from channel." : "Could not subscribe to channel.");
+        }
+
+        bool isSubscribedAfter;
+        string? channelIdAfter;
+        lock (_lock)
+        {
+            _isSubscriptionBusy = false;
+            if (generation == _channelGeneration && result.IsSuccess)
+            {
+                _isSubscribed = result.IsSubscribed;
+                if (!string.IsNullOrWhiteSpace(result.ChannelId))
+                    _channelId = result.ChannelId;
+            }
+
+            isSubscribedAfter = generation == _channelGeneration ? _isSubscribed : State.IsSubscribed;
+            channelIdAfter = generation == _channelGeneration ? _channelId : State.ChannelId;
+        }
+
+        State = State with
+        {
+            IsSubscribed = isSubscribedAfter,
+            IsSubscriptionBusy = false,
+            ChannelId = channelIdAfter
+        };
+
+        if (result.IsSuccess)
+            _notificationService?.ShowToast(result.IsSubscribed
+                ? $"Subscribed to “{channelName}”"
+                : $"Unsubscribed from “{channelName}”");
+        else if (!string.IsNullOrWhiteSpace(result.Message))
+            _notificationService?.ShowToast(result.Message);
+    }
 
     private async Task LoadAsync(string channelUrl, string fallbackName, ChannelVideoSort sort,
         int count = VideoFeedConstants.DefaultPageSize)
@@ -199,8 +310,16 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         bool identityChanged;
         lock (_lock)
         {
-            identityChanged = !string.Equals(_url, channelUrl, StringComparison.Ordinal)
-                              || _sort != sort;
+            var urlChanged = !string.Equals(_url, channelUrl, StringComparison.Ordinal);
+            identityChanged = urlChanged || _sort != sort;
+            if (urlChanged)
+            {
+                _channelId = null;
+                _isSubscribed = false;
+                _isSubscriptionBusy = false;
+                _channelGeneration++;
+            }
+
             _url = channelUrl;
             _name = fallbackName;
             _sort = sort;
@@ -218,11 +337,13 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
         string? url;
         string name;
         ChannelVideoSort sort;
+        long requestGeneration;
         lock (_lock)
         {
             url = _url;
             name = _name;
             sort = _sort;
+            requestGeneration = _channelGeneration;
         }
 
         if (url is null)
@@ -238,8 +359,15 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
                 page.StatusMessage);
         lock (_lock)
         {
-            if (!string.IsNullOrWhiteSpace(page.Url))
-                _url = page.Url;
+            if (requestGeneration == _channelGeneration)
+            {
+                if (!string.IsNullOrWhiteSpace(page.Url))
+                    _url = page.Url;
+                if (!string.IsNullOrWhiteSpace(page.ChannelId))
+                    _channelId = page.ChannelId;
+                if (page.IsSubscribed is { } isSubscribed)
+                    _isSubscribed = isSubscribed;
+            }
 
             if (token is null)
             {
@@ -271,20 +399,26 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
     private void OnEngineStateChanged(object? sender, FeedEngineState state)
     {
         string? url;
+        string? channelId;
         string name;
         string? description;
         string? avatarUrl;
         long? subscriberCount;
         ChannelVideoSort sort;
+        bool isSubscribed;
+        bool isSubscriptionBusy;
 
         lock (_lock)
         {
             url = _url;
+            channelId = _channelId;
             name = _name;
             description = _description;
             avatarUrl = _avatarUrl;
             subscriberCount = _subscriberCount;
             sort = _sort;
+            isSubscribed = _isSubscribed;
+            isSubscriptionBusy = _isSubscriptionBusy;
         }
 
         var summary = state.IsLoading
@@ -308,7 +442,10 @@ public sealed class ChannelViewModel : INotifyPropertyChanged, IVideoListSource
             state.IsLoading,
             state is { IsSuccess: true, LastError: null },
             state.IsLoadingMore,
-            state.HasMore);
+            state.HasMore,
+            channelId,
+            isSubscribed,
+            isSubscriptionBusy);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

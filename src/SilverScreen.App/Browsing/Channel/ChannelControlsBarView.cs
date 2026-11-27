@@ -26,8 +26,38 @@ public partial class ChannelControlsBarView : ViewBase<Box, ChannelViewModel>
         bindings.Bind(
             nameof(ChannelViewModel.State),
             this,
-            static vm => vm.State.Sort,
-            static (view, sort) => view.UpdateSort(sort));
+            static vm => vm.State,
+            static (view, state) =>
+            {
+                view.UpdateSort(state.Sort);
+                view.UpdateSubscriptionButton(state);
+            });
+    }
+
+    private void UpdateSubscriptionButton(ChannelViewState state)
+    {
+        var canShow = !string.IsNullOrWhiteSpace(state.Url) && (state.IsSuccess || !state.IsLoading);
+        channel_subscribe_button.Visible = canShow;
+        channel_subscribe_button.Sensitive = canShow && !state.IsLoading && !state.IsSubscriptionBusy && state.IsSuccess;
+
+        if (state.IsSubscriptionBusy)
+        {
+            channel_subscribe_button.Label = state.IsSubscribed ? "Unsubscribing…" : "Subscribing…";
+            return;
+        }
+
+        if (state.IsSubscribed)
+        {
+            channel_subscribe_button.Label = "Subscribed";
+            channel_subscribe_button.TooltipText = "Unsubscribe from channel";
+            channel_subscribe_button.RemoveCssClass("suggested-action");
+        }
+        else
+        {
+            channel_subscribe_button.Label = "Subscribe";
+            channel_subscribe_button.TooltipText = "Subscribe to channel";
+            channel_subscribe_button.AddCssClass("suggested-action");
+        }
     }
 
     private void UpdateSort(ChannelVideoSort sort)
@@ -65,6 +95,22 @@ public partial class ChannelControlsBarView : ViewBase<Box, ChannelViewModel>
         catch (Exception exception)
         {
             Logger.Warning(exception, "Failed to update channel sort selection");
+        }
+    }
+
+    private async void OnSubscribeClicked(object? sender = null, EventArgs? args = null)
+    {
+        try
+        {
+            if (IsDisposed || ViewModel is null) return;
+            await ViewModel.ToggleSubscriptionAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to update channel subscription");
         }
     }
 }
