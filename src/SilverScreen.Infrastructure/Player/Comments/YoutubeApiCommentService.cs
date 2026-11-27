@@ -98,6 +98,39 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         }
     }
 
+    public async Task<YouTubeCommentTranslationResult> TranslateCommentAsync(
+        string commentId,
+        string text,
+        string? targetLanguage = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!CommentId.TryParse(commentId, out var parsedCommentId) || string.IsNullOrWhiteSpace(text))
+            return new YouTubeCommentTranslationResult(false, ErrorMessage: "Comment could not be translated.");
+
+        try
+        {
+            var client = _clientProvider.GetClient();
+            var translated = await client.Comments
+                .TranslateAsync(parsedCommentId, text, targetLanguage, cancellationToken)
+                .ConfigureAwait(false);
+            return new YouTubeCommentTranslationResult(true, translated);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (YouTubeException exception)
+        {
+            Logger.Warning(exception, "YoutubeAPI failed to translate comment {CommentId}", commentId);
+            return new YouTubeCommentTranslationResult(false, ErrorMessage: "Could not translate comment.");
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Unexpected failure translating comment {CommentId}", commentId);
+            return new YouTubeCommentTranslationResult(false, ErrorMessage: "Could not translate comment.");
+        }
+    }
+
     private async Task<YouTubeCommentsResult> FetchThreadPageAsync(
         VideoId videoId,
         YouTubeCommentSort sort,

@@ -32,6 +32,13 @@ public sealed record AppPreferences
     public PreferredVideoCodec PreferredCodec { get; set; } = PreferredVideoCodec.Any;
 
     public string PreferredSubtitleLanguage { get; set; } = string.Empty;
+    public string YouTubeLanguage { get; set; } = DefaultYouTubeLanguage;
+    public const string DefaultYouTubeLanguage = "en";
+
+    public string GetEffectiveYouTubeLanguage()
+    {
+        return string.IsNullOrWhiteSpace(YouTubeLanguage) ? DefaultYouTubeLanguage : YouTubeLanguage.Trim();
+    }
     public string YtDlpExecutablePath { get; set; } = "yt-dlp";
     public bool MarkWatchedVideos { get; set; }
     public bool YouTubePlaybackTelemetryEnabled { get; set; }

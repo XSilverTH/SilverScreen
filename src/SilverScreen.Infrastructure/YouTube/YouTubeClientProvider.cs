@@ -5,6 +5,7 @@ using System.Text;
 using Serilog;
 using Serilog.Events;
 using SilverScreen.Core.Account.Session;
+using SilverScreen.Core.Preferences;
 using SilverScreen.Infrastructure.Common;
 using YoutubeAPI;
 using YoutubeAPI.Exceptions;
@@ -57,18 +58,23 @@ public sealed class YouTubeClientProvider : IYouTubeClientProvider, IDisposable
     private readonly Lock _gate = new();
     private readonly LinkedList<CachedClient> _lru = new();
 
+    private readonly IPreferencesService? _preferencesService;
     private readonly ISessionService _sessionService;
 
     private bool _disposed;
 
-    public YouTubeClientProvider(ISessionService sessionService)
-        : this(sessionService, null)
+    public YouTubeClientProvider(ISessionService sessionService, IPreferencesService? preferencesService = null)
+        : this(sessionService, null, preferencesService)
     {
     }
 
-    internal YouTubeClientProvider(ISessionService sessionService, string? bootstrapCacheFilePath)
+    internal YouTubeClientProvider(
+        ISessionService sessionService,
+        string? bootstrapCacheFilePath,
+        IPreferencesService? preferencesService = null)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
+        _preferencesService = preferencesService;
         _bootstrapCacheFilePath = string.IsNullOrWhiteSpace(bootstrapCacheFilePath)
             ? PersistentCacheFile.GetCacheFilePath("innertube-bootstrap.json")
             : bootstrapCacheFilePath;
@@ -115,7 +121,9 @@ public sealed class YouTubeClientProvider : IYouTubeClientProvider, IDisposable
             throw new AuthenticationRequiredException(
                 "This operation requires a valid authenticated YouTube session.");
 
-        var sessionKey = HashSessionCookies(cookieContent);
+        var language = _preferencesService?.GetPreferences().GetEffectiveYouTubeLanguage()
+                       ?? AppPreferences.DefaultYouTubeLanguage;
+        var sessionKey = $"{language}|{HashSessionCookies(cookieContent)}";
 
         // Fast path: check _clients cache by cookie hash BEFORE parsing Netscape cookies.
         lock (_gate)
@@ -180,6 +188,7 @@ public sealed class YouTubeClientProvider : IYouTubeClientProvider, IDisposable
 
             client = new YouTubeClient(new YouTubeClientOptions
             {
+                Language = language,
                 Authentication = authentication,
                 BootstrapCacheFilePath = _bootstrapCacheFilePath
             });

@@ -6,7 +6,10 @@ using XSTH.Blueprint.Helpers;
 
 namespace SilverScreen.Player.Comments;
 
-public partial class CommentRowView(Action<string> repliesToggleRequested, Func<string, bool> linkActivated)
+public partial class CommentRowView(
+    Action<string> repliesToggleRequested,
+    Func<string, bool> linkActivated,
+    Action<string>? translateRequested = null)
     : ViewBase<Bin>
 {
     private readonly Func<string, bool> _linkActivated =
@@ -15,9 +18,15 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
     private readonly Action<string> _repliesToggleRequested =
         repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
 
+    private readonly Action<string>? _translateRequested = translateRequested;
+
+    private bool? _boundCanTranslate;
+    private bool? _boundIsTranslated;
+    private bool? _boundIsTranslating;
     private bool? _boundRepliesVisible;
     private int _boundReplyCount = -1;
     private string? _boundText;
+    private string? _boundTranslationError;
 
     internal string? BoundCommentId { get; private set; }
 
@@ -32,29 +41,78 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
             _repliesToggleRequested(commentId);
     }
 
+    private void OnTranslateButtonClicked(object? sender, EventArgs args)
+    {
+        if (BoundCommentId is { } commentId)
+            _translateRequested?.Invoke(commentId);
+    }
+
     public void Bind(YouTubeComment comment, int replyCount, bool repliesVisible)
     {
         Bind(comment, replyCount, repliesVisible, null);
     }
 
-    internal void Bind(YouTubeComment comment, int replyCount, bool repliesVisible, string? prebuiltMarkup)
+    internal void Bind(
+        YouTubeComment comment,
+        int replyCount,
+        bool repliesVisible,
+        string? prebuiltMarkup,
+        bool canTranslate = false,
+        bool isTranslated = false,
+        bool isTranslating = false,
+        string? translatedText = null,
+        string? translationError = null)
     {
-        var sameContent = string.Equals(BoundCommentId, comment.Id, StringComparison.Ordinal) &&
-                          string.Equals(_boundText, comment.Text, StringComparison.Ordinal);
+        var displayText = isTranslated && !string.IsNullOrEmpty(translatedText)
+            ? translatedText
+            : comment.Text;
+        var sameId = string.Equals(BoundCommentId, comment.Id, StringComparison.Ordinal);
+        var sameText = string.Equals(_boundText, displayText, StringComparison.Ordinal);
 
         BoundCommentId = comment.Id;
-        if (!sameContent)
+        if (!sameId)
         {
-            _boundText = comment.Text;
             Widget.MarginStart = comment.ParentId is null ? 8 : 32;
             comment_author_label.SetText(comment.AuthorName);
             comment_published_time_label.SetText(comment.PublishedTimeText);
             comment_published_time_label.SetVisible(!string.IsNullOrWhiteSpace(comment.PublishedTimeText));
-            SetCommentText(comment.Text, prebuiltMarkup);
             comment_likes_label.SetText(FormatCount(comment.LikeCount));
         }
 
-        if (!sameContent || _boundReplyCount != replyCount || _boundRepliesVisible != repliesVisible)
+        if (!sameId || !sameText)
+        {
+            _boundText = displayText;
+            SetCommentText(displayText, prebuiltMarkup);
+        }
+
+        if (!sameId ||
+            _boundCanTranslate != canTranslate ||
+            _boundIsTranslated != isTranslated ||
+            _boundIsTranslating != isTranslating ||
+            !string.Equals(_boundTranslationError, translationError, StringComparison.Ordinal))
+        {
+            _boundCanTranslate = canTranslate;
+            _boundIsTranslated = isTranslated;
+            _boundIsTranslating = isTranslating;
+            _boundTranslationError = translationError;
+
+            comment_translate_button.SetVisible(canTranslate);
+            comment_translate_button.SetSensitive(!isTranslating);
+            if (isTranslated)
+                comment_translate_button.AddCssClass("accent");
+            else
+                comment_translate_button.RemoveCssClass("accent");
+
+            comment_translate_button.SetTooltipText(isTranslating
+                ? "Translating…"
+                : !string.IsNullOrWhiteSpace(translationError)
+                    ? translationError
+                    : isTranslated
+                        ? "Show original"
+                        : "Translate comment");
+        }
+
+        if (!sameId || _boundReplyCount != replyCount || _boundRepliesVisible != repliesVisible)
         {
             _boundReplyCount = replyCount;
             _boundRepliesVisible = repliesVisible;
@@ -74,11 +132,18 @@ public partial class CommentRowView(Action<string> repliesToggleRequested, Func<
         _boundText = null;
         _boundReplyCount = -1;
         _boundRepliesVisible = null;
+        _boundCanTranslate = null;
+        _boundIsTranslated = null;
+        _boundIsTranslating = null;
+        _boundTranslationError = null;
         Widget.MarginStart = 8;
         comment_author_label.SetText(string.Empty);
         comment_published_time_label.SetText(string.Empty);
         comment_published_time_label.SetVisible(false);
         comment_text_label.SetText(string.Empty);
+        comment_translate_button.SetVisible(false);
+        comment_translate_button.SetSensitive(true);
+        comment_translate_button.RemoveCssClass("accent");
         comment_likes_label.SetText(string.Empty);
         comment_replies_button.SetVisible(false);
         comment_replies_button.SetLabel(string.Empty);

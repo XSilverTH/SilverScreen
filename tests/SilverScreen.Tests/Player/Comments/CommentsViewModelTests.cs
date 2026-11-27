@@ -188,6 +188,66 @@ public sealed class CommentsViewModelTests
         Assert.Equal(CommentsViewStatus.List, viewModel.State.Status);
     }
 
+    [Fact]
+    public async Task ToggleTranslationAsync_TranslatesAndTogglesBackToOriginalWithoutRefetching()
+    {
+        var service = new ControlledCommentService
+        {
+            TranslateHandler = (commentId, text, targetLanguage) =>
+                Task.FromResult(new YouTubeCommentTranslationResult(true, $"[translated:{targetLanguage}] {text}"))
+        };
+        var prefs = new StubPreferencesService(new Core.Preferences.AppPreferences { YouTubeLanguage = "es" });
+        using var viewModel = new CommentsViewModel(service, prefs);
+
+        viewModel.SetVideo("dQw4w9WgXcQ");
+        var request = Assert.Single(service.Requests);
+        request.Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Author", "This is a great video and I love it", "1d ago", 5)],
+            true,
+            "Loaded"));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.True(viewModel.State.VisibleComments[0].CanTranslate);
+        Assert.False(viewModel.State.VisibleComments[0].IsTranslated);
+
+        await viewModel.ToggleTranslationAsync("c1");
+
+        var translatedRow = viewModel.State.VisibleComments[0];
+        Assert.True(translatedRow.IsTranslated);
+        Assert.Equal("[translated:es] This is a great video and I love it", translatedRow.TranslatedText);
+        Assert.Equal(1, service.TranslateCallCount);
+
+        // Toggling again shows original without another service call
+        await viewModel.ToggleTranslationAsync("c1");
+        Assert.False(viewModel.State.VisibleComments[0].IsTranslated);
+        Assert.Equal(1, service.TranslateCallCount);
+    }
+
+    [Fact]
+    public async Task ToggleTranslationAsync_OnFailure_PublishesTranslationError()
+    {
+        var service = new ControlledCommentService
+        {
+            TranslateHandler = (_, _, _) =>
+                Task.FromResult(new YouTubeCommentTranslationResult(false, ErrorMessage: "Could not translate comment."))
+        };
+        using var viewModel = new CommentsViewModel(service);
+
+        viewModel.SetVideo("dQw4w9WgXcQ");
+        var request = Assert.Single(service.Requests);
+        request.Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Author", "Hola amigos, gracias", "1d ago", 5)],
+            true,
+            "Loaded"));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        await viewModel.ToggleTranslationAsync("c1");
+
+        var row = viewModel.State.VisibleComments[0];
+        Assert.False(row.IsTranslated);
+        Assert.Equal("Could not translate comment.", row.TranslationError);
+    }
+
     private static YouTubeComment Comment(string id, string? parentId = null)
     {
         return new YouTubeComment(id, id, id, "", 0, parentId);
@@ -224,6 +284,8 @@ public sealed class CommentsViewModelTests
     private sealed class ControlledCommentService : IYouTubeCommentService
     {
         public List<Pending> Requests { get; } = [];
+        public int TranslateCallCount { get; private set; }
+        public Func<string, string, string?, Task<YouTubeCommentTranslationResult>>? TranslateHandler { get; init; }
 
         public Task<YouTubeCommentsResult> LoadFirstPageAsync(
             string videoId,
@@ -245,6 +307,18 @@ public sealed class CommentsViewModelTests
             return pending.Completion.Task;
         }
 
+        public Task<YouTubeCommentTranslationResult> TranslateCommentAsync(
+            string commentId,
+            string text,
+            string? targetLanguage = null,
+            CancellationToken cancellationToken = default)
+        {
+            TranslateCallCount++;
+            return TranslateHandler is not null
+                ? TranslateHandler(commentId, text, targetLanguage)
+                : Task.FromResult(new YouTubeCommentTranslationResult(false, ErrorMessage: "Not configured"));
+        }
+
         public sealed class Pending(
             string? videoId,
             YouTubeCommentSort sort,
@@ -260,6 +334,19 @@ public sealed class CommentsViewModelTests
 
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    private sealed class StubPreferencesService(Core.Preferences.AppPreferences preferences)
+        : Core.Preferences.IPreferencesService
+    {
+        public event EventHandler<Core.Preferences.AppPreferences>? PreferencesChanged;
+        public Core.Preferences.AppPreferences GetPreferences() => preferences;
+
+        public void SavePreferences(Core.Preferences.AppPreferences updated)
+        {
+            preferences = updated;
+            PreferencesChanged?.Invoke(this, updated);
         }
     }
 }

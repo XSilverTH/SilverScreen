@@ -105,6 +105,9 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
             ((Editable)ytdlp_path_row).SetText(state.YtDlpExecutablePath);
             ((Editable)mpv_path_row).SetText(state.MpvExecutablePath);
             ((Editable)subtitle_language_row).SetText(state.PreferredSubtitleLanguage);
+            if (!string.Equals(((Editable)youtube_language_row).GetText(), state.YouTubeLanguage,
+                    StringComparison.Ordinal))
+                ((Editable)youtube_language_row).SetText(state.YouTubeLanguage);
             mark_watched_row.Active = state.MarkWatchedVideos;
             youtube_playback_telemetry_row.Active = state.YouTubePlaybackTelemetryEnabled;
             discord_rich_presence_row.Active = state.DiscordRichPresenceEnabled;
@@ -400,6 +403,7 @@ public partial class PreferencesDialog : ViewBase<Adw.PreferencesDialog>
                 : PlaybackBackendKind.ExternalMpv,
             OpenInFullscreen = fullscreen_row.Active,
             PreferredSubtitleLanguage = ((Editable)subtitle_language_row).GetText(),
+            YouTubeLanguage = ((Editable)youtube_language_row).GetText(),
             AutoAdvanceNextVideo = auto_advance_next_video_row.Active,
             MarkWatchedVideos = mark_watched_row.Active,
             YouTubePlaybackTelemetryEnabled = youtube_playback_telemetry_row.Active,

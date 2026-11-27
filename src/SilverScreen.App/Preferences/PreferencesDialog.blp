@@ -520,6 +520,11 @@ Adw.PreferencesDialog PreferencesDialog {
     Adw.PreferencesGroup {
       title: "YouTube";
 
+      Adw.EntryRow youtube_language_row {
+        changed => $OnRowChanged();
+        title: "Language (hl)";
+      }
+
       Adw.SwitchRow mark_watched_row {
         notify => $OnRowNotify();
         title: "Mark videos as watched on YouTube";

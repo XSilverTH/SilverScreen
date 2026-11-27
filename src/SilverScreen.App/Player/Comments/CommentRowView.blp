@@ -34,22 +34,53 @@ Adw.Bin CommentRowView {
       spacing: 4;
       hexpand: true;
 
-      Gtk.Label comment_author_label {
-        xalign: 0;
-        ellipsize: end;
+      Gtk.Box {
+        orientation: horizontal;
+        spacing: 8;
+        hexpand: true;
 
-        styles [
-          "heading",
-        ]
-      }
+        Gtk.Box {
+          orientation: vertical;
+          spacing: 2;
+          hexpand: true;
 
-      Gtk.Label comment_published_time_label {
-        xalign: 0;
+          Gtk.Label comment_author_label {
+            xalign: 0;
+            ellipsize: end;
 
-        styles [
-          "caption",
-          "dim-label",
-        ]
+            styles [
+              "heading",
+            ]
+          }
+
+          Gtk.Label comment_published_time_label {
+            xalign: 0;
+
+            styles [
+              "caption",
+              "dim-label",
+            ]
+          }
+        }
+
+        Gtk.Button comment_translate_button {
+          valign: start;
+          halign: end;
+          visible: false;
+          tooltip-text: "Translate comment";
+          clicked => $OnTranslateButtonClicked();
+
+          styles [
+            "flat",
+            "square",
+          ]
+
+          Gtk.Image comment_translate_icon {
+            resource: "/SilverScreen/Assets/translate-symbolic.svg";
+            pixel-size: 16;
+            accessible-role: presentation;
+          }
+        }
       }
 
       Gtk.Label comment_text_label {

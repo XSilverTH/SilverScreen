@@ -84,7 +84,9 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         {
             if (_session.Request is { } req && idx >= 0 && idx < req.Videos.Length) _player.PlayPlaylistIndex(idx);
         }));
-        _commentsView = Lifetime.Own(new CommentsView(new CommentsViewModel(dependencies.Comments), CloseComments,
+        _commentsView = Lifetime.Own(new CommentsView(
+            new CommentsViewModel(dependencies.Comments, dependencies.Preferences),
+            CloseComments,
             uri => linkRouter.Activate(uri)));
 
         comments_sidebar_host.Append(_commentsView.Widget);

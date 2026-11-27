@@ -60,6 +60,7 @@ public sealed class PreferencesTests : IDisposable
             YtDlpExecutablePath = "/custom/yt-dlp",
             Quality = VideoQuality.P1080,
             PreferredSubtitleLanguage = "en",
+            YouTubeLanguage = "es",
             PlaybackBackendKind = PlaybackBackendKind.Embedded,
             OpenInFullscreen = false,
             AutoAdvanceNextVideo = false,
@@ -91,6 +92,8 @@ public sealed class PreferencesTests : IDisposable
         Assert.Equal("/custom/yt-dlp", loaded.YtDlpExecutablePath);
         Assert.Equal(VideoQuality.P1080, loaded.Quality);
         Assert.Equal("en", loaded.PreferredSubtitleLanguage);
+        Assert.Equal("es", loaded.YouTubeLanguage);
+        Assert.Equal("es", loaded.GetEffectiveYouTubeLanguage());
         Assert.Equal(PlaybackBackendKind.Embedded, loaded.PlaybackBackendKind);
         Assert.False(loaded.OpenInFullscreen);
         Assert.False(loaded.AutoAdvanceNextVideo);

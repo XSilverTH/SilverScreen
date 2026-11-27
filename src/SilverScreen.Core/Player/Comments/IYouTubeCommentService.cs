@@ -14,4 +14,16 @@ public interface IYouTubeCommentService
     Task<YouTubeCommentsResult> LoadNextPageAsync(
         int count = 20,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Translates a comment into the specified target language (or the configured host language).</summary>
+    Task<YouTubeCommentTranslationResult> TranslateCommentAsync(
+        string commentId,
+        string text,
+        string? targetLanguage = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new YouTubeCommentTranslationResult(
+            false,
+            ErrorMessage: "Comment translation is not supported."));
+    }
 }

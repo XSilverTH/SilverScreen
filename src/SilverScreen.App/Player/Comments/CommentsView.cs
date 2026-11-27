@@ -162,19 +162,35 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         var addedMiddleCount = nextIds.Length - prefixLength - suffixLength;
 
         _displayedCommentIds = nextIds;
-        if (removedMiddleCount == 0 && addedMiddleCount == 0)
-            return;
+        if (removedMiddleCount != 0 || addedMiddleCount != 0)
+        {
+            var addedMiddleIds = new string[addedMiddleCount];
+            for (var i = 0; i < addedMiddleCount; i++)
+                addedMiddleIds[i] = nextIds[prefixLength + i];
 
-        var addedMiddleIds = new string[addedMiddleCount];
-        for (var i = 0; i < addedMiddleCount; i++)
-            addedMiddleIds[i] = nextIds[prefixLength + i];
-
-        _itemIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
+            _itemIds.Splice((uint)prefixLength, (uint)removedMiddleCount, addedMiddleIds);
+        }
 
         foreach (var row in _rowsByCell.Values)
             if (row.BoundCommentId is { } boundId && _visibleCommentsById.TryGetValue(boundId, out var rowState))
-                row.Bind(rowState.Comment, rowState.ReplyCount, rowState.RepliesExpanded,
-                    GetOrBuildMarkup(rowState.Comment.Id, rowState.Comment.Text));
+                BindRow(row, rowState);
+    }
+
+    private void BindRow(CommentRowView row, CommentRowState rowState)
+    {
+        var displayText = rowState.IsTranslated && !string.IsNullOrEmpty(rowState.TranslatedText)
+            ? rowState.TranslatedText
+            : rowState.Comment.Text;
+        row.Bind(
+            rowState.Comment,
+            rowState.ReplyCount,
+            rowState.RepliesExpanded,
+            GetOrBuildMarkup(rowState.Comment.Id, displayText),
+            rowState.CanTranslate,
+            rowState.IsTranslated,
+            rowState.IsTranslating,
+            rowState.TranslatedText,
+            rowState.TranslationError);
     }
 
     private string GetOrBuildMarkup(string commentId, string text)
@@ -194,7 +210,10 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             return;
 
         listItem.Focusable = true;
-        var row = new CommentRowView(id => ViewModel?.ToggleReplies(id), _linkActivated);
+        var row = new CommentRowView(
+            id => ViewModel?.ToggleReplies(id),
+            _linkActivated,
+            id => ViewModel?.ToggleTranslationAsync(id).FireAndForget(Logger));
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }
@@ -206,8 +225,7 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             !_visibleCommentsById.TryGetValue(id, out var comment))
             return;
 
-        var markup = GetOrBuildMarkup(comment.Comment.Id, comment.Comment.Text);
-        row.Bind(comment.Comment, comment.ReplyCount, comment.RepliesExpanded, markup);
+        BindRow(row, comment);
     }
 
     private void OnRowUnbind(object? sender, SignalListItemFactory.UnbindSignalArgs args)

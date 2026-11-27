@@ -35,6 +35,7 @@ public sealed record PreferencesEditorState
         [.. Core.Player.SponsorBlockCategories.All];
 
     public string PreferredSubtitleLanguage { get; init; } = string.Empty;
+    public string YouTubeLanguage { get; init; } = AppPreferences.DefaultYouTubeLanguage;
     public string LibraryDirectory { get; init; } = AppPreferences.GetDefaultLibraryDirectory();
     public int MaxConcurrentDownloads { get; init; } = AppPreferences.DefaultMaxConcurrentDownloads;
     public bool ShowCustomDownloadOption { get; init; } = true;
@@ -145,6 +146,7 @@ public sealed class PreferencesViewModel
             WindowMaximized = preferences.WindowMaximized,
             SponsorBlockCategories = [.. preferences.SponsorBlockCategories],
             PreferredSubtitleLanguage = preferences.PreferredSubtitleLanguage,
+            YouTubeLanguage = preferences.YouTubeLanguage,
             LibraryDirectory = preferences.LibraryDirectory,
             MaxConcurrentDownloads = preferences.MaxConcurrentDownloads,
             ShowCustomDownloadOption = preferences.ShowCustomDownloadOption,
@@ -179,6 +181,7 @@ public sealed class PreferencesViewModel
             WindowMaximized = state.WindowMaximized,
             SponsorBlockCategories = [.. state.SponsorBlockCategories],
             PreferredSubtitleLanguage = state.PreferredSubtitleLanguage,
+            YouTubeLanguage = state.YouTubeLanguage.Trim(),
             LibraryDirectory = state.LibraryDirectory,
             MaxConcurrentDownloads = state.MaxConcurrentDownloads,
             ShowCustomDownloadOption = state.ShowCustomDownloadOption,

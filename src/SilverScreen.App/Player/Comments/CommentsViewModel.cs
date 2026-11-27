@@ -4,6 +4,7 @@ using Serilog;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Player;
 using SilverScreen.Core.Player.Comments;
+using SilverScreen.Core.Preferences;
 
 namespace SilverScreen.Player.Comments;
 
@@ -19,7 +20,12 @@ public enum CommentsViewStatus
 public sealed record CommentRowState(
     YouTubeComment Comment,
     int ReplyCount,
-    bool RepliesExpanded);
+    bool RepliesExpanded,
+    bool CanTranslate = false,
+    bool IsTranslated = false,
+    bool IsTranslating = false,
+    string? TranslatedText = null,
+    string? TranslationError = null);
 
 public sealed record CommentsViewState(
     CommentsViewStatus Status,
@@ -29,15 +35,22 @@ public sealed record CommentsViewState(
     bool HasMore = false,
     string PaginationLoadingMessage = "Loading more comments…");
 
-public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotifyPropertyChanged, IDisposable
+public sealed class CommentsViewModel(
+    IYouTubeCommentService comments,
+    IPreferencesService? preferences = null) : INotifyPropertyChanged, IDisposable
 {
     public const int InitialPageSize = 20;
     public const int PageSizeIncrement = 20;
     private const string DefaultErrorMessage = "Comments could not be loaded. Try again shortly.";
     private static readonly ILogger Logger = Log.ForContext<CommentsViewModel>();
     private readonly IYouTubeCommentService _comments = comments ?? throw new ArgumentNullException(nameof(comments));
+    private readonly IPreferencesService? _preferences = preferences;
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];
     private readonly HashSet<string> _expandedCommentIds = [];
+    private readonly Dictionary<string, string> _translatedTexts = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _showingTranslationIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _translatingIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _translationErrors = new(StringComparer.Ordinal);
     private readonly Lock _loadGate = new();
     private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
     private readonly List<string> _topLevelCommentIds = [];
@@ -135,6 +148,83 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotify
             _expandedCommentIds.Remove(commentId);
 
         PublishVisibleState();
+    }
+
+    public async Task ToggleTranslationAsync(string commentId)
+    {
+        if (_disposed)
+            return;
+
+        YouTubeComment? comment;
+        long generation;
+        string? videoId;
+        lock (_loadGate)
+        {
+            if (!_commentsById.TryGetValue(commentId, out comment))
+                return;
+
+            if (_translatingIds.Contains(commentId))
+                return;
+
+            if (_translatedTexts.ContainsKey(commentId))
+            {
+                if (!_showingTranslationIds.Add(commentId))
+                    _showingTranslationIds.Remove(commentId);
+                _translationErrors.Remove(commentId);
+                PublishVisibleState();
+                return;
+            }
+
+            _translatingIds.Add(commentId);
+            _translationErrors.Remove(commentId);
+            generation = _loadGeneration;
+            videoId = _videoId;
+        }
+
+        PublishVisibleState();
+
+        var targetLanguage = _preferences?.GetPreferences().GetEffectiveYouTubeLanguage()
+                             ?? AppPreferences.DefaultYouTubeLanguage;
+        YouTubeCommentTranslationResult result;
+        try
+        {
+            result = await _comments
+                .TranslateCommentAsync(commentId, comment.Text, targetLanguage)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_loadGate)
+            {
+                _translatingIds.Remove(commentId);
+            }
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to translate comment {CommentId}", commentId);
+            result = new YouTubeCommentTranslationResult(false, ErrorMessage: "Could not translate comment.");
+        }
+
+        lock (_loadGate)
+        {
+            _translatingIds.Remove(commentId);
+            if (_disposed || generation != _loadGeneration || !string.Equals(_videoId, videoId, StringComparison.Ordinal))
+                return;
+
+            if (result.IsSuccess && !string.IsNullOrEmpty(result.TranslatedText))
+            {
+                _translatedTexts[commentId] = result.TranslatedText;
+                _showingTranslationIds.Add(commentId);
+                _translationErrors.Remove(commentId);
+            }
+            else
+            {
+                _translationErrors[commentId] = result.ErrorMessage ?? "Could not translate comment.";
+            }
+
+            PublishVisibleState();
+        }
     }
 
     public async Task LoadMoreAsync()
@@ -301,6 +391,10 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotify
         _repliesByParentId.Clear();
         _topLevelCommentIds.Clear();
         _expandedCommentIds.Clear();
+        _translatedTexts.Clear();
+        _showingTranslationIds.Clear();
+        _translatingIds.Clear();
+        _translationErrors.Clear();
     }
 
     private void PublishVisibleState()
@@ -329,15 +423,30 @@ public sealed class CommentsViewModel(IYouTubeCommentService comments) : INotify
         foreach (var commentId in _topLevelCommentIds)
             AddVisibleComment(commentId, visibleIds, ancestors);
 
+        var targetLanguage = _preferences?.GetPreferences().GetEffectiveYouTubeLanguage()
+                             ?? AppPreferences.DefaultYouTubeLanguage;
         var visibleComments = new CommentRowState[visibleIds.Count];
         for (var index = 0; index < visibleIds.Count; index++)
         {
             var commentId = visibleIds[index];
             var comment = _commentsById[commentId];
+            var hasTranslated = _translatedTexts.TryGetValue(commentId, out var translatedText);
+            var isTranslated = hasTranslated && _showingTranslationIds.Contains(commentId);
+            var isTranslating = _translatingIds.Contains(commentId);
+            var canTranslate = hasTranslated ||
+                               isTranslating ||
+                               CommentTranslationDetector.NeedsTranslation(comment.Text, targetLanguage);
+            _translationErrors.TryGetValue(commentId, out var translationError);
+
             visibleComments[index] = new CommentRowState(
                 comment,
                 _repliesByParentId.TryGetValue(commentId, out var replies) ? replies.Count : 0,
-                _expandedCommentIds.Contains(commentId));
+                _expandedCommentIds.Contains(commentId),
+                canTranslate,
+                isTranslated,
+                isTranslating,
+                translatedText,
+                translationError);
         }
 
         return Array.AsReadOnly(visibleComments);
