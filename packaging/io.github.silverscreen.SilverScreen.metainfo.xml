@@ -43,6 +43,26 @@
     <url type="homepage">https://github.com/XSilverTH/SilverScreen</url>
     <url type="bugtracker">https://github.com/XSilverTH/SilverScreen/issues</url>
     <releases>
+        <release version="0.4.0" date="2026-11-27">
+            <description>
+                <ul>
+                    <li>Offline Library &amp; Downloads: add a built-in yt-dlp downloader, Library tab, download presets,
+                        Downloads preferences, local-first playback with offline SponsorBlock skipping, and offline
+                        badges on feed cards.
+                    </li>
+                    <li>Comments: add threaded reply trees, comment posting, replying, editing, deleting, liking,
+                        on-demand translation with configurable YouTube language, and collapsible long comments.
+                    </li>
+                    <li>Channels &amp; Player: add channel subscribe/unsubscribe, fix timeline click-to-seek on KDE
+                        Plasma, fix the description cue blocking progress bar clicks, and hide overlapping transport
+                        controls while loading.
+                    </li>
+                    <li>Visual Polish &amp; Platform: bundle monochrome symbolic icons, minify SVG assets, and opt into
+                        .NET 11 runtime-async.
+                    </li>
+                </ul>
+            </description>
+        </release>
         <release version="0.3.0" date="2026-11-26">
             <description>
                 <ul>
