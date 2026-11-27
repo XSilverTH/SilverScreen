@@ -90,6 +90,22 @@ internal sealed class PlaybackSession : IDisposable
     public bool CanResume => ResumePrompt == ResumePromptMode.Resume;
     public bool CanRestart => ResumePrompt == ResumePromptMode.Restart;
 
+    /// <summary>
+    ///     Returns <c>true</c> when the target video of <paramref name="request" /> matches the
+    ///     currently active video in this session.
+    /// </summary>
+    public bool IsSameVideoPlaying(PlaybackRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_disposed || CurrentVideo is null || request.Videos.IsDefaultOrEmpty)
+            return false;
+
+        var targetVideo = PlaybackCoordinator.GetVideoAt(request, request.EffectiveStartIndex);
+        return targetVideo is not null &&
+               !string.IsNullOrWhiteSpace(targetVideo.Id) &&
+               string.Equals(CurrentVideo.Id, targetVideo.Id, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

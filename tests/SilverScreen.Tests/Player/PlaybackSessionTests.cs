@@ -91,6 +91,35 @@ public sealed class PlaybackSessionTests : IDisposable
     }
 
     [Fact]
+    public void IsSameVideoPlaying_ReturnsTrueOnlyWhenActiveSessionMatchesTargetVideo()
+    {
+        var v1 = CreateVideo("dQw4w9WgXcQ", "Never Gonna Give You Up");
+        var v2 = CreateVideo("abc123_X-yZ", "Second Video");
+
+        Assert.False(_session.IsSameVideoPlaying(new PlaybackRequest([v1])));
+
+        _session.Start(new PlaybackRequest([v1]));
+        Assert.True(_session.IsSameVideoPlaying(new PlaybackRequest([v1])));
+        Assert.True(_session.IsSameVideoPlaying(new PlaybackRequest([v1, v2])));
+        Assert.False(_session.IsSameVideoPlaying(new PlaybackRequest([v2])));
+        Assert.False(_session.IsSameVideoPlaying(new PlaybackRequest([v1, v2], 1)));
+
+        _session.EndSession();
+        Assert.False(_session.IsSameVideoPlaying(new PlaybackRequest([v1])));
+    }
+
+    [Fact]
+    public void IsSameVideoPlaying_ReturnsFalseAfterFailure()
+    {
+        var v1 = CreateVideo("dQw4w9WgXcQ", "Never Gonna Give You Up");
+        _session.Start(new PlaybackRequest([v1]));
+        Assert.True(_session.IsSameVideoPlaying(new PlaybackRequest([v1])));
+
+        _session.Fail("Network error");
+        Assert.False(_session.IsSameVideoPlaying(new PlaybackRequest([v1])));
+    }
+
+    [Fact]
     public void UpdatePlayback_UpdatesCoordinator_AndAdvancesPlaylistOnVideoChange()
     {
         var v1 = CreateVideo("dQw4w9WgXcQ", "Video 1");

@@ -118,6 +118,17 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
 
         GtkUiDispatch.Run(() => !IsDisposed, () =>
         {
+            if (_session.IsSameVideoPlaying(request))
+            {
+                PresentPlayer();
+                _overlay.Shortcuts.Attach();
+                if (_session.HasMedia)
+                    _overlay.Surface.GrabFocus();
+                else
+                    Widget.GrabFocus();
+                return;
+            }
+
             EndSession(true);
             _session.Start(request);
             _syncingQueue = true;
