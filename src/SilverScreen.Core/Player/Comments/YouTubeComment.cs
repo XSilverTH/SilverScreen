@@ -6,4 +6,6 @@ public sealed record YouTubeComment(
     string Text,
     string PublishedTimeText,
     long LikeCount,
-    string? ParentId = null);
+    string? ParentId = null,
+    int ReplyCount = 0,
+    bool HasMoreReplies = false);

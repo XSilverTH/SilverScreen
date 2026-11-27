@@ -21,7 +21,8 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
     private readonly Lock _gate = new();
     private readonly HashSet<string> _loadedCommentIds = [with(StringComparer.Ordinal)];
     private readonly List<YouTubeComment> _loadedComments = [];
-    private readonly Queue<CommentRepliesContinuation> _replyContinuations = [];
+    private readonly Dictionary<string, CommentRepliesContinuation> _replyContinuationsByParentId =
+        new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _requestGate = new(1, 1);
     private bool _disposed;
     private YouTubeCommentSort _sort;
@@ -70,27 +71,53 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             string? videoId;
             YouTubeCommentSort sort;
             CommentThreadsContinuation? threadContinuation;
-            CommentRepliesContinuation? replyContinuation;
             lock (_gate)
             {
                 videoId = _videoId;
                 sort = _sort;
                 threadContinuation = _threadContinuation;
-                replyContinuation = threadContinuation is null && _replyContinuations.Count > 0
-                    ? _replyContinuations.Peek()
-                    : null;
             }
 
             if (videoId is null)
                 return Failure("Comments are unavailable for this video.");
-            if (threadContinuation is null && replyContinuation is null)
+            if (threadContinuation is null)
                 return Snapshot("No additional comments are available for this video.", false);
 
             var parsedVideoId = VideoId.Parse(videoId);
-            return threadContinuation is not null
-                ? await FetchThreadPageAsync(parsedVideoId, sort, threadContinuation, cancellationToken)
-                    .ConfigureAwait(false)
-                : await FetchReplyPageAsync(replyContinuation!, cancellationToken).ConfigureAwait(false);
+            return await FetchThreadPageAsync(parsedVideoId, sort, threadContinuation, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _requestGate.Release();
+        }
+    }
+
+    public async Task<YouTubeCommentsResult> LoadRepliesAsync(
+        string parentCommentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(parentCommentId))
+            return Failure("Could not load replies.");
+
+        await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            string? videoId;
+            CommentRepliesContinuation? replyContinuation;
+            lock (_gate)
+            {
+                videoId = _videoId;
+                _replyContinuationsByParentId.TryGetValue(parentCommentId, out replyContinuation);
+            }
+
+            if (videoId is null)
+                return Failure("Comments are unavailable for this video.");
+            if (replyContinuation is null)
+                return Snapshot("No additional replies are available.", HasMore());
+
+            return await FetchReplyPageAsync(parentCommentId, replyContinuation, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -156,11 +183,14 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             {
                 foreach (var thread in page.Items)
                 {
-                    AddComment(thread.TopLevel, null);
+                    var parentId = thread.TopLevel.Id.Value;
+                    var replyCount = Math.Max(thread.ReplyCount ?? thread.Replies.Count, thread.Replies.Count);
+                    var hasMoreReplies = thread.NextReplies is not null;
+                    AddComment(thread.TopLevel, null, replyCount, hasMoreReplies);
                     foreach (var reply in thread.Replies)
-                        AddComment(reply, thread.TopLevel.Id.Value);
+                        AddComment(reply, parentId);
                     if (thread.NextReplies is not null)
-                        _replyContinuations.Enqueue(thread.NextReplies);
+                        _replyContinuationsByParentId[parentId] = thread.NextReplies;
                 }
 
                 _threadContinuation = page.Next;
@@ -192,6 +222,7 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
     }
 
     private async Task<YouTubeCommentsResult> FetchReplyPageAsync(
+        string parentId,
         CommentRepliesContinuation continuation,
         CancellationToken cancellationToken)
     {
@@ -202,17 +233,18 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
                 .ConfigureAwait(false);
             lock (_gate)
             {
-                if (_replyContinuations.Count > 0 && (_replyContinuations.Peek() == continuation ||
-                                                      ReferenceEquals(_replyContinuations.Peek(), continuation)))
-                    _replyContinuations.Dequeue();
-
                 foreach (var reply in page.Items)
-                    AddComment(reply, continuation.Target);
+                    AddComment(reply, parentId);
+
                 if (page.Next is not null)
-                    _replyContinuations.Enqueue(page.Next);
+                    _replyContinuationsByParentId[parentId] = page.Next;
+                else
+                    _replyContinuationsByParentId.Remove(parentId);
+
+                UpdateParentReplyMetadata(parentId, page.Next is not null);
             }
 
-            return Snapshot("Comments loaded.", HasMore());
+            return Snapshot("Replies loaded.", HasMore());
         }
         catch (OperationCanceledException)
         {
@@ -221,12 +253,12 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         catch (YouTubeException exception)
         {
             Logger.Warning(exception, "YoutubeAPI failed to fetch comment replies");
-            return Failure("Could not load comments.");
+            return Failure("Could not load replies.");
         }
         catch (Exception exception)
         {
             Logger.Warning(exception, "Unexpected failure fetching comment replies");
-            return Failure("Could not load comments.");
+            return Failure("Could not load replies.");
         }
     }
 
@@ -237,13 +269,13 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             _videoId = videoId;
             _sort = sort;
             _threadContinuation = null;
-            _replyContinuations.Clear();
+            _replyContinuationsByParentId.Clear();
             _loadedComments.Clear();
             _loadedCommentIds.Clear();
         }
     }
 
-    private void AddComment(Comment comment, string? parentId)
+    private void AddComment(Comment comment, string? parentId, int replyCount = 0, bool hasMoreReplies = false)
     {
         if (!_loadedCommentIds.Add(comment.Id.Value)) return;
         var authorName = string.IsNullOrWhiteSpace(comment.Author.Name) ? "YouTube user" : comment.Author.Name;
@@ -253,14 +285,40 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             comment.Text,
             comment.PublishedText,
             Math.Max(comment.LikeCount.GetValueOrDefault(), 0),
-            parentId));
+            parentId,
+            replyCount,
+            hasMoreReplies));
+    }
+
+    private void UpdateParentReplyMetadata(string parentId, bool hasMoreReplies)
+    {
+        var loadedRepliesCount = 0;
+        var parentIndex = -1;
+        for (var i = 0; i < _loadedComments.Count; i++)
+        {
+            var item = _loadedComments[i];
+            if (string.Equals(item.Id, parentId, StringComparison.Ordinal))
+                parentIndex = i;
+            else if (string.Equals(item.ParentId, parentId, StringComparison.Ordinal))
+                loadedRepliesCount++;
+        }
+
+        if (parentIndex >= 0)
+        {
+            var parent = _loadedComments[parentIndex];
+            _loadedComments[parentIndex] = parent with
+            {
+                ReplyCount = Math.Max(parent.ReplyCount, loadedRepliesCount),
+                HasMoreReplies = hasMoreReplies
+            };
+        }
     }
 
     private bool HasMore()
     {
         lock (_gate)
         {
-            return _threadContinuation is not null || _replyContinuations.Count > 0;
+            return _threadContinuation is not null;
         }
     }
 

@@ -25,7 +25,13 @@ public sealed record CommentRowState(
     bool IsTranslated = false,
     bool IsTranslating = false,
     string? TranslatedText = null,
-    string? TranslationError = null);
+    string? TranslationError = null,
+    int Depth = 0,
+    bool IsLastSibling = true,
+    IReadOnlyList<bool>? AncestorHasMoreSiblings = null,
+    bool HasMoreReplies = false,
+    bool IsLoadingReplies = false,
+    string? LoadMoreRepliesParentId = null);
 
 public sealed record CommentsViewState(
     CommentsViewStatus Status,
@@ -47,6 +53,7 @@ public sealed class CommentsViewModel(
     private readonly IPreferencesService? _preferences = preferences;
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];
     private readonly HashSet<string> _expandedCommentIds = [];
+    private readonly HashSet<string> _loadingRepliesIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _translatedTexts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _showingTranslationIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _translatingIds = new(StringComparer.Ordinal);
@@ -141,13 +148,86 @@ public sealed class CommentsViewModel(
 
     public void ToggleReplies(string commentId)
     {
-        if (_disposed || !_repliesByParentId.ContainsKey(commentId))
+        bool shouldLoadReplies;
+        lock (_loadGate)
+        {
+            if (_disposed || !_commentsById.TryGetValue(commentId, out var comment))
+                return;
+
+            var hasLoadedReplies = _repliesByParentId.ContainsKey(commentId);
+            if (!hasLoadedReplies && !comment.HasMoreReplies)
+                return;
+
+            if (!_expandedCommentIds.Add(commentId))
+            {
+                _expandedCommentIds.Remove(commentId);
+                PublishVisibleState();
+                return;
+            }
+
+            shouldLoadReplies = !hasLoadedReplies && comment.HasMoreReplies && !_loadingRepliesIds.Contains(commentId);
+            if (!shouldLoadReplies)
+            {
+                PublishVisibleState();
+                return;
+            }
+        }
+
+        LoadMoreRepliesAsync(commentId).FireAndForget(Logger);
+    }
+
+    public async Task LoadMoreRepliesAsync(string parentCommentId)
+    {
+        long generation;
+        string? videoId;
+        lock (_loadGate)
+        {
+            if (_disposed || _videoId is null || !_commentsById.TryGetValue(parentCommentId, out var parent))
+                return;
+
+            if (!parent.HasMoreReplies || _loadingRepliesIds.Contains(parentCommentId))
+                return;
+
+            _expandedCommentIds.Add(parentCommentId);
+            _loadingRepliesIds.Add(parentCommentId);
+            generation = _loadGeneration;
+            videoId = _videoId;
+            PublishVisibleState();
+        }
+
+        YouTubeCommentsResult result;
+        try
+        {
+            result = await _comments.LoadRepliesAsync(parentCommentId).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_loadGate)
+            {
+                _loadingRepliesIds.Remove(parentCommentId);
+                if (!_disposed && generation == _loadGeneration && string.Equals(_videoId, videoId, StringComparison.Ordinal))
+                    PublishVisibleState();
+            }
+
             return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to load replies for comment {CommentId}", parentCommentId);
+            result = new YouTubeCommentsResult([], false, "Could not load replies.");
+        }
 
-        if (!_expandedCommentIds.Add(commentId))
-            _expandedCommentIds.Remove(commentId);
+        lock (_loadGate)
+        {
+            _loadingRepliesIds.Remove(parentCommentId);
+            if (_disposed || generation != _loadGeneration || !string.Equals(_videoId, videoId, StringComparison.Ordinal))
+                return;
 
-        PublishVisibleState();
+            if (result.IsSuccess)
+                MergeComments(result.Comments);
+
+            PublishVisibleState();
+        }
     }
 
     public async Task ToggleTranslationAsync(string commentId)
@@ -385,12 +465,42 @@ public sealed class CommentsViewModel(
         }
     }
 
+    private void MergeComments(IReadOnlyList<YouTubeComment> comments)
+    {
+        if (comments.Count == 0)
+            return;
+
+        foreach (var comment in comments)
+            _commentsById[comment.Id] = comment;
+
+        _repliesByParentId.Clear();
+        _topLevelCommentIds.Clear();
+
+        foreach (var comment in _commentsById.Values)
+        {
+            if (string.IsNullOrWhiteSpace(comment.ParentId) || !_commentsById.ContainsKey(comment.ParentId))
+            {
+                _topLevelCommentIds.Add(comment.Id);
+                continue;
+            }
+
+            if (!_repliesByParentId.TryGetValue(comment.ParentId, out var replies))
+            {
+                replies = [];
+                _repliesByParentId.Add(comment.ParentId, replies);
+            }
+
+            replies.Add(comment);
+        }
+    }
+
     private void ClearComments()
     {
         _commentsById.Clear();
         _repliesByParentId.Clear();
         _topLevelCommentIds.Clear();
         _expandedCommentIds.Clear();
+        _loadingRepliesIds.Clear();
         _translatedTexts.Clear();
         _showingTranslationIds.Clear();
         _translatingIds.Clear();
@@ -413,22 +523,33 @@ public sealed class CommentsViewModel(
         StateChanged?.Invoke(this, State);
     }
 
+    private readonly record struct VisibleCommentNode(
+        string CommentId,
+        int Depth,
+        bool IsLastSibling,
+        IReadOnlyList<bool> AncestorHasMoreSiblings,
+        string? LoadMoreRepliesParentId);
+
     private ReadOnlyCollection<CommentRowState> BuildVisibleComments()
     {
         if (_commentsById.Count == 0)
             return [];
 
-        var visibleIds = new List<string>(_commentsById.Count);
+        var visibleNodes = new List<VisibleCommentNode>(_commentsById.Count);
         var ancestors = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var commentId in _topLevelCommentIds)
-            AddVisibleComment(commentId, visibleIds, ancestors);
+        for (var i = 0; i < _topLevelCommentIds.Count; i++)
+        {
+            var isLastTopLevel = i == _topLevelCommentIds.Count - 1;
+            AddVisibleComment(_topLevelCommentIds[i], 0, isLastTopLevel, [], visibleNodes, ancestors, null);
+        }
 
         var targetLanguage = _preferences?.GetPreferences().GetEffectiveYouTubeLanguage()
                              ?? AppPreferences.DefaultYouTubeLanguage;
-        var visibleComments = new CommentRowState[visibleIds.Count];
-        for (var index = 0; index < visibleIds.Count; index++)
+        var visibleComments = new CommentRowState[visibleNodes.Count];
+        for (var index = 0; index < visibleNodes.Count; index++)
         {
-            var commentId = visibleIds[index];
+            var node = visibleNodes[index];
+            var commentId = node.CommentId;
             var comment = _commentsById[commentId];
             var hasTranslated = _translatedTexts.TryGetValue(commentId, out var translatedText);
             var isTranslated = hasTranslated && _showingTranslationIds.Contains(commentId);
@@ -438,29 +559,70 @@ public sealed class CommentsViewModel(
                                CommentTranslationDetector.NeedsTranslation(comment.Text, targetLanguage);
             _translationErrors.TryGetValue(commentId, out var translationError);
 
+            var loadedReplyCount = _repliesByParentId.TryGetValue(commentId, out var replies) ? replies.Count : 0;
+            var effectiveReplyCount = Math.Max(comment.ReplyCount, loadedReplyCount);
+
             visibleComments[index] = new CommentRowState(
                 comment,
-                _repliesByParentId.TryGetValue(commentId, out var replies) ? replies.Count : 0,
+                effectiveReplyCount,
                 _expandedCommentIds.Contains(commentId),
                 canTranslate,
                 isTranslated,
                 isTranslating,
                 translatedText,
-                translationError);
+                translationError,
+                node.Depth,
+                node.IsLastSibling,
+                node.AncestorHasMoreSiblings,
+                comment.HasMoreReplies,
+                _loadingRepliesIds.Contains(commentId),
+                node.LoadMoreRepliesParentId);
         }
 
         return Array.AsReadOnly(visibleComments);
     }
 
-    private void AddVisibleComment(string commentId, List<string> visibleIds, HashSet<string> ancestors)
+    private void AddVisibleComment(
+        string commentId,
+        int depth,
+        bool isLastSibling,
+        IReadOnlyList<bool> ancestorHasMoreSiblings,
+        List<VisibleCommentNode> visibleNodes,
+        HashSet<string> ancestors,
+        string? loadMoreRepliesParentId)
     {
         if (!ancestors.Add(commentId))
             return;
 
-        visibleIds.Add(commentId);
-        if (_expandedCommentIds.Contains(commentId) && _repliesByParentId.TryGetValue(commentId, out var replies))
-            foreach (var reply in replies)
-                AddVisibleComment(reply.Id, visibleIds, ancestors);
+        visibleNodes.Add(new VisibleCommentNode(
+            commentId,
+            depth,
+            isLastSibling,
+            ancestorHasMoreSiblings,
+            loadMoreRepliesParentId));
+
+        if (_expandedCommentIds.Contains(commentId) &&
+            _commentsById.TryGetValue(commentId, out var comment) &&
+            _repliesByParentId.TryGetValue(commentId, out var replies) &&
+            replies.Count > 0)
+        {
+            IReadOnlyList<bool> nextAncestors = depth == 0
+                ? []
+                : [.. ancestorHasMoreSiblings, !isLastSibling];
+            for (var i = 0; i < replies.Count; i++)
+            {
+                var isLastReply = i == replies.Count - 1;
+                var nextLoadMoreParentId = isLastReply && comment.HasMoreReplies ? commentId : null;
+                AddVisibleComment(
+                    replies[i].Id,
+                    depth + 1,
+                    isLastReply,
+                    nextAncestors,
+                    visibleNodes,
+                    ancestors,
+                    nextLoadMoreParentId);
+            }
+        }
 
         ancestors.Remove(commentId);
     }

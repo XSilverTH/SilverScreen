@@ -248,6 +248,89 @@ public sealed class CommentsViewModelTests
         Assert.Equal("Could not translate comment.", row.TranslationError);
     }
 
+    [Fact]
+    public async Task ToggleReplies_WhenHasMoreRepliesAndNotYetLoaded_LoadsRepliesOnDemandAndProjectsTree()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+
+        var initialRequest = Assert.Single(service.Requests);
+        var root = new YouTubeComment("root", "RootAuthor", "Top comment", "1d ago", 10, null, ReplyCount: 3,
+            HasMoreReplies: true);
+        initialRequest.Completion.SetResult(new YouTubeCommentsResult([root], true, "Comments loaded."));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.Equal(3, viewModel.State.VisibleComments[0].ReplyCount);
+        Assert.True(viewModel.State.VisibleComments[0].HasMoreReplies);
+        Assert.False(viewModel.State.VisibleComments[0].RepliesExpanded);
+
+        viewModel.ToggleReplies("root");
+        var replyRequest = Assert.Single(service.ReplyRequests);
+        Assert.Equal("root", replyRequest.ParentCommentId);
+        Assert.True(viewModel.State.VisibleComments[0].IsLoadingReplies);
+        Assert.True(viewModel.State.VisibleComments[0].RepliesExpanded);
+
+        var updatedRoot = root with { HasMoreReplies = true };
+        var reply1 = Comment("reply1", "root");
+        var reply2 = Comment("reply2", "root");
+        replyRequest.Completion.SetResult(new YouTubeCommentsResult([updatedRoot, reply1, reply2], true,
+            "Replies loaded."));
+
+        await WaitForStateAsync(viewModel, state =>
+            state.VisibleComments.Count == 3 && !state.VisibleComments[0].IsLoadingReplies);
+
+        Assert.Equal(["root", "reply1", "reply2"], viewModel.State.VisibleComments.Select(r => r.Comment.Id));
+        Assert.Equal(0, viewModel.State.VisibleComments[0].Depth);
+        Assert.Equal(1, viewModel.State.VisibleComments[1].Depth);
+        Assert.False(viewModel.State.VisibleComments[1].IsLastSibling);
+        Assert.Null(viewModel.State.VisibleComments[1].LoadMoreRepliesParentId);
+        Assert.Equal(1, viewModel.State.VisibleComments[2].Depth);
+        Assert.True(viewModel.State.VisibleComments[2].IsLastSibling);
+        Assert.Equal("root", viewModel.State.VisibleComments[2].LoadMoreRepliesParentId);
+
+        var loadMoreTask = viewModel.LoadMoreRepliesAsync("root");
+        Assert.Equal(2, service.ReplyRequests.Count);
+        var secondReplyRequest = service.ReplyRequests[1];
+        var finalRoot = updatedRoot with { HasMoreReplies = false };
+        var reply3 = Comment("reply3", "root");
+        secondReplyRequest.Completion.SetResult(new YouTubeCommentsResult([finalRoot, reply1, reply2, reply3], true,
+            "Replies loaded."));
+        await loadMoreTask;
+
+        Assert.Equal(["root", "reply1", "reply2", "reply3"], viewModel.State.VisibleComments.Select(r => r.Comment.Id));
+        Assert.False(viewModel.State.VisibleComments[0].HasMoreReplies);
+        Assert.Null(viewModel.State.VisibleComments[3].LoadMoreRepliesParentId);
+    }
+
+    [Fact]
+    public async Task BuildVisibleComments_ProjectsAncestorLinesForMultiLevelTree()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+
+        var request = Assert.Single(service.Requests);
+        var root = Comment("root");
+        var reply1 = Comment("reply1", "root");
+        var reply2 = Comment("reply2", "root");
+        var nested = Comment("nested", "reply1");
+        request.Completion.SetResult(new YouTubeCommentsResult([root, reply1, reply2, nested], true,
+            "Comments loaded."));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        viewModel.ToggleReplies("root");
+        viewModel.ToggleReplies("reply1");
+
+        Assert.Equal(["root", "reply1", "nested", "reply2"],
+            viewModel.State.VisibleComments.Select(r => r.Comment.Id));
+
+        var nestedRow = viewModel.State.VisibleComments[2];
+        Assert.Equal(2, nestedRow.Depth);
+        Assert.True(nestedRow.IsLastSibling);
+        Assert.Equal([true], nestedRow.AncestorHasMoreSiblings);
+    }
+
     private static YouTubeComment Comment(string id, string? parentId = null)
     {
         return new YouTubeComment(id, id, id, "", 0, parentId);
@@ -284,6 +367,7 @@ public sealed class CommentsViewModelTests
     private sealed class ControlledCommentService : IYouTubeCommentService
     {
         public List<Pending> Requests { get; } = [];
+        public List<PendingReplies> ReplyRequests { get; } = [];
         public int TranslateCallCount { get; private set; }
         public Func<string, string, string?, Task<YouTubeCommentTranslationResult>>? TranslateHandler { get; init; }
 
@@ -304,6 +388,15 @@ public sealed class CommentsViewModelTests
         {
             var pending = new Pending(null, YouTubeCommentSort.Top, count, cancellationToken, false);
             Requests.Add(pending);
+            return pending.Completion.Task;
+        }
+
+        public Task<YouTubeCommentsResult> LoadRepliesAsync(
+            string parentCommentId,
+            CancellationToken cancellationToken = default)
+        {
+            var pending = new PendingReplies(parentCommentId, cancellationToken);
+            ReplyRequests.Add(pending);
             return pending.Completion.Task;
         }
 
@@ -331,6 +424,15 @@ public sealed class CommentsViewModelTests
             public int Count { get; } = count;
             public CancellationToken Token { get; } = token;
             public bool IsFirstPage { get; } = isFirstPage;
+
+            public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public sealed class PendingReplies(string parentCommentId, CancellationToken token)
+        {
+            public string ParentCommentId { get; } = parentCommentId;
+            public CancellationToken Token { get; } = token;
 
             public TaskCompletionSource<YouTubeCommentsResult> Completion { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);

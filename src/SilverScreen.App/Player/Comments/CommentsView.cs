@@ -190,7 +190,13 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             rowState.IsTranslated,
             rowState.IsTranslating,
             rowState.TranslatedText,
-            rowState.TranslationError);
+            rowState.TranslationError,
+            rowState.Depth,
+            rowState.IsLastSibling,
+            rowState.AncestorHasMoreSiblings,
+            rowState.HasMoreReplies,
+            rowState.IsLoadingReplies,
+            rowState.LoadMoreRepliesParentId);
     }
 
     private string GetOrBuildMarkup(string commentId, string text)
@@ -213,7 +219,8 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         var row = new CommentRowView(
             id => ViewModel?.ToggleReplies(id),
             _linkActivated,
-            id => ViewModel?.ToggleTranslationAsync(id).FireAndForget(Logger));
+            id => ViewModel?.ToggleTranslationAsync(id).FireAndForget(Logger),
+            parentId => ViewModel?.LoadMoreRepliesAsync(parentId).FireAndForget(Logger));
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

@@ -10,10 +10,18 @@ public interface IYouTubeCommentService
         int count = 20,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Loads the next retained YoutubeAPI thread or reply continuation.</summary>
+    /// <summary>Loads the next retained YoutubeAPI thread continuation.</summary>
     Task<YouTubeCommentsResult> LoadNextPageAsync(
         int count = 20,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Loads the next page of replies for a specific parent comment.</summary>
+    Task<YouTubeCommentsResult> LoadRepliesAsync(
+        string parentCommentId,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new YouTubeCommentsResult([], false, "Comment replies are not supported."));
+    }
 
     /// <summary>Translates a comment into the specified target language (or the configured host language).</summary>
     Task<YouTubeCommentTranslationResult> TranslateCommentAsync(

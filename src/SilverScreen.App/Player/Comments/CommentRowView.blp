@@ -1,26 +1,36 @@
 using Gtk 4.0;
 using Adw 1;
 
-Adw.Bin CommentRowView {
+Gtk.Box CommentRowView {
+  orientation: horizontal;
   hexpand: true;
-  focusable: true;
-  styles [
-    "comment-row",
-  ]
-
-  margin-top: 3;
-  margin-bottom: 3;
   margin-start: 8;
   margin-end: 8;
 
-  Gtk.Box {
-    orientation: horizontal;
-    spacing: 12;
-    margin-top: 12;
-    margin-bottom: 12;
-    margin-start: 12;
-    margin-end: 12;
+  Gtk.DrawingArea comment_tree_gutter {
+    visible: false;
+    vexpand: true;
+    can-target: false;
+  }
+
+  Adw.Bin comment_card {
     hexpand: true;
+    focusable: true;
+    styles [
+      "comment-row",
+    ]
+
+    margin-top: 3;
+    margin-bottom: 3;
+
+    Gtk.Box {
+      orientation: horizontal;
+      spacing: 12;
+      margin-top: 12;
+      margin-bottom: 12;
+      margin-start: 12;
+      margin-end: 12;
+      hexpand: true;
 
     Gtk.Image {
       icon-name: "avatar-default-symbolic";
@@ -113,15 +123,51 @@ Adw.Bin CommentRowView {
         }
       }
 
-      Gtk.Button comment_replies_button {
-        label: "";
-        halign: start;
-        visible: false;
-        clicked => $OnRepliesButtonClicked();
-        styles [
-          "flat",
-        ]
+      Gtk.Box {
+        orientation: horizontal;
+        spacing: 8;
+        margin-top: 2;
+
+        Gtk.Button comment_replies_button {
+          halign: start;
+          visible: false;
+          clicked => $OnRepliesButtonClicked();
+          styles [
+            "flat",
+            "comment-replies-button",
+          ]
+
+          Gtk.Box {
+            orientation: horizontal;
+            spacing: 6;
+
+            Gtk.Image comment_replies_chevron {
+              icon-name: "pan-down-symbolic";
+              pixel-size: 14;
+              accessible-role: presentation;
+            }
+
+            Gtk.Label comment_replies_label {
+              label: "";
+            }
+          }
+        }
+
+        Gtk.Button comment_load_more_replies_button {
+          halign: start;
+          visible: false;
+          clicked => $OnLoadMoreRepliesButtonClicked();
+          styles [
+            "flat",
+            "comment-replies-button",
+          ]
+
+          Gtk.Label comment_load_more_replies_label {
+            label: "Load more replies";
+          }
+        }
       }
     }
   }
+}
 }
