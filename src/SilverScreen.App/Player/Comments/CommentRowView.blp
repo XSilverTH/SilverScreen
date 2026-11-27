@@ -18,17 +18,20 @@ Gtk.Box CommentRowView {
       orientation: vertical;
       hexpand: true;
 
-      Gtk.Box {
-        orientation: horizontal;
+      Gtk.Overlay comment_card_overlay {
         hexpand: true;
 
-        Gtk.DrawingArea comment_tree_gutter {
-          visible: false;
-          vexpand: true;
-          can-target: false;
-        }
+        child: Gtk.Box {
+          orientation: horizontal;
+          hexpand: true;
 
-        Gtk.Box comment_content_box {
+          Gtk.DrawingArea comment_tree_gutter {
+            visible: false;
+            vexpand: true;
+            can-target: false;
+          }
+
+          Gtk.Box comment_content_box {
           orientation: horizontal;
           spacing: 12;
           margin-top: 12;
@@ -209,13 +212,37 @@ Gtk.Box CommentRowView {
               }
             }
 
-            Gtk.Label comment_text_label {
-              xalign: 0;
-              wrap: true;
-              wrap-mode: word;
-              selectable: true;
-              use-markup: true;
-              activate-link => $OnCommentTextActivateLink();
+            Gtk.Overlay comment_body_overlay {
+              hexpand: true;
+
+              child: Gtk.Box comment_text_clip {
+                orientation: vertical;
+                hexpand: true;
+                overflow: hidden;
+
+                Gtk.Label comment_text_label {
+                  xalign: 0;
+                  yalign: 0;
+                  wrap: true;
+                  wrap-mode: word;
+                  selectable: true;
+                  use-markup: true;
+                  activate-link => $OnCommentTextActivateLink();
+                }
+              };
+
+              [overlay]
+              Gtk.Box comment_text_fade {
+                hexpand: true;
+                valign: end;
+                height-request: 44;
+                can-target: false;
+                visible: false;
+
+                styles [
+                  "comment-text-fade",
+                ]
+              }
             }
 
             Gtk.Box comment_edit_box {
@@ -373,6 +400,46 @@ Gtk.Box CommentRowView {
               }
             }
           }
+        }
+      };
+
+      [overlay]
+      Gtk.Revealer comment_expand_revealer {
+          halign: center;
+          valign: end;
+          reveal-child: false;
+          transition-type: slide_up;
+          transition-duration: 180;
+          can-target: false;
+
+          styles [
+            "comment-expand-revealer",
+          ]
+
+          child: Gtk.Button comment_expand_button {
+            margin-bottom: 8;
+            clicked => $OnExpandCollapseButtonClicked();
+
+            styles [
+              "pill",
+              "comment-expand-pill",
+            ]
+
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 6;
+
+              Gtk.Image comment_expand_icon {
+                icon-name: "pan-down-symbolic";
+                pixel-size: 14;
+                accessible-role: presentation;
+              }
+
+              Gtk.Label comment_expand_label {
+                label: "Expand";
+              }
+            }
+          };
         }
       }
 

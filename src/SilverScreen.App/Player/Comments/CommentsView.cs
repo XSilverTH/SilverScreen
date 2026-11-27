@@ -29,6 +29,8 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private Texture? _composerAvatarTexture;
     private string? _loadedComposerAvatarUrl;
     private string[] _displayedCommentIds = [];
+    private string? _stickyCollapseCommentId;
+    private bool _pendingStickyCollapseUpdate;
     private CommentsViewState _state = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
     public CommentsView(
@@ -120,11 +122,75 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 
     private void OnScrollValueChanged(object? sender, EventArgs args)
     {
-        if (IsDisposed || _vadjustment is null || !_state.HasMore || _state.IsLoadingMore ||
+        if (IsDisposed)
+            return;
+
+        ScheduleStickyCollapseUpdate();
+
+        if (_vadjustment is null || !_state.HasMore || _state.IsLoadingMore ||
             _vadjustment.Value + _vadjustment.PageSize < _vadjustment.Upper - 280)
             return;
 
         ViewModel?.LoadMoreAsync().FireAndForget(Logger);
+    }
+
+    private void OnStickyCollapseButtonClicked(object? sender, EventArgs args)
+    {
+        if (!string.IsNullOrEmpty(_stickyCollapseCommentId))
+            ViewModel?.ToggleCommentTextExpanded(_stickyCollapseCommentId);
+    }
+
+    private void ScheduleStickyCollapseUpdate()
+    {
+        if (_pendingStickyCollapseUpdate || IsDisposed)
+            return;
+
+        _pendingStickyCollapseUpdate = true;
+        Lifetime.Idle(() =>
+        {
+            _pendingStickyCollapseUpdate = false;
+            if (!IsDisposed)
+                UpdateStickyCollapsePill();
+            return false;
+        });
+    }
+
+    private void UpdateStickyCollapsePill()
+    {
+        var viewportHeight = (double)comments_scrolled_window.GetAllocatedHeight();
+        string? nextTargetId = null;
+
+        if (viewportHeight > 0 && _state.Status == CommentsViewStatus.List)
+        {
+            foreach (var row in _rowsByCell.Values)
+            {
+                if (!row.IsLongAndExpanded || row.BoundCommentId is null)
+                    continue;
+
+                if (!row.TryGetBodyBoundsInViewport(comments_scrolled_window, out var bodyTop, out var bodyHeight))
+                    continue;
+
+                var bodyBottom = bodyTop + bodyHeight;
+                var visibleTop = Math.Max(0.0, bodyTop);
+                var visibleBottom = Math.Min(viewportHeight, bodyBottom);
+                var visibleHeight = visibleBottom - visibleTop;
+
+                if (bodyBottom > viewportHeight + 8.0 && visibleHeight >= 48.0)
+                {
+                    nextTargetId = row.BoundCommentId;
+                    break;
+                }
+            }
+        }
+
+        _stickyCollapseCommentId = nextTargetId;
+        var shouldShow = nextTargetId is not null;
+        comments_sticky_collapse_revealer.SetCanTarget(shouldShow);
+        comments_sticky_collapse_revealer.SetRevealChild(shouldShow);
+        if (shouldShow)
+            comments_sticky_collapse_revealer.AddCssClass("revealed");
+        else
+            comments_sticky_collapse_revealer.RemoveCssClass("revealed");
     }
 
     private void OnSortDropdownNotify(object? sender, EventArgs args)
@@ -383,6 +449,8 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         foreach (var row in _rowsByCell.Values)
             if (row.BoundCommentId is { } boundId && _visibleCommentsById.TryGetValue(boundId, out var rowState))
                 BindRow(row, rowState);
+
+        ScheduleStickyCollapseUpdate();
     }
 
     private void BindRow(CommentRowView row, CommentRowState rowState)
@@ -415,7 +483,8 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             rowState.IsSavingEdit,
             rowState.EditError,
             rowState.IsDeleting,
-            rowState.DeleteError);
+            rowState.DeleteError,
+            rowState.IsTextExpanded);
     }
 
     private string GetOrBuildMarkup(string commentId, string text)
@@ -445,7 +514,9 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             id => ViewModel?.BeginEdit(id),
             id => ViewModel?.CancelEdit(id),
             (id, text) => ViewModel?.SaveEditAsync(id, text).FireAndForget(Logger),
-            id => ViewModel?.DeleteCommentAsync(id).FireAndForget(Logger));
+            id => ViewModel?.DeleteCommentAsync(id).FireAndForget(Logger),
+            id => ViewModel?.ToggleCommentTextExpanded(id),
+            ScheduleStickyCollapseUpdate);
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

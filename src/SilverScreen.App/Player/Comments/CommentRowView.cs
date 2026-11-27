@@ -17,6 +17,9 @@ public partial class CommentRowView : ViewBase<Box>
     private const int FirstLevelIndent = 56;
     private const int IndentPerDepth = 24;
     private const int MaxVisualDepth = 4;
+    private const double CollapsedVisibleLines = 5.75;
+    private const double LongCommentThresholdLines = 6.5;
+    private const uint ExpandAnimationDurationMs = 220;
     private static readonly ILogger Logger = Log.ForContext<CommentRowView>();
 
     private readonly NativeMemoryPressure _avatarPressure = new();
@@ -28,18 +31,29 @@ public partial class CommentRowView : ViewBase<Box>
     private readonly Action<string>? _loadMoreRepliesRequested;
     private readonly Action<string> _repliesToggleRequested;
     private readonly Action<string, string>? _saveEditRequested;
+    private readonly Action? _stickyCollapseChanged;
+    private readonly Action<string>? _textExpandToggleRequested;
     private readonly IThumbnailService? _thumbnails;
     private readonly Action<string>? _translateRequested;
 
+    private readonly CustomRequestModeFunc _clipRequestModeDelegate;
+    private readonly CustomMeasureFunc _clipMeasureDelegate;
+    private readonly CustomAllocateFunc _clipAllocateDelegate;
     private CancellationTokenSource? _avatarCancellation;
     private Texture? _avatarTexture;
+    private Adw.TimedAnimation? _expandAnimation;
+    private double _expandProgress;
+    private bool _isHovered;
+    private bool _isLongComment;
     private string? _loadedAvatarUrl;
+    private bool _pendingOverlaySync;
 
     private IReadOnlyList<bool> _boundAncestorHasMoreSiblings = [];
     private bool? _boundCanTranslate;
     private int _boundDepth;
     private bool? _boundHasMoreReplies;
     private bool _boundIsEditing;
+    private bool _boundIsTextExpanded;
     private bool _boundIsFirstSibling = true;
     private bool _boundIsLastInThread = true;
     private bool _boundIsLastSibling = true;
@@ -63,7 +77,9 @@ public partial class CommentRowView : ViewBase<Box>
         Action<string>? beginEditRequested = null,
         Action<string>? cancelEditRequested = null,
         Action<string, string>? saveEditRequested = null,
-        Action<string>? deleteRequested = null)
+        Action<string>? deleteRequested = null,
+        Action<string>? textExpandToggleRequested = null,
+        Action? stickyCollapseChanged = null)
     {
         _repliesToggleRequested =
             repliesToggleRequested ?? throw new ArgumentNullException(nameof(repliesToggleRequested));
@@ -76,14 +92,44 @@ public partial class CommentRowView : ViewBase<Box>
         _cancelEditRequested = cancelEditRequested;
         _saveEditRequested = saveEditRequested;
         _deleteRequested = deleteRequested;
+        _textExpandToggleRequested = textExpandToggleRequested;
+        _stickyCollapseChanged = stickyCollapseChanged;
 
         comment_tree_gutter.SetDrawFunc(DrawTreeLines);
+        _clipRequestModeDelegate = GetClipRequestMode;
+        _clipMeasureDelegate = MeasureClip;
+        _clipAllocateDelegate = AllocateClip;
+        comment_text_clip.SetLayoutManager(CustomLayout.New(
+            _clipRequestModeDelegate,
+            _clipMeasureDelegate,
+            _clipAllocateDelegate));
+
+        var cardMotion = EventControllerMotion.New();
+        cardMotion.SetPropagationPhase(PropagationPhase.Capture);
+        Lifetime.Attach(
+            comment_card,
+            cardMotion,
+            c =>
+            {
+                c.OnEnter += OnCardMotionEnter;
+                c.OnLeave += OnCardMotionLeave;
+            },
+            c =>
+            {
+                c.OnEnter -= OnCardMotionEnter;
+                c.OnLeave -= OnCardMotionLeave;
+            });
+
         var editBuffer = comment_edit_text.Buffer;
         if (editBuffer is not null)
             Lifetime.Track(
                 () => editBuffer.OnChanged += OnEditBufferChanged,
                 () => editBuffer.OnChanged -= OnEditBufferChanged);
-        Lifetime.Track(() => { }, CancelAvatarLoad);
+        Lifetime.Track(() => { }, () =>
+        {
+            CancelAvatarLoad();
+            CancelExpandAnimation();
+        });
     }
 
     internal string? BoundCommentId { get; private set; }
@@ -226,7 +272,8 @@ public partial class CommentRowView : ViewBase<Box>
         bool isSavingEdit = false,
         string? editError = null,
         bool isDeleting = false,
-        string? deleteError = null)
+        string? deleteError = null,
+        bool isTextExpanded = false)
     {
         var displayText = isTranslated && !string.IsNullOrEmpty(translatedText)
             ? translatedText
@@ -289,6 +336,8 @@ public partial class CommentRowView : ViewBase<Box>
             _boundText = displayText;
             SetCommentText(displayText, prebuiltMarkup);
         }
+
+        UpdateTextExpansionState(sameId, isTextExpanded);
 
         if (!sameId ||
             _boundCanTranslate != canTranslate ||
@@ -404,6 +453,17 @@ public partial class CommentRowView : ViewBase<Box>
         _boundTranslationError = null;
         _boundDepth = 0;
         _boundIsEditing = false;
+        _boundIsTextExpanded = false;
+        _isHovered = false;
+        _isLongComment = false;
+        _expandProgress = 0.0;
+        CancelExpandAnimation();
+        comment_text_fade.SetVisible(false);
+        comment_text_fade.SetOpacity(1.0);
+        comment_expand_revealer.SetRevealChild(false);
+        comment_expand_revealer.RemoveCssClass("revealed");
+        comment_expand_revealer.SetCanTarget(false);
+        comment_body_overlay.SetVisible(true);
         _boundIsFirstSibling = true;
         _boundIsLastSibling = true;
         _boundIsLastInThread = true;
@@ -442,6 +502,7 @@ public partial class CommentRowView : ViewBase<Box>
         comment_delete_button.SetVisible(false);
         comment_edit_box.SetVisible(false);
         comment_text_label.SetVisible(true);
+        comment_body_overlay.SetVisible(true);
         comment_edit_text.SetSensitive(true);
         comment_edit_text.Buffer?.SetText(string.Empty, 0);
         comment_edit_error_label.SetVisible(false);
@@ -493,7 +554,10 @@ public partial class CommentRowView : ViewBase<Box>
         _boundIsEditing = isEditing;
 
         comment_text_label.SetVisible(!isEditing);
+        comment_body_overlay.SetVisible(!isEditing);
         comment_edit_box.SetVisible(isEditing);
+        if (isEditing)
+            UpdatePillVisibility();
 
         if (isEditing)
         {
@@ -680,6 +744,233 @@ public partial class CommentRowView : ViewBase<Box>
 
         cr.PopGroupToSource();
         cr.PaintWithAlpha(alpha);
+    }
+
+    private void OnExpandCollapseButtonClicked(object? sender, EventArgs args)
+    {
+        if (!string.IsNullOrEmpty(BoundCommentId))
+            _textExpandToggleRequested?.Invoke(BoundCommentId);
+    }
+
+    private void OnCardMotionEnter(EventControllerMotion sender, EventArgs args)
+    {
+        if (IsDisposed || _isHovered)
+            return;
+
+        _isHovered = true;
+        UpdatePillVisibility();
+    }
+
+    private void OnCardMotionLeave(EventControllerMotion sender, EventArgs args)
+    {
+        if (IsDisposed || !_isHovered)
+            return;
+
+        _isHovered = false;
+        UpdatePillVisibility();
+    }
+
+    private SizeRequestMode GetClipRequestMode(Widget widget)
+    {
+        return SizeRequestMode.HeightForWidth;
+    }
+
+    private void MeasureClip(
+        Widget widget,
+        Orientation orientation,
+        int forSize,
+        out int minimum,
+        out int natural,
+        out int minimumBaseline,
+        out int naturalBaseline)
+    {
+        minimumBaseline = -1;
+        naturalBaseline = -1;
+
+        if (orientation == Orientation.Horizontal)
+        {
+            comment_text_label.Measure(Orientation.Horizontal, forSize, out minimum, out natural, out _, out _);
+            return;
+        }
+
+        comment_text_label.Measure(Orientation.Vertical, forSize, out _, out var labelNatural, out _, out _);
+        var lineHeight = GetLineHeight();
+        var collapsedHeight = (int)Math.Round(lineHeight * CollapsedVisibleLines);
+        var thresholdHeight = (int)Math.Round(lineHeight * LongCommentThresholdLines);
+        var isLong = !_boundIsEditing && labelNatural > thresholdHeight;
+        if (isLong != _isLongComment)
+        {
+            _isLongComment = isLong;
+            ScheduleOverlaySync();
+        }
+
+        if (!isLong)
+        {
+            minimum = labelNatural;
+            natural = labelNatural;
+            return;
+        }
+
+        var targetHeight = (int)Math.Round(collapsedHeight + (labelNatural - collapsedHeight) * _expandProgress);
+        targetHeight = Math.Clamp(targetHeight, collapsedHeight, labelNatural);
+        minimum = targetHeight;
+        natural = targetHeight;
+    }
+
+    private void AllocateClip(Widget widget, int width, int height, int baseline)
+    {
+        comment_text_label.Measure(Orientation.Vertical, width, out _, out var labelNatural, out _, out _);
+        comment_text_label.Allocate(width, Math.Max(height, labelNatural), -1, null);
+        ScheduleOverlaySync();
+    }
+
+    private double GetLineHeight()
+    {
+        var metrics = comment_text_label.GetPangoContext().GetMetrics(null, null);
+        var height = metrics.GetHeight();
+        if (height <= 0)
+            height = metrics.GetAscent() + metrics.GetDescent();
+
+        var lineHeight = height / (double)Pango.Constants.SCALE;
+        return lineHeight > 1.0 ? lineHeight : 19.0;
+    }
+
+    private void UpdateTextExpansionState(bool sameId, bool isTextExpanded)
+    {
+        var changed = _boundIsTextExpanded != isTextExpanded;
+        _boundIsTextExpanded = isTextExpanded;
+        var target = isTextExpanded ? 1.0 : 0.0;
+
+        if (!sameId)
+        {
+            CancelExpandAnimation();
+            _expandProgress = target;
+            comment_text_clip.QueueResize();
+            SyncOverlayState();
+            return;
+        }
+
+        if (changed)
+            AnimateExpandTo(target);
+        else
+            SyncOverlayState();
+    }
+
+    private void AnimateExpandTo(double target)
+    {
+        CancelExpandAnimation();
+
+        if (Math.Abs(_expandProgress - target) < 0.001)
+        {
+            _expandProgress = target;
+            comment_text_clip.QueueResize();
+            SyncOverlayState();
+            return;
+        }
+
+        var animTarget = Adw.CallbackAnimationTarget.New(value =>
+        {
+            if (IsDisposed)
+                return;
+
+            _expandProgress = value;
+            comment_text_clip.QueueResize();
+            SyncFadeOpacity();
+        });
+
+        var animation = Adw.TimedAnimation.New(
+            comment_text_clip,
+            _expandProgress,
+            target,
+            ExpandAnimationDurationMs,
+            animTarget);
+        animation.SetEasing(Adw.Easing.EaseInOutCubic);
+        animation.OnDone += (_, _) =>
+        {
+            if (IsDisposed)
+                return;
+
+            _expandProgress = target;
+            _expandAnimation = null;
+            comment_text_clip.QueueResize();
+            SyncOverlayState();
+        };
+
+        _expandAnimation = animation;
+        SyncOverlayState();
+        animation.Play();
+    }
+
+    private void CancelExpandAnimation()
+    {
+        if (_expandAnimation is not { } animation)
+            return;
+
+        _expandAnimation = null;
+        animation.Pause();
+    }
+
+    private void ScheduleOverlaySync()
+    {
+        if (_pendingOverlaySync || IsDisposed)
+            return;
+
+        _pendingOverlaySync = true;
+        Lifetime.Idle(() =>
+        {
+            _pendingOverlaySync = false;
+            if (!IsDisposed)
+                SyncOverlayState();
+            return false;
+        });
+    }
+
+    private void SyncOverlayState()
+    {
+        SyncFadeOpacity();
+
+        comment_expand_icon.SetFromIconName(_boundIsTextExpanded ? "pan-up-symbolic" : "pan-down-symbolic");
+        comment_expand_label.SetText(_boundIsTextExpanded ? "Collapse" : "Expand");
+        comment_expand_button.SetTooltipText(_boundIsTextExpanded ? "Collapse comment" : "Expand comment");
+
+        UpdatePillVisibility();
+        _stickyCollapseChanged?.Invoke();
+    }
+
+    private void SyncFadeOpacity()
+    {
+        var showFade = _isLongComment && !_boundIsEditing && _expandProgress < 0.995;
+        comment_text_fade.SetVisible(showFade);
+        if (showFade)
+            comment_text_fade.SetOpacity(Math.Clamp(1.0 - _expandProgress, 0.0, 1.0));
+    }
+
+    internal bool IsLongAndExpanded => _isLongComment && _boundIsTextExpanded && !_boundIsEditing;
+
+    internal bool TryGetBodyBoundsInViewport(Widget viewport, out double top, out double height)
+    {
+        if (IsDisposed || !comment_card_overlay.ComputeBounds(viewport, out var bounds))
+        {
+            top = 0;
+            height = 0;
+            return false;
+        }
+
+        top = bounds.GetY();
+        height = bounds.GetHeight();
+        return true;
+    }
+
+    private void UpdatePillVisibility()
+    {
+        var shouldShow = _isLongComment && !_boundIsEditing && _isHovered;
+
+        comment_expand_revealer.SetCanTarget(shouldShow);
+        comment_expand_revealer.SetRevealChild(shouldShow);
+        if (shouldShow)
+            comment_expand_revealer.AddCssClass("revealed");
+        else
+            comment_expand_revealer.RemoveCssClass("revealed");
     }
 
     private void SetCommentText(string text, string? prebuiltMarkup)

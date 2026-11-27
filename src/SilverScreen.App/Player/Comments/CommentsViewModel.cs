@@ -41,7 +41,8 @@ public sealed record CommentRowState(
     bool IsSavingEdit = false,
     string? EditError = null,
     bool IsDeleting = false,
-    string? DeleteError = null);
+    string? DeleteError = null,
+    bool IsTextExpanded = false);
 
 public sealed record CommentsViewState(
     CommentsViewStatus Status,
@@ -65,6 +66,7 @@ public sealed class CommentsViewModel(
     private readonly IPreferencesService? _preferences = preferences;
     private readonly Dictionary<string, YouTubeComment> _commentsById = [];
     private readonly HashSet<string> _expandedCommentIds = [];
+    private readonly HashSet<string> _expandedTextCommentIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _loadingRepliesIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _translatedTexts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _showingTranslationIds = new(StringComparer.Ordinal);
@@ -106,6 +108,8 @@ public sealed class CommentsViewModel(
         _repliesByParentId.Clear();
         _topLevelCommentIds.Clear();
         _expandedCommentIds.Clear();
+        _expandedTextCommentIds.Clear();
+        _expandedTextCommentIds.Clear();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -457,6 +461,7 @@ public sealed class CommentsViewModel(
             _commentsById.Remove(id);
             _topLevelCommentIds.RemoveAll(t => string.Equals(t, id, StringComparison.Ordinal));
             _expandedCommentIds.Remove(id);
+            _expandedTextCommentIds.Remove(id);
             _loadingRepliesIds.Remove(id);
             _translatedTexts.Remove(id);
             _showingTranslationIds.Remove(id);
@@ -499,6 +504,20 @@ public sealed class CommentsViewModel(
         _hasMore = false;
         if (_videoId is not null)
             StartLoad();
+    }
+
+    public void ToggleCommentTextExpanded(string commentId)
+    {
+        lock (_loadGate)
+        {
+            if (_disposed || !_commentsById.ContainsKey(commentId))
+                return;
+
+            if (!_expandedTextCommentIds.Add(commentId))
+                _expandedTextCommentIds.Remove(commentId);
+
+            PublishVisibleState();
+        }
     }
 
     public void ToggleReplies(string commentId)
@@ -927,6 +946,7 @@ public sealed class CommentsViewModel(
         _repliesByParentId.Clear();
         _topLevelCommentIds.Clear();
         _expandedCommentIds.Clear();
+        _expandedTextCommentIds.Clear();
         _loadingRepliesIds.Clear();
         _translatedTexts.Clear();
         _showingTranslationIds.Clear();
@@ -1037,7 +1057,8 @@ public sealed class CommentsViewModel(
                 _savingEditIds.Contains(commentId),
                 editError,
                 _deletingIds.Contains(commentId),
-                deleteError);
+                deleteError,
+                _expandedTextCommentIds.Contains(commentId));
         }
 
         return Array.AsReadOnly(visibleComments);

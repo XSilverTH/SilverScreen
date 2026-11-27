@@ -33,6 +33,35 @@ public sealed class CommentsViewModelTests
     }
 
     [Fact]
+    public async Task ToggleCommentTextExpanded_TogglesAndResetsOnVideoChange()
+    {
+        var service = new ControlledCommentService();
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        var request = Assert.Single(service.Requests);
+        request.Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, "Comments loaded."));
+
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.False(viewModel.State.VisibleComments[0].IsTextExpanded);
+
+        viewModel.ToggleCommentTextExpanded("c1");
+        Assert.True(viewModel.State.VisibleComments[0].IsTextExpanded);
+
+        viewModel.ToggleCommentTextExpanded("c1");
+        Assert.False(viewModel.State.VisibleComments[0].IsTextExpanded);
+
+        viewModel.ToggleCommentTextExpanded("c1");
+        Assert.True(viewModel.State.VisibleComments[0].IsTextExpanded);
+
+        viewModel.SetVideo("bbbbbbbbbbb");
+        var secondRequest = Assert.IsType<ControlledCommentService.Pending>(service.Requests[1]);
+        secondRequest.Completion.SetResult(new YouTubeCommentsResult([Comment("c1")], true, "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+        Assert.False(viewModel.State.VisibleComments[0].IsTextExpanded);
+    }
+
+    [Fact]
     public async Task SortSelectionCancelsPriorLoadAndInvokesSelectedSort()
     {
         var service = new ControlledCommentService();

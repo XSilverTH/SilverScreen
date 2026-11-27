@@ -260,6 +260,46 @@ Gtk.Box CommentsView {
             }
           };
         }
+
+        [overlay]
+        Gtk.Revealer comments_sticky_collapse_revealer {
+          halign: center;
+          valign: end;
+          reveal-child: false;
+          transition-type: slide_up;
+          transition-duration: 180;
+          can-target: false;
+          margin-bottom: 14;
+
+          styles [
+            "comment-expand-revealer",
+          ]
+
+          child: Gtk.Button comments_sticky_collapse_button {
+            clicked => $OnStickyCollapseButtonClicked();
+            tooltip-text: "Collapse comment";
+
+            styles [
+              "pill",
+              "comment-expand-pill",
+            ]
+
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 6;
+
+              Gtk.Image {
+                icon-name: "pan-up-symbolic";
+                pixel-size: 14;
+                accessible-role: presentation;
+              }
+
+              Gtk.Label {
+                label: "Collapse";
+              }
+            }
+          };
+        }
       };
     }
 
