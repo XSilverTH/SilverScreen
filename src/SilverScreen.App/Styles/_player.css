@@ -653,3 +653,10 @@ button.player-info-cue-button:focus-visible .player-info-cue-icon,
     font-feature-settings: "tnum";
     text-shadow: 0 1px 2px alpha(#000000, 0.9);
 }
+
+button.flat.player-reaction-button.accent,
+button.flat.player-reaction-button.accent:hover,
+button.flat.player-reaction-button.accent:active,
+button.flat.player-reaction-button.accent .player-reaction-count {
+    color: @accent_color;
+}

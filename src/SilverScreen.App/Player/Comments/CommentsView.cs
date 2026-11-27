@@ -1,6 +1,7 @@
 using Gtk;
 using Serilog;
 using SilverScreen.Core.Common;
+using SilverScreen.Core.Domain;
 using SilverScreen.Player.RichText;
 using XSTH.Blueprint.Helpers;
 
@@ -16,16 +17,22 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private readonly Func<string, bool> _linkActivated;
     private readonly Dictionary<string, (string Text, string Markup)> _markupCache = new(StringComparer.Ordinal);
     private readonly Dictionary<Widget, CommentRowView> _rowsByCell = [];
+    private readonly IThumbnailService? _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly Dictionary<string, CommentRowState> _visibleCommentsById = new(StringComparer.Ordinal);
     private string[] _displayedCommentIds = [];
     private CommentsViewState _state = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
-    public CommentsView(CommentsViewModel viewModel, Action closeRequested, Func<string, bool> linkActivated)
+    public CommentsView(
+        CommentsViewModel viewModel,
+        Action closeRequested,
+        Func<string, bool> linkActivated,
+        IThumbnailService? thumbnails = null)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
+        _thumbnails = thumbnails;
 
         _vadjustment = comments_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
@@ -223,7 +230,9 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
             id => ViewModel?.ToggleReplies(id),
             _linkActivated,
             id => ViewModel?.ToggleTranslationAsync(id).FireAndForget(Logger),
-            parentId => ViewModel?.LoadMoreRepliesAsync(parentId).FireAndForget(Logger));
+            parentId => ViewModel?.LoadMoreRepliesAsync(parentId).FireAndForget(Logger),
+            _thumbnails,
+            id => ViewModel?.ToggleLikeAsync(id).FireAndForget(Logger));
         listItem.Child = row.Widget;
         _rowsByCell[row.Widget] = row;
     }

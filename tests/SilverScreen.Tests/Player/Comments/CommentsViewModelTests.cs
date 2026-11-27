@@ -364,8 +364,70 @@ public sealed class CommentsViewModelTests
         }
     }
 
+    [Fact]
+    public async Task ToggleLikeAsync_LikesAndUnlikesCommentOptimistically()
+    {
+        var service = new ControlledCommentService { SetCommentLikeResult = true };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        var firstRequest = Assert.Single(service.Requests);
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Author", "Nice!", "1h ago", 5, LikeAction: "like-tok", UnlikeAction: "unlike-tok")],
+            false,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        await viewModel.ToggleLikeAsync("c1");
+
+        var likedRow = Assert.Single(viewModel.State.VisibleComments);
+        Assert.True(likedRow.Comment.IsLiked);
+        Assert.Equal(6, likedRow.Comment.LikeCount);
+        Assert.Equal(("c1", true, "like-tok"), Assert.Single(service.LikeCalls));
+
+        await viewModel.ToggleLikeAsync("c1");
+
+        var unlikedRow = Assert.Single(viewModel.State.VisibleComments);
+        Assert.False(unlikedRow.Comment.IsLiked);
+        Assert.Equal(5, unlikedRow.Comment.LikeCount);
+        Assert.Equal(("c1", false, "unlike-tok"), service.LikeCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ToggleLikeAsync_RevertsStateWhenServiceFails()
+    {
+        var service = new ControlledCommentService { SetCommentLikeResult = false };
+        using var viewModel = new CommentsViewModel(service);
+        viewModel.SetVideo("aaaaaaaaaaa");
+        viewModel.EnsureLoaded();
+        var firstRequest = Assert.Single(service.Requests);
+        firstRequest.Completion.SetResult(new YouTubeCommentsResult(
+            [new YouTubeComment("c1", "Author", "Nice!", "1h ago", 5, LikeAction: "like-tok", UnlikeAction: "unlike-tok")],
+            false,
+            "Comments loaded."));
+        await WaitForStateAsync(viewModel, state => state.Status == CommentsViewStatus.List);
+
+        await viewModel.ToggleLikeAsync("c1");
+
+        var row = Assert.Single(viewModel.State.VisibleComments);
+        Assert.False(row.Comment.IsLiked);
+        Assert.Equal(5, row.Comment.LikeCount);
+    }
+
     private sealed class ControlledCommentService : IYouTubeCommentService
     {
+        public bool SetCommentLikeResult { get; set; } = true;
+        public List<(string CommentId, bool Like, string? ActionToken)> LikeCalls { get; } = [];
+
+        public Task<bool> SetCommentLikeAsync(
+            string commentId,
+            bool like,
+            string? actionToken,
+            CancellationToken cancellationToken = default)
+        {
+            LikeCalls.Add((commentId, like, actionToken));
+            return Task.FromResult(SetCommentLikeResult);
+        }
         public List<Pending> Requests { get; } = [];
         public List<PendingReplies> ReplyRequests { get; } = [];
         public int TranslateCallCount { get; private set; }

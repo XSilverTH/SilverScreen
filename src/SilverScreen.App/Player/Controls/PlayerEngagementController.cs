@@ -118,9 +118,15 @@ internal sealed class PlayerEngagementController : IDisposable
 
     private void SetRatingState(YouTubeRatingState ratingState)
     {
-        _likeImage.SetFromResource(ratingState == YouTubeRatingState.Like
+        var isLiked = ratingState == YouTubeRatingState.Like;
+        _likeImage.SetFromResource(isLiked
             ? "/SilverScreen/Assets/liked-symbolic.svg"
             : "/SilverScreen/Assets/like-symbolic.svg");
+        if (isLiked)
+            _likeButton.AddCssClass("accent");
+        else
+            _likeButton.RemoveCssClass("accent");
+
         _dislikeImage.SetFromResource(ratingState == YouTubeRatingState.Dislike
             ? "/SilverScreen/Assets/disliked-symbolic.svg"
             : "/SilverScreen/Assets/dislike-symbolic.svg");

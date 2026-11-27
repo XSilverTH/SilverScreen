@@ -60,6 +60,7 @@ public sealed class CommentsViewModel(
     private readonly Dictionary<string, string> _translatedTexts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _showingTranslationIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _translatingIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _likingIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _translationErrors = new(StringComparer.Ordinal);
     private readonly Lock _loadGate = new();
     private readonly Dictionary<string, List<YouTubeComment>> _repliesByParentId = [];
@@ -310,6 +311,78 @@ public sealed class CommentsViewModel(
         }
     }
 
+    public async Task ToggleLikeAsync(string commentId)
+    {
+        if (_disposed || string.IsNullOrWhiteSpace(commentId))
+            return;
+
+        YouTubeComment original;
+        bool targetLiked;
+        string? actionToken;
+        long generation;
+        string? videoId;
+
+        lock (_loadGate)
+        {
+            if (_disposed || _likingIds.Contains(commentId))
+                return;
+
+            if (!_commentsById.TryGetValue(commentId, out original!))
+                return;
+
+            targetLiked = !original.IsLiked;
+            actionToken = targetLiked ? original.LikeAction : original.UnlikeAction;
+            if (string.IsNullOrWhiteSpace(actionToken))
+                return;
+
+            _likingIds.Add(commentId);
+            generation = _loadGeneration;
+            videoId = _videoId;
+
+            _commentsById[commentId] = original with
+            {
+                IsLiked = targetLiked,
+                LikeCount = Math.Max(0, original.LikeCount + (targetLiked ? 1 : -1))
+            };
+        }
+
+        PublishVisibleState();
+
+        var success = false;
+        try
+        {
+            success = await _comments
+                .SetCommentLikeAsync(commentId, targetLiked, actionToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_loadGate)
+            {
+                _likingIds.Remove(commentId);
+            }
+            return;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Failed to toggle like for comment {CommentId}", commentId);
+        }
+
+        lock (_loadGate)
+        {
+            _likingIds.Remove(commentId);
+            if (_disposed || generation != _loadGeneration || !string.Equals(_videoId, videoId, StringComparison.Ordinal))
+                return;
+
+            if (!success)
+            {
+                if (_commentsById.ContainsKey(commentId))
+                    _commentsById[commentId] = original;
+                PublishVisibleState();
+            }
+        }
+    }
+
     public async Task LoadMoreAsync()
     {
         if (_disposed || _videoId is null || !_hasLoadedCurrentVideo || !_hasMore)
@@ -507,6 +580,7 @@ public sealed class CommentsViewModel(
         _translatedTexts.Clear();
         _showingTranslationIds.Clear();
         _translatingIds.Clear();
+        _likingIds.Clear();
         _translationErrors.Clear();
     }
 

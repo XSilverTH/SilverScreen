@@ -87,7 +87,8 @@ public partial class EmbeddedPlayerView : ViewBase<OverlaySplitView>, IEmbeddedP
         _commentsView = Lifetime.Own(new CommentsView(
             new CommentsViewModel(dependencies.Comments, dependencies.Preferences),
             CloseComments,
-            uri => linkRouter.Activate(uri)));
+            uri => linkRouter.Activate(uri),
+            dependencies.Thumbnails));
 
         comments_sidebar_host.Append(_commentsView.Widget);
         player_queue_sidebar_host.Append(queueView.Widget);

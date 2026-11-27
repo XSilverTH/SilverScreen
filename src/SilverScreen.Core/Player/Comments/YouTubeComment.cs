@@ -8,4 +8,8 @@ public sealed record YouTubeComment(
     long LikeCount,
     string? ParentId = null,
     int ReplyCount = 0,
-    bool HasMoreReplies = false);
+    bool HasMoreReplies = false,
+    string? AuthorAvatarUrl = null,
+    bool IsLiked = false,
+    string? LikeAction = null,
+    string? UnlikeAction = null);

@@ -52,6 +52,15 @@ listview > row:focus-visible > .comment-row {
     min-height: 28px;
 }
 
+.comment-like-button {
+    padding: 4px 8px;
+    min-height: 24px;
+}
+
+.comment-like-button.accent {
+    color: @accent_color;
+}
+
 button.flat.comment-replies-footer {
     color: @accent_color;
     font-weight: 600;

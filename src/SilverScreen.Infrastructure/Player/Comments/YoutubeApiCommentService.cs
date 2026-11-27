@@ -262,6 +262,34 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
         }
     }
 
+    public async Task<bool> SetCommentLikeAsync(
+        string commentId,
+        bool like,
+        string? actionToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(commentId) || string.IsNullOrWhiteSpace(actionToken))
+            return false;
+
+        try
+        {
+            var client = _clientProvider.GetClient();
+            await client.Comments
+                .PerformActionAsync(actionToken, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning(ex, "Failed to {Action} comment {CommentId}", like ? "like" : "unlike", commentId);
+            return false;
+        }
+    }
+
     private void Reset(string videoId, YouTubeCommentSort sort)
     {
         lock (_gate)
@@ -287,7 +315,11 @@ public sealed class YoutubeApiCommentService(IYouTubeClientProvider clientProvid
             Math.Max(comment.LikeCount.GetValueOrDefault(), 0),
             parentId,
             replyCount,
-            hasMoreReplies));
+            hasMoreReplies,
+            comment.Author.Avatar?.Url.ToString(),
+            comment.IsLiked,
+            comment.LikeAction,
+            comment.UnlikeAction));
     }
 
     private void UpdateParentReplyMetadata(string parentId, bool hasMoreReplies)

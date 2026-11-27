@@ -34,4 +34,14 @@ public interface IYouTubeCommentService
             false,
             ErrorMessage: "Comment translation is not supported."));
     }
+
+    /// <summary>Likes or unlikes a comment using its InnerTube action token.</summary>
+    Task<bool> SetCommentLikeAsync(
+        string commentId,
+        bool like,
+        string? actionToken,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(false);
+    }
 }

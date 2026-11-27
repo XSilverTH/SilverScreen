@@ -37,9 +37,9 @@ Gtk.Box CommentRowView {
           margin-end: 12;
           hexpand: true;
 
-          Gtk.Image {
-            icon-name: "avatar-default-symbolic";
-            pixel-size: 32;
+          Adw.Avatar comment_avatar {
+            size: 32;
+            show-initials: true;
             valign: start;
             accessible-role: presentation;
           }
@@ -102,24 +102,34 @@ Gtk.Box CommentRowView {
                   }
                 }
 
-                Gtk.Box comment_header_likes_box {
-                  orientation: horizontal;
-                  spacing: 6;
+                Gtk.Button comment_like_button {
                   valign: center;
+                  clicked => $OnLikeButtonClicked();
+                  tooltip-text: "Like comment";
 
-                  Gtk.Image {
-                    resource: "/SilverScreen/Assets/like-symbolic.svg";
-                    pixel-size: 16;
-                    accessible-role: presentation;
-                  }
+                  styles [
+                    "flat",
+                    "comment-like-button",
+                  ]
 
-                  Gtk.Label comment_header_likes_label {
-                    xalign: 0;
+                  Gtk.Box {
+                    orientation: horizontal;
+                    spacing: 6;
 
-                    styles [
-                      "caption",
-                      "dim-label",
-                    ]
+                    Gtk.Image comment_like_icon {
+                      resource: "/SilverScreen/Assets/like-symbolic.svg";
+                      pixel-size: 16;
+                      accessible-role: presentation;
+                    }
+
+                    Gtk.Label comment_header_likes_label {
+                      xalign: 0;
+
+                      styles [
+                        "caption",
+                        "dim-label",
+                      ]
+                    }
                   }
                 }
               }
