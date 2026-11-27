@@ -57,6 +57,25 @@ listview > row:focus-visible > .comment-row {
     min-height: 24px;
 }
 
+.comment-composer-card {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.comment-composer-text {
+    background-color: transparent;
+}
+
+.comment-composer-text text {
+    background-color: transparent;
+}
+
+.comment-composer-button {
+    padding: 4px 12px;
+    min-height: 28px;
+    font-size: 0.9em;
+}
+
 .comment-like-button.accent {
     color: @accent_color;
 }

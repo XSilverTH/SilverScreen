@@ -126,6 +126,24 @@ public sealed class CommentsViewModel(
         StartLoad();
     }
 
+    public void AddComment(string text, string? authorName = null, string? authorAvatarUrl = null)
+    {
+        if (_disposed || string.IsNullOrWhiteSpace(text))
+            return;
+
+        var comment = new YouTubeComment(
+            Id: $"local-{Guid.NewGuid():N}",
+            AuthorName: string.IsNullOrWhiteSpace(authorName) ? "You" : authorName,
+            Text: text.Trim(),
+            PublishedTimeText: "Just now",
+            LikeCount: 0,
+            AuthorAvatarUrl: authorAvatarUrl);
+
+        _commentsById[comment.Id] = comment;
+        _topLevelCommentIds.Insert(0, comment.Id);
+        Publish(CommentsViewStatus.List, State.StatusMessage);
+    }
+
     public void Retry()
     {
         if (_disposed || _videoId is null)

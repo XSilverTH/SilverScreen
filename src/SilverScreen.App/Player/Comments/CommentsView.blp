@@ -43,20 +43,129 @@ Gtk.Box CommentsView {
     }
   }
 
-  Gtk.DropDown comments_sort_dropdown {
+  Gtk.Box {
+    orientation: horizontal;
+    spacing: 8;
     margin-start: 16;
     margin-end: 16;
     margin-bottom: 12;
-    notify => $OnSortDropdownNotify();
 
-    model: Gtk.StringList {
-      strings: [
-        "Top comments",
-        "Newest first",
-      ];
+    Gtk.DropDown comments_sort_dropdown {
+      hexpand: true;
+      notify => $OnSortDropdownNotify();
+
+      model: Gtk.StringList {
+        strings: [
+          "Top comments",
+          "Newest first",
+        ];
+      };
+
+      selected: 0;
+    }
+
+    Gtk.Button comments_compose_button {
+      icon-name: "document-edit-symbolic";
+      tooltip-text: "Add a comment";
+      valign: center;
+      clicked => $OnComposeButtonClicked();
+
+      styles [
+        "flat",
+        "circular",
+      ]
+    }
+  }
+
+  Gtk.Revealer comments_composer_revealer {
+    reveal-child: false;
+    transition-type: slide_down;
+    transition-duration: 200;
+
+    child: Adw.Bin {
+      margin-start: 8;
+      margin-end: 8;
+      margin-bottom: 12;
+
+      styles [
+        "comment-row",
+        "comment-composer-card",
+      ]
+
+      Gtk.Box {
+        orientation: vertical;
+        spacing: 12;
+        margin-top: 12;
+        margin-bottom: 12;
+        margin-start: 12;
+        margin-end: 12;
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 12;
+          hexpand: true;
+
+          Adw.Avatar comments_composer_avatar {
+            size: 32;
+            show-initials: true;
+            valign: start;
+            accessible-role: presentation;
+          }
+
+          Gtk.Overlay {
+            hexpand: true;
+
+            child: Gtk.ScrolledWindow {
+              hexpand: true;
+              hscrollbar-policy: never;
+              vscrollbar-policy: automatic;
+              propagate-natural-height: true;
+              min-content-height: 54;
+              max-content-height: 140;
+
+              child: Gtk.TextView comments_composer_text {
+                wrap-mode: word;
+                accepts-tab: false;
+                hexpand: true;
+
+                styles [
+                  "comment-composer-text",
+                ]
+              };
+            };
+
+            [overlay]
+            Gtk.Label comments_composer_placeholder {
+              label: "Add a comment...";
+              halign: start;
+              valign: start;
+              can-target: false;
+
+              styles [
+                "dim-label",
+              ]
+            }
+          }
+        }
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 8;
+          halign: end;
+
+          Gtk.Button comments_composer_submit_button {
+            label: "Comment";
+            sensitive: false;
+            clicked => $OnComposerSubmitClicked();
+
+            styles [
+              "suggested-action",
+              "comment-composer-button",
+            ]
+          }
+        }
+      }
     };
-
-    selected: 0;
   }
 
   Gtk.Stack comments_stack {

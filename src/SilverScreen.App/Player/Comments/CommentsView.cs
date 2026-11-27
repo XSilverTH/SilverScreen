@@ -1,5 +1,9 @@
+using System.ComponentModel;
+using Gdk;
+using GdkPixbuf;
 using Gtk;
 using Serilog;
+using SilverScreen.Account.Profile;
 using SilverScreen.Core.Common;
 using SilverScreen.Core.Domain;
 using SilverScreen.Player.RichText;
@@ -11,6 +15,7 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
 {
     private static readonly ILogger Logger = Log.ForContext<CommentsView>();
 
+    private readonly AccountViewModel? _account;
     private readonly Action _closeRequested;
     private readonly SignalListItemFactory _factory;
     private readonly StringList _itemIds;
@@ -20,6 +25,9 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private readonly IThumbnailService? _thumbnails;
     private readonly Adjustment? _vadjustment;
     private readonly Dictionary<string, CommentRowState> _visibleCommentsById = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _composerAvatarCancellation;
+    private Texture? _composerAvatarTexture;
+    private string? _loadedComposerAvatarUrl;
     private string[] _displayedCommentIds = [];
     private CommentsViewState _state = new(CommentsViewStatus.Unavailable, [], string.Empty);
 
@@ -27,12 +35,14 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         CommentsViewModel viewModel,
         Action closeRequested,
         Func<string, bool> linkActivated,
-        IThumbnailService? thumbnails = null)
+        IThumbnailService? thumbnails = null,
+        AccountViewModel? account = null)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         _closeRequested = closeRequested ?? throw new ArgumentNullException(nameof(closeRequested));
         _linkActivated = linkActivated ?? throw new ArgumentNullException(nameof(linkActivated));
         _thumbnails = thumbnails;
+        _account = account;
 
         _vadjustment = comments_scrolled_window.Vadjustment;
         if (_vadjustment is not null)
@@ -59,6 +69,20 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
         comments_list.Model = selection;
         comments_list.Factory = _factory;
         comments_stack.VisibleChildName = "unavailable";
+
+        var composerBuffer = comments_composer_text.Buffer;
+        if (composerBuffer is not null)
+            Lifetime.Track(
+                () => composerBuffer.OnChanged += OnComposerBufferChanged,
+                () => composerBuffer.OnChanged -= OnComposerBufferChanged);
+
+        if (_account is not null)
+        {
+            Lifetime.Track(
+                () => _account.PropertyChanged += OnAccountPropertyChanged,
+                () => _account.PropertyChanged -= OnAccountPropertyChanged);
+            UpdateComposerAvatar();
+        }
 
         Lifetime.Own(viewModel);
         ViewModel = viewModel;
@@ -105,6 +129,126 @@ public partial class CommentsView : ViewBase<Box, CommentsViewModel>
     private void OnSortDropdownNotify(object? sender, EventArgs args)
     {
         ViewModel?.SetSortSelection(comments_sort_dropdown.GetSelected());
+    }
+
+    private void OnComposeButtonClicked(object? sender, EventArgs args)
+    {
+        var reveal = !comments_composer_revealer.RevealChild;
+        comments_composer_revealer.RevealChild = reveal;
+        if (reveal)
+            comments_composer_text.GrabFocus();
+    }
+
+    private void OnComposerSubmitClicked(object? sender, EventArgs args)
+    {
+        var buffer = comments_composer_text.Buffer;
+        if (buffer is null)
+            return;
+
+        buffer.GetBounds(out var start, out var end);
+        var text = buffer.GetText(start, end, false);
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        ViewModel?.AddComment(text, _account?.DisplayName, _account?.AvatarUrl);
+        buffer.SetText(string.Empty, 0);
+        comments_composer_revealer.RevealChild = false;
+    }
+
+    private void OnAccountPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        UpdateComposerAvatar();
+    }
+
+    private void UpdateComposerAvatar()
+    {
+        if (IsDisposed || _account is null)
+            return;
+
+        var isReady = _account.ProfileStatus == AccountProfilePresentationStatus.Ready;
+        comments_composer_avatar.Text = isReady ? _account.DisplayName : string.Empty;
+        comments_composer_avatar.ShowInitials = isReady;
+        if (isReady && _thumbnails is not null && !string.IsNullOrWhiteSpace(_account.AvatarUrl))
+            LoadComposerAvatarAsync(_account.AvatarUrl).FireAndForget(Logger);
+        else
+            ClearComposerAvatar();
+    }
+
+    private async Task LoadComposerAvatarAsync(string avatarUrl)
+    {
+        if (string.Equals(_loadedComposerAvatarUrl, avatarUrl, StringComparison.Ordinal))
+            return;
+
+        _loadedComposerAvatarUrl = avatarUrl;
+        _composerAvatarCancellation?.Cancel();
+        _composerAvatarCancellation?.Dispose();
+        _composerAvatarCancellation = new CancellationTokenSource();
+        var token = _composerAvatarCancellation.Token;
+
+        try
+        {
+            var thumbnail = await _thumbnails!.GetThumbnailAsync(avatarUrl, token).ConfigureAwait(false);
+            if (thumbnail is null || token.IsCancellationRequested || IsDisposed)
+                return;
+
+            var pixbuf = await Task.Run(() => Pixbuf.NewFromFileAtScale(thumbnail.LocalPath, 32, 32, true), token)
+                .ConfigureAwait(false);
+            if (pixbuf is null || token.IsCancellationRequested || IsDisposed)
+            {
+                pixbuf?.Dispose();
+                return;
+            }
+
+            Lifetime.Idle(() =>
+            {
+                try
+                {
+                    if (token.IsCancellationRequested || IsDisposed ||
+                        !string.Equals(_loadedComposerAvatarUrl, avatarUrl, StringComparison.Ordinal))
+                        return false;
+
+                    var texture = Texture.NewForPixbuf(pixbuf);
+                    comments_composer_avatar.CustomImage = texture;
+                    _composerAvatarTexture?.Dispose();
+                    _composerAvatarTexture = texture;
+                    return false;
+                }
+                finally
+                {
+                    pixbuf.Dispose();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Failed to load composer avatar");
+        }
+    }
+
+    private void ClearComposerAvatar()
+    {
+        _composerAvatarCancellation?.Cancel();
+        _composerAvatarCancellation?.Dispose();
+        _composerAvatarCancellation = null;
+        _loadedComposerAvatarUrl = null;
+        comments_composer_avatar.CustomImage = null!;
+        _composerAvatarTexture?.Dispose();
+        _composerAvatarTexture = null;
+    }
+
+    private void OnComposerBufferChanged(object? sender, EventArgs args)
+    {
+        var buffer = comments_composer_text.Buffer;
+        if (buffer is null)
+            return;
+
+        buffer.GetBounds(out var start, out var end);
+        var text = buffer.GetText(start, end, false);
+        comments_composer_placeholder.Visible = string.IsNullOrEmpty(text);
+        comments_composer_submit_button.Sensitive = !string.IsNullOrWhiteSpace(text);
     }
 
     private void Render(CommentsViewState state)

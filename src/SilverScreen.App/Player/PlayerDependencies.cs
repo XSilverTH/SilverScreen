@@ -47,4 +47,5 @@ public sealed record PlayerDependencies(
     IQueueService Queue,
     IThumbnailService Thumbnails,
     ILibraryService? Library = null,
-    IDownloadService? Downloads = null);
+    IDownloadService? Downloads = null,
+    Account.Profile.AccountViewModel? Account = null);
