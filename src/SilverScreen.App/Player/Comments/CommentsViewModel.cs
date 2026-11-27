@@ -31,7 +31,10 @@ public sealed record CommentRowState(
     IReadOnlyList<bool>? AncestorHasMoreSiblings = null,
     bool HasMoreReplies = false,
     bool IsLoadingReplies = false,
-    string? LoadMoreRepliesParentId = null);
+    string? LoadMoreRepliesParentId = null,
+    bool IsFirstSibling = true,
+    bool IsLastInThread = true,
+    string? ThreadRootCommentId = null);
 
 public sealed record CommentsViewState(
     CommentsViewStatus Status,
@@ -526,6 +529,7 @@ public sealed class CommentsViewModel(
     private readonly record struct VisibleCommentNode(
         string CommentId,
         int Depth,
+        bool IsFirstSibling,
         bool IsLastSibling,
         IReadOnlyList<bool> AncestorHasMoreSiblings,
         string? LoadMoreRepliesParentId);
@@ -539,17 +543,23 @@ public sealed class CommentsViewModel(
         var ancestors = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < _topLevelCommentIds.Count; i++)
         {
+            var isFirstTopLevel = i == 0;
             var isLastTopLevel = i == _topLevelCommentIds.Count - 1;
-            AddVisibleComment(_topLevelCommentIds[i], 0, isLastTopLevel, [], visibleNodes, ancestors, null);
+            AddVisibleComment(_topLevelCommentIds[i], 0, isFirstTopLevel, isLastTopLevel, [], visibleNodes, ancestors, null);
         }
 
         var targetLanguage = _preferences?.GetPreferences().GetEffectiveYouTubeLanguage()
                              ?? AppPreferences.DefaultYouTubeLanguage;
         var visibleComments = new CommentRowState[visibleNodes.Count];
+        string? currentRootId = null;
         for (var index = 0; index < visibleNodes.Count; index++)
         {
             var node = visibleNodes[index];
             var commentId = node.CommentId;
+            if (node.Depth == 0)
+                currentRootId = commentId;
+
+            var isLastInThread = index == visibleNodes.Count - 1 || visibleNodes[index + 1].Depth == 0;
             var comment = _commentsById[commentId];
             var hasTranslated = _translatedTexts.TryGetValue(commentId, out var translatedText);
             var isTranslated = hasTranslated && _showingTranslationIds.Contains(commentId);
@@ -576,7 +586,10 @@ public sealed class CommentsViewModel(
                 node.AncestorHasMoreSiblings,
                 comment.HasMoreReplies,
                 _loadingRepliesIds.Contains(commentId),
-                node.LoadMoreRepliesParentId);
+                node.LoadMoreRepliesParentId,
+                node.IsFirstSibling,
+                isLastInThread,
+                currentRootId);
         }
 
         return Array.AsReadOnly(visibleComments);
@@ -585,6 +598,7 @@ public sealed class CommentsViewModel(
     private void AddVisibleComment(
         string commentId,
         int depth,
+        bool isFirstSibling,
         bool isLastSibling,
         IReadOnlyList<bool> ancestorHasMoreSiblings,
         List<VisibleCommentNode> visibleNodes,
@@ -597,6 +611,7 @@ public sealed class CommentsViewModel(
         visibleNodes.Add(new VisibleCommentNode(
             commentId,
             depth,
+            isFirstSibling,
             isLastSibling,
             ancestorHasMoreSiblings,
             loadMoreRepliesParentId));
@@ -611,11 +626,13 @@ public sealed class CommentsViewModel(
                 : [.. ancestorHasMoreSiblings, !isLastSibling];
             for (var i = 0; i < replies.Count; i++)
             {
+                var isFirstReply = i == 0;
                 var isLastReply = i == replies.Count - 1;
                 var nextLoadMoreParentId = isLastReply && comment.HasMoreReplies ? commentId : null;
                 AddVisibleComment(
                     replies[i].Id,
                     depth + 1,
+                    isFirstReply,
                     isLastReply,
                     nextAncestors,
                     visibleNodes,

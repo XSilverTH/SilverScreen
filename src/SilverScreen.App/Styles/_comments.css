@@ -1,11 +1,36 @@
 /* Comment Row styles */
 
+listview.comments-list > row {
+    padding: 0;
+    margin: 0;
+}
+
 .comment-row {
     background-color: @card_bg_color;
     border: 1px solid @borders;
     border-radius: 12px;
     margin-top: 3px;
     margin-bottom: 3px;
+}
+
+.comment-row.comment-row-top {
+    border-radius: 12px 12px 0 0;
+    border-bottom-width: 0;
+    margin-bottom: 0;
+}
+
+.comment-row.comment-row-middle {
+    border-radius: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.comment-row.comment-row-bottom {
+    border-radius: 0 0 12px 12px;
+    border-top-width: 0;
+    margin-top: 0;
 }
 
 .comment-row:focus-visible,
@@ -25,4 +50,22 @@ listview > row:focus-visible > .comment-row {
     font-weight: 600;
     padding: 4px 8px;
     min-height: 28px;
+}
+
+button.flat.comment-replies-footer {
+    color: @accent_color;
+    font-weight: 600;
+    background-color: alpha(@window_fg_color, 0.04);
+    border-top: 1px solid @borders;
+    border-radius: 0 0 11px 11px;
+    padding: 6px 12px;
+    min-height: 28px;
+}
+
+button.flat.comment-replies-footer:hover {
+    background-color: alpha(@window_fg_color, 0.08);
+}
+
+button.flat.comment-replies-footer:active {
+    background-color: alpha(@window_fg_color, 0.12);
 }

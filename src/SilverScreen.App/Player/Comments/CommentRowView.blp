@@ -7,12 +7,6 @@ Gtk.Box CommentRowView {
   margin-start: 8;
   margin-end: 8;
 
-  Gtk.DrawingArea comment_tree_gutter {
-    visible: false;
-    vexpand: true;
-    can-target: false;
-  }
-
   Adw.Bin comment_card {
     hexpand: true;
     focusable: true;
@@ -20,154 +14,207 @@ Gtk.Box CommentRowView {
       "comment-row",
     ]
 
-    margin-top: 3;
-    margin-bottom: 3;
-
-    Gtk.Box {
-      orientation: horizontal;
-      spacing: 12;
-      margin-top: 12;
-      margin-bottom: 12;
-      margin-start: 12;
-      margin-end: 12;
-      hexpand: true;
-
-    Gtk.Image {
-      icon-name: "avatar-default-symbolic";
-      pixel-size: 32;
-      valign: start;
-      accessible-role: presentation;
-    }
-
     Gtk.Box {
       orientation: vertical;
-      spacing: 4;
       hexpand: true;
 
       Gtk.Box {
         orientation: horizontal;
-        spacing: 8;
         hexpand: true;
 
-        Gtk.Box {
-          orientation: vertical;
-          spacing: 2;
+        Gtk.DrawingArea comment_tree_gutter {
+          visible: false;
+          vexpand: true;
+          can-target: false;
+        }
+
+        Gtk.Box comment_content_box {
+          orientation: horizontal;
+          spacing: 12;
+          margin-top: 12;
+          margin-bottom: 12;
+          margin-start: 12;
+          margin-end: 12;
           hexpand: true;
 
-          Gtk.Label comment_author_label {
-            xalign: 0;
-            ellipsize: end;
-
-            styles [
-              "heading",
-            ]
-          }
-
-          Gtk.Label comment_published_time_label {
-            xalign: 0;
-
-            styles [
-              "caption",
-              "dim-label",
-            ]
-          }
-        }
-
-        Gtk.Button comment_translate_button {
-          valign: start;
-          halign: end;
-          visible: false;
-          tooltip-text: "Translate comment";
-          clicked => $OnTranslateButtonClicked();
-
-          styles [
-            "flat",
-            "square",
-          ]
-
-          Gtk.Image comment_translate_icon {
-            resource: "/SilverScreen/Assets/translate-symbolic.svg";
-            pixel-size: 16;
+          Gtk.Image {
+            icon-name: "avatar-default-symbolic";
+            pixel-size: 32;
+            valign: start;
             accessible-role: presentation;
           }
-        }
-      }
-
-      Gtk.Label comment_text_label {
-        xalign: 0;
-        wrap: true;
-        wrap-mode: word;
-        selectable: true;
-        use-markup: true;
-        activate-link => $OnCommentTextActivateLink();
-      }
-
-      Gtk.Box {
-        orientation: horizontal;
-        spacing: 6;
-        margin-top: 4;
-
-        Gtk.Image {
-          resource: "/SilverScreen/Assets/like-symbolic.svg";
-          pixel-size: 16;
-          accessible-role: presentation;
-        }
-
-        Gtk.Label comment_likes_label {
-          xalign: 0;
-
-          styles [
-            "caption",
-            "dim-label",
-          ]
-        }
-      }
-
-      Gtk.Box {
-        orientation: horizontal;
-        spacing: 8;
-        margin-top: 2;
-
-        Gtk.Button comment_replies_button {
-          halign: start;
-          visible: false;
-          clicked => $OnRepliesButtonClicked();
-          styles [
-            "flat",
-            "comment-replies-button",
-          ]
 
           Gtk.Box {
-            orientation: horizontal;
-            spacing: 6;
+            orientation: vertical;
+            spacing: 4;
+            hexpand: true;
 
-            Gtk.Image comment_replies_chevron {
-              icon-name: "pan-down-symbolic";
-              pixel-size: 14;
-              accessible-role: presentation;
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 8;
+              hexpand: true;
+
+              Gtk.Box {
+                orientation: vertical;
+                spacing: 2;
+                hexpand: true;
+
+                Gtk.Label comment_author_label {
+                  xalign: 0;
+                  ellipsize: end;
+
+                  styles [
+                    "heading",
+                  ]
+                }
+
+                Gtk.Label comment_published_time_label {
+                  xalign: 0;
+
+                  styles [
+                    "caption",
+                    "dim-label",
+                  ]
+                }
+              }
+
+              Gtk.Box {
+                orientation: horizontal;
+                spacing: 8;
+                valign: start;
+                halign: end;
+
+                Gtk.Button comment_translate_button {
+                  valign: center;
+                  visible: false;
+                  tooltip-text: "Translate comment";
+                  clicked => $OnTranslateButtonClicked();
+
+                  styles [
+                    "flat",
+                    "square",
+                  ]
+
+                  Gtk.Image comment_translate_icon {
+                    resource: "/SilverScreen/Assets/translate-symbolic.svg";
+                    pixel-size: 16;
+                    accessible-role: presentation;
+                  }
+                }
+
+                Gtk.Box comment_header_likes_box {
+                  orientation: horizontal;
+                  spacing: 6;
+                  valign: center;
+
+                  Gtk.Image {
+                    resource: "/SilverScreen/Assets/like-symbolic.svg";
+                    pixel-size: 16;
+                    accessible-role: presentation;
+                  }
+
+                  Gtk.Label comment_header_likes_label {
+                    xalign: 0;
+
+                    styles [
+                      "caption",
+                      "dim-label",
+                    ]
+                  }
+                }
+              }
             }
 
-            Gtk.Label comment_replies_label {
-              label: "";
+            Gtk.Label comment_text_label {
+              xalign: 0;
+              wrap: true;
+              wrap-mode: word;
+              selectable: true;
+              use-markup: true;
+              activate-link => $OnCommentTextActivateLink();
+            }
+
+            Gtk.Box comment_inline_actions_box {
+              orientation: horizontal;
+              spacing: 8;
+              margin-top: 2;
+              visible: false;
+
+              Gtk.Button comment_nested_replies_button {
+                halign: start;
+                visible: false;
+                clicked => $OnNestedRepliesButtonClicked();
+                styles [
+                  "flat",
+                  "comment-replies-button",
+                ]
+
+                Gtk.Box {
+                  orientation: horizontal;
+                  spacing: 6;
+
+                  Gtk.Image comment_nested_replies_chevron {
+                    icon-name: "pan-down-symbolic";
+                    pixel-size: 14;
+                    accessible-role: presentation;
+                  }
+
+                  Gtk.Label comment_nested_replies_label {
+                    label: "";
+                  }
+                }
+              }
+
+              Gtk.Button comment_load_more_replies_button {
+                halign: start;
+                visible: false;
+                clicked => $OnLoadMoreRepliesButtonClicked();
+                styles [
+                  "flat",
+                  "comment-replies-button",
+                ]
+
+                Gtk.Label comment_load_more_replies_label {
+                  label: "Load more replies";
+                }
+              }
             }
           }
         }
+      }
 
-        Gtk.Button comment_load_more_replies_button {
-          halign: start;
-          visible: false;
-          clicked => $OnLoadMoreRepliesButtonClicked();
-          styles [
-            "flat",
-            "comment-replies-button",
-          ]
+      Gtk.Separator comment_thread_divider {
+        orientation: horizontal;
+        visible: false;
+        margin-start: 12;
+        margin-end: 12;
+      }
 
-          Gtk.Label comment_load_more_replies_label {
-            label: "Load more replies";
+      Gtk.Button comment_replies_button {
+        hexpand: true;
+        visible: false;
+        clicked => $OnRepliesButtonClicked();
+        styles [
+          "flat",
+          "comment-replies-footer",
+        ]
+
+        Gtk.Box {
+          orientation: horizontal;
+          spacing: 6;
+          halign: center;
+
+          Gtk.Image comment_replies_chevron {
+            icon-name: "pan-down-symbolic";
+            pixel-size: 14;
+            accessible-role: presentation;
+          }
+
+          Gtk.Label comment_replies_label {
+            label: "";
           }
         }
       }
     }
   }
-}
 }
